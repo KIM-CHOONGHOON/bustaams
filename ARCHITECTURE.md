@@ -50,6 +50,29 @@ bustaams/
 
 ---
 
+## 📂 파일 저장 경로 (File Storage Paths)
+
+본 프로젝트에서 사용되는 주요 인증/증명서 정적 파일들은 프론트엔드 환경의 `assets` 폴더 하위에서 체계적으로 분류되어 관리됩니다.
+
+### 1. 공용 이미지 에셋 (Common Images)
+bustaams 프로젝트 전반의 화면 UI를 구성하는 데 필요한 범용적인 디자인 이미지 파일들은 별도의 이미지 전용 폴더로 모아 관리합니다.
+- **경로:** `busTaams_web/src/assets/images/`
+- **용도:** 회사 로고(`bustaams_bus_logo.png`), 아이콘, 배경화면 등 어플리케이션 전반에서 공용으로 사용되는 모든 `.png` 및 시각적 정적 이미지 파일 보관
+
+### 2. 기사님 증명서 관리
+기사님의 신뢰도를 검증하기 위한 필수 자격/증명 서류들은 `busTaams_web/src/assets/certificates/` 폴더 하위에서 용도별로 격리되어 저장됩니다.
+
+- **버스운전 자격증 증명서**
+  - **경로:** `busTaams_web/src/assets/certificates/bus_licenses/`
+  - **용도:** 기사님이 업로드한 버스운전 자격증 원본 이미지 및 사본 파일 보관
+- **무사고 증명서**
+  - **경로:** `busTaams_web/src/assets/certificates/accident_free/`
+  - **용도:** 무사고 운전 경력 증명서 파일 보관
+
+*※ 향후 사업자등록증 등 추가 증명서가 필요할 경우, 동일하게 `certificates/` 하위에 새로운 하위 폴더를 생성하여 일관된 파일 트리 구조를 유지합니다.*
+
+---
+
 ## 🎨 DESIGN 표준 (Web & App 공통)
 
 본 섹션은 `busTaams_web`(프론트엔드) 및 `busTaams_app`(앱 프론트엔드)에서 일관성 있게 동일하게 적용되어야 하는 공통 UI/UX 화면 표준(Design System) 가이드라인입니다.

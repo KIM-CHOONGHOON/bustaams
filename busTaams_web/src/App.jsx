@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import busLogo from './assets/images/bustaams_bus_logo.png';
 import nameLogo from './assets/images/bustaams_name_logo.png';
 
-function Header({ setShowLoginModal, userRole }) {
+function Header({ setShowLoginModal, setShowDriverProfileModal, userRole }) {
   // Glassmorphic header
   return (
     <header className="sticky top-0 z-50 bg-surface/80 backdrop-blur-xl transition-all">
@@ -15,12 +15,29 @@ function Header({ setShowLoginModal, userRole }) {
           <img src={nameLogo} alt="busTaams 네임" className="h-[60px] md:h-[72px] w-auto object-contain transition-transform group-hover:scale-105" />
         </div>
         <nav className="hidden md:flex items-center gap-10 font-medium text-gray-700">
-          {userRole !== 'driver' && (
-            <a className="hover:text-primary transition-colors" href="#">이용 고객 전용</a>
-          )}
-          {userRole === 'driver' && (
-            <a className="hover:text-primary transition-colors" href="#">기사님 전용</a>
-          )}
+          <a className="hover:text-primary transition-colors" href="#">이용 고객 전용</a>
+          
+          <div className="relative group">
+            <div className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer py-4">
+              기사님 전용
+              <span className="material-symbols-outlined text-[18px]">expand_more</span>
+            </div>
+            
+            {/* Dropdown Menu */}
+            <div className="absolute top-[80%] left-0 pt-2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-10 w-48">
+              <div className="bg-surface-lowest rounded-xl shadow-ambient border border-surface-container-low py-2 flex flex-col overflow-hidden">
+                <button className="px-5 py-3 text-left hover:bg-surface-container-low transition-colors text-sm font-bold text-gray-700 hover:text-primary">입찰 대쉬보드</button>
+                <button 
+                  className="px-5 py-3 text-left hover:bg-surface-container-low transition-colors text-sm font-bold text-gray-700 hover:text-primary"
+                  onClick={() => setShowDriverProfileModal(true)}
+                >
+                  기사님 프로필
+                </button>
+                <button className="px-5 py-3 text-left hover:bg-surface-container-low transition-colors text-sm font-bold text-gray-700 hover:text-primary">보유 차량 정보</button>
+              </div>
+            </div>
+          </div>
+
           <a className="hover:text-primary transition-colors" href="#">bus-Taams ?</a>
           <a className="hover:text-primary transition-colors" href="#">이용 약관</a>
         </nav>
@@ -296,13 +313,179 @@ function LoginModal({ close }) {
   );
 }
 
+function DriverProfileModal({ close }) {
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="absolute inset-0 cursor-pointer" onClick={close}></div>
+      
+      <div className="relative flex w-full max-w-[440px] h-[90vh] flex-col bg-surface-lowest rounded-xl shadow-ambient overflow-hidden animate-in zoom-in-95 duration-200">
+        
+        <header className="sticky top-0 z-20 flex items-center bg-surface-lowest/90 backdrop-blur-md px-6 py-4 justify-between border-b border-surface-container-low">
+          <button onClick={close} className="flex size-10 items-center justify-center rounded-full hover:bg-surface-container-low cursor-pointer transition-colors text-gray-500">
+             <span className="material-symbols-outlined font-bold">close</span>
+          </button>
+          <h1 className="text-gray-900 text-lg font-display font-bold flex-1 text-center">기사님 신뢰 프로필</h1>
+          <div className="flex size-10 items-center justify-center rounded-full hover:bg-surface-container-low cursor-pointer transition-colors text-gray-500">
+            <span className="material-symbols-outlined">share</span>
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-y-auto no-scrollbar pb-24 border-none">
+          <div className="flex flex-col items-center px-6 pt-6 pb-8 bg-gradient-to-b from-primary/5 to-transparent flex-shrink-0">
+            <div className="relative mb-6">
+              <div 
+                className="bg-center bg-no-repeat aspect-square bg-cover rounded-full h-32 w-32 border-[6px] border-surface-lowest shadow-ambient" 
+                style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuAkQpll1UM4qkVBGJYpjoQPLFYaC7SOWIM4GQdk0zGQG4nV827qNptP5Ejg-SG0L1mPE1jAc-fRo2e19zFvQI_gZmnVq9l_yoDjtJXYhnZkGAr1ZE0uLaYWax9CAqeoz2brWUx3XRer0beVWqxkVV7V_kq9xpIKemVCqYShRNyy70MQTINqgXUkABZpR7BqOP6GcgyrsicOPAPXoariwVw33Fqy7EBxAq9gFKpXKmSMuOq8aXEGrZzYOVtsjnaNvQGNVQeO_HyO")' }}
+              ></div>
+              <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-gradient-to-br from-primary to-primary-container px-4 py-1.5 rounded-full flex items-center gap-1.5 shadow-ambient border-2 border-surface-lowest whitespace-nowrap">
+                <span className="material-symbols-outlined text-white text-[16px] font-bold">verified</span>
+                <span className="text-white text-xs font-bold tracking-wide">KoROAD 인증 완료</span>
+              </div>
+            </div>
+            
+            <div className="text-center">
+              <h2 className="text-2xl font-display font-bold text-gray-900 mb-1">김명호 기사님</h2>
+              <p className="text-primary font-bold text-sm bg-primary/10 inline-block px-3 py-1 rounded-full">베테랑 전문 운송 파트너</p>
+              <div className="flex items-center justify-center gap-1 mt-3 text-gray-500 text-xs font-medium">
+                <span className="material-symbols-outlined text-sm">location_on</span>
+                <span>대한민국 서울특별시</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 w-full gap-4 mt-8">
+              <div className="bg-surface-container-low p-4 rounded-xl flex flex-col items-center justify-center text-center">
+                <span className="material-symbols-outlined text-primary mb-2 text-2xl">star</span>
+                <span className="text-lg font-display font-bold text-gray-900">4.9<span className="text-sm font-medium text-gray-500">/5.0</span></span>
+                <span className="text-[11px] font-bold text-gray-500 mt-1 uppercase tracking-wider">평점</span>
+              </div>
+              <div className="bg-surface-container-low p-4 rounded-xl flex flex-col items-center justify-center text-center">
+                <span className="material-symbols-outlined text-primary mb-2 text-2xl">directions_bus</span>
+                <span className="text-lg font-display font-bold text-gray-900">1,240회</span>
+                <span className="text-[11px] font-bold text-gray-500 mt-1 uppercase tracking-wider">운행 횟수</span>
+              </div>
+              <div className="bg-surface-container-low p-4 rounded-xl flex flex-col items-center justify-center text-center">
+                <span className="material-symbols-outlined text-primary mb-2 text-2xl">workspace_premium</span>
+                <span className="text-lg font-display font-bold text-gray-900">12년</span>
+                <span className="text-[11px] font-bold text-gray-500 mt-1 uppercase tracking-wider">경력</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="px-6 py-2 space-y-4">
+            <div className="flex items-center justify-between p-5 bg-surface-container-low rounded-xl">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-primary/10 rounded-xl flex items-center justify-center">
+                  <span className="material-symbols-outlined text-primary text-2xl flex">shield_person</span>
+                </div>
+                <div>
+                  <p className="text-base font-bold text-gray-900 font-display">종합보험 가입 완료</p>
+                  <p className="text-sm text-gray-500 mt-0.5">영업배상책임보험 적용 차량</p>
+                </div>
+              </div>
+              <span className="material-symbols-outlined text-primary text-2xl bg-surface-lowest rounded-full shadow-ambient flex">check_circle</span>
+            </div>
+
+            <div className="flex items-center justify-between p-5 bg-surface-container-low rounded-xl">
+              <div className="flex items-center gap-4 w-full">
+                <div className="p-3 bg-secondary/10 rounded-xl flex items-center justify-center">
+                  <span className="material-symbols-outlined text-secondary text-2xl flex">hotel_class</span>
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-2">
+                     <p className="text-base font-bold text-gray-900 font-display">차량 컨디션</p>
+                     <span className="text-xs font-bold text-secondary bg-surface-lowest px-2 py-0.5 rounded shadow-sm">최상급 (3년식)</span>
+                  </div>
+                  <div className="w-full bg-surface-dim h-2 rounded-full overflow-hidden">
+                    <div className="bg-gradient-to-r from-secondary to-secondary-container h-full w-[15%] rounded-full"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8 px-6">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-display font-bold text-gray-900 flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary">photo_library</span>
+                차량 갤러리
+              </h3>
+              <span className="text-sm font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">3장</span>
+            </div>
+            
+            <div className="flex gap-4 overflow-x-auto no-scrollbar pb-6 -mx-6 px-6 snap-x">
+              <div className="relative w-[80%] h-48 rounded-xl overflow-hidden shadow-ambient group snap-center shrink-0">
+                <div className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105" style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuDYMKVMpoJohkVbDKo38KFZfcQSdfDPpxXjYzkDQf5wStr_z8K_Qj4kO5Goqi6ohVumkFea2LlB564jPal82MvjYUanpNvsGHXFcC7Q84EzcxIjg4l-vyKOZbOLNhQllGoD2Hcm5pErc59VZo9lIHU4v68t7xVjwR-lBSE9GRh3D0SasdlwIl_h-9_gH0Ub0-qxm2YqiAw3lmmEFPILQxDziaOGkKE5T8RB9K6dnu-Jw03pBwnuNlyRkWO3JC4Gn2rQnNeLOW98")' }}></div>
+                <div className="absolute bottom-3 left-3 bg-surface-lowest/90 backdrop-blur-md px-3 py-1.5 rounded-lg text-xs text-gray-900 font-bold shadow-sm">차량 전면</div>
+              </div>
+              <div className="relative w-[80%] h-48 rounded-xl overflow-hidden shadow-ambient group snap-center shrink-0">
+                <div className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105" style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuCjALg74-MmC0bSL5rsAn4zLDWVLZqQdAwvv8C0wbxY0H-IMACjP4hoeIUQc4V_B3q3VplC40NPL0VtTqVEAlQHBpWhGhPTXpYvAH7HI4diMw832dDmPiLrsKRPCeVyDYBdmNZ3UjEPoQTuELfrM6kmcjToMrLXKmCb2k9FlAqrYwPlqIDH7u3XupQWJhYW-8ii4Tbd8Wa3qhPnCOsM7wr6X3YxuTlcbhMutMWl0hZtmq5W2VgN0ghrWO6-qSC6q3mSkvd-h0cw")' }}></div>
+                <div className="absolute bottom-3 left-3 bg-surface-lowest/90 backdrop-blur-md px-3 py-1.5 rounded-lg text-xs text-gray-900 font-bold shadow-sm">내부 좌석</div>
+              </div>
+              <div className="relative w-[80%] h-48 rounded-xl overflow-hidden shadow-ambient group snap-center shrink-0">
+                <div className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105" style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuCmOtvHG4vm_3Q7kysJDgsLSTQ-Kd7mP9oe8UmnDtdQrN5O6UxIYpRU89zUBIWIzqCfjRyai7LjxqSH2xLyZV4IHWN68SmT-FTzRG0lFXHrUfHwdBwadSaGnrEl2IbbHBsIPWZJHKFfa80vigLvxFxJ-k-uWAqaVncXI1sn9z4mP6hyk5v8oIccZyU9Rl-xT2gNuoW83npcuWsMCORgdwiCjwi-VaoA0_nwbOxQhgX6v1QiILo6FaZZiTZFWORbB-tSTaRKqsvp")' }}></div>
+                <div className="absolute bottom-3 left-3 bg-surface-lowest/90 backdrop-blur-md px-3 py-1.5 rounded-lg text-xs text-gray-900 font-bold shadow-sm">운전석</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mx-6 mb-6 border-t border-surface-container-low pt-6">
+            <h3 className="text-lg font-display font-bold text-gray-900 mb-5 flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary">assignment_turned_in</span>
+              상세 스펙
+            </h3>
+            
+            <div className="space-y-2">
+              <div className="flex items-center justify-between p-4 bg-surface-container-low rounded-lg">
+                <div className="flex items-center gap-3 text-gray-600">
+                  <span className="material-symbols-outlined">event_seat</span>
+                  <span className="text-sm font-bold">승차 정원</span>
+                </div>
+                <span className="text-sm text-gray-900 font-bold">45인승 대형</span>
+              </div>
+              <div className="flex items-center justify-between p-4 bg-surface-container-low rounded-lg">
+                <div className="flex items-center gap-3 text-gray-600">
+                  <span className="material-symbols-outlined">wifi</span>
+                  <span className="text-sm font-bold">인터넷</span>
+                </div>
+                <span className="text-sm text-primary font-bold">무료 5G Wi-Fi 제공</span>
+              </div>
+              <div className="flex items-center justify-between p-4 bg-surface-container-low rounded-lg">
+                <div className="flex items-center gap-3 text-gray-600">
+                  <span className="material-symbols-outlined">power</span>
+                  <span className="text-sm font-bold">전원 포트</span>
+                </div>
+                <span className="text-sm text-gray-900 font-bold">전 좌석 220V/USB 적용</span>
+              </div>
+            </div>
+          </div>
+        </main>
+        
+        <div className="absolute bottom-0 left-0 right-0 p-5 bg-surface-lowest/95 backdrop-blur-xl border-t border-surface-container-low z-40">
+          <button className="w-full bg-gradient-to-br from-primary to-primary-container hover:opacity-90 text-white h-14 rounded-xl font-bold flex items-center justify-center gap-2 shadow-ambient transition-transform hover:-translate-y-0.5">
+            <span className="material-symbols-outlined font-bold font-['Material_Symbols_Outlined']">mail</span>
+            기사님께 1:1 문의하기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showDriverProfileModal, setShowDriverProfileModal] = useState(false);
   const [userRole, setUserRole] = useState('customer');
 
   return (
     <div className="min-h-screen flex flex-col font-body selection:bg-primary/20 selection:text-primary">
-      <Header setShowLoginModal={setShowLoginModal} userRole={userRole} />
+      <Header setShowLoginModal={setShowLoginModal} setShowDriverProfileModal={setShowDriverProfileModal} userRole={userRole} />
       <main className="flex-1">
         <Hero />
         <Features />
@@ -311,6 +494,7 @@ function App() {
       <Footer />
       
       {showLoginModal && <LoginModal close={() => setShowLoginModal(false)} />}
+      {showDriverProfileModal && <DriverProfileModal close={() => setShowDriverProfileModal(false)} />}
     </div>
   );
 }
