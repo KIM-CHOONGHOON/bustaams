@@ -47,3 +47,102 @@ bustaams/
 ├── busTaams_admin/    # [관리자] 관리자 전용 프론트엔드/백엔드 (별도 관리자 URL 사용)
 └── busTaams_app/      # [앱프론트] 모바일 앱 프론트엔드
 ```
+
+---
+
+## 🎨 DESIGN 표준 (Web & App 공통)
+
+본 섹션은 `busTaams_web`(프론트엔드) 및 `busTaams_app`(앱 프론트엔드)에서 일관성 있게 동일하게 적용되어야 하는 공통 UI/UX 화면 표준(Design System) 가이드라인입니다.
+
+### Design System Strategy: The Radiant Traveler
+
+#### 1. Overview & Creative North Star
+**Creative North Star: "The Digital Concierge"**
+
+This design system is built to evoke the breezy, high-energy anticipation of a spring/summer journey. Unlike standard booking platforms that feel utilitarian and rigid, this system adopts an **Editorial High-End** approach. We achieve this by breaking the "template" look through intentional asymmetry, generous white space, and a sophisticated layering of surfaces.
+
+The visual language balances the reliability of a professional auction platform with the vibrant energy of travel. We move away from traditional box-heavy layouts toward an open-canvas feel, where information breathes and priority is established through tonal depth and typographic scale rather than heavy lines.
+
+---
+
+#### 2. Color Strategy: Tonal Energy
+Our palette uses a foundation of professional Teal complemented by an energetic Orange, set against a sophisticated neutral background hierarchy.
+
+##### The Palette (Core Tokens)
+- **Primary (Teal):** `#00685f` (Primary) / `#008378` (Container)
+- **Secondary (Orange):** `#9d4300` (Secondary) / `#fd761a` (Container)
+- **Backgrounds:** `#f7f9fb` (Surface) / `#ffffff` (Surface Lowest)
+- **Success/Error:** Standardized tonal reds and greens via `error` and `surface_tint` tokens.
+
+##### Signature Rules
+*   **The "No-Line" Rule:** We strictly prohibit 1px solid borders for sectioning. Boundaries must be defined solely through background color shifts. For example, a search filter section using `surface_container_low` sits directly on a `surface` background without a stroke.
+*   **Surface Hierarchy & Nesting:** Treat the UI as physical layers. An auction card (`surface_container_lowest`) should sit atop a section background (`surface_container_low`) to create a natural "lift."
+*   **The "Glass & Gradient" Rule:** Use Glassmorphism for floating navigation and high-level overlays. Apply `surface` colors at 80% opacity with a `backdrop-filter: blur(20px)` to create a premium, frosted-glass effect. 
+*   **Signature Textures:** Main CTAs should not be flat. Use a subtle linear gradient from `primary` to `primary_container` (Teal) or `secondary` to `secondary_container` (Orange) at a 135-degree angle to add "soul" and dimension.
+
+---
+
+#### 3. Typography: Editorial Authority
+We utilize two distinct typefaces to create a custom, high-end feel.
+
+*   **Display & Headlines (Plus Jakarta Sans):** Used for large headers and auction titles. Its geometric yet friendly curves reflect the "spring/summer" vibe.
+*   **Body & Labels (Manrope / Pretendard):** Optimized for high legibility in auction details and form inputs.
+
+**Hierarchy Principles:**
+- **High Contrast:** Use `display-lg` (3.5rem) for hero statements to create an editorial impact.
+- **Micro-Copy:** Use `label-md` with increased letter-spacing for meta-data (e.g., "AUCTION ENDS IN") to provide an authoritative, clean look.
+
+---
+
+#### 4. Elevation & Depth
+Depth is achieved through **Tonal Layering** rather than traditional drop shadows.
+
+*   **The Layering Principle:** Stacking surface tiers defines priority. 
+    *   *Base:* `surface`
+    *   *Section:* `surface_container_low`
+    *   *Interactive Card:* `surface_container_lowest` (Pure White)
+*   **Ambient Shadows:** For floating modals or "active" states, use extra-diffused shadows.
+    *   *Token:* `box-shadow: 0 12px 40px rgba(0, 104, 95, 0.06);` (Notice the tint is a low-opacity version of the Primary Teal, not black/gray).
+*   **The "Ghost Border" Fallback:** If a border is required for accessibility, use the `outline_variant` token at 15% opacity. Never use 100% opaque borders.
+
+---
+
+#### 5. Components
+
+##### 5.1 Buttons (버튼)
+All buttons use the `md` (0.75rem) or `lg` (1rem) roundedness scale.
+- **Primary (주요 버튼):** Teal gradient (`primary` to `primary_container`). White text. No border.
+- **Secondary (보조 버튼):** Orange gradient (`secondary` to `secondary_container`). White text.
+- **Ghost/Outline (고스트 버튼):** No background. `primary` text. Use the "Ghost Border" rule if necessary.
+- **Disabled:** `surface_dim` background with `on_surface_variant` text.
+
+##### 5.2 Form Elements (폼 요소)
+- **Input Fields (입력창):** Use `surface_container_high` backgrounds instead of white boxes with borders. On focus, transition the background to `surface_lowest` and add a 2px `primary` ghost border (20% opacity).
+- **Checkboxes & Radios:** When checked, use `primary` (Teal). Use a soft `primary_fixed` shadow to indicate the active state.
+
+##### 5.3 Feedback & Navigation (피드백 및 내비게이션)
+- **Modals (모달):** Glassmorphic header with `surface_container_lowest` body. Use `xl` (1.5rem) corner radius for a friendly, modern feel.
+- **Mobile Tab Bar (모바일 탭바):** A floating glass element centered at the bottom, using `surface` with 80% opacity and a subtle ambient shadow.
+- **Lists (리스트):** Forbid dividers. Use `spacing.8` (2rem) of vertical white space or alternating subtle background shifts (`surface` vs `surface_container_low`).
+
+##### 5.4 Signature Component: The Auction Card
+A bespoke card for bus auctions.
+- Background: `surface_container_lowest`.
+- Radius: `lg` (1rem).
+- Detail: A subtle orange accent line (2px) on the left side of the card to denote "High Priority" or "Ending Soon," rather than an intrusive badge.
+
+---
+
+#### 6. Do's and Don'ts
+
+##### Do (권장 사항)
+- **Do** use whitespace as a functional tool to group information.
+- **Do** use the Teal primary for "Action" and Orange secondary for "Urgency/Attention."
+- **Do** ensure all Korean text uses `Pretendard` for perfect weight distribution and readability across devices.
+- **Do** use the `surface_bright` token for backgrounds in sunny, outdoor-themed sections.
+
+##### Don't (금지 사항)
+- **Don't** use 1px solid black or dark gray borders.
+- **Don't** use standard drop shadows (e.g., `rgba(0,0,0,0.5)`). Only use tinted, ambient shadows.
+- **Don't** crowd the screen. If a section feels busy, increase the spacing token by one level (e.g., from `spacing.4` to `spacing.6`).
+- **Don't** use sharp corners. Everything must feel organic and approachable, staying within the `md` to `xl` roundedness range.

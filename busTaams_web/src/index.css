@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Noto Sans KR', sans-serif;
+  }
+}
+
+@layer utilities {
+  .bg-spring-gradient {
+    background: linear-gradient(135deg, #fce4ec 0%, #e8f5e9 50%, #e3f2fd 100%);
+  }
+  .hero-overlay {
+    background: linear-gradient(rgba(0,0,0,0.1), rgba(0,0,0,0.3));
+  }
+}
