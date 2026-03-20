@@ -14,15 +14,42 @@
 - **상세 설명:** 
   - 일반 웹 사용자를 위한 프론트엔드 서비스입니다.
   - iOS, iPadOS, Windows 등 다양한 OS 및 디바이스 환경에서 원활하게 동작하도록 **반응형 웹(Responsive Web)**으로 구축됩니다.
-  - 백엔드(`busTaams_api`)에서 제공하는 REST API를 호출하여 데이터를 연동합니다.
+  - 백엔드(`busTaams_server`)에서 제공하는 REST API를 호출하여 데이터를 연동합니다.
 
 ### 2. 백엔드 (Backend)
-- **작성 폴더:** `busTaams_api`
-- **기술 스택:** Java (MVC 패턴)
+- **작성 폴더:** `busTaams_server`
+- **기술 스택:** Node.js (Express)
 - **상세 설명:**
   - 데이터 처리 및 비즈니스 로직을 담당하는 핵심 서버 파트입니다.
-  - 프론트엔드(`busTaams_web`) 및 앱 프론트(`busTaams_app`)와 통신하기 위한 **REST API**를 제공합니다.
-  - 이 폴더 내에서 Web과 App을 위한 Java 소스와 REST API 코드를 통합하여 함께 관리합니다.
+  - 프론트엔드(`busTaams_web`) 및 앱 프론트(`busTaams_app`)와 통신하기 위한 **REST API / JSON 응답**을 전담합니다.
+
+---
+
+### 💡 React + Node.js 풀스택 아키텍처 (작동 원리 및 이점)
+
+#### 1. 왜 이 조합이 좋은가요?
+- **언어의 통일성 (JavaScript)**: 프론트엔드와 백엔드 모두 자바스크립트(또는 타입스크립트)를 사용합니다. 문법이 같아서 전환이 빠르고, 코드를 공유하기 좋습니다.
+- **비동기 처리 효율성**: Node.js는 가볍고 빠르며, 많은 사용자의 요청을 동시에 처리하는 데 특화되어 있어 React 앱의 서버로 매우 적합합니다.
+- **강력한 커뮤니티**: npm(노드 패키지 매니저)을 통해 필요한 기능을 거의 대부분 라이브러리로 파워풀하게 가져다 쓸 수 있습니다.
+
+#### 2. 어떻게 연결되나요? (작동 원리)
+보통 다음과 같은 흐름으로 데이터를 주고받습니다.
+- **React (프론트)**: 사용자가 버튼을 누르면(예: 버스 입찰 신청), API 요청(`fetch` 또는 `axios`)을 보냅니다.
+- **Node.js (백엔드)**: 요청을 받아 데이터베이스(DB)에서 정보를 꺼내거나 저장합니다.
+- **응답 (Response)**: 서버가 처리 결과를 JSON 형태로 React에 돌려주면, React가 화면을 부드럽게 업데이트합니다.
+
+#### 3. 프로젝트 구조 추천
+현재 `bus-taams` 폴더 안에 프론트와 백엔드를 분리해서 독립적으로 관리하는 것이 버전에 따른 협업과 배포에 유리합니다.
+- `busTaams_web/`: React 프론트엔드 (현재 작업 중인 곳)
+- `busTaams_server/`: Node.js 백엔드 (새로 구축하실 곳)
+- `busTaams_admin/`: 관리자용 React 페이지 (이미 폴더를 만드셨네요!)
+
+#### 4. 지금 바로 시작해볼 수 있는 체크리스트
+- [ ] **Node.js 서버 폴더 생성**: 터미널에서 `mkdir busTaams_server` 명령어를 통해 서버 폴더 뼈대 생성
+- [ ] **Express 설치**: Node.js에서 가장 많이 쓰는 웹 프레임워크인 Express를 설치해서 서버 라우팅 뼈대를 편하게 잡습니다.
+- [ ] **API 설계**: "입찰 목록 가져오기", "로그인하기" 등 프론트엔드에서 필요한 기능들을 서버 내 함수로 정의합니다.
+
+---
 
 ### 3. 관리자 (Admin)
 - **작성 폴더:** `busTaams_admin`
@@ -34,7 +61,7 @@
 - **작성 폴더:** `busTaams_app`
 - **상세 설명:**
   - 모바일 애플리케이션 화면을 구성하는 앱의 프론트엔드 요소입니다.
-  - 서버 측 데이터 처리는 `busTaams_api` 폴더에서 일괄 관리되며, REST API를 통해 연동됩니다.
+  - 서버 측 데이터 처리 및 비즈니스 로직은 `busTaams_server` 폴더에서 일괄 관리되며, REST API를 통해 연동됩니다.
 
 ---
 
@@ -42,11 +69,17 @@
 
 ```text
 bustaams/
-├── busTaams_web/      # [프론트엔드] React 기반 반응형 웹 (iOS, iPadOS, Windows 지원)
-├── busTaams_api/      # [백엔드] Java MVC 기반, Web/App 공통 기능 및 REST API 제공
-├── busTaams_admin/    # [관리자] 관리자 전용 프론트엔드/백엔드 (별도 관리자 URL 사용)
+├── busTaams_web/      # [프론트엔드] React 기반 반응형 웹 (현재 작업 중)
+├── busTaams_server/   # [백엔드] Node.js(Express) 기반, Web/App 공통 기능 및 JSON API 제공 (기존 Java 대체)
+├── busTaams_admin/    # [관리자] 관리자 전용 React 페이지 (별도 관리자 URL 사용)
 └── busTaams_app/      # [앱프론트] 모바일 앱 프론트엔드
 ```
+
+### 💡 풀스택 구조에서의 정확한 역할 (쉽게 정리한 상태)
+새로운 Node.js 기반 환경에서는 **`busTaams_server` 폴더 하나가 백엔드의 모든 역할(비즈니스 로직 처리 + REST API 라우팅)을 통째로 전담**합니다. 
+- **`busTaams_web`**: 껍데기(UI) 화면을 유저에게 보여주며, 유저 클릭 등의 액션 발생 시 `busTaams_server`로 API 요청(문서)을 보냅니다.
+- **`busTaams_server`**: 유저의 요청을 받아들여(REST API 수신) 유효성을 확인하고, DB(`TB_USER` 등)를 조작한 뒤 그 결과값을 다시 JSON의 형태로 프론트엔드에 응답해 주는 "완전한 뒷단 서버" 역할을 수행합니다. 
+- **(🚫 기존 `busTaams_api` 폴더 제한)**: Node.js로의 백엔드 통합 변경에 따라, 기존 Java 기반의 `busTaams_api`는 사용하지 않고 영구 폐기(또는 아카이브 보관)합니다. 즉 앞으로의 모든 DB 연동 및 API 코딩은 오직 **`busTaams_server`** 폴더 안에서 진행됩니다.
 
 ---
 
