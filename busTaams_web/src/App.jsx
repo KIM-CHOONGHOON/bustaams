@@ -7,13 +7,13 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAU5QJ2pnJb37BJ3iUXoppMoi3kRgP55QI",
-  authDomain: "project-d481af23-2c56-483d-956.firebaseapp.com",
-  projectId: "project-d481af23-2c56-483d-956",
-  storageBucket: "project-d481af23-2c56-483d-956.firebasestorage.app",
-  messagingSenderId: "98374123431",
-  appId: "1:98374123431:web:7db538cf23173492e74082",
-  measurementId: "G-XR2RWVL6B4"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 try {
@@ -497,6 +497,9 @@ function DriverProfileModal({ close }) {
 }
 
 function SignUpModal({ close }) {
+  // 모든 API 호출의 base URL - 환경변수에서 로드 (하드코딩 금지)
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
+
   const sigCanvas = useRef(null);
   const [userRole, setUserRole] = useState('customer');
   const [password, setPassword] = useState('');
@@ -570,7 +573,7 @@ function SignUpModal({ close }) {
   const handleEmailBlur = async () => {
     if (!email) return;
     try {
-      const res = await fetch(`http://127.0.0.1:8080/api/auth/check-email?email=${encodeURIComponent(email)}`);
+      const res = await fetch(`${API_BASE}/api/auth/check-email?email=${encodeURIComponent(email)}`);
       const data = await res.json();
       if (res.status === 409) setEmailError(data.message);
       else setEmailError('');
@@ -582,7 +585,7 @@ function SignUpModal({ close }) {
   // 전화번호 인증 완료 후 중복 검사
   const checkPhoneDuplicate = async (phoneNo) => {
     try {
-      const res = await fetch(`http://127.0.0.1:8080/api/auth/check-phone?phoneNo=${encodeURIComponent(phoneNo)}`);
+      const res = await fetch(`${API_BASE}/api/auth/check-phone?phoneNo=${encodeURIComponent(phoneNo)}`);
       const data = await res.json();
       if (res.status === 409) {
         setPhoneError(data.message);
@@ -592,7 +595,7 @@ function SignUpModal({ close }) {
       return true;
     } catch (e) {
       console.warn('전화번호 중복 검사 실패 (서버 미응답)', e);
-      return true; // 서버 오류 시 통과 허용
+      return true;
     }
   };
 
@@ -674,7 +677,7 @@ function SignUpModal({ close }) {
     const agreedTerms = Object.keys(agreements).filter(k => k !== 'all' && agreements[k]).map((k, idx) => idx + 1);
 
     try {
-      const res = await window.fetch('http://127.0.0.1:8080/api/auth/register', {
+      const res = await window.fetch(`${API_BASE}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
