@@ -83,26 +83,37 @@ bustaams/
 
 ---
 
-## 📂 파일 저장 경로 (File Storage Paths)
+## 📂 파일 및 스토리지 아키텍처 (Storage Architecture)
 
-본 프로젝트에서 사용되는 주요 인증/증명서 정적 파일들은 프론트엔드 환경의 `assets` 폴더 하위에서 체계적으로 분류되어 관리됩니다.
+본 프로젝트는 소스 코드의 무결성(Integrity)을 유지하고 서버 운영/배포의 독립성을 보장하기 위해, 앱 구동에 필요한 고정 리소스(Static)와 유저가 생성하는 동적 리소스(Dynamic)의 저장소를 물리적으로 완벽히 분리하여 운영합니다.
 
-### 1. 공용 이미지 에셋 (Common Images)
-bustaams 프로젝트 전반의 화면 UI를 구성하는 데 필요한 범용적인 디자인 이미지 파일들은 별도의 이미지 전용 폴더로 모아 관리합니다.
-- **경로:** `busTaams_web/src/assets/images/`
-- **용도:** 회사 로고(`bustaams_bus_logo.png`), 아이콘, 배경화면 등 어플리케이션 전반에서 공용으로 사용되는 모든 `.png` 및 시각적 정적 이미지 파일 보관
+### 1. [Workspace] 공용 정적 에셋 (Static UI Assets)
+애플리케이션 전반의 UI 디자인을 구성하는 고정 이미지들은 프론트엔드 코드 저장소 내부에 포함되어 브라우저 내 빌드(Build) 결과물과 함께 서비스됩니다.
+- **물리적 경로:** `busTaams_web/src/assets/images/`
+- **저장 대상:** 회사 공식 로고(`bustaams_bus_logo.png`), UI 패턴, 고정된 배경화면 아이콘 등
 
-### 2. 기사님 증명서 관리
-기사님의 신뢰도를 검증하기 위한 필수 자격/증명 서류들은 `busTaams_web/src/assets/certificates/` 폴더 하위에서 용도별로 격리되어 저장됩니다.
+### 2. [Google Cloud Storage] 사용자 동적 업로드 데이터 분리 저장 (Dynamic Data)
+Git 저장소의 치명적 오염과 서버 스케일아웃(Scale-out) 시 발생하는 파일 동기화·용량 한계 이슈를 원천 차단하기 위해, 회원이 능동적으로 생성/업로드하는 모든 개인정보 및 파일은 앱 서버(Workspace)가 아닌 **구글 클라우드 스토리지(Google Cloud Storage, GCS)** 시스템에 완벽히 독립적으로 저장됩니다. 
 
-- **버스운전 자격증 증명서**
-  - **경로:** `busTaams_web/src/assets/certificates/bus_licenses/`
-  - **용도:** 기사님이 업로드한 버스운전 자격증 원본 이미지 및 사본 파일 보관
-- **무사고 증명서**
-  - **경로:** `busTaams_web/src/assets/certificates/accident_free/`
-  - **용도:** 무사고 운전 경력 증명서 파일 보관
+파일의 종류 및 보안 접근(Access Control) 목적에 따라 GCS 버킷(Bucket) 내 하위 폴더 트리(Prefix)를 다음과 같이 강제 분류하여 관리합니다.
 
-*※ 향후 사업자등록증 등 추가 증명서가 필요할 경우, 동일하게 `certificates/` 하위에 새로운 하위 폴더를 생성하여 일관된 파일 트리 구조를 유지합니다.*
+- **2-1. [서명 데이터] 전자 서명 파일 보관소**
+  - **GCS 경로:** `gs://[프로젝트ID]-secure-bucket/signatures/{YYYYMM}/`
+  - **용도:** 회원 가입 및 제휴 맺을 때 생성/캡처되는 `.png` 형태의 서명 이미지 전용 저장소
+  - **접근 권한:** Private (백엔드에서 임시로 발급하는 Signed URL을 통해서만 조회 가능)
+  
+- **2-2. [기사 서류] 민감 자격 증명서 보관소**
+  - **GCS 경로:** `gs://[프로젝트ID]-secure-bucket/certificates/bus_licenses/` (버스 운전 자격증 사본)
+  - **GCS 경로:** `gs://[프로젝트ID]-secure-bucket/certificates/accident_free/` (무사고 운전 경력 증명서)
+  - **용도:** 시스템상 가장 엄격한 취급이 필요한 기사님의 물리적 사진/스캔 증명서 데이터 적재
+  - **접근 권한:** Strict Private (인가된 관리자 및 자사 시스템 내 REST API를 통해서만 열람 가능)
+
+- **2-3. [서비스 공통 서류] 약관 및 규정 정적 문서 저장소**
+  - **GCS 경로:** `gs://[프로젝트ID]-public-bucket/terms/`
+  - **용도:** 데이터베이스 테이블 관리가 어려운 분량의 약관 PDF 문서(`서비스이용약관.pdf` 등), 마케팅 동의서 원본 파일 보관용
+  - **접근 권한:** Public Read (누구나 다운로드 가능하도록 CDN 캐싱을 통해 배포 권장)
+
+*※ 핵심 룰: 백엔드(`busTaams_server`)는 클라이언트가 전송한 바이너리 파일이나 생성된 캔버스 PNG 값을 수신한 즉시 GCS로 업로드 요청 스트림을 전송해야 하며, MySQL 데이터베이스(`TB_USER` 등)에는 파일 원본이나 바이너리가 아닌, 발급된 GCS 스토리지 최종 접근 URL 주소(`https://storage.googleapis.com/...`) 문자열만 기록해야 합니다.*
 
 ---
 

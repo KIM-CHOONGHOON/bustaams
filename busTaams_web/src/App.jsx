@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import SignatureCanvas from 'react-signature-canvas';
 import busLogo from './assets/images/bustaams_bus_logo.png';
 import nameLogo from './assets/images/bustaams_name_logo.png';
 
-function Header({ setShowLoginModal, setShowDriverProfileModal, userRole }) {
+function Header({ setShowLoginModal, setShowDriverProfileModal, setShowSignUpModal, userRole }) {
   // Glassmorphic header
   return (
     <header className="sticky top-0 z-50 bg-surface/80 backdrop-blur-xl transition-all">
@@ -49,7 +50,12 @@ function Header({ setShowLoginModal, setShowDriverProfileModal, userRole }) {
             로그인
           </button>
           {/* Primary CTA button with gradient */}
-          <button className="px-6 py-3 text-base font-bold bg-gradient-to-br from-primary to-primary-container text-white rounded-lg hover:opacity-90 transition-opacity shadow-ambient">회원가입</button>
+          <button 
+            className="px-6 py-3 text-base font-bold bg-gradient-to-br from-primary to-primary-container text-white rounded-lg hover:opacity-90 transition-opacity shadow-ambient"
+            onClick={() => setShowSignUpModal(true)}
+          >
+            회원가입
+          </button>
         </div>
       </div>
     </header>
@@ -226,7 +232,7 @@ function LoginModal({ close }) {
 
         <div className="flex items-center p-10 pb-6 justify-center">
           <h1 className="font-display text-primary text-3xl font-bold tracking-tight flex items-center gap-3">
-            <span className="material-symbols-outlined text-secondary text-3xl">directions_bus</span>
+            <img src={busLogo} alt="bus icon" className="w-16 h-16 object-contain mix-blend-multiply" />
             BUS TAMS
           </h1>
         </div>
@@ -467,14 +473,301 @@ function DriverProfileModal({ close }) {
   );
 }
 
+function SignUpModal({ close }) {
+  const sigCanvas = useRef({});
+  const [userRole, setUserRole] = useState('customer');
+  const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [signature, setSignature] = useState('');
+  const [hasSignature, setHasSignature] = useState(false);
+
+  const clearSignature = () => {
+    if (sigCanvas.current && sigCanvas.current.clear) {
+      sigCanvas.current.clear();
+    }
+    setSignature('');
+    setHasSignature(false);
+  };
+
+  const handleEndDrawing = () => {
+    if (sigCanvas.current && sigCanvas.current.getTrimmedCanvas) {
+      setSignature(sigCanvas.current.getTrimmedCanvas().toDataURL('image/png'));
+      setHasSignature(true);
+    }
+  };
+
+  const [agreements, setAgreements] = useState({
+    all: false,
+    term1: false,
+    term2: false,
+    term3: false,
+    termMarketing: false,
+    termDriver: false
+  });
+
+  const allRequiredChecked = agreements.term1 && agreements.term2 && agreements.term3 && (userRole === 'customer' || agreements.termDriver);
+
+  const handleAllAgree = (e) => {
+    const checked = e.target.checked;
+    setAgreements({
+      all: checked,
+      term1: checked,
+      term2: checked,
+      term3: checked,
+      termMarketing: checked,
+      termDriver: userRole === 'driver' ? checked : false
+    });
+  };
+
+  const handleAgreeChange = (key) => (e) => {
+    const checked = e.target.checked;
+    setAgreements(prev => {
+      const next = { ...prev, [key]: checked };
+      next.all = next.term1 && next.term2 && next.term3 && next.termMarketing && (userRole === 'customer' || next.termDriver);
+      return next;
+    });
+  };
+
+  const validatePassword = (pw) => {
+    // 6자리 이상, 문자, 숫자, 특수문자 조합
+    const regex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{6,}$/;
+    return regex.test(pw);
+  };
+
+  const handlePasswordChange = (e) => {
+    const val = e.target.value;
+    setPassword(val);
+    if (val.length > 0 && !validatePassword(val)) {
+      setPasswordError('6자리 이상 문자+숫자+특수문자 조합이어야 합니다.');
+    } else {
+      setPasswordError('');
+    }
+  };
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="absolute inset-0 cursor-pointer" onClick={close}></div>
+      <div className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto no-scrollbar bg-surface-lowest rounded-2xl shadow-ambient p-8 md:p-12 animate-in zoom-in-95 duration-200">
+        <div className="absolute top-0 left-0 w-full h-1 bg-primary"></div>
+        <button onClick={close} className="absolute top-6 right-6 w-10 h-10 flex items-center justify-center bg-surface hover:bg-surface-container-low text-gray-500 rounded-lg transition-colors z-10">
+          <span className="material-symbols-outlined font-bold">close</span>
+        </button>
+        
+        <div className="flex items-center justify-center mb-8">
+          <h1 className="font-display text-primary text-4xl font-extrabold tracking-tight flex items-center gap-3">
+            <img src={busLogo} alt="bus icon" className="w-20 h-20 object-contain mix-blend-multiply" />
+            BUS TAMS
+          </h1>
+        </div>
+
+        <div className="mb-8">
+          <div className="flex bg-surface-container-low p-1.5 rounded-xl mb-6">
+            <button 
+              onClick={() => setUserRole('customer')}
+              className={`flex-1 flex items-center justify-center py-3 rounded-lg transition-all duration-200 ${userRole === 'customer' ? 'bg-surface-lowest shadow-sm text-gray-900 font-bold' : 'text-gray-500 hover:text-gray-800 font-medium'}`}
+            >
+              <span className="text-sm tracking-wide">소비자</span>
+            </button>
+            <button 
+              onClick={() => setUserRole('driver')}
+              className={`flex-1 flex items-center justify-center py-3 rounded-lg transition-all duration-200 ${userRole === 'driver' ? 'bg-surface-lowest shadow-sm text-gray-900 font-bold' : 'text-gray-500 hover:text-gray-800 font-medium'}`}
+            >
+              <span className="text-sm tracking-wide">기사님</span>
+            </button>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button className="flex-1 flex items-center justify-center gap-3 py-3.5 rounded-xl bg-[#FEE500] hover:opacity-90 transition-opacity duration-200 shadow-sm">
+              <span className="material-symbols-outlined text-black">chat_bubble</span>
+              <span className="font-bold text-sm text-black">카카오 회원 간편 가입</span>
+            </button>
+            <button className="flex-1 flex items-center justify-center gap-3 py-3.5 rounded-xl bg-[#03C75A] hover:opacity-90 transition-opacity duration-200 shadow-sm">
+              <span className="material-symbols-outlined text-white">circle</span>
+              <span className="font-bold text-sm text-white">네이버 회원 간편 가입</span>
+            </button>
+          </div>
+          <div className="relative flex items-center py-6">
+            <div className="flex-grow border-t border-surface-container-low"></div>
+            <span className="flex-shrink mx-4 text-gray-400 text-xs font-bold tracking-widest uppercase">OR SIGNUP WITH EMAIL</span>
+            <div className="flex-grow border-t border-surface-container-low"></div>
+          </div>
+        </div>
+
+        <form className="space-y-5" onSubmit={(e) => e.preventDefault()}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-500 tracking-wider uppercase ml-1">Name</label>
+              <input className="w-full px-4 py-3.5 bg-surface-container-low border-2 border-transparent rounded-xl focus:ring-0 focus:border-primary/30 focus:bg-surface-lowest transition-all outline-none text-gray-900 font-medium" placeholder="실명을 입력해주세요" type="text"/>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-500 tracking-wider uppercase ml-1">Email (ID)</label>
+              <input className="w-full px-4 py-3.5 bg-surface-container-low border-2 border-transparent rounded-xl focus:ring-0 focus:border-primary/30 focus:bg-surface-lowest transition-all outline-none text-gray-900 font-medium" placeholder="email@example.com" type="email"/>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-500 tracking-wider uppercase ml-1">Password</label>
+              <div className="relative">
+                <input 
+                  className={`w-full px-4 py-3.5 bg-surface-container-low border-2 ${passwordError && password.length > 0 ? 'border-red-400 focus:border-red-500' : 'border-transparent focus:border-primary/30'} rounded-xl focus:ring-0 focus:bg-surface-lowest transition-all outline-none text-gray-900 font-medium`} 
+                  placeholder="6자리 이상 문자+숫자+특수문자" 
+                  type="password"
+                  value={password}
+                  onChange={handlePasswordChange}
+                />
+                <button className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors" type="button">
+                  <span className="material-symbols-outlined text-xl">visibility</span>
+                </button>
+              </div>
+              {passwordError && password.length > 0 && <p className="text-xs text-red-500 ml-1 font-bold">{passwordError}</p>}
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-500 tracking-wider uppercase ml-1">Confirm Password</label>
+              <div className="relative">
+                <input 
+                  className={`w-full px-4 py-3.5 bg-surface-container-low border-2 ${passwordConfirm.length > 0 && password !== passwordConfirm ? 'border-red-400 focus:border-red-500' : 'border-transparent focus:border-primary/30'} rounded-xl focus:ring-0 focus:bg-surface-lowest transition-all outline-none text-gray-900 font-medium`} 
+                  placeholder="비밀번호 재입력" 
+                  type="password"
+                  value={passwordConfirm}
+                  onChange={(e) => setPasswordConfirm(e.target.value)}
+                />
+              </div>
+              {passwordConfirm.length > 0 && password !== passwordConfirm && <p className="text-xs text-red-500 ml-1 font-bold">비밀번호가 일치하지 않습니다.</p>}
+            </div>
+          </div>
+          <div className="space-y-3 pt-2">
+            <label className="text-xs font-bold text-gray-500 tracking-wider uppercase ml-1">Phone Verification</label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <select className="px-3 py-3.5 sm:w-[130px] bg-surface-container-low border-2 border-transparent rounded-xl focus:ring-0 focus:border-primary/30 focus:bg-surface-lowest transition-all outline-none text-gray-900 font-medium cursor-pointer">
+                <option value="" disabled selected>통신사 선택</option>
+                <option value="SKT">SKT</option>
+                <option value="KT">KT</option>
+                <option value="LGU">LG U+</option>
+                <option value="SKT_MVNO">SKT 알뜰폰</option>
+                <option value="KT_MVNO">KT 알뜰폰</option>
+                <option value="LGU_MVNO">LGU+ 알뜰폰</option>
+              </select>
+              <input className="flex-grow px-4 py-3.5 bg-surface-container-low border-2 border-transparent rounded-xl focus:ring-0 focus:border-primary/30 focus:bg-surface-lowest transition-all outline-none text-gray-900 font-medium" placeholder="010-0000-0000" type="tel"/>
+              <button className="px-6 py-3.5 bg-gray-900 text-white font-bold rounded-xl active:scale-95 transition-transform whitespace-nowrap" type="button">인증 요청</button>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input className="flex-grow px-4 py-3.5 bg-surface-container-low border-2 border-transparent rounded-xl focus:ring-0 focus:border-primary/30 focus:bg-surface-lowest transition-all outline-none text-gray-900 font-medium" placeholder="수신된 인증번호 6자리" type="text"/>
+              <button className="px-6 py-3.5 border-2 border-primary text-primary font-bold rounded-xl hover:bg-primary/5 active:scale-95 transition-transform" type="button">확인</button>
+            </div>
+          </div>
+          <div className="space-y-3 pt-4 border-t border-surface-container-low mt-4">
+            <label className="flex items-center gap-3 cursor-pointer group pb-1">
+              <input className="w-5 h-5 rounded text-primary border-gray-300 focus:ring-primary" type="checkbox" checked={agreements.all} onChange={handleAllAgree} />
+              <span className="text-sm font-bold text-gray-900">전체 약관에 동의합니다</span>
+            </label>
+            <div className="pl-8 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input className="w-4 h-4 rounded text-primary border-gray-300 focus:ring-primary" type="checkbox" checked={agreements.term1} onChange={handleAgreeChange('term1')} />
+                  <span className="text-xs font-medium text-gray-600">통합이용약관 (필수)</span>
+                </label>
+                <button type="button" className="text-gray-400 hover:text-gray-700 text-[11px] font-bold px-2 py-1 rounded bg-surface-container-low transition-colors">[보기]</button>
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input className="w-4 h-4 rounded text-primary border-gray-300 focus:ring-primary" type="checkbox" checked={agreements.term2} onChange={handleAgreeChange('term2')} />
+                  <span className="text-xs font-medium text-gray-600">개인정보 처리방침 (필수)</span>
+                </label>
+                <button type="button" className="text-gray-400 hover:text-gray-700 text-[11px] font-bold px-2 py-1 rounded bg-surface-container-low transition-colors">[보기]</button>
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input className="w-4 h-4 rounded text-primary border-gray-300 focus:ring-primary" type="checkbox" checked={agreements.term3} onChange={handleAgreeChange('term3')} />
+                  <span className="text-xs font-medium text-gray-600">위치정보 이용약관 (필수)</span>
+                </label>
+                <button type="button" className="text-gray-400 hover:text-gray-700 text-[11px] font-bold px-2 py-1 rounded bg-surface-container-low transition-colors">[보기]</button>
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input className="w-4 h-4 rounded text-primary border-gray-300 focus:ring-primary" type="checkbox" checked={agreements.termMarketing} onChange={handleAgreeChange('termMarketing')} />
+                  <span className="text-xs font-medium text-gray-600">마케팅정보 수신 동의서 (선택)</span>
+                </label>
+                <button type="button" className="text-gray-400 hover:text-gray-700 text-[11px] font-bold px-2 py-1 rounded bg-surface-container-low transition-colors">[보기]</button>
+              </div>
+              {userRole === 'driver' && (
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input className="w-4 h-4 rounded text-primary border-gray-300 focus:ring-primary" type="checkbox" checked={agreements.termDriver} onChange={handleAgreeChange('termDriver')} />
+                    <span className="text-xs font-bold text-secondary">파트너(기사님) 입점 계약서 (필수)</span>
+                  </label>
+                  <button type="button" className="text-gray-400 hover:text-gray-700 text-[11px] font-bold px-2 py-1 rounded bg-surface-container-low transition-colors">[보기]</button>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div className="pt-6 border-t border-surface-container-low mt-6">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-bold text-gray-500 tracking-wider uppercase ml-1 block">서명 또는 사인 (이름 정자 입력)</label>
+              {allRequiredChecked && (
+                <button type="button" onClick={clearSignature} className="text-xs font-bold text-gray-500 hover:text-gray-800 bg-surface-container-low hover:bg-surface-container px-3 py-1.5 rounded-lg transition-colors">
+                  지우기 (다시 쓰기)
+                </button>
+              )}
+            </div>
+            
+            <div className={`relative w-full h-36 md:h-44 rounded-[2rem] border-2 transition-all overflow-hidden ${allRequiredChecked ? 'border-[#007E69]/30 bg-white' : 'border-transparent bg-surface-container-low opacity-50 cursor-not-allowed'}`}>
+              {!hasSignature && allRequiredChecked && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+                  <span className="text-gray-400 font-bold text-lg">정자로 이름을 입력해주세요</span>
+                </div>
+              )}
+              {!allRequiredChecked && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+                  <span className="text-gray-400 font-bold">모든 필수 약관에 동의해야 서명이 가능합니다</span>
+                </div>
+              )}
+              
+              <div className={`w-full h-full relative z-10 ${!allRequiredChecked ? 'pointer-events-none' : ''}`}>
+                <SignatureCanvas
+                  ref={sigCanvas}
+                  penColor="#007E69"
+                  minWidth={1.5}
+                  maxWidth={3}
+                  velocityFilterWeight={0.7}
+                  onEnd={handleEndDrawing}
+                  clearOnResize={false}
+                  canvasProps={{ className: 'w-full h-full' }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <button className="w-full py-4 mt-8 bg-[#007E69] text-white text-lg font-extrabold rounded-full shadow-md hover:bg-[#006A58] active:scale-[0.98] transition-all" type="submit">
+            회원 가입 완료하기
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showDriverProfileModal, setShowDriverProfileModal] = useState(false);
+  const [showSignUpModal, setShowSignUpModal] = useState(false);
   const [userRole, setUserRole] = useState('customer');
 
   return (
     <div className="min-h-screen flex flex-col font-body selection:bg-primary/20 selection:text-primary">
-      <Header setShowLoginModal={setShowLoginModal} setShowDriverProfileModal={setShowDriverProfileModal} userRole={userRole} />
+      <Header 
+        setShowLoginModal={setShowLoginModal} 
+        setShowDriverProfileModal={setShowDriverProfileModal} 
+        setShowSignUpModal={setShowSignUpModal}
+        userRole={userRole} 
+      />
       <main className="flex-1">
         <Hero />
         <Features />
@@ -484,6 +777,7 @@ function App() {
       
       {showLoginModal && <LoginModal close={() => setShowLoginModal(false)} />}
       {showDriverProfileModal && <DriverProfileModal close={() => setShowDriverProfileModal(false)} />}
+      {showSignUpModal && <SignUpModal close={() => setShowSignUpModal(false)} />}
     </div>
   );
 }
