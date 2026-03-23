@@ -150,7 +150,9 @@ app.post('/api/auth/register', async (req, res) => {
         const base64Data = signatureBase64.replace(/^data:image\/png;base64,/, "");
         const buffer = Buffer.from(base64Data, 'base64');
         const dateStr = new Date().toISOString().slice(0, 7).replace('-', ''); // YYYYMM format
-        const fileName = `${dateStr}/${userId}_sign_${Date.now()}.png`;
+        // [보안] 파일명에서도 이메일 누출 방지를 위해 UUID 사용
+        const signFileUuid = randomUUID();
+        const fileName = `${dateStr}/${signFileUuid}.png`;
         const file = bucket.file(`signatures/${fileName}`);
         
         try {
@@ -166,7 +168,6 @@ app.post('/api/auth/register', async (req, res) => {
         }
         
         const gcsUrl = `https://storage.googleapis.com/${bucketName}/signatures/${fileName}`;
-        const signFileUuid = randomUUID();
 
         // 4. DB 트랜잭션 시작
         connection = await pool.getConnection();
@@ -198,7 +199,7 @@ app.post('/api/auth/register', async (req, res) => {
                     ) VALUES ?
                 `;
                 const histValues = agreedTerms.map(termId => [
-                    userId,
+                    encryptedUserId, // [수정] 평문 userId -> 암호화된 ID 적용
                     termId,
                     signFileUuid, 
                     'Y',
