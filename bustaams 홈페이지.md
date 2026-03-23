@@ -1,6 +1,6 @@
 # bustaams 홈페이지 설계 및 구현 문서
 
-React를 기반으로 구축된 `busTaams_web` 프론트엔드의 메인 홈페이지 구성 내역입니다. **[`ARCHITECTURE.md` - DESIGN 표준 (Web & App 공통)]** 가이드라인("The Radiant Traveler")을 완벽히 엄수하여 디자인 구조가 전면 개편되었습니다.
+React를 기반으로 구축된 `busTaams_web` 프론트엔드의 메인 홈페이지 구성 내역입니다. **[[ARCHITECTURE.md](./ARCHITECTURE.md) - DESIGN 표준 (Web & App 공통)]** 가이드라인("The Radiant Traveler")을 완벽히 엄수하여 디자인 구조가 전면 개편되었습니다.
 
 ## 1. 프론트엔드 환경 및 기술 스택
 - **기반 환경:** React (Vite 빌드 도구 사용)
