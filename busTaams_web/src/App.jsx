@@ -3,8 +3,16 @@ import SignatureCanvas from 'react-signature-canvas';
 import busLogo from './assets/images/bustaams_bus_logo.png';
 import nameLogo from './assets/images/bustaams_name_logo.png';
 
-function Header({ setShowLoginModal, setShowDriverProfileModal, setShowSignUpModal, userRole }) {
-  // Glassmorphic header
+function Header({ setShowLoginModal, setShowDriverProfileModal, setShowSignUpModal, user, onLogout }) {
+  // USER_TYPE 변환 함수
+  const translateUserType = (type) => {
+    switch (type) {
+      case 'CONSUMER': return '소비자';
+      case 'DRIVER': return '기사';
+      default: return type;
+    }
+  };
+
   return (
     <header className="sticky top-0 z-50 bg-surface/80 backdrop-blur-xl transition-all">
       <div className="container mx-auto px-6 h-24 flex items-center justify-between">
@@ -16,10 +24,15 @@ function Header({ setShowLoginModal, setShowDriverProfileModal, setShowSignUpMod
           <img src={nameLogo} alt="busTaams 네임" className="h-[60px] md:h-[72px] w-auto object-contain transition-transform group-hover:scale-105" />
         </div>
         <nav className="hidden md:flex items-center gap-10 font-medium text-gray-700">
-          <a className="hover:text-primary transition-colors" href="#">이용 고객 전용</a>
+          <a 
+            className={`transition-all ${user?.userType === 'CONSUMER' ? 'text-primary font-bold cursor-pointer hover:opacity-80' : 'opacity-40 pointer-events-none cursor-not-allowed'}`} 
+            href="#"
+          >
+            이용 고객 전용
+          </a>
           
-          <div className="relative group">
-            <div className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer py-4">
+          <div className={`relative group transition-all ${user?.userType === 'DRIVER' ? 'opacity-100' : 'opacity-40 pointer-events-none cursor-not-allowed'}`}>
+            <div className={`flex items-center gap-1 transition-colors py-4 ${user?.userType === 'DRIVER' ? 'text-primary font-bold cursor-pointer hover:opacity-80' : ''}`}>
               기사님 전용
               <span className="material-symbols-outlined text-[18px]">expand_more</span>
             </div>
@@ -43,19 +56,40 @@ function Header({ setShowLoginModal, setShowDriverProfileModal, setShowSignUpMod
           <a className="hover:text-primary transition-colors" href="#">이용 약관</a>
         </nav>
         <div className="flex items-center gap-6">
-          <button 
-            className="text-base font-semibold text-gray-700 hover:text-primary transition-colors"
-            onClick={() => setShowLoginModal(true)}
-          >
-            로그인
-          </button>
-          {/* Primary CTA button with gradient */}
-          <button 
-            className="px-6 py-3 text-base font-bold bg-gradient-to-br from-primary to-primary-container text-white rounded-lg hover:opacity-90 transition-opacity shadow-ambient"
-            onClick={() => setShowSignUpModal(true)}
-          >
-            회원가입
-          </button>
+          {user ? (
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3 py-2 px-5 bg-surface-container-low rounded-full border border-primary/10 transition-all hover:bg-surface-container animate-in fade-in slide-in-from-right-4 duration-500">
+                 <span className="material-symbols-outlined text-primary text-[20px]">account_circle</span>
+                 <p className="text-gray-800 font-bold text-sm tracking-tight">
+                   <span className="text-primary">{user.userName}</span>
+                   <span className="text-gray-400 font-medium ml-1">({translateUserType(user.userType)})</span>
+                   <span className="ml-1">님, 환영합니다!</span>
+                 </p>
+              </div>
+              <button 
+                onClick={onLogout}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-gray-500 hover:text-primary hover:bg-surface-container rounded-lg transition-all"
+              >
+                <span className="material-symbols-outlined text-[18px]">logout</span>
+                로그아웃
+              </button>
+            </div>
+          ) : (
+            <>
+              <button 
+                className="text-base font-semibold text-gray-700 hover:text-primary transition-colors"
+                onClick={() => setShowLoginModal(true)}
+              >
+                로그인
+              </button>
+              <button 
+                className="px-6 py-3 text-base font-bold bg-gradient-to-br from-primary to-primary-container text-white rounded-lg hover:opacity-90 transition-opacity shadow-ambient"
+                onClick={() => setShowSignUpModal(true)}
+              >
+                회원가입
+              </button>
+            </>
+          )}
         </div>
       </div>
     </header>
@@ -206,8 +240,46 @@ function Footer() {
   );
 }
 
-function LoginModal({ close }) {
-  const [activeTab, setActiveTab] = useState('customer');
+function LoginModal({ close, onLoginSuccess }) {
+  const [userId, setUserId] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState({ text: '', type: '' });
+
+  const handleLogin = async () => {
+    if (!userId || !password) {
+      setMessage({ text: '아이디와 비밀번호를 입력해주세요.', type: 'error' });
+      return;
+    }
+
+    setIsLoading(true);
+    setMessage({ text: '', type: '' });
+
+    try {
+      const response = await fetch('http://localhost:8080/api/users/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, password }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setMessage({ text: `${result.user.userName}님, 환영합니다!`, type: 'success' });
+        setTimeout(() => {
+          onLoginSuccess(result.user);
+          close();
+        }, 1500);
+      } else {
+        setMessage({ text: result.error || '로그인에 실패했습니다.', type: 'error' });
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setMessage({ text: '서버와 통신 중 오류가 발생했습니다.', type: 'error' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // 홈페이지에 pop-up 형식으로 출력될 때, 뒷배경 스크롤 방지 효과
   useEffect(() => {
@@ -237,22 +309,6 @@ function LoginModal({ close }) {
           </h1>
         </div>
 
-        <div className="px-10 pb-10">
-          <div className="flex bg-surface-container-low p-1.5 rounded-lg">
-            <button 
-              onClick={() => setActiveTab('customer')}
-              className={`flex-1 flex flex-col items-center justify-center py-3 rounded-[0.5rem] transition-colors ${activeTab === 'customer' ? 'bg-surface-lowest shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-800'}`}
-            >
-              <p className="text-sm font-bold tracking-wide">소비자</p>
-            </button>
-            <button 
-              onClick={() => setActiveTab('driver')}
-              className={`flex-1 flex flex-col items-center justify-center py-3 rounded-[0.5rem] transition-colors ${activeTab === 'driver' ? 'bg-surface-lowest shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-800'}`}
-            >
-              <p className="text-sm font-bold tracking-wide">기사님</p>
-            </button>
-          </div>
-        </div>
 
         <div className="px-10 space-y-6">
           <div className="flex flex-col">
@@ -263,6 +319,8 @@ function LoginModal({ close }) {
                 className="w-full bg-surface-container-high focus:bg-surface-lowest border-0 focus:ring-[2px] focus:ring-primary/20 rounded-lg h-14 pl-12 pr-4 text-base font-body text-gray-900 placeholder:text-gray-400 focus:outline-none transition-all" 
                 placeholder="아이디를 입력해주세요" 
                 type="text" 
+                value={userId}
+                onChange={(e) => setUserId(e.target.value)}
               />
             </div>
           </div>
@@ -274,6 +332,9 @@ function LoginModal({ close }) {
                 className="w-full bg-surface-container-high focus:bg-surface-lowest border-0 focus:ring-[2px] focus:ring-primary/20 rounded-lg h-14 pl-12 pr-4 text-base font-body text-gray-900 placeholder:text-gray-400 focus:outline-none transition-all" 
                 placeholder="비밀번호를 입력해주세요" 
                 type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
               />
             </div>
           </div>
@@ -283,9 +344,19 @@ function LoginModal({ close }) {
           <a className="text-primary text-sm font-bold font-body hover:text-primary-container transition-colors" href="#">아이디/비밀번호 찾기</a>
         </div>
 
+        {message.text && (
+          <div className={`px-10 pt-4 text-center text-sm font-bold ${message.type === 'error' ? 'text-red-500' : 'text-primary'}`}>
+            {message.text}
+          </div>
+        )}
+
         <div className="px-10 pt-8 pb-10">
-          <button className="w-full bg-gradient-to-br from-primary to-primary-container text-white font-bold h-14 rounded-lg transition-transform hover:-translate-y-0.5 shadow-ambient flex items-center justify-center font-body text-lg">
-            로그인
+          <button 
+            onClick={handleLogin}
+            disabled={isLoading}
+            className={`w-full bg-gradient-to-br from-primary to-primary-container text-white font-bold h-14 rounded-lg transition-transform hover:-translate-y-0.5 shadow-ambient flex items-center justify-center font-body text-lg ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+          >
+            {isLoading ? '로그인 중...' : '로그인'}
           </button>
         </div>
 
@@ -319,13 +390,61 @@ function LoginModal({ close }) {
   );
 }
 
-function DriverProfileModal({ close }) {
+function DriverProfileModal({ close, user }) {
+  const [formData, setFormData] = useState({
+    licenseNo: '13-01-234567-89',
+    certPhotoUrl: '2023_cert_v2.pdf',
+    accidentFreeDoc: '',
+    membershipType: 'PREMIUM',
+    bioDesc: '안녕하세요, 15년 경력의 베테랑 기사 김태준입니다. 대형 버스 운전뿐만 아니라 고객 응대 및 안전 교육 이수 경험이 풍부합니다. 언제나 쾌적하고 안전한 여행을 약속드립니다. 특히 장거리 투어 및 단체 관광 전문입니다.',
+    profileImgUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAVP2cSwYA5bmTFahSdVEwx8d6WcQmTzsuPMdE7Spdt3qlWNaROREPNi7n5Ij7Wi1sWk19Bylt1BBmnHiVoc60Xen7h7HNqO2Ogyh_yDqJIwHCg404_HIPZa5D1d_fn66FbgOhUYXdyXGYfVU2-Pv9n8lLfol0jEUJC7befbzL8n1HdrKxKzS5mGUCyK-FWJkHGe-A2KTuRsmWeuJKiV2FgHBDVuUjZ5fdpWdQ7ISpe6fKybXD0nAvN77HjM6tTSOIy_07X0asJdn4'
+  });
+  const [isLoading, setIsLoading] = useState(false);
+
   useEffect(() => {
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = 'unset';
     };
   }, []);
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSave = async () => {
+    if (!user) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch('http://localhost:8080/api/driver/profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.userId,
+          ...formData
+        }),
+      });
+
+      const result = await response.json();
+      if (response.ok) {
+        alert('프로필이 성공적으로 저장되었습니다!');
+        close();
+      } else {
+        alert(result.error || '저장 중 오류가 발생했습니다.');
+      }
+    } catch (error) {
+      console.error('Save profile error:', error);
+      alert('서버와 통신 중 오류가 발생했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -372,7 +491,8 @@ function DriverProfileModal({ close }) {
                   className="w-full bg-surface-container-low border-2 border-transparent rounded-2xl py-4 px-5 text-gray-900 font-bold focus:ring-0 focus:border-primary/30 focus:bg-surface-lowest transition-all duration-200 outline-none" 
                   placeholder="면허 번호를 입력해주세요" 
                   type="text" 
-                  defaultValue="13-01-234567-89" 
+                  value={formData.licenseNo}
+                  onChange={(e) => handleInputChange('licenseNo', e.target.value)}
                 />
                 <span className="material-symbols-outlined absolute right-5 top-1/2 -translate-y-1/2 text-primary/50">badge</span>
               </div>
@@ -424,19 +544,28 @@ function DriverProfileModal({ close }) {
             <section className="space-y-4">
               <label className="block text-[13px] font-bold text-gray-500 tracking-wide px-1 uppercase">멤버십 유형 선택</label>
               <div className="grid grid-cols-3 gap-3">
-                <label className="flex flex-col items-center p-4 bg-surface-container-low rounded-2xl border-2 border-transparent cursor-pointer transition-all hover:bg-gray-100">
-                  <span className="text-[10px] font-black mb-2 text-gray-500 uppercase">Normal</span>
-                  <span className="material-symbols-outlined text-gray-400 text-2xl">person</span>
+                <label 
+                  onClick={() => handleInputChange('membershipType', 'NORMAL')}
+                  className={`flex flex-col items-center p-4 rounded-2xl border-2 cursor-pointer transition-all ${formData.membershipType === 'NORMAL' ? 'bg-primary text-white border-primary shadow-md transform scale-105' : 'bg-surface-container-low border-transparent hover:bg-gray-100'}`}
+                >
+                  <span className={`text-[10px] font-black mb-2 uppercase ${formData.membershipType === 'NORMAL' ? 'text-white' : 'text-gray-500'}`}>Normal</span>
+                  <span className={`material-symbols-outlined text-2xl ${formData.membershipType === 'NORMAL' ? 'text-white' : 'text-gray-400'}`}>person</span>
                 </label>
                 
-                <label className="flex flex-col items-center p-4 bg-secondary rounded-2xl border-2 border-secondary cursor-pointer shadow-md transform scale-105 transition-all text-white">
-                  <span className="text-[10px] font-black mb-2 text-white uppercase">Premium</span>
-                  <span className="material-symbols-outlined text-white text-2xl">workspace_premium</span>
+                <label 
+                  onClick={() => handleInputChange('membershipType', 'PREMIUM')}
+                  className={`flex flex-col items-center p-4 rounded-2xl border-2 cursor-pointer transition-all ${formData.membershipType === 'PREMIUM' ? 'bg-secondary text-white border-secondary shadow-md transform scale-105' : 'bg-surface-container-low border-transparent hover:bg-gray-100'}`}
+                >
+                  <span className={`text-[10px] font-black mb-2 uppercase text-white`}>Premium</span>
+                  <span className={`material-symbols-outlined text-white text-2xl`}>workspace_premium</span>
                 </label>
                 
-                <label className="flex flex-col items-center p-4 bg-surface-container-low rounded-2xl border-2 border-transparent cursor-pointer transition-all hover:bg-gray-100">
-                  <span className="text-[10px] font-black mb-2 text-gray-500 uppercase">VIP</span>
-                  <span className="material-symbols-outlined text-gray-400 text-2xl">diamond</span>
+                <label 
+                  onClick={() => handleInputChange('membershipType', 'VIP')}
+                  className={`flex flex-col items-center p-4 rounded-2xl border-2 cursor-pointer transition-all ${formData.membershipType === 'VIP' ? 'bg-[#3C1E1E] text-white border-[#3C1E1E] shadow-md transform scale-105' : 'bg-surface-container-low border-transparent hover:bg-gray-100'}`}
+                >
+                  <span className={`text-[10px] font-black mb-2 uppercase ${formData.membershipType === 'VIP' ? 'text-white' : 'text-gray-500'}`}>VIP</span>
+                  <span className={`material-symbols-outlined text-2xl ${formData.membershipType === 'VIP' ? 'text-white' : 'text-gray-400'}`}>diamond</span>
                 </label>
               </div>
             </section>
@@ -447,7 +576,8 @@ function DriverProfileModal({ close }) {
               <textarea 
                 className="w-full bg-surface-container-low border-2 border-transparent rounded-2xl py-4 px-5 text-gray-900 font-medium focus:ring-0 focus:border-primary/30 focus:bg-surface-lowest transition-all duration-200 resize-none min-h-[120px] outline-none" 
                 placeholder="간단한 자기소개를 작성해주세요."
-                defaultValue="안녕하세요, 15년 경력의 베테랑 기사 김태준입니다. 대형 버스 운전뿐만 아니라 고객 응대 및 안전 교육 이수 경험이 풍부합니다. 언제나 쾌적하고 안전한 여행을 약속드립니다. 특히 장거리 투어 및 단체 관광 전문입니다."
+                value={formData.bioDesc}
+                onChange={(e) => handleInputChange('bioDesc', e.target.value)}
               ></textarea>
             </section>
             
@@ -456,9 +586,13 @@ function DriverProfileModal({ close }) {
 
         {/* Footer */}
         <footer className="p-6 bg-surface-lowest flex flex-col gap-4 border-t border-surface-container-low z-20">
-          <button className="w-full py-4 bg-gradient-to-r from-primary to-primary-container text-white font-extrabold text-lg rounded-2xl shadow-ambient active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 group">
+          <button 
+            onClick={handleSave}
+            disabled={isLoading}
+            className={`w-full py-4 bg-gradient-to-r from-primary to-primary-container text-white font-extrabold text-lg rounded-2xl shadow-ambient active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 group ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+          >
             <span className="material-symbols-outlined text-2xl group-hover:rotate-12 transition-transform">save</span>
-            수정 사항 저장하기
+            {isLoading ? '저장 중...' : '수정 사항 저장하기'}
           </button>
           <div className="flex flex-col items-center mt-2">
             <button className="px-6 py-2 text-red-500/80 text-sm font-bold hover:text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200 flex items-center gap-2">
@@ -759,6 +893,11 @@ function App() {
   const [showDriverProfileModal, setShowDriverProfileModal] = useState(false);
   const [showSignUpModal, setShowSignUpModal] = useState(false);
   const [userRole, setUserRole] = useState('customer');
+  const [user, setUser] = useState(null);
+
+  const handleLogout = () => {
+    setUser(null);
+  };
 
   return (
     <div className="min-h-screen flex flex-col font-body selection:bg-primary/20 selection:text-primary">
@@ -766,7 +905,8 @@ function App() {
         setShowLoginModal={setShowLoginModal} 
         setShowDriverProfileModal={setShowDriverProfileModal} 
         setShowSignUpModal={setShowSignUpModal}
-        userRole={userRole} 
+        user={user}
+        onLogout={handleLogout}
       />
       <main className="flex-1">
         <Hero />
@@ -775,8 +915,13 @@ function App() {
       </main>
       <Footer />
       
-      {showLoginModal && <LoginModal close={() => setShowLoginModal(false)} />}
-      {showDriverProfileModal && <DriverProfileModal close={() => setShowDriverProfileModal(false)} />}
+      {showLoginModal && (
+        <LoginModal 
+          close={() => setShowLoginModal(false)} 
+          onLoginSuccess={(userData) => setUser(userData)} 
+        />
+      )}
+      {showDriverProfileModal && <DriverProfileModal close={() => setShowDriverProfileModal(false)} user={user} />}
       {showSignUpModal && <SignUpModal close={() => setShowSignUpModal(false)} />}
     </div>
   );

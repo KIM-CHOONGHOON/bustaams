@@ -77,7 +77,87 @@ app.post('/api/users/signup', async (req, res) => {
         res.status(500).json({ error: '데이터를 저장하는 동안 오류가 발생했습니다.' });
     }
 });
+ 
+// 로그인 API (POST /api/users/login)
+app.post('/api/users/login', async (req, res) => {
+    try {
+        const { userId, password } = req.body;
 
+        if (!userId || !password) {
+            return res.status(400).json({ error: '아이디와 비밀번호를 입력해주세요.' });
+        }
+
+        const query = 'SELECT * FROM TB_USER WHERE USER_ID = ? AND PASSWORD = ?';
+        const [rows] = await pool.execute(query, [userId, password]);
+
+        if (rows.length === 0) {
+            return res.status(401).json({ error: '아이디 또는 비밀번호가 일치하지 않습니다.' });
+        }
+
+        res.status(200).json({
+            message: '로그인 성공',
+            user: {
+                userId: rows[0].USER_ID,
+                userName: rows[0].USER_NM,
+                userType: rows[0].USER_TYPE
+            }
+        });
+
+    } catch (error) {
+        console.error('로그인 백엔드 통신 에러:', error);
+        res.status(500).json({ error: '로그인 중 서버 오류가 발생했습니다.' });
+    }
+});
+
+// 기사님 프로필 저장/수정 API (POST /api/driver/profile)
+app.post('/api/driver/profile', async (req, res) => {
+    try {
+        const {
+            userId, licenseNo, certPhotoUrl, accidentFreeDoc,
+            membershipType, bioDesc, profileImgUrl
+        } = req.body;
+
+        if (!userId) {
+            return res.status(400).json({ error: '사용자 ID가 필요합니다.' });
+        }
+
+        const query = `
+            INSERT INTO TB_DRIVER_DETAIL (
+                USER_ID, LICENSE_NO, CERT_PHOTO_URL, ACCIDENT_FREE_DOC,
+                MEMBERSHIP_TYPE, BIO_DESC, PROFILE_IMG_URL, REG_ID, MOD_ID
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                LICENSE_NO = VALUES(LICENSE_NO),
+                CERT_PHOTO_URL = VALUES(CERT_PHOTO_URL),
+                ACCIDENT_FREE_DOC = VALUES(ACCIDENT_FREE_DOC),
+                MEMBERSHIP_TYPE = VALUES(MEMBERSHIP_TYPE),
+                BIO_DESC = VALUES(BIO_DESC),
+                PROFILE_IMG_URL = VALUES(PROFILE_IMG_URL),
+                MOD_ID = VALUES(MOD_ID)
+        `;
+
+        const params = [
+            userId, 
+            licenseNo || '', 
+            certPhotoUrl || '', 
+            accidentFreeDoc || '',
+            membershipType || 'NORMAL', 
+            bioDesc || '', 
+            profileImgUrl || '',
+            userId, // REG_ID
+            userId  // MOD_ID
+        ];
+
+        await pool.execute(query, params);
+
+        res.status(200).json({ message: '기사님 프로필이 성공적으로 저장되었습니다.' });
+
+    } catch (error) {
+        console.error('기사 프로필 저장 에러:', error);
+        res.status(500).json({ error: '프로필 저장 중 오류가 발생했습니다.' });
+    }
+});
+ 
 // 서버 기동
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
