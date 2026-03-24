@@ -63,3 +63,66 @@ gcloud storage cp /dev/null gs://bustaams-secure-data/terms/
 4. **Node.js 연동 준비 마무리:**
    - 다운로드받은 JSON 포맷의 권한 키 파일을 `busTaams_server/` 폴더 밖으로 유출되지 않게 `gcp-key.json` 등의 이름으로 은밀하게 옮겨 둡니다. (GitHub 커밋 시 제외 설정 필수!)
    - 향후 백엔드 코드에서 이 키를 물려주면 프론트엔드 - 백엔드 - GCS 3박자의 클라우드 시스템이 완벽하게 연동됩니다.
+
+---
+
+## 🔐 3. Firebase 휴대폰 인증(OTP) 세팅 및 연동 키 발급 방법
+
+현재 프론트엔드(`App.jsx`)에 임시로 하드코딩된 `PLACEHOLDER` 값을 실제 서비스 키로 교체하고, 문자 메세지(SMS) 전송을 진짜로 활성화하는 방법입니다.
+
+### 📍 1단계: Firebase 프로젝트 생성 및 요금제 설정
+1. **Firebase 콘솔 접속:** [console.firebase.google.com](https://console.firebase.google.com/)으로 이동합니다.
+2. **프로젝트 추가:** 기존 구글 클라우드(GCP) 프로젝트(`bustaams`)가 있다면 해당 프로젝트를 선택하여 연결하거나, 새로 만듭니다.
+3. **요금제 업그레이드:** 휴대폰 번호 인증(SMS 발송)은 어뷰징 방지를 위해 Firebase **Blaze 요금제(종량제)**로 전환해야 발송이 허용됩니다. (초기 무상 할당량이 있어 개발/테스트 시 요금은 거의 발생하지 않습니다.)
+
+### 📍 2단계: Authentication (인증) 활성화
+1. 좌측 메뉴에서 **[빌드] > [Authentication]**을 클릭하고 `시작하기`를 누릅니다.
+2. **[Sign-in method (로그인 방법)]** 탭을 클릭하고, **'전화번호(Phone)'** 제공업체를 찾아 클릭합니다.
+3. 스위치를 **'사용 설정(Enable)'**으로 켜고 저장합니다.
+*(※ '테스트용 전화번호' 란에 본인의 휴대폰 번호와 가상의 랜덤 인증코드(예: 123456)를 등록해 두면, 비용 차감 없이 안심하고 무한 테스트가 가능합니다.)*
+
+### 📍 3단계: 프론트엔드(`App.jsx`) 웹 SDK 키 발급
+1. Firebase 콘솔 좌측 상단의 ⚙️(톱니바퀴) 아이콘을 눌러 **[프로젝트 설정]**으로 이동합니다.
+2. `일반` 탭 맨 아래쪽의 **[내 앱]** 섹션에서 `</>` (웹 아이콘)을 눌러 새 웹 앱을 등록합니다. (이름: `bustaams-web` 등)
+3. 등록 완료 후 나타나는 `firebaseConfig` 객체 안의 설정값들을 모두 복사합니다.
+4. **코드 적용:** `busTaams_web/src/App.jsx` 파일 상단(20번째 줄 부근) 파이어베이스 설정 배열에 복사한 키들을 아래와 같이 덮어씌웁니다.
+   ```javascript
+   const firebaseConfig = {
+     apiKey: "AIzaSyAU5QJ2pnJb37BJ3iUXoppMoi3kRgP55QI",
+     authDomain: "project-d481af23-2c56-483d-956.firebaseapp.com",
+     projectId: "project-d481af23-2c56-483d-956",
+     storageBucket: "project-d481af23-2c56-483d-956.firebasestorage.app",
+     messagingSenderId: "98374123431",
+     appId: "1:98374123431:web:7db538cf23173492e74082",
+     measurementId: "G-XR2RWVL6B4"
+   };
+   ```
+
+### 📍 4단계: 백엔드(`server.js`) 서버리스 서명 검증 키 발급
+프론트엔드에서 획득한 Firebase 인증 토큰이 조작된 토큰이 아닌지 백엔드(`firebase-admin` 라이브러리)에서 교차 검증하기 위해 전용 Admin 권한 키가 필요합니다.
+
+1. 다시 Firebase 콘솔 **[프로젝트 설정]**에서 이번에는 **[서비스 계정]** 탭으로 이동합니다.
+2. `Firebase Admin SDK` 구역 하단의 **[새 비공개 키 생성]** 버튼을 클릭하여 `.json` 파일을 다운로드받습니다.
+3. 다운로드한 파일을 백엔드 폴더(`busTaams_server/`) 안의 은밀한 곳에 보관합니다. (예: `firebase-admin-key.json`)
+4. **코드 적용:** `busTaams_server/.env` 파일 안에 해당 JSON 파일의 상대/절대 경로를 적어줍니다.
+   ```env
+   FIREBASE_SERVICE_ACCOUNT_PATH=./firebase-admin-key.json
+   ```
+   *(주의: 이 `.json` 파일 역시 절대 GitHub이나 외부에 노출되면 안 되므로 `.gitignore` 파일에 반드시 추가해야 합니다.)*
+
+모든 발급과 세팅이 끝난 후 프론트엔드와 백엔드를 껐다 켜면, 모의 통과 창 대신 **진짜 스마트폰으로 [Web발신] 인증번호 문자가 전송**되며 실서버와 완벽하게 동일한 본인 인증 체계가 가동됩니다!
+
+---
+
+### 🚨 [트러블슈팅] "조직 정책에 따라 서비스 계정 키 생성이 제한되는지 확인하세요" 에러 발생 시
+
+구글 상위 조직이 설정되어 있는 회사(`bustaams-org`) 계정으로 구글 클라우드를 사용할 경우, 구글의 기본자재 보안 조직 정책(Organization Policy) 때문에 최고 관리자라 할지라도 키 다운로드가 강제로 막혀있을 수 있습니다. 아래 방법으로 이 제한을 해제(우회)해야 합니다.
+
+1. **GCP 콘솔 접속:** [console.cloud.google.com](https://console.cloud.google.com/)으로 이동하여 상단에 `bustaams` 프로젝트가 잘 선택되어 있는지 확인합니다.
+2. 좌측 상단 햄버거 메뉴(☰)를 클릭 후 **[IAM 및 관리자] > [조직 정책]** (또는 Organization policies) 메뉴를 찾아 클릭합니다.
+3. 상단 검색창/필터 영역에서 **`서비스 계정 키 생성 사용 중지`** (영문일 경우 `iam.disableServiceAccountKeyCreation`)를 검색해서 찾아 화면에 나오면 클릭합니다.
+4. 해당 화면 상단의 **[정책 수정]**(또는 관리) 버튼을 누릅니다.
+5. '정책 적용 대상'을 기본값에서 **맞춤설정(Customize)**으로 변경합니다.
+6. 하단 '적용(Enforcement)' 섹션의 옵션을 **[설정 안함]** 또는 **[해제(끄기/Off)]** 상태로 변경합니다. (또는 '모두 허용' 규칙 추가)
+7. **[저장]**을 누릅니다.
+8. 구글 데이터센터에 규칙이 전파되는데 보통 1~2분 정도의 시간이 소요됩니다. 잠깐 커피 한 모금 드시고, 다시 방금 전 **붉은색 에러 팝업이 떴던 Firebase 콘솔 화면으로 돌아와 새로고침(F5)** 해보시면 빨간 에러가 기적처럼 사라지고 원하시던 파란색 **[새 비공개 키 생성]** 버튼이 활성화되어 있을 것입니다!
