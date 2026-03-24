@@ -8,6 +8,7 @@ const { Storage } = require('@google-cloud/storage');
 const bcrypt = require('bcrypt');
 const { randomUUID } = require('crypto');
 const { encrypt, decrypt } = require('./crypto');
+const fs = require('fs');
 
 const app = express();
 
@@ -15,13 +16,19 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 // 1. Firebase Admin SDK Initialization
-if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
-    const serviceAccount = require(process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
-    admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-    });
+if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH && fs.existsSync(path.resolve(__dirname, process.env.FIREBASE_SERVICE_ACCOUNT_PATH))) {
+    try {
+        const serviceAccount = require(path.resolve(__dirname, process.env.FIREBASE_SERVICE_ACCOUNT_PATH));
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount)
+        });
+        console.log('✅ Firebase Admin SDK initialized successfully.');
+    } catch (e) {
+        console.error('❌ Failed to load Firebase Service Account Key:', e.message);
+        try { admin.initializeApp(); } catch(err) {} 
+    }
 } else {
-    console.warn('⚠️ FIREBASE_SERVICE_ACCOUNT_PATH is not set in .env. Real SMS verification will be bypassed in development mode.');
+    console.warn('⚠️ FIREBASE_SERVICE_ACCOUNT_PATH is not set or file does not exist in .env. Real SMS verification will be bypassed in development mode.');
     // To prevent total crashes, try initialize with default credentials
     try { admin.initializeApp(); } catch(e) {}
 }
@@ -269,12 +276,35 @@ app.post('/api/users/login', async (req, res) => {
 app.post('/api/driver/profile', async (req, res) => {
     try {
         const {
-            userId, licenseNo, certPhotoUrl, accidentFreeDoc,
-            membershipType, bioDesc, profileImgUrl
+            userId, licenseNo, profileImgBase64, licenseImgBase64,
+            accidentFreeDoc, membershipType, bioDesc
         } = req.body;
 
         if (!userId) {
             return res.status(400).json({ error: '사용자 ID가 필요합니다.' });
+        }
+
+        let profileImgUrl = '';
+        let licenseImgUrl = '';
+
+        // 1. 프로필 이미지 업로드 (Base64 -> GCS)
+        if (profileImgBase64 && profileImgBase64.startsWith('data:image')) {
+            const base64Data = profileImgBase64.replace(/^data:image\/\w+;base64,/, "");
+            const buffer = Buffer.from(base64Data, 'base64');
+            const fileName = `profile/${userId}_${Date.now()}.png`;
+            const file = bucket.file(`certificates/${fileName}`);
+            await file.save(buffer, { metadata: { contentType: 'image/png' }, resumable: false });
+            profileImgUrl = `https://storage.googleapis.com/${bucketName}/certificates/${fileName}`;
+        }
+
+        // 2. 면허증 이미지 업로드 (Base64 -> GCS)
+        if (licenseImgBase64 && licenseImgBase64.startsWith('data:image')) {
+            const base64Data = licenseImgBase64.replace(/^data:image\/\w+;base64,/, "");
+            const buffer = Buffer.from(base64Data, 'base64');
+            const fileName = `bus_licenses/${userId}_${Date.now()}.png`;
+            const file = bucket.file(`certificates/${fileName}`);
+            await file.save(buffer, { metadata: { contentType: 'image/png' }, resumable: false });
+            licenseImgUrl = `https://storage.googleapis.com/${bucketName}/certificates/${fileName}`;
         }
 
         const query = `
@@ -284,29 +314,33 @@ app.post('/api/driver/profile', async (req, res) => {
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 LICENSE_NO = VALUES(LICENSE_NO),
-                CERT_PHOTO_URL = VALUES(CERT_PHOTO_URL),
+                CERT_PHOTO_URL = IF(VALUES(CERT_PHOTO_URL) != '', VALUES(CERT_PHOTO_URL), CERT_PHOTO_URL),
                 ACCIDENT_FREE_DOC = VALUES(ACCIDENT_FREE_DOC),
                 MEMBERSHIP_TYPE = VALUES(MEMBERSHIP_TYPE),
                 BIO_DESC = VALUES(BIO_DESC),
-                PROFILE_IMG_URL = VALUES(PROFILE_IMG_URL),
+                PROFILE_IMG_URL = IF(VALUES(PROFILE_IMG_URL) != '', VALUES(PROFILE_IMG_URL), PROFILE_IMG_URL),
                 MOD_ID = VALUES(MOD_ID)
         `;
 
         const params = [
             userId, 
             licenseNo || '', 
-            certPhotoUrl || '', 
+            licenseImgUrl, 
             accidentFreeDoc || '',
             membershipType || 'NORMAL', 
             bioDesc || '', 
-            profileImgUrl || '',
+            profileImgUrl,
             userId, // REG_ID
             userId  // MOD_ID
         ];
 
         await pool.execute(query, params);
 
-        res.status(200).json({ message: '기사님 프로필이 성공적으로 저장되었습니다.' });
+        res.status(200).json({ 
+            message: '기사님 프로필이 성공적으로 저장되었습니다.',
+            profileImgUrl,
+            licenseImgUrl
+        });
 
     } catch (error) {
         console.error('기사 프로필 저장 에러:', error);

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
+import DriverProfileModal from './components/DriverProfileModal';
 import busLogo from './assets/images/bustaams_bus_logo.png';
 import nameLogo from './assets/images/bustaams_name_logo.png';
 
@@ -386,244 +387,16 @@ function LoginModal({ close, onLoginSuccess }) {
            <span className="text-gray-400 text-xs font-bold tracking-widest uppercase font-body bg-surface-container-low px-4 py-1.5 rounded-full">간편 로그인</span>
         </div>
 
-        <div className="px-10 space-y-4 pb-12">
-          <button className="w-full bg-kakao text-[#3C1E1E] font-bold h-14 rounded-lg flex items-center justify-center gap-3 transition-transform hover:-translate-y-0.5 shadow-ambient">
-            <div className="w-6 h-6 flex items-center justify-center">
-              <span className="material-symbols-outlined">chat_bubble</span>
-            </div>
-            카카오로 시작하기
-          </button>
-          <button className="w-full bg-naver text-white font-bold h-14 rounded-lg flex items-center justify-center gap-3 transition-transform hover:-translate-y-0.5 shadow-ambient">
-            <div className="w-6 h-6 flex items-center justify-center bg-white rounded-md text-naver font-black">
-              N
-            </div>
-            네이버로 시작하기
-          </button>
-        </div>
-
-        <div className="p-8 bg-surface-container-low text-center">
-          <p className="text-gray-500 text-sm font-body">
-            계정이 없으신가요? 
-            <a className="text-secondary font-bold hover:text-secondary-container ml-2" href="#">회원가입</a>
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DriverProfileModal({ close, user }) {
-  const [formData, setFormData] = useState({
-    licenseNo: '13-01-234567-89',
-    certPhotoUrl: '2023_cert_v2.pdf',
-    accidentFreeDoc: '',
-    membershipType: 'PREMIUM',
-    bioDesc: '안녕하세요, 15년 경력의 베테랑 기사 김태준입니다. 대형 버스 운전뿐만 아니라 고객 응대 및 안전 교육 이수 경험이 풍부합니다. 언제나 쾌적하고 안전한 여행을 약속드립니다. 특히 장거리 투어 및 단체 관광 전문입니다.',
-    profileImgUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAVP2cSwYA5bmTFahSdVEwx8d6WcQmTzsuPMdE7Spdt3qlWNaROREPNi7n5Ij7Wi1sWk19Bylt1BBmnHiVoc60Xen7h7HNqO2Ogyh_yDqJIwHCg404_HIPZa5D1d_fn66FbgOhUYXdyXGYfVU2-Pv9n8lLfol0jEUJC7befbzL8n1HdrKxKzS5mGUCyK-FWJkHGe-A2KTuRsmWeuJKiV2FgHBDVuUjZ5fdpWdQ7ISpe6fKybXD0nAvN77HjM6tTSOIy_07X0asJdn4'
-  });
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, []);
-
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleSave = async () => {
-    if (!user) {
-      alert('로그인이 필요합니다.');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const response = await fetch('http://localhost:8080/api/driver/profile', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: user.userId,
-          ...formData
-        }),
-      });
-
-      const result = await response.json();
-      if (response.ok) {
-        alert('프로필이 성공적으로 저장되었습니다!');
-        close();
-      } else {
-        alert(result.error || '저장 중 오류가 발생했습니다.');
-      }
-    } catch (error) {
-      console.error('Save profile error:', error);
-      alert('서버와 통신 중 오류가 발생했습니다.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="absolute inset-0 cursor-pointer" onClick={close}></div>
-      
-      <div className="relative w-full max-w-2xl max-h-[95vh] bg-surface-lowest rounded-3xl shadow-ambient flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-        
-        {/* Header */}
-        <header className="flex items-center justify-between px-8 py-6 bg-surface-lowest sticky top-0 z-20 border-b border-surface-container-low">
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold tracking-widest text-secondary uppercase mb-1">busTaams Driver Portal</span>
-            <h1 className="font-display font-extrabold text-2xl text-primary tracking-tight">기사님 프로필 관리</h1>
-          </div>
-          <button onClick={close} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-low transition-colors duration-200 text-gray-500">
-            <span className="material-symbols-outlined">close</span>
-          </button>
-        </header>
-
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto px-8 py-4 no-scrollbar">
-          <div className="space-y-8 pb-8">
-            
-            {/* Section 1: Profile Photo */}
-            <section className="flex flex-col items-center pt-4">
-              <div className="relative group">
-                <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-surface-container-low shadow-sm ring-2 ring-primary/10">
-                  <img alt="Driver Profile" className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAVP2cSwYA5bmTFahSdVEwx8d6WcQmTzsuPMdE7Spdt3qlWNaROREPNi7n5Ij7Wi1sWk19Bylt1BBmnHiVoc60Xen7h7HNqO2Ogyh_yDqJIwHCg404_HIPZa5D1d_fn66FbgOhUYXdyXGYfVU2-Pv9n8lLfol0jEUJC7befbzL8n1HdrKxKzS5mGUCyK-FWJkHGe-A2KTuRsmWeuJKiV2FgHBDVuUjZ5fdpWdQ7ISpe6fKybXD0nAvN77HjM6tTSOIy_07X0asJdn4" />
-                </div>
-                <button className="absolute bottom-1 right-1 bg-primary text-white p-2.5 rounded-full shadow-ambient hover:scale-110 active:scale-95 transition-all duration-200">
-                  <span className="material-symbols-outlined text-sm flex items-center justify-center">photo_camera</span>
-                </button>
-              </div>
-              <div className="mt-4 flex items-center gap-2 px-4 py-1.5 bg-surface-container-low rounded-full border border-gray-200">
-                <span className="material-symbols-outlined text-primary text-base">attachment</span>
-                <span className="text-xs font-bold text-gray-600">DRIVER_PHOTO_2024.jpg</span>
-              </div>
-            </section>
-
-            {/* Section 2: License Info */}
-            <section className="space-y-3">
-              <label className="block text-[13px] font-bold text-gray-500 tracking-wide px-1 uppercase">1종 대형 면허 번호</label>
-              <div className="relative">
-                <input 
-                  className="w-full bg-surface-container-low border-2 border-transparent rounded-2xl py-4 px-5 text-gray-900 font-bold focus:ring-0 focus:border-primary/30 focus:bg-surface-lowest transition-all duration-200 outline-none" 
-                  placeholder="면허 번호를 입력해주세요" 
-                  type="text" 
-                  value={formData.licenseNo}
-                  onChange={(e) => handleInputChange('licenseNo', e.target.value)}
-                />
-                <span className="material-symbols-outlined absolute right-5 top-1/2 -translate-y-1/2 text-primary/50">badge</span>
-              </div>
-            </section>
-
-            {/* Section 3: Certifications */}
-            <section className="space-y-4">
-              <label className="block text-[13px] font-bold text-gray-500 tracking-wide px-1 uppercase">자격증 및 증명서 관리</label>
-              <div className="space-y-3">
-                {/* Cert Item 1 (Registered) */}
-                <div className="flex items-center justify-between p-4 bg-surface-container-low rounded-2xl hover:bg-gray-100 border border-transparent transition-all group">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
-                      <span className="material-symbols-outlined text-primary">verified</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-gray-900">버스운전 자격증</p>
-                      <p className="text-[11px] text-gray-500">2023_cert_v2.pdf</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button className="p-2 text-gray-400 hover:text-red-500 transition-colors">
-                      <span className="material-symbols-outlined text-xl flex">delete</span>
-                    </button>
-                    <button className="px-4 py-2 bg-surface-lowest text-primary text-xs font-bold rounded-lg shadow-sm border border-gray-200 hover:bg-primary hover:text-white transition-all duration-200">변경</button>
-                  </div>
-                </div>
-                
-                {/* Cert Item 2 (Not Registered) */}
-                <div className="flex items-center justify-between p-4 bg-surface-lowest border-2 border-dashed border-gray-300 rounded-2xl hover:bg-gray-50 transition-all">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-surface-container-low rounded-xl flex items-center justify-center">
-                      <span className="material-symbols-outlined text-gray-400">safety_check</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-gray-500">무사고 증명서</p>
-                      <p className="text-[11px] text-gray-400 italic">파일을 업로드해주세요</p>
-                    </div>
-                  </div>
-                  <button className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow-sm hover:bg-primary-container transition-all duration-200 flex items-center gap-1">
-                    <span className="material-symbols-outlined text-xs">upload</span>
-                    업로드
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            {/* Section 4: Membership Selection */}
-            <section className="space-y-4">
-              <label className="block text-[13px] font-bold text-gray-500 tracking-wide px-1 uppercase">멤버십 유형 선택</label>
-              <div className="grid grid-cols-3 gap-3">
-                <label 
-                  onClick={() => handleInputChange('membershipType', 'NORMAL')}
-                  className={`flex flex-col items-center p-4 rounded-2xl border-2 cursor-pointer transition-all ${formData.membershipType === 'NORMAL' ? 'bg-primary text-white border-primary shadow-md transform scale-105' : 'bg-surface-container-low border-transparent hover:bg-gray-100'}`}
-                >
-                  <span className={`text-[10px] font-black mb-2 uppercase ${formData.membershipType === 'NORMAL' ? 'text-white' : 'text-gray-500'}`}>Normal</span>
-                  <span className={`material-symbols-outlined text-2xl ${formData.membershipType === 'NORMAL' ? 'text-white' : 'text-gray-400'}`}>person</span>
-                </label>
-                
-                <label 
-                  onClick={() => handleInputChange('membershipType', 'PREMIUM')}
-                  className={`flex flex-col items-center p-4 rounded-2xl border-2 cursor-pointer transition-all ${formData.membershipType === 'PREMIUM' ? 'bg-secondary text-white border-secondary shadow-md transform scale-105' : 'bg-surface-container-low border-transparent hover:bg-gray-100'}`}
-                >
-                  <span className={`text-[10px] font-black mb-2 uppercase text-white`}>Premium</span>
-                  <span className={`material-symbols-outlined text-white text-2xl`}>workspace_premium</span>
-                </label>
-                
-                <label 
-                  onClick={() => handleInputChange('membershipType', 'VIP')}
-                  className={`flex flex-col items-center p-4 rounded-2xl border-2 cursor-pointer transition-all ${formData.membershipType === 'VIP' ? 'bg-[#3C1E1E] text-white border-[#3C1E1E] shadow-md transform scale-105' : 'bg-surface-container-low border-transparent hover:bg-gray-100'}`}
-                >
-                  <span className={`text-[10px] font-black mb-2 uppercase ${formData.membershipType === 'VIP' ? 'text-white' : 'text-gray-500'}`}>VIP</span>
-                  <span className={`material-symbols-outlined text-2xl ${formData.membershipType === 'VIP' ? 'text-white' : 'text-gray-400'}`}>diamond</span>
-                </label>
-              </div>
-            </section>
-
-            {/* Section 5: Bio */}
-            <section className="space-y-3">
-              <label className="block text-[13px] font-bold text-gray-500 tracking-wide px-1 uppercase">자기소개 및 강점 (Bio)</label>
-              <textarea 
-                className="w-full bg-surface-container-low border-2 border-transparent rounded-2xl py-4 px-5 text-gray-900 font-medium focus:ring-0 focus:border-primary/30 focus:bg-surface-lowest transition-all duration-200 resize-none min-h-[120px] outline-none" 
-                placeholder="간단한 자기소개를 작성해주세요."
-                value={formData.bioDesc}
-                onChange={(e) => handleInputChange('bioDesc', e.target.value)}
-              ></textarea>
-            </section>
-            
-          </div>
-        </div>
-
-        {/* Footer */}
-        <footer className="p-6 bg-surface-lowest flex flex-col gap-4 border-t border-surface-container-low z-20">
+        <div className="px-10 pb-12 text-center">
+          <p className="text-gray-500 text-sm font-body">아직 회원이 아니신가요?</p>
           <button 
-            onClick={handleSave}
-            disabled={isLoading}
-            className={`w-full py-4 bg-gradient-to-r from-primary to-primary-container text-white font-extrabold text-lg rounded-2xl shadow-ambient active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 group ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+            type="button"
+            onClick={() => { close(); setShowSignUpModal(true); }}
+            className="text-secondary font-bold hover:text-secondary-container mt-1"
           >
-            <span className="material-symbols-outlined text-2xl group-hover:rotate-12 transition-transform">save</span>
-            {isLoading ? '저장 중...' : '수정 사항 저장하기'}
+            회원가입
           </button>
-          <div className="flex flex-col items-center mt-2">
-            <button className="px-6 py-2 text-red-500/80 text-sm font-bold hover:text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200 flex items-center gap-2">
-              <span className="material-symbols-outlined text-lg">delete_forever</span>
-              프로필 삭제하기
-            </button>
-          </div>
-        </footer>
-
+        </div>
       </div>
     </div>
   );
@@ -1013,7 +786,13 @@ function App() {
           onLoginSuccess={(userData) => setUser(userData)} 
         />
       )}
-      {showDriverProfileModal && <DriverProfileModal close={() => setShowDriverProfileModal(false)} user={user} />}
+      {showDriverProfileModal && (
+        <DriverProfileModal 
+          isOpen={showDriverProfileModal} 
+          onClose={() => setShowDriverProfileModal(false)} 
+          user={user} 
+        />
+      )}
       {showSignUpModal && <SignUpModal close={() => setShowSignUpModal(false)} />}
     </div>
   );
