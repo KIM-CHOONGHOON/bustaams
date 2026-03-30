@@ -43,23 +43,23 @@ const bucket = storage.bucket(bucketName);
 // REST APIs
 // ---------------------------------------------------------------------------
 
-// API 1: 이메일 중복 검사
-app.get('/api/auth/check-email', async (req, res) => {
+// API 1-0: 아이디 중복 검사
+app.get('/api/auth/check-id', async (req, res) => {
     try {
-        const { email } = req.query;
-        if (!email) return res.status(400).json({ error: 'Email query parameter is required' });
+        const { userId } = req.query;
+        if (!userId) return res.status(400).json({ error: 'userId query parameter is required' });
 
-        // [보안] 이메일은 DB에 암호화된 상태로 저장되므로, 전체 스캔 후 복호화 비교
-        const [rows] = await pool.execute('SELECT USER_ID FROM TB_USER');
+        // [보안] 아이디(이메일)는 DB에 암호화된 상태로 저장되므로, 전체 스캔 후 복호화 비교
+        const [rows] = await pool.execute('SELECT USER_ID_ENC FROM TB_USER');
         const isDuplicate = rows.some(row => {
-            try { return decrypt(row.USER_ID) === email; } catch (e) { return false; }
+            try { return decrypt(row.USER_ID_ENC) === userId; } catch (e) { return false; }
         });
         if (isDuplicate) {
-            return res.status(409).json({ isAvailable: false, message: '이미 사용 중인 이메일입니다.' });
+            return res.status(409).json({ isAvailable: false, message: '이미 사용 중인 아이디입니다.' });
         }
-        return res.status(200).json({ isAvailable: true });
+        return res.status(200).json({ isAvailable: true, message: '사용 가능한 아이디입니다.' });
     } catch (error) {
-        console.error('Check email error:', error);
+        console.error('Check ID error:', error);
         res.status(500).json({ error: '서버 오류가 발생했습니다.' });
     }
 });
@@ -70,10 +70,10 @@ app.get('/api/auth/check-phone', async (req, res) => {
         const { phoneNo } = req.query;
         if (!phoneNo) return res.status(400).json({ error: 'phoneNo query parameter is required' });
 
-        // [보안] 전화번호는 DB에 암호화된 상태로 저장되므로, 전체 스캔 후 복호화 비교
-        const [rows] = await pool.execute('SELECT PHONE_NO FROM TB_USER');
+        // [보안] 휴대폰 번호는 DB에 암호화된 상태로 저장되므로, 전체 스캔 후 복호화 비교
+        const [rows] = await pool.execute('SELECT HP_NO FROM TB_USER');
         const isDuplicate = rows.some(row => {
-            try { return decrypt(row.PHONE_NO) === phoneNo; } catch (e) { return false; }
+            try { return decrypt(row.HP_NO) === phoneNo; } catch (e) { return false; }
         });
         if (isDuplicate) {
             return res.status(409).json({ isAvailable: false, message: '이미 가입된 휴대폰 번호입니다.' });
@@ -128,32 +128,25 @@ app.post('/api/auth/register', async (req, res) => {
             firebaseIdToken, mktAgreeYn, signatureBase64, agreedTerms
         } = req.body;
 
-        if (!userId || !password || !userName || !phoneNo || !signatureBase64 || !agreedTerms) {
-            return res.status(400).json({ error: '필수 항목이 누락되었습니다.' });
+        if (!userId || !password || !userName || !phoneNo || !signatureBase64 || !agreedTerms || !userType) {
+            console.error('Registration Failed: Missing fields', {
+                userId: !!userId, password: !!password, userName: !!userName, 
+                phoneNo: !!phoneNo, signatureBase64: !!signatureBase64, 
+                agreedTerms: !!agreedTerms, userType: !!userType
+            });
+            return res.status(400).json({ error: '필수 항목이 누락되었습니다. (ID, 비밀번호, 이름, 전화번호, 서명, 약관동의, 사용자타입)' });
         }
 
-        // 1. [보안] 인증 토큰 검증
-        let authVerifyYn = 'N';
-        if (process.env.NODE_ENV === 'production' && firebaseIdToken) {
-            try {
-                const decodedToken = await admin.auth().verifyIdToken(firebaseIdToken);
-                // decodedToken.phone_number matches req.body.phoneNo validation can be added here
-                authVerifyYn = 'Y';
-            } catch (error) {
-                console.error('Firebase Auth Verification Failed:', error);
-                return res.status(401).json({ error: '휴대폰 본인 인증 검증에 실패했습니다.' });
-            }
-        } else {
-            // 개발 환경이거나 .env로 통과 허용된 경우
-            console.log('Skipping real firebase token verify in non-prod or token absent dev-mode.');
-            authVerifyYn = 'Y';
-        }
+        // 1. [보안] 인증 토큰 검증 - (테스트 단계: 항상 'Y'로 처리)
+        let smsAuthYn = 'Y';
+        console.log('Test Mode: SMS Auth always bypassed with Y');
 
         // 2. [보안] 비밀번호 해싱 (bcrypt)
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
         // 3. [스토리지] 서명 사진 적재 (GCS)
+        const newUserUuid = randomUUID(); // 회원용 고정 UUID 생성
         const base64Data = signatureBase64.replace(/^data:image\/png;base64,/, "");
         const buffer = Buffer.from(base64Data, 'base64');
         const dateStr = new Date().toISOString().slice(0, 7).replace('-', ''); // YYYYMM format
@@ -182,38 +175,66 @@ app.post('/api/auth/register', async (req, res) => {
 
         try {
             // [DB 트랜잭션] TB_USER INSERT
-            // [보안] 개인정보 3개 컬럼(이메일, 이름, 전화번호)을 AES-256-GCM으로 암호화 후 저장
             const encryptedUserId = encrypt(userId);
             const encryptedUserName = encrypt(userName);
             const encryptedPhoneNo = encrypt(phoneNo);
 
+            // UserType Mapping
+            let mappedUserType = 'TRAVELER';
+            if (userType === 'CONSUMER') mappedUserType = 'TRAVELER';
+            else if (userType === 'SALES') mappedUserType = 'PARTNER';
+            else if (userType === 'DRIVER') mappedUserType = 'DRIVER';
+
             const userQuery = `
                 INSERT INTO TB_USER (
-                    USER_ID, PASSWORD, USER_NM, PHONE_NO, SNS_TYPE, 
-                    AUTH_VERIFY_YN, MKT_AGREE_YN, USER_TYPE
-                ) VALUES (?, ?, ?, ?, 'NONE', ?, ?, ?)
+                    USER_UUID, USER_ID_ENC, PASSWORD, USER_NM, HP_NO, SNS_TYPE, 
+                    SMS_AUTH_YN, USER_TYPE, JOIN_DT, USER_STAT
+                ) VALUES (UUID_TO_BIN(?), ?, ?, ?, ?, 'NONE', ?, ?, NOW(), 'ACTIVE')
             `;
-            await connection.execute(userQuery, [
-                encryptedUserId, hashedPassword, encryptedUserName, encryptedPhoneNo,
-                authVerifyYn, mktAgreeYn || 'N', userType || 'CONSUMER'
+            const [userResult] = await connection.execute(userQuery, [
+                newUserUuid, encryptedUserId, hashedPassword, encryptedUserName, encryptedPhoneNo,
+                smsAuthYn, mappedUserType
+            ]);
+
+            // [DB 트랜잭션] TB_FILE_MASTER INSERT (서명 파일 정보 등록)
+            // TB_USER_TERMS_HIST의 SIGN_FILE_UUID가 이 테이블을 참조함 (F.K)
+            const fileQuery = `
+                INSERT INTO TB_FILE_MASTER (
+                    FILE_UUID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, 
+                    ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT
+                ) VALUES (UUID_TO_BIN(?), 'SIGNATURE', ?, ?, ?, 'png', ?, NOW())
+            `;
+            await connection.execute(fileQuery, [
+                signFileUuid, bucketName, fileName, 'signature.png', buffer.length
             ]);
 
             // [DB 트랜잭션] TB_USER_TERMS_HIST 다중 INSERT
             if (agreedTerms.length > 0) {
                 const histQuery = `
                     INSERT INTO TB_USER_TERMS_HIST (
-                        USER_ID, TERMS_ID, SIGN_FILE_UUID, AGREE_YN, CLIENT_IP
-                    ) VALUES ?
+                        USER_UUID, TERMS_TYPE, TERMS_VER, AGREE_YN, SIGN_FILE_UUID, AGREE_DT
+                    ) VALUES (UUID_TO_BIN(?), ?, 'v1.0', 'Y', UUID_TO_BIN(?), NOW())
                 `;
-                const histValues = agreedTerms.map(termId => [
-                    encryptedUserId, // [수정] 평문 userId -> 암호화된 ID 적용
-                    termId,
-                    signFileUuid, 
-                    'Y',
-                    req.ip || '127.0.0.1'
-                ]);
                 
-                await connection.query(histQuery, [histValues]);
+                const termsMapping = {
+                    1: 'SERVICE',
+                    2: 'PRIVACY',
+                    4: 'MARKETING'
+                };
+
+                for (const termId of agreedTerms) {
+                    const type = termsMapping[termId];
+                    if (type) {
+                        try {
+                            await connection.execute(histQuery, [newUserUuid, type, signFileUuid]);
+                        } catch (histErr) {
+                            console.error(`Terms Hist Insert Failed for ${type}:`, histErr.message);
+                            // 히스토리 저장 실패가 전체 가입을 막게 할지 여부는 정책에 따라 다름. 
+                            // 여기서는 트랜잭션이므로 에러를 던져 롤백하게 함.
+                            throw histErr;
+                        }
+                    }
+                }
             }
 
             await connection.commit();
@@ -250,19 +271,27 @@ app.post('/api/users/login', async (req, res) => {
             return res.status(400).json({ error: '아이디와 비밀번호를 입력해주세요.' });
         }
 
-        const query = 'SELECT * FROM TB_USER WHERE USER_ID = ? AND PASSWORD = ?';
-        const [rows] = await pool.execute(query, [userId, password]);
+        // [보안] 아이디(이메일)는 암호화되어 있으므로 전체 조회 후 비교 (데이터가 많아지면 인덱스용 해시 컬럼 필요)
+        const [rows] = await pool.execute('SELECT * FROM TB_USER');
+        const user = rows.find(row => {
+            try { return decrypt(row.USER_ID_ENC) === userId; } catch (e) { return false; }
+        });
 
-        if (rows.length === 0) {
+        if (!user) {
+            return res.status(401).json({ error: '아이디 또는 비밀번호가 일치하지 않습니다.' });
+        }
+
+        const isPasswordMatch = await bcrypt.compare(password, user.PASSWORD);
+        if (!isPasswordMatch) {
             return res.status(401).json({ error: '아이디 또는 비밀번호가 일치하지 않습니다.' });
         }
 
         res.status(200).json({
             message: '로그인 성공',
             user: {
-                userId: rows[0].USER_ID,
-                userName: rows[0].USER_NM,
-                userType: rows[0].USER_TYPE
+                userId: userId,
+                userName: decrypt(user.USER_NM),
+                userType: user.USER_TYPE
             }
         });
 
