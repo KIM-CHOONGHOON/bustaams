@@ -15,6 +15,12 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+// Global request logger
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+});
+
 // 1. Firebase Admin SDK Initialization
 if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH && fs.existsSync(path.resolve(__dirname, process.env.FIREBASE_SERVICE_ACCOUNT_PATH))) {
     try {
@@ -153,7 +159,8 @@ app.post('/api/auth/register', async (req, res) => {
         // [보안] 파일명에서도 이메일 누출 방지를 위해 UUID 사용
         const signFileUuid = randomUUID();
         const fileName = `${dateStr}/${signFileUuid}.png`;
-        const file = bucket.file(`signatures/${fileName}`);
+        const gcsPath = `signatures/${fileName}`;
+        const file = bucket.file(gcsPath);
         
         try {
             await file.save(buffer, {
@@ -205,7 +212,7 @@ app.post('/api/auth/register', async (req, res) => {
                 ) VALUES (UUID_TO_BIN(?), 'SIGNATURE', ?, ?, ?, 'png', ?, NOW())
             `;
             await connection.execute(fileQuery, [
-                signFileUuid, bucketName, fileName, 'signature.png', buffer.length
+                signFileUuid, bucketName, gcsPath, 'signature.png', buffer.length
             ]);
 
             // [DB 트랜잭션] TB_USER_TERMS_HIST 다중 INSERT
@@ -271,7 +278,7 @@ app.post('/api/users/login', async (req, res) => {
             return res.status(400).json({ error: '아이디와 비밀번호를 입력해주세요.' });
         }
 
-        // [보안] 아이디(이메일)는 암호화되어 있으므로 전체 조회 후 비교 (데이터가 많아지면 인덱스용 해시 컬럼 필요)
+        // [보안] 아이디(이메일)는 암호화되어 있으므로 전체 조회 후 비교
         const [rows] = await pool.execute('SELECT * FROM TB_USER');
         const user = rows.find(row => {
             try { return decrypt(row.USER_ID_ENC) === userId; } catch (e) { return false; }
@@ -286,17 +293,23 @@ app.post('/api/users/login', async (req, res) => {
             return res.status(401).json({ error: '아이디 또는 비밀번호가 일치하지 않습니다.' });
         }
 
+        const decryptedUserName = user.USER_NM ? decrypt(user.USER_NM) : '';
+        const decryptedPhoneNo = user.HP_NO ? decrypt(user.HP_NO) : '';
+
         res.status(200).json({
             message: '로그인 성공',
             user: {
                 userId: userId,
-                userName: decrypt(user.USER_NM),
+                email: userId,
+                userName: decryptedUserName,
+                phoneNo: decryptedPhoneNo,
+                phoneNumber: decryptedPhoneNo,
                 userType: user.USER_TYPE
             }
         });
 
     } catch (error) {
-        console.error('로그인 백엔드 통신 에러:', error);
+        console.error('로그인 에러:', error.message);
         res.status(500).json({ error: '로그인 중 서버 오류가 발생했습니다.' });
     }
 });
@@ -336,40 +349,77 @@ app.post('/api/driver/profile', async (req, res) => {
             licenseImgUrl = `https://storage.googleapis.com/${bucketName}/certificates/${fileName}`;
         }
 
-        const query = `
-            INSERT INTO TB_DRIVER_DETAIL (
-                USER_ID, LICENSE_NO, CERT_PHOTO_URL, ACCIDENT_FREE_DOC,
-                MEMBERSHIP_TYPE, BIO_DESC, PROFILE_IMG_URL, REG_ID, MOD_ID
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-                LICENSE_NO = VALUES(LICENSE_NO),
-                CERT_PHOTO_URL = IF(VALUES(CERT_PHOTO_URL) != '', VALUES(CERT_PHOTO_URL), CERT_PHOTO_URL),
-                ACCIDENT_FREE_DOC = VALUES(ACCIDENT_FREE_DOC),
-                MEMBERSHIP_TYPE = VALUES(MEMBERSHIP_TYPE),
-                BIO_DESC = VALUES(BIO_DESC),
-                PROFILE_IMG_URL = IF(VALUES(PROFILE_IMG_URL) != '', VALUES(PROFILE_IMG_URL), PROFILE_IMG_URL),
-                MOD_ID = VALUES(MOD_ID)
-        `;
+        // 3. DB 작업 (Transaction)
+        const connection = await pool.getConnection();
+        await connection.beginTransaction();
 
-        const params = [
-            userId, 
-            licenseNo || '', 
-            licenseImgUrl, 
-            accidentFreeDoc || '',
-            membershipType || 'NORMAL', 
-            bioDesc || '', 
-            profileImgUrl,
-            userId, // REG_ID
-            userId  // MOD_ID
-        ];
+        try {
+            const profileFileUuid = randomUUID();
+            const licenseFileUuid = randomUUID();
 
-        await pool.execute(query, params);
+            if (profileImgUrl) {
+                const fileQuery = `
+                    INSERT INTO TB_FILE_MASTER (
+                        FILE_UUID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, 
+                        ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT
+                    ) VALUES (UUID_TO_BIN(?), 'PROFILE_IMG', ?, ?, ?, 'png', 0, NOW())
+                `;
+                const profileGcsPath = profileImgUrl.split(`${bucketName}/`)[1];
+                await connection.execute(fileQuery, [profileFileUuid, bucketName, profileGcsPath, 'profile.png']);
+            }
 
-        res.status(200).json({ 
-            message: '기사님 프로필이 성공적으로 저장되었습니다.',
-            profileImgUrl,
-            licenseImgUrl
-        });
+            if (licenseImgUrl) {
+                const fileQuery = `
+                    INSERT INTO TB_FILE_MASTER (
+                        FILE_UUID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, 
+                        ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT
+                    ) VALUES (UUID_TO_BIN(?), 'DRIVER_LICENSE', ?, ?, ?, 'png', 0, NOW())
+                `;
+                const licenseGcsPath = licenseImgUrl.split(`${bucketName}/`)[1];
+                await connection.execute(fileQuery, [licenseFileUuid, bucketName, licenseGcsPath, 'license.png']);
+            }
+
+            const query = `
+                INSERT INTO TB_DRIVER_DETAIL (
+                    USER_ID, LICENSE_NO, CERT_PHOTO_URL, ACCIDENT_FREE_DOC,
+                    MEMBERSHIP_TYPE, BIO_DESC, PROFILE_IMG_URL, REG_ID, MOD_ID
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    LICENSE_NO = VALUES(LICENSE_NO),
+                    CERT_PHOTO_URL = IF(VALUES(CERT_PHOTO_URL) != '', VALUES(CERT_PHOTO_URL), CERT_PHOTO_URL),
+                    ACCIDENT_FREE_DOC = VALUES(ACCIDENT_FREE_DOC),
+                    MEMBERSHIP_TYPE = VALUES(MEMBERSHIP_TYPE),
+                    BIO_DESC = VALUES(BIO_DESC),
+                    PROFILE_IMG_URL = IF(VALUES(PROFILE_IMG_URL) != '', VALUES(PROFILE_IMG_URL), PROFILE_IMG_URL),
+                    MOD_ID = VALUES(MOD_ID)
+            `;
+
+            const params = [
+                userId, 
+                licenseNo || '', 
+                licenseImgUrl, 
+                accidentFreeDoc || '',
+                membershipType || 'NORMAL', 
+                bioDesc || '', 
+                profileImgUrl,
+                userId, // REG_ID
+                userId  // MOD_ID
+            ];
+
+            await connection.execute(query, params);
+            await connection.commit();
+
+            res.status(200).json({ 
+                message: '기사님 프로필이 성공적으로 저장되었습니다.',
+                profileImgUrl,
+                licenseImgUrl
+            });
+        } catch (dbError) {
+            await connection.rollback();
+            throw dbError;
+        } finally {
+            connection.release();
+        }
 
     } catch (error) {
         console.error('기사 프로필 저장 에러:', error);
@@ -380,5 +430,5 @@ app.post('/api/driver/profile', async (req, res) => {
 // 서버 기동
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-    console.log(`🚀 busTaams REST API Server is running beautifully on http://127.0.0.1:${PORT}`);
+    console.log(`🚀 busTaams REST API Server is running beautifully on http://localhost:${PORT}`);
 });

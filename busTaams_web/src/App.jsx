@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import DriverProfileModal from './components/DriverProfileModal';
+import SignupPage from './components/SignupPage';
+import AccountSettings from './components/AccountSettings';
+import CustomerDashboard from './components/CustomerDashboard';
 import busLogo from './assets/images/bustaams_bus_logo.png';
 import nameLogo from './assets/images/bustaams_name_logo.png';
 
@@ -27,11 +30,15 @@ try {
   console.error("Firebase Auth Init Failed", e);
 }
 
-function Header({ setShowLoginModal, setShowDriverProfileModal, setShowSignUpModal, user, onLogout }) {
+function Header({ setShowLoginModal, setShowDriverProfileModal, setShowAccountSettings, setShowSignUpModal, user, onLogout }) {
   // USER_TYPE 변환 함수
   const translateUserType = (type) => {
     switch (type) {
-      case 'CONSUMER': return '소비자';
+      case 'CONSUMER':
+      case 'TRAVELER':
+      case 'CUSTOMER': return '소비자';
+      case 'SALES':
+      case 'PARTNER': return '영업사원';
       case 'DRIVER': return '기사';
       default: return type;
     }
@@ -48,7 +55,7 @@ function Header({ setShowLoginModal, setShowDriverProfileModal, setShowSignUpMod
         </div>
         <nav className="hidden md:flex items-center gap-10 font-medium text-gray-700">
           <a 
-            className={`transition-all ${user?.userType === 'CONSUMER' ? 'text-primary font-bold cursor-pointer hover:opacity-80' : 'opacity-40 pointer-events-none cursor-not-allowed'}`} 
+            className={`transition-all ${(user?.userType === 'CONSUMER' || user?.userType === 'TRAVELER' || user?.userType === 'CUSTOMER' || user?.userType === 'SALES' || user?.userType === 'PARTNER') ? 'text-primary font-bold cursor-pointer hover:opacity-80' : 'opacity-40 pointer-events-none cursor-not-allowed'}`} 
             href="#"
           >
             이용 고객 전용
@@ -90,6 +97,13 @@ function Header({ setShowLoginModal, setShowDriverProfileModal, setShowSignUpMod
                  </p>
               </div>
               <button 
+                onClick={() => setShowAccountSettings(true)}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-gray-500 hover:text-primary hover:bg-surface-container rounded-lg transition-all"
+              >
+                <span className="material-symbols-outlined text-[18px]">person</span>
+                내 정보
+              </button>
+              <button 
                 onClick={onLogout}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-gray-500 hover:text-primary hover:bg-surface-container rounded-lg transition-all"
               >
@@ -119,7 +133,7 @@ function Header({ setShowLoginModal, setShowDriverProfileModal, setShowSignUpMod
   );
 }
 
-function Hero() {
+function Hero({ user, setShowLoginModal }) {
   return (
     <section className="relative min-h-[700px] flex items-center justify-center overflow-hidden bg-surface-container-low">
       <div className="absolute inset-0 z-0">
@@ -263,7 +277,7 @@ function Footer() {
   );
 }
 
-function LoginModal({ close, onLoginSuccess }) {
+function LoginModal({ close, onLoginSuccess, setCurrentView }) {
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -391,7 +405,7 @@ function LoginModal({ close, onLoginSuccess }) {
           <p className="text-gray-500 text-sm font-body">아직 회원이 아니신가요?</p>
           <button 
             type="button"
-            onClick={() => { close(); setShowSignUpModal(true); }}
+            onClick={() => { close(); setCurrentView('signup'); }}
             className="text-secondary font-bold hover:text-secondary-container mt-1"
           >
             회원가입
@@ -756,7 +770,9 @@ function SignUpModal({ close }) {
 function App() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showDriverProfileModal, setShowDriverProfileModal] = useState(false);
+  const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [showSignUpModal, setShowSignUpModal] = useState(false);
+  const [currentView, setCurrentView] = useState('home'); // 'home' or 'signup'
   const [userRole, setUserRole] = useState('customer');
   const [user, setUser] = useState(null);
 
@@ -769,21 +785,50 @@ function App() {
       <Header 
         setShowLoginModal={setShowLoginModal} 
         setShowDriverProfileModal={setShowDriverProfileModal} 
-        setShowSignUpModal={setShowSignUpModal}
+        setShowAccountSettings={setShowAccountSettings}
+        setShowSignUpModal={() => setCurrentView('signup')}
         user={user}
         onLogout={handleLogout}
       />
       <main className="flex-1">
-        <Hero />
-        <Features />
-        <SpringSpecial />
+        {currentView === 'home' ? (
+          user && (user.userType === 'CONSUMER' || user.userType === 'TRAVELER' || user.userType === 'CUSTOMER') ? (
+            <CustomerDashboard 
+              user={user} 
+              setShowAccountSettings={setShowAccountSettings} 
+            />
+          ) : (
+            <>
+              <Hero user={user} setShowLoginModal={setShowLoginModal} />
+              <Features user={user} />
+              <SpringSpecial />
+              
+              {/* New section for Driver Profile if logged in as driver */}
+              {user?.userType === 'DRIVER' && (
+                 <div className="bg-surface-container py-20 px-8 text-center">
+                   <h2 className="text-3xl font-headline font-bold text-primary mb-6">기사님, 반갑습니다!</h2>
+                   <p className="text-gray-600 mb-8">안전 운행을 위해 기사님 프로필을 최신 상태로 관리해 주세요.</p>
+                   <button 
+                     onClick={() => setShowDriverProfileModal(true)}
+                     className="kinetic-gradient-primary text-white px-10 py-4 rounded-full font-bold shadow-xl hover:scale-105 transition-transform"
+                   >
+                     기사 프로필 관리하기
+                   </button>
+                 </div>
+              )}
+            </>
+          )
+        ) : (
+          <SignupPage onBack={() => setCurrentView('home')} />
+        )}
       </main>
-      <Footer />
+      {currentView === 'home' && !(user && (user.userType === 'CONSUMER' || user.userType === 'TRAVELER' || user.userType === 'CUSTOMER')) && <Footer />}
       
       {showLoginModal && (
         <LoginModal 
           close={() => setShowLoginModal(false)} 
           onLoginSuccess={(userData) => setUser(userData)} 
+          setCurrentView={setCurrentView}
         />
       )}
       {showDriverProfileModal && (
@@ -791,6 +836,13 @@ function App() {
           isOpen={showDriverProfileModal} 
           onClose={() => setShowDriverProfileModal(false)} 
           user={user} 
+        />
+      )}
+      {showAccountSettings && (
+        <AccountSettings 
+          user={user} 
+          onBack={() => setShowAccountSettings(false)} 
+          onLogout={handleLogout}
         />
       )}
       {showSignUpModal && <SignUpModal close={() => setShowSignUpModal(false)} />}

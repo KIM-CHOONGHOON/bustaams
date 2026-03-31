@@ -1,26 +1,28 @@
 const mysql = require('mysql2/promise');
 require('dotenv').config();
 
-async function checkData() {
+async function checkSchema() {
     const pool = mysql.createPool({
         host: process.env.DB_HOST || '127.0.0.1',
         port: process.env.DB_PORT || 3306,
         user: process.env.DB_USER || 'root',
         password: process.env.DB_PASSWORD,
         database: process.env.DB_NAME || 'bustaams',
-        waitForConnections: true,
-        connectionLimit: 10,
     });
 
     try {
-        const [rows] = await pool.execute('SELECT USER_ID_ENC, USER_NM, HP_NO FROM TB_USER LIMIT 1');
-        console.log('--- DB Stored Data (Raw) ---');
-        console.log(JSON.stringify(rows[0], null, 2));
+        const [columns] = await pool.execute('SHOW COLUMNS FROM TB_USER');
+        console.log('--- TB_USER Columns ---');
+        console.table(columns);
+
+        const [tables] = await pool.execute('SHOW TABLES');
+        console.log('--- Database Tables ---');
+        console.table(tables);
     } catch (error) {
-        console.error('Error fetching data:', error);
+        console.error('Error:', error);
     } finally {
         await pool.end();
     }
 }
 
-checkData();
+checkSchema();
