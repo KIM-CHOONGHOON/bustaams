@@ -178,7 +178,20 @@ const Login = ({ onToggle, onLoginSuccess }) => {
               </button>
             </form>
 
-            <div className="mt-8 flex items-center justify-center">
+            <div className="mt-8 flex items-center gap-4 justify-center">
+              <a 
+                className="text-xs font-medium text-outline hover:text-primary transition-colors cursor-pointer" 
+                onClick={() => {
+                  onToggle(); // Close login
+                  // The parent (App.jsx) needs to open SignUpModal. 
+                  // In our current App.jsx, Header manages these, but Login.jsx doesn't have direct access to setShowSignUpModal.
+                  // However, the Login.html design was converted to Login.jsx which has onToggle.
+                  // In App.jsx, Login.jsx is rendered as LoginModal.
+                }}
+              >
+                회원가입
+              </a>
+              <div className="w-px h-3 bg-outline-variant"></div>
               <a className="text-xs font-medium text-outline hover:text-primary transition-colors" href="#">ID/비밀번호 찾기</a>
             </div>
 
