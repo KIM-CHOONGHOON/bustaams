@@ -1,0 +1,39 @@
+# BusTaams 전체 테이블 생성 쿼리 (MySQL)
+
+이 쿼리는 UUID 기반 PK, 개인정보 암호화, GCS 파일 연동 구조, 그리고 약관 및 정산 로직을 모두 포함하고 있습니다.
+
+## 1. 파일 마스터 관리 (GCS 연동)
+
+```sql
+CREATE TABLE TB_FILE_MASTER (
+    FILE_UUID BINARY(16) NOT NULL COMMENT '파일 고유 식별자 (UUID)',
+    FILE_CATEGORY ENUM('SIGNATURE', 'LICENSE', 'BUS_PHOTO', 'DOCS') NOT NULL COMMENT '파일 분류',
+    GCS_BUCKET_NM VARCHAR(100) DEFAULT 'bustaams-secure-data' COMMENT 'GCS 버킷명',
+    GCS_PATH VARCHAR(255) NOT NULL COMMENT 'GCS 내 물리적 경로',
+    ORG_FILE_NM VARCHAR(255) COMMENT '원본 파일명',
+    FILE_EXT CHAR(5) DEFAULT 'png' COMMENT '파일 확장자',
+    FILE_SIZE BIGINT COMMENT '파일 크기 (Byte)',
+    REG_DT DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '업로드 일시',
+    PRIMARY KEY (FILE_UUID)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='공통 파일 마스터 테이블';
+```
+
+## 2. 통합 회원 및 개인정보 관리
+
+```sql
+CREATE TABLE TB_USER (
+    USER_UUID BINARY(16) NOT NULL COMMENT '시스템 관리용 고유 식별자 (UUID)',
+    USER_ID_ENC VARCHAR(255) NOT NULL COMMENT '사용자 입력 ID / SNS ID (양방향 암호화)',
+    SNS_TYPE ENUM('NONE', 'KAKAO', 'NAVER') DEFAULT 'NONE' COMMENT '간편로그인 타입',
+    USER_TYPE ENUM('TRAVELER', 'DRIVER', 'PARTNER') NOT NULL COMMENT '회원구분',
+    PASSWORD VARCHAR(255) NOT NULL COMMENT '비밀번호 (단방향 암호화)',
+    USER_NM VARCHAR(255) NOT NULL COMMENT '회원성명 (양방향 암호화)',
+    HP_NO VARCHAR(255) NOT NULL COMMENT '전화번호 (양방향 암호화)',
+    SMS_AUTH_YN ENUM('Y', 'N') DEFAULT 'N' COMMENT 'SMS 문자 인증 여부',
+    RECOM_CODE BINARY(16) COMMENT '추천인 코드 (영업파트너의 USER_UUID)',
+    JOIN_DT DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '가입 일시',
+    USER_STAT ENUM('ACTIVE', 'LEAVE', 'BANNED') DEFAULT 'ACTIVE' COMMENT '상태',
+    PRIMARY KEY (USER_UUID),
+    UNIQUE KEY UK_USER_ID (USER_ID_ENC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='통합 회원 및 개인정보 관리';
+```

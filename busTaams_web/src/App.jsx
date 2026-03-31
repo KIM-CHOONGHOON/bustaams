@@ -1,32 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import SignatureCanvas from 'react-signature-canvas';
 import busLogo from './assets/images/bustaams_bus_logo.png';
 import nameLogo from './assets/images/bustaams_name_logo.png';
+import Login from './components/Login/Login';
 
-import { initializeApp } from 'firebase/app';
-import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
-};
-
-try {
-  const app = initializeApp(firebaseConfig);
-  window.auth = getAuth(app);
-  // 테스트 환경(localhost)에서 그림 맞추기(reCAPTCHA) 로직 강제 패스
-  window.auth.settings.appVerificationDisabledForTesting = true;
-  window.firebaseAuth = { RecaptchaVerifier, signInWithPhoneNumber };
-} catch (e) {
-  console.error("Firebase Auth Init Failed", e);
-}
-
-function Header({ setShowLoginModal, setShowDriverProfileModal, setShowSignUpModal, userRole }) {
+function Header({ setShowLoginModal, setShowDriverProfileModal, currentUser, setCurrentUser }) {
   // Glassmorphic header
   return (
     <header className="sticky top-0 z-50 bg-surface/80 backdrop-blur-xl transition-all">
@@ -66,19 +44,26 @@ function Header({ setShowLoginModal, setShowDriverProfileModal, setShowSignUpMod
           <a className="hover:text-primary transition-colors" href="#">이용 약관</a>
         </nav>
         <div className="flex items-center gap-6">
-          <button 
-            className="text-base font-semibold text-gray-700 hover:text-primary transition-colors"
-            onClick={() => setShowLoginModal(true)}
-          >
-            로그인
-          </button>
-          {/* Primary CTA button with gradient */}
-          <button 
-            className="px-6 py-3 text-base font-bold bg-gradient-to-br from-primary to-primary-container text-white rounded-lg hover:opacity-90 transition-opacity shadow-ambient"
-            onClick={() => setShowSignUpModal(true)}
-          >
-            회원가입
-          </button>
+          {currentUser ? (
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-bold text-gray-900">{currentUser.name} {currentUser.type === 'DRIVER' ? '기사님' : '님'}</span>
+              <button 
+                onClick={() => setCurrentUser(null)}
+                className="text-xs font-bold text-gray-400 hover:text-red-500 transition-colors"
+              >
+                로그아웃
+              </button>
+            </div>
+          ) : (
+            <>
+              <button 
+                className="text-base font-semibold text-gray-700 hover:text-primary transition-colors"
+                onClick={() => setShowLoginModal(true)}
+              >
+                로그인
+              </button>
+            </>
+          )}
         </div>
       </div>
     </header>
@@ -229,114 +214,13 @@ function Footer() {
   );
 }
 
-function LoginModal({ close }) {
-  const [activeTab, setActiveTab] = useState('customer');
-
-  // 홈페이지에 pop-up 형식으로 출력될 때, 뒷배경 스크롤 방지 효과
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, []);
-
+function LoginModal({ close, setCurrentUser }) {
+  // Use the premium Login component we created
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-6 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-0 md:p-6 animate-in fade-in duration-200">
       <div className="absolute inset-0 cursor-pointer" onClick={close}></div>
-      
-      <div className="relative flex w-full max-w-[440px] flex-col bg-surface-lowest rounded-xl shadow-ambient overflow-hidden animate-in zoom-in-95 duration-200">
-        
-        <button 
-          onClick={close} 
-          className="absolute top-6 right-6 w-10 h-10 flex items-center justify-center bg-surface hover:bg-surface-container-low text-gray-500 rounded-lg transition-colors z-10"
-        >
-          <span className="material-symbols-outlined font-bold">close</span>
-        </button>
-
-        <div className="flex items-center p-10 pb-6 justify-center">
-          <h1 className="font-display text-primary text-3xl font-bold tracking-tight flex items-center gap-3">
-            <img src={busLogo} alt="bus icon" className="w-16 h-16 object-contain mix-blend-multiply" />
-            BUS TAAMS
-          </h1>
-        </div>
-
-        <div className="px-10 pb-10">
-          <div className="flex bg-surface-container-low p-1.5 rounded-lg">
-            <button 
-              onClick={() => setActiveTab('customer')}
-              className={`flex-1 flex flex-col items-center justify-center py-3 rounded-[0.5rem] transition-colors ${activeTab === 'customer' ? 'bg-surface-lowest shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-800'}`}
-            >
-              <p className="text-sm font-bold tracking-wide">소비자</p>
-            </button>
-            <button 
-              onClick={() => setActiveTab('driver')}
-              className={`flex-1 flex flex-col items-center justify-center py-3 rounded-[0.5rem] transition-colors ${activeTab === 'driver' ? 'bg-surface-lowest shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-800'}`}
-            >
-              <p className="text-sm font-bold tracking-wide">기사님</p>
-            </button>
-          </div>
-        </div>
-
-        <div className="px-10 space-y-6">
-          <div className="flex flex-col">
-            <label className="text-gray-700 text-sm font-bold pb-2 px-1 font-body">아이디</label>
-            <div className="relative">
-              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">person</span>
-              <input 
-                className="w-full bg-surface-container-high focus:bg-surface-lowest border-0 focus:ring-[2px] focus:ring-primary/20 rounded-lg h-14 pl-12 pr-4 text-base font-body text-gray-900 placeholder:text-gray-400 focus:outline-none transition-all" 
-                placeholder="아이디를 입력해주세요" 
-                type="text" 
-              />
-            </div>
-          </div>
-          <div className="flex flex-col">
-            <label className="text-gray-700 text-sm font-bold pb-2 px-1 font-body">비밀번호</label>
-            <div className="relative">
-              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">lock</span>
-              <input 
-                className="w-full bg-surface-container-high focus:bg-surface-lowest border-0 focus:ring-[2px] focus:ring-primary/20 rounded-lg h-14 pl-12 pr-4 text-base font-body text-gray-900 placeholder:text-gray-400 focus:outline-none transition-all" 
-                placeholder="비밀번호를 입력해주세요" 
-                type="password" 
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="px-10 pt-4 flex justify-end">
-          <a className="text-primary text-sm font-bold font-body hover:text-primary-container transition-colors" href="#">아이디/비밀번호 찾기</a>
-        </div>
-
-        <div className="px-10 pt-8 pb-10">
-          <button className="w-full bg-gradient-to-br from-primary to-primary-container text-white font-bold h-14 rounded-lg transition-transform hover:-translate-y-0.5 shadow-ambient flex items-center justify-center font-body text-lg">
-            로그인
-          </button>
-        </div>
-
-        <div className="px-10 flex items-center justify-center pb-6">
-           <span className="text-gray-400 text-xs font-bold tracking-widest uppercase font-body bg-surface-container-low px-4 py-1.5 rounded-full">간편 로그인</span>
-        </div>
-
-        <div className="px-10 space-y-4 pb-12">
-          <button className="w-full bg-kakao text-[#3C1E1E] font-bold h-14 rounded-lg flex items-center justify-center gap-3 transition-transform hover:-translate-y-0.5 shadow-ambient">
-            <div className="w-6 h-6 flex items-center justify-center">
-              <span className="material-symbols-outlined">chat_bubble</span>
-            </div>
-            카카오로 시작하기
-          </button>
-          <button className="w-full bg-naver text-white font-bold h-14 rounded-lg flex items-center justify-center gap-3 transition-transform hover:-translate-y-0.5 shadow-ambient">
-            <div className="w-6 h-6 flex items-center justify-center bg-white rounded-md text-naver font-black">
-              N
-            </div>
-            네이버로 시작하기
-          </button>
-        </div>
-
-        <div className="p-8 bg-surface-container-low text-center">
-          <p className="text-gray-500 text-sm font-body">
-            계정이 없으신가요? 
-            <a className="text-secondary font-bold hover:text-secondary-container ml-2" href="#">회원가입</a>
-          </p>
-        </div>
+      <div className="relative w-full h-full md:h-auto md:max-w-[1000px] bg-surface-lowest rounded-none md:rounded-3xl shadow-ambient overflow-hidden animate-in zoom-in-95 duration-200">
+        <Login onToggle={close} onLoginSuccess={(user) => { setCurrentUser(user); close(); }} />
       </div>
     </div>
   );
@@ -496,370 +380,19 @@ function DriverProfileModal({ close }) {
   );
 }
 
-function SignUpModal({ close }) {
-  // 모든 API 호출의 base URL - 환경변수에서 로드 (하드코딩 금지)
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
-
-  const sigCanvas = useRef(null);
-  const [userRole, setUserRole] = useState('customer');
-  const [password, setPassword] = useState('');
-  const [passwordConfirm, setPasswordConfirm] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const [signature, setSignature] = useState('');
-  const [hasSignature, setHasSignature] = useState(false);
-
-  // Mapped States
-  const [userName, setUserName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [verificationCode, setVerificationCode] = useState('');
-  const [confirmationResult, setConfirmationResult] = useState(null);
-  const [isPhoneVerified, setIsPhoneVerified] = useState(false);
-  const [firebaseIdToken, setFirebaseIdToken] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [emailError, setEmailError] = useState('');
-  const [phoneError, setPhoneError] = useState('');
-
-  // Setup recaptcha (Requires actual firebase initialization at top of file eventually)
-  useEffect(() => {
-    if (!window.recaptchaVerifier && window.auth) {
-      window.recaptchaVerifier = new window.firebaseAuth.RecaptchaVerifier(window.auth, 'recaptcha-wrapper', {
-        'size': 'invisible',
-        'callback': (response) => {}
-      });
-    }
-  }, []);
-
-  const clearSignature = () => {
-    if (sigCanvas.current && sigCanvas.current.clear) sigCanvas.current.clear();
-    setSignature('');
-    setHasSignature(false);
-  };
-
-  const handleEndDrawing = () => {
-    if (sigCanvas.current && sigCanvas.current.getCanvas) {
-      setSignature(sigCanvas.current.getCanvas().toDataURL('image/png'));
-      setHasSignature(true);
-    }
-  };
-
-  const [agreements, setAgreements] = useState({
-    all: false, term1: false, term2: false, term3: false, termMarketing: false, termDriver: false
-  });
-
-  const allRequiredChecked = agreements.term1 && agreements.term2 && agreements.term3 && (userRole === 'customer' || agreements.termDriver);
-
-  const handleAllAgree = (e) => {
-    const checked = e.target.checked;
-    setAgreements({
-      all: checked, term1: checked, term2: checked, term3: checked, termMarketing: checked, 
-      termDriver: userRole === 'driver' ? checked : false
-    });
-  };
-
-  const handleAgreeChange = (key) => (e) => {
-    const checked = e.target.checked;
-    setAgreements(prev => {
-      const next = { ...prev, [key]: checked };
-      next.all = next.term1 && next.term2 && next.term3 && next.termMarketing && (userRole === 'customer' || next.termDriver);
-      return next;
-    });
-  };
-
-  const validatePassword = (pw) => /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{6,}$/.test(pw);
-
-  // 이메일 blur 시 중복 검사
-  const handleEmailBlur = async () => {
-    if (!email) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/check-email?email=${encodeURIComponent(email)}`);
-      const data = await res.json();
-      if (res.status === 409) setEmailError(data.message);
-      else setEmailError('');
-    } catch (e) {
-      console.warn('이메일 중복 검사 실패 (서버 미응답)', e);
-    }
-  };
-
-  // 전화번호 인증 완료 후 중복 검사
-  const checkPhoneDuplicate = async (phoneNo) => {
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/check-phone?phoneNo=${encodeURIComponent(phoneNo)}`);
-      const data = await res.json();
-      if (res.status === 409) {
-        setPhoneError(data.message);
-        return false;
-      }
-      setPhoneError('');
-      return true;
-    } catch (e) {
-      console.warn('전화번호 중복 검사 실패 (서버 미응답)', e);
-      return true;
-    }
-  };
-
-  const handlePasswordChange = (e) => {
-    const val = e.target.value;
-    setPassword(val);
-    setPasswordError((val.length > 0 && !validatePassword(val)) ? '6자리 이상 통과 오류' : '');
-  };
-
-  const handleSendSms = async () => {
-    if (!phoneNumber) return alert("휴대폰 번호를 입력해주세요.");
-    const formattedPhone = "+82" + phoneNumber.replace(/^0/, '');
-    try {
-      if (!window.recaptchaVerifier) {
-        throw new Error("Recaptcha not initialized");
-      }
-      const confirmation = await window.firebaseAuth.signInWithPhoneNumber(window.auth, formattedPhone, window.recaptchaVerifier);
-      setConfirmationResult(confirmation);
-      alert("인증번호가 발송되었습니다.");
-    } catch (e) {
-      console.error("Firebase SMS Auth Error:", e);
-      alert(`인증번호 전송 실패: ${e.message}\n(Firebase 프로젝트 설정이나 테스트 번호를 확인해주세요.)`);
-    }
-  };
-
-  const handleVerifyCode = async () => {
-    if (!verificationCode || !confirmationResult) return;
-    try {
-      const result = await confirmationResult.confirm(verificationCode);
-      setFirebaseIdToken(await result.user.getIdToken());
-      // 인증 완료 즉시 전화번호 중복 검사
-      const available = await checkPhoneDuplicate(phoneNumber);
-      if (!available) {
-        alert('이미 가입된 휴대폰 번호입니다. 다른 번호를 사용해주세요.');
-        return;
-      }
-      setIsPhoneVerified(true);
-      alert('본인 인증 확인!');
-    } catch (e) {
-      alert('인증번호 오류');
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    // 강제로 현재 캔버스 상태 추출 시도 (가끔 onEnd 이벤트가 씹히는 브라우저 버그 방지)
-    let finalSignature = signature;
-    let finalHasSignature = hasSignature;
-    
-    if (sigCanvas.current && sigCanvas.current.isEmpty && !sigCanvas.current.isEmpty()) {
-       finalSignature = sigCanvas.current.getCanvas().toDataURL('image/png');
-       finalHasSignature = true;
-       setSignature(finalSignature);
-       setHasSignature(true);
-    }
-
-    if (!userName || !email || !password || !finalHasSignature || !allRequiredChecked || !isPhoneVerified) {
-      const missing = [];
-      if (!userName) missing.push('이름(실명)');
-      if (!email) missing.push('이메일(ID)');
-      if (!password) missing.push('비밀번호');
-      if (!isPhoneVerified) missing.push('휴대폰 본인 인증');
-      if (!allRequiredChecked) missing.push('필수 약관 동의');
-      if (!finalHasSignature) missing.push('전자 서명');
-      return alert(`다음 필수 항목이 누락되었습니다:\n- ${missing.join('\n- ')}`);
-    }
-    // 비밀번호 확인 일치 검사
-    if (password !== passwordConfirm) {
-      return alert('비밀번호와 비밀번호 확인이 일치하지 않습니다.');
-    }
-    // 이메일/전화번호 중복 에러 재확인
-    if (emailError || phoneError) {
-      return alert(`중복 오류가 있습니다:\n${emailError || phoneError}`);
-    }
-    setIsLoading(true);
-    setErrorMsg('');
-    
-    const agreedTerms = Object.keys(agreements).filter(k => k !== 'all' && agreements[k]).map((k, idx) => idx + 1);
-
-    try {
-      const res = await window.fetch(`${API_BASE}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: email, password, userName, phoneNo: phoneNumber || "01000000000",
-          userType: userRole === 'customer' ? 'CONSUMER' : 'DRIVER',
-          firebaseIdToken: firebaseIdToken || "DEV_SKIP",
-          mktAgreeYn: agreements.termMarketing ? 'Y' : 'N',
-          signatureBase64: signature, agreedTerms
-        })
-      });
-      const data = await res.json();
-      if(!res.ok) throw new Error(data.error);
-      alert(data.message);
-      close();
-    } catch (err) {
-      const isNetworkError = err.name === 'TypeError' || err.message === 'Failed to fetch';
-      const userMsg = isNetworkError ? '백엔드 서버와 연결할 수 없습니다. (서버가 꺼져있는 것 같습니다.)' : err.message;
-      setErrorMsg(userMsg);
-      alert(`[가입 실패]\n${userMsg}`);
-    } finally { setIsLoading(false); }
-  };
-
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = 'unset'; };
-  }, []);
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
-      <div className="absolute inset-0 cursor-pointer" onClick={close}></div>
-      <div className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto bg-surface-lowest rounded-2xl p-8 shadow-ambient z-10">
-        <div id="recaptcha-wrapper"></div>
-        <button onClick={close} className="absolute top-6 right-6 w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-500 rounded-lg transition-colors z-10">
-          <span className="material-symbols-outlined font-bold">close</span>
-        </button>
-        
-        <div className="flex items-center pb-8 justify-center">
-          <h1 className="font-display text-primary text-[2.5rem] font-bold tracking-tight flex items-center gap-4">
-            <img src={busLogo} alt="bus icon" className="w-[84px] h-[84px] object-contain mix-blend-multiply" />
-            BUS TAAMS
-          </h1>
-        </div>
-        
-        <form className="space-y-5" onSubmit={handleSubmit}>
-          {errorMsg && <div className="text-red-500 font-bold mb-4">{errorMsg}</div>}
-          
-          <div className="flex bg-gray-100 rounded-lg p-1.5 mb-6">
-            <button type="button" onClick={()=>setUserRole('customer')} className={`flex-1 py-2 ${userRole==='customer'?'bg-white shadow font-bold':'text-gray-500'}`}>소비자</button>
-            <button type="button" onClick={()=>setUserRole('driver')} className={`flex-1 py-2 ${userRole==='driver'?'bg-white shadow font-bold':'text-gray-500'}`}>기사님</button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-             <div>
-               <label>실명 Name</label>
-               <input value={userName} onChange={e=>setUserName(e.target.value)} type="text" className="w-full bg-gray-100 p-3 rounded" />
-             </div>
-             <div>
-               <label>Email ID</label>
-               <input
-                 value={email}
-                 onChange={e=>{ setEmail(e.target.value); setEmailError(''); }}
-                 onBlur={handleEmailBlur}
-                 type="email"
-                 className={`w-full p-3 rounded ${emailError ? 'bg-red-50 ring-2 ring-red-400' : 'bg-gray-100'}`}
-               />
-               {emailError && <p className="text-red-500 text-xs mt-1 font-bold">{emailError}</p>}
-             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-             <div><label>Password</label><input value={password} onChange={handlePasswordChange} type="password" className="w-full bg-gray-100 p-3 rounded" /></div>
-             <div><label>Confirm</label><input value={passwordConfirm} onChange={e=>setPasswordConfirm(e.target.value)} type="password" className="w-full bg-gray-100 p-3 rounded" /></div>
-          </div>
-          
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-gray-700">휴대폰 인증</label>
-            <div className="flex gap-2">
-              <select className="bg-gray-100 p-3 rounded-xl border-2 border-transparent focus:border-primary/30 outline-none text-gray-700 font-medium w-[130px] cursor-pointer">
-                <option value="">통신사 선택</option>
-                <option value="SKT">SKT</option>
-                <option value="KT">KT</option>
-                <option value="LGU">LG U+</option>
-                <option value="SKT_MVNO">SKT 알뜰폰</option>
-                <option value="KT_MVNO">KT 알뜰폰</option>
-                <option value="LGU_MVNO">LGU+ 알뜰폰</option>
-              </select>
-              <input type="tel" value={phoneNumber} onChange={e=>setPhoneNumber(e.target.value)} placeholder="01012345678" className="flex-1 bg-gray-100 p-3 rounded-xl border-2 border-transparent focus:border-primary/30 outline-none text-gray-900 font-medium"/>
-              <button type="button" disabled={isPhoneVerified} onClick={handleSendSms} className="bg-gray-900 text-white px-5 rounded-xl font-bold active:scale-95 transition-transform disabled:opacity-50 whitespace-nowrap">
-                {isPhoneVerified ? '인증완료' : '인증전송'}
-              </button>
-            </div>
-            {!isPhoneVerified && confirmationResult && (
-              <div className="flex gap-2 mt-2 animate-in slide-in-from-top-2 duration-200">
-                <input type="text" value={verificationCode} onChange={e=>setVerificationCode(e.target.value)} placeholder="수신된 인증번호 6자리" className="flex-1 bg-gray-100 p-3 rounded-xl border-2 border-transparent focus:border-primary/30 outline-none text-gray-900 font-medium tracking-widest"/>
-                <button type="button" onClick={handleVerifyCode} className="border-2 border-primary text-primary px-6 rounded-xl font-bold bg-transparent hover:bg-primary/5 active:scale-95 transition-all">확인</button>
-              </div>
-            )}
-            {phoneError && <p className="text-red-500 text-xs mt-1 font-bold">{phoneError}</p>}
-          </div>
-
-          <div className="mt-4 border-t pt-4 space-y-3">
-            <label className="flex items-center gap-2 cursor-pointer w-fit mb-3">
-              <input type="checkbox" checked={agreements.all} onChange={handleAllAgree} className="w-5 h-5 rounded border-gray-300 text-primary focus:ring-primary"/>
-              <span className="text-base font-bold text-gray-900">전체 약관 동의</span>
-            </label>
-            
-            <div className="flex flex-wrap items-center gap-6">
-               <div className="flex items-center gap-1">
-                 <label className="flex items-center gap-2 cursor-pointer">
-                   <input type="checkbox" checked={agreements.term1} onChange={handleAgreeChange('term1')} className="w-4 h-4 rounded border-gray-300 text-primary"/>
-                   <span className="text-sm font-medium text-gray-800">이용약관(필수)</span>
-                 </label>
-                 <button type="button" onClick={() => alert('이용약관 상세 보기 팝업')} className="text-xs font-bold text-gray-500 hover:text-primary transition-colors ml-1">[보기]</button>
-               </div>
-               
-               <div className="flex items-center gap-1">
-                 <label className="flex items-center gap-2 cursor-pointer">
-                   <input type="checkbox" checked={agreements.term2} onChange={handleAgreeChange('term2')} className="w-4 h-4 rounded border-gray-300 text-primary"/>
-                   <span className="text-sm font-medium text-gray-800">개인정보(필수)</span>
-                 </label>
-                 <button type="button" onClick={() => alert('개인정보 처리방침 팝업')} className="text-xs font-bold text-gray-500 hover:text-primary transition-colors ml-1">[보기]</button>
-               </div>
-               
-               <div className="flex items-center gap-1">
-                 <label className="flex items-center gap-2 cursor-pointer">
-                   <input type="checkbox" checked={agreements.term3} onChange={handleAgreeChange('term3')} className="w-4 h-4 rounded border-gray-300 text-primary"/>
-                   <span className="text-sm font-medium text-gray-800">위치약관(필수)</span>
-                 </label>
-                 <button type="button" onClick={() => alert('위치약관 팝업')} className="text-xs font-bold text-gray-500 hover:text-primary transition-colors ml-1">[보기]</button>
-               </div>
-               
-               <div className="flex items-center gap-1">
-                 <label className="flex items-center gap-2 cursor-pointer">
-                   <input type="checkbox" checked={agreements.termMarketing} onChange={handleAgreeChange('termMarketing')} className="w-4 h-4 rounded border-gray-300 text-primary"/>
-                   <span className="text-sm font-medium text-gray-800">마케팅(선택)</span>
-                 </label>
-                 <button type="button" onClick={() => alert('마케팅 동의서 팝업')} className="text-xs font-bold text-gray-500 hover:text-primary transition-colors ml-1">[보기]</button>
-               </div>
-            </div>
-
-            {userRole === 'driver' && (
-               <div className="flex items-center gap-1 mt-2">
-                 <label className="flex items-center gap-2 cursor-pointer">
-                   <input type="checkbox" checked={agreements.termDriver} onChange={handleAgreeChange('termDriver')} className="w-4 h-4 rounded border-gray-300 text-[#007E69]"/>
-                   <span className="text-sm font-bold text-[#007E69]">기사님 입점 계약(필수)</span>
-                 </label>
-                 <button type="button" onClick={() => alert('기사님 입점 계약 상세 보기')} className="text-xs font-bold text-gray-500 hover:text-primary transition-colors ml-1">[보기]</button>
-               </div>
-            )}
-          </div>
-
-          <div className="mt-6 border-t pt-4">
-             <div className="flex justify-between">
-                <label>서명 캔버스 (이름 정자)</label>
-                {allRequiredChecked && <button type="button" onClick={clearSignature} className="text-sm text-gray-500">초기화</button>}
-             </div>
-             <div className={`mt-2 border-2 rounded-xl h-40 ${allRequiredChecked ? 'border-primary' : 'border-gray-300 opacity-50 pointer-events-none'}`}>
-                 <SignatureCanvas ref={sigCanvas} onEnd={handleEndDrawing} canvasProps={{ className: 'w-full h-full' }} />
-             </div>
-          </div>
-
-          <button disabled={isLoading} type="submit" className="w-full mt-6 bg-primary text-white py-4 rounded-xl font-bold">
-            {isLoading ? "진행 중..." : "최종 가입 제출"}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
 
 function App() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showDriverProfileModal, setShowDriverProfileModal] = useState(false);
-  const [showSignUpModal, setShowSignUpModal] = useState(false);
-  const [userRole, setUserRole] = useState('customer');
+  const [currentUser, setCurrentUser] = useState(null);
 
   return (
     <div className="min-h-screen flex flex-col font-body selection:bg-primary/20 selection:text-primary">
       <Header 
         setShowLoginModal={setShowLoginModal} 
         setShowDriverProfileModal={setShowDriverProfileModal} 
-        setShowSignUpModal={setShowSignUpModal}
-        userRole={userRole} 
+        currentUser={currentUser}
+        setCurrentUser={setCurrentUser}
       />
       <main className="flex-1">
         <Hero />
@@ -868,9 +401,8 @@ function App() {
       </main>
       <Footer />
       
-      {showLoginModal && <LoginModal close={() => setShowLoginModal(false)} />}
+      {showLoginModal && <LoginModal close={() => setShowLoginModal(false)} setCurrentUser={setCurrentUser} />}
       {showDriverProfileModal && <DriverProfileModal close={() => setShowDriverProfileModal(false)} />}
-      {showSignUpModal && <SignUpModal close={() => setShowSignUpModal(false)} />}
     </div>
   );
 }
