@@ -1,0 +1,27 @@
+/* Login.css - Custom styles for the Login screen */
+
+.material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.editorial-gradient-primary {
+    background: linear-gradient(135deg, #004e47 0%, #00685f 100%);
+}
+
+.editorial-gradient-secondary {
+    background: linear-gradient(135deg, #9d4300 0%, #ff8d4b 100%);
+}
+
+.glass-panel {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px);
+}
+
+/* Scrollbar hiding utility if needed */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
