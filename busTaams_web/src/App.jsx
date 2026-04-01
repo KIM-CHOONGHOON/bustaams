@@ -6,6 +6,10 @@ import AccountSettings from './components/AccountSettings';
 import CustomerDashboard from './components/CustomerDashboard';
 import busLogo from './assets/images/bustaams_bus_logo.png';
 import nameLogo from './assets/images/bustaams_name_logo.png';
+import DriverDashboard from './components/DriverDashboard/DriverDashboard';
+import DriverProfileSetup from './components/DriverProfileSetup/DriverProfileSetup';
+import BusInformationSetup from './components/BusInformationSetup/BusInformationSetup';
+import QuotationRequests from './components/QuotationRequests/QuotationRequests';
 
 import { initializeApp } from 'firebase/app';
 import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
@@ -776,9 +780,14 @@ function App() {
   const [userRole, setUserRole] = useState('customer');
   const [user, setUser] = useState(null);
 
+  const [showBusInfoModal, setShowBusInfoModal] = useState(false);
+  const [showQuotationModal, setShowQuotationModal] = useState(false);
+  const [driverView, setDriverView] = useState('dashboard'); // 'dashboard' | 'profileSetup'
+
   const handleLogout = () => {
     setUser(null);
   };
+  
 
   return (
     <div className="min-h-screen flex flex-col font-body selection:bg-primary/20 selection:text-primary">
@@ -792,37 +801,41 @@ function App() {
       />
       <main className="flex-1">
         {currentView === 'home' ? (
-          user && (user.userType === 'CONSUMER' || user.userType === 'TRAVELER' || user.userType === 'CUSTOMER') ? (
-            <CustomerDashboard 
-              user={user} 
-              setShowAccountSettings={setShowAccountSettings} 
-            />
+          user ? (
+            user.userType === 'CONSUMER' || user.userType === 'TRAVELER' || user.userType === 'CUSTOMER' ? (
+               <CustomerDashboard 
+                 user={user} 
+                 setShowAccountSettings={setShowAccountSettings} 
+               />
+            ) : user.userType === 'DRIVER' ? (
+               driverView === 'profileSetup' ? (
+                 <DriverProfileSetup 
+                   currentUser={user} 
+                   onBack={() => setDriverView('dashboard')} 
+                 />
+               ) : (
+                 <DriverDashboard 
+                   currentUser={user} 
+                   onLogout={handleLogout} 
+                   onProfileSetup={() => setDriverView('profileSetup')}
+                   onBusInfoSetup={() => setShowBusInfoModal(true)}
+                   onQuotationRequests={() => setShowQuotationModal(true)}
+                 />
+               )
+            ) : null
           ) : (
             <>
               <Hero user={user} setShowLoginModal={setShowLoginModal} />
               <Features user={user} />
               <SpringSpecial />
-              
-              {/* New section for Driver Profile if logged in as driver */}
-              {user?.userType === 'DRIVER' && (
-                 <div className="bg-surface-container py-20 px-8 text-center">
-                   <h2 className="text-3xl font-headline font-bold text-primary mb-6">기사님, 반갑습니다!</h2>
-                   <p className="text-gray-600 mb-8">안전 운행을 위해 기사님 프로필을 최신 상태로 관리해 주세요.</p>
-                   <button 
-                     onClick={() => setShowDriverProfileModal(true)}
-                     className="kinetic-gradient-primary text-white px-10 py-4 rounded-full font-bold shadow-xl hover:scale-105 transition-transform"
-                   >
-                     기사 프로필 관리하기
-                   </button>
-                 </div>
-              )}
             </>
           )
         ) : (
           <SignupPage onBack={() => setCurrentView('home')} />
         )}
       </main>
-      {currentView === 'home' && !(user && (user.userType === 'CONSUMER' || user.userType === 'TRAVELER' || user.userType === 'CUSTOMER')) && <Footer />}
+      
+      {currentView === 'home' && !user && <Footer />}
       
       {showLoginModal && (
         <LoginModal 
@@ -846,6 +859,8 @@ function App() {
         />
       )}
       {showSignUpModal && <SignUpModal close={() => setShowSignUpModal(false)} />}
+      {showBusInfoModal && <BusInformationSetup close={() => setShowBusInfoModal(false)} currentUser={user} />}
+      {showQuotationModal && <QuotationRequests close={() => setShowQuotationModal(false)} currentUser={user} />}
     </div>
   );
 }

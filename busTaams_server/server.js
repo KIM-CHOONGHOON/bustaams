@@ -487,6 +487,224 @@ app.post('/api/driver/profile', async (req, res) => {
 });
  
 // 서버 기동
+// API: 기사 프로필 설정 (Profile Setup)
+app.post('/api/driver/profile-setup', async (req, res) => {
+    let connection;
+    try {
+        const {
+            userUuid, rrn, licenseType, licenseNo, licenseIssueDt, licenseExpiryDt,
+            qualCertNo, bioText, profilePhotoBase64, qualCertBase64
+        } = req.body;
+
+        if (!userUuid) return res.status(400).json({ error: 'userUuid is required' });
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        try {
+            const encryptedRrn = encrypt(rrn || '');
+            let profilePhotoUuid = null;
+            let qualCertUuid = null;
+
+            // 1. 프로필 사진 업로드
+            if (profilePhotoBase64 && profilePhotoBase64.startsWith('data:image')) {
+                profilePhotoUuid = randomUUID();
+                const buffer = Buffer.from(profilePhotoBase64.replace(/^data:image\/\w+;base64,/, ""), 'base64');
+                const fileName = `profiles/${new Date().toISOString().slice(0, 7).replace('-', '')}/${profilePhotoUuid}.png`;
+                const file = bucket.file(fileName);
+                await file.save(buffer, { metadata: { contentType: 'image/png' }, resumable: false });
+
+                await connection.execute(`
+                    INSERT INTO TB_FILE_MASTER (FILE_UUID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT)
+                    VALUES (UUID_TO_BIN(?), 'BUS_PHOTO', ?, ?, 'profile.png', 'png', ?, NOW())
+                `, [profilePhotoUuid, bucketName, fileName, buffer.length]);
+            }
+
+            // 2. 자격증 사본 업로드
+            if (qualCertBase64 && qualCertBase64.startsWith('data:')) {
+                qualCertUuid = randomUUID();
+                const isPdf = qualCertBase64.includes('pdf');
+                const ext = isPdf ? 'pdf' : 'png';
+                const buffer = Buffer.from(qualCertBase64.replace(/^data:[\w\/]+;base64,/, ""), 'base64');
+                const fileName = `certificates/${new Date().toISOString().slice(0, 7).replace('-', '')}/${qualCertUuid}.${ext}`;
+                const file = bucket.file(fileName);
+                await file.save(buffer, { metadata: { contentType: isPdf ? 'application/pdf' : 'image/png' }, resumable: false });
+
+                await connection.execute(`
+                    INSERT INTO TB_FILE_MASTER (FILE_UUID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT)
+                    VALUES (UUID_TO_BIN(?), 'LICENSE', ?, ?, 'cert.${ext}', ?, ?, NOW())
+                `, [qualCertUuid, bucketName, fileName, ext, buffer.length]);
+            }
+
+            // 3. TB_DRIVER_INFO 저장 (Upsert)
+            const driverQuery = `
+                INSERT INTO TB_DRIVER_INFO (
+                    USER_UUID, RRN_ENC, LICENSE_TYPE, LICENSE_NO, LICENSE_ISSUE_DT, 
+                    LICENSE_EXPIRY_DT, QUAL_CERT_NO, QUAL_CERT_FILE_UUID, PROFILE_PHOTO_UUID, BIO_TEXT, UPDATE_DT
+                ) VALUES (
+                    UUID_TO_BIN(?), ?, ?, ?, ?, ?, ?, 
+                    ${qualCertUuid ? 'UUID_TO_BIN(?)' : 'NULL'}, 
+                    ${profilePhotoUuid ? 'UUID_TO_BIN(?)' : 'NULL'}, 
+                    ?, NOW()
+                )
+                ON DUPLICATE KEY UPDATE 
+                    RRN_ENC = VALUES(RRN_ENC),
+                    LICENSE_TYPE = VALUES(LICENSE_TYPE),
+                    LICENSE_NO = VALUES(LICENSE_NO),
+                    LICENSE_ISSUE_DT = VALUES(LICENSE_ISSUE_DT),
+                    LICENSE_EXPIRY_DT = VALUES(LICENSE_EXPIRY_DT),
+                    QUAL_CERT_NO = VALUES(QUAL_CERT_NO),
+                    BIO_TEXT = VALUES(BIO_TEXT),
+                    UPDATE_DT = NOW()
+            `;
+            
+            const params = [userUuid, encryptedRrn, licenseType, licenseNo, licenseIssueDt, licenseExpiryDt, qualCertNo];
+            if (qualCertUuid) params.push(qualCertUuid);
+            if (profilePhotoUuid) params.push(profilePhotoUuid);
+            params.push(bioText);
+
+            await connection.execute(driverQuery, params);
+
+            await connection.commit();
+            res.status(200).json({ message: "기사 프로필 설정이 완료되었습니다." });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally { connection.release(); }
+    } catch (error) {
+        console.error('Profile setup error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// CustomerDashboard API
+app.get('/api/customer/active-request', async (req, res) => {
+    const { uuid } = req.query;
+    try {
+        const [rows] = await pool.execute(`SELECT * FROM TB_BUS_REQUEST WHERE TRAVELER_UUID = UUID_TO_BIN(?) AND REQUEST_STATUS = 'OPEN' ORDER BY CREATE_DT DESC LIMIT 1`, [uuid]);
+        if (rows.length === 0) return res.json(null);
+        const r = rows[0];
+        res.json({ id: r.REQUEST_UUID, route: `${r.DEPARTURE_LOC} → ${r.DESTINATION_LOC}`, subTitle: '대형 전세버스 패키지', startDt: '2024-10-24', description: `대형 · ${r.PASSENGER_CNT}명`, status: r.REQUEST_STATUS });
+    } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+// API: 버스 정보 등록 (Bus Information Setup)
+app.post('/api/driver/bus', async (req, res) => {
+    try {
+        const {
+            userUuid, vehicleNo, modelNm, manufactureYear, mileage,
+            serviceClass, amenities, lastInspectDt, insuranceExpDt
+        } = req.body;
+
+        if (!userUuid || !vehicleNo) {
+            return res.status(400).json({ error: 'userUuid and vehicleNo are required' });
+        }
+
+        // 테이블이 없을 경우 자동 생성 (TB_DRIVER_BUS)
+        const createTableQuery = `
+            CREATE TABLE IF NOT EXISTS TB_DRIVER_BUS (
+                BUS_UUID BINARY(16) NOT NULL PRIMARY KEY,
+                USER_UUID BINARY(16) NOT NULL,
+                VEHICLE_NO VARCHAR(20) NOT NULL UNIQUE,
+                MODEL_NM VARCHAR(100) NOT NULL,
+                MANUFACTURE_YEAR VARCHAR(10),
+                MILEAGE INT DEFAULT 0,
+                SERVICE_CLASS VARCHAR(50) NOT NULL,
+                AMENITIES JSON,
+                LAST_INSPECT_DT DATE,
+                INSURANCE_EXP_DT DATE,
+                BIZ_REG_FILE_UUID BINARY(16),
+                TRANS_LIC_FILE_UUID BINARY(16),
+                INS_CERT_FILE_UUID BINARY(16),
+                REG_DT DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `;
+        await pool.execute(createTableQuery);
+
+        const busUuid = randomUUID();
+        const insertQuery = `
+            INSERT INTO TB_DRIVER_BUS (
+                BUS_UUID, USER_UUID, VEHICLE_NO, MODEL_NM, MANUFACTURE_YEAR, 
+                MILEAGE, SERVICE_CLASS, AMENITIES, LAST_INSPECT_DT, INSURANCE_EXP_DT
+            ) VALUES (
+                UUID_TO_BIN(?), UUID_TO_BIN(?), ?, ?, ?, ?, ?, ?, ?, ?
+            )
+        `;
+
+        await pool.execute(insertQuery, [
+            busUuid, userUuid, vehicleNo, modelNm, manufactureYear, 
+            mileage || 0, serviceClass, JSON.stringify(amenities || {}),
+            lastInspectDt || null, insuranceExpDt || null
+        ]);
+
+        res.status(201).json({ message: "차량 등록이 완료되었습니다.", busUuid });
+    } catch (error) {
+        console.error('Bus Setup error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// API: 기사 견적 리스트 조회 (Quotation Requests)
+app.get('/api/driver/quotation-requests', async (req, res) => {
+    try {
+        const { uuid } = req.query;
+
+        // 실제로는 TB_BUS_REQUEST 와 TB_BID를 조회해야 하나, 
+        // 요구사항에 명시된 화면(QuotationRequests.html)의 텍스트와 구성을 그대로 유지하기 위한 더미 데이터 반환
+        const dummyData = {
+            summary: {
+                title: "서울 ↔ 부산 45인승 대형버스 (왕복)",
+                subTitle: "현재 요청 정보",
+                notice: "선택하신 일정에 대해 총 8명의 파트너가 제안을 보냈습니다.",
+                timeLeft: "04:22:15"
+            },
+            bids: [
+                {
+                    id: 1,
+                    driverName: "정재훈 기사님",
+                    busType: "2023년형 현대 유니버스 노블",
+                    badge: "최신형",
+                    rating: "4.9",
+                    reviews: 128,
+                    price: 1250000,
+                    experience: "무사고 15년",
+                    amenities: ["wifi", "usb", "verified"],
+                    image: "https://lh3.googleusercontent.com/aida-public/AB6AXuDRVQEXsRneczMakBAxBKkLsynR4mCslaVZHJbUltjHB_Dvd52ACzBAVg5htOpNwka_60jObCjc_L5362k5MEbBKcbeq2m69Ou5KcUC0glkSk-ZND8y11b9Ih--vldR8Uv6f3ClXuobXbnDFml9ZKhKqWtQL5Kp0EA0nGb8oiMl1ve2tLWXkGB_DON_9DDjh1CcD5niqxnFLEzFnItTFQBmNkGGJXZJNK-RunQB6BnP_g84HWmR_6a8sk55Jp9HDWSZkjFVe5YUBAE"
+                },
+                {
+                    id: 2,
+                    driverName: "이영수 기사님",
+                    busType: "2021년형 기아 그랜버드",
+                    badge: "베스트 파트너",
+                    rating: "4.8",
+                    reviews: 84,
+                    price: 1180000,
+                    experience: "무사고 8년",
+                    amenities: ["usb", "kitchen", "verified"],
+                    image: "https://lh3.googleusercontent.com/aida-public/AB6AXuAwKoOIShv-xi1ZiGzRoXzb9WxLDsn02wE5Xz7o6Cv7IDJJ_ogGe329guficHv3hgWuS5i6cWLscHWwWEJiAWi1zE1kwYD5ev55mVwJIiAgXtmAv461bphlEltLtR_b1_8Lw5UM31a0A0HZBG-JkYncBpuuW6gGzXHYVhskQ31_Rd50YpRuSGrOP5bhSeTvSpoXlVXpT8VOOZaRqH9C-_cjfTys-mNyF0vr4s5cGaY-wOo8IwIcKK-nvKH3KGKDPUiMwQR4E3ht4as"
+                },
+                {
+                    id: 3,
+                    driverName: "박강석 기사님",
+                    busType: "2019년형 현대 뉴 프리미엄",
+                    badge: null,
+                    rating: "4.7",
+                    reviews: 215,
+                    price: 1050000,
+                    experience: "무사고 20년",
+                    amenities: ["verified"],
+                    image: "https://lh3.googleusercontent.com/aida-public/AB6AXuDfOmboO3y1eKoa4uKGjwHRU081liT_0pfp73FB-YCgbtLe8EBKh6CrlNI11JmCzHnaRobiV5TBxYEjue_Et2XODk3nRc922QAdvwB9UJjewJHpWhm4SZQM1Mmr0ihJkP_lcQWUTAYoJ7oluq6JzZZz8u-bdKwhDt2DbNz3DyFgHftTr6HelRkGmXbXNT7GAUQBWSLtqy_1nEYYtZRadxo_EnceuBouGiffP6xbJUsesPopXX_x3sZ0YoQJqpe6B4AW1MqdBESIzjg"
+                }
+            ]
+        };
+
+        res.status(200).json(dummyData);
+    } catch (error) {
+        console.error('Quotation Requests error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
     console.log(`🚀 busTaams REST API Server is running beautifully on http://localhost:${PORT}`);
