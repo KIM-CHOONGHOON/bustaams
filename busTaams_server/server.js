@@ -328,8 +328,8 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
  
-// 로그인 API (POST /api/users/login)
-app.post('/api/users/login', async (req, res) => {
+// 로그인 API (POST /api/auth/login)
+app.post('/api/auth/login', async (req, res) => {
     try {
         const { userId, password } = req.body;
 

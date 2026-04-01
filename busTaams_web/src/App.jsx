@@ -10,6 +10,7 @@ import DriverDashboard from './components/DriverDashboard/DriverDashboard';
 import DriverProfileSetup from './components/DriverProfileSetup/DriverProfileSetup';
 import BusInformationSetup from './components/BusInformationSetup/BusInformationSetup';
 import QuotationRequests from './components/QuotationRequests/QuotationRequests';
+import Login from './components/Login/Login';
 
 import { initializeApp } from 'firebase/app';
 import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
@@ -838,11 +839,18 @@ function App() {
       {currentView === 'home' && !user && <Footer />}
       
       {showLoginModal && (
-        <LoginModal 
-          close={() => setShowLoginModal(false)} 
-          onLoginSuccess={(userData) => setUser(userData)} 
-          setCurrentView={setCurrentView}
-        />
+        <div className="fixed inset-0 z-[100] bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-[800px] h-[600px] bg-surface-bright rounded-2xl shadow-ambient overflow-hidden animate-in zoom-in-95 duration-200">
+            <Login 
+              onToggle={() => setShowLoginModal(false)} 
+              onLoginSuccess={(userData) => {
+                setUser(userData);
+                setShowLoginModal(false);
+              }}
+              setCurrentView={setCurrentView}
+            />
+          </div>
+        </div>
       )}
       {showDriverProfileModal && (
         <DriverProfileModal 
