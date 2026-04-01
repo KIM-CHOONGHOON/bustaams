@@ -6,16 +6,10 @@ import AccountSettings from './components/AccountSettings';
 import CustomerDashboard from './components/CustomerDashboard';
 import busLogo from './assets/images/bustaams_bus_logo.png';
 import nameLogo from './assets/images/bustaams_name_logo.png';
-=======
-import Login from './components/Login/Login';
-import FindIdPassword from './components/FindIdPassword/FindIdPassword';
 import DriverDashboard from './components/DriverDashboard/DriverDashboard';
-import CustomerDashboard from './components/CustomerDashboard/CustomerDashboard';
-import PartnerDashboard from './components/PartnerDashboard/PartnerDashboard';
 import DriverProfileSetup from './components/DriverProfileSetup/DriverProfileSetup';
 import BusInformationSetup from './components/BusInformationSetup/BusInformationSetup';
 import QuotationRequests from './components/QuotationRequests/QuotationRequests';
->>>>>>> 42314b4 (feat: 기사 시스템 - 프로필, 버스정보, 견적 리스트 기능 설계 및 구현)
 
 import { initializeApp } from 'firebase/app';
 import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
@@ -788,18 +782,12 @@ function App() {
 
   const [showBusInfoModal, setShowBusInfoModal] = useState(false);
   const [showQuotationModal, setShowQuotationModal] = useState(false);
-  const [showFindIdPasswordModal, setShowFindIdPasswordModal] = useState(false);
-  const [findIdPasswordInitialTab, setFindIdPasswordInitialTab] = useState('id');
   const [driverView, setDriverView] = useState('dashboard'); // 'dashboard' | 'profileSetup'
 
   const handleLogout = () => {
     setUser(null);
   };
   
-  const openFindIdPassword = (tab) => {
-    setFindIdPasswordInitialTab(tab);
-    setShowFindIdPasswordModal(true);
-  };
 
   return (
     <div className="min-h-screen flex flex-col font-body selection:bg-primary/20 selection:text-primary">
@@ -834,11 +822,6 @@ function App() {
                    onQuotationRequests={() => setShowQuotationModal(true)}
                  />
                )
-            ) : user.userType === 'PARTNER' || user.userType === 'SALES' ? (
-               <PartnerDashboard 
-                 currentUser={user} 
-                 onLogout={handleLogout}
-               />
             ) : null
           ) : (
             <>
@@ -876,12 +859,6 @@ function App() {
         />
       )}
       {showSignUpModal && <SignUpModal close={() => setShowSignUpModal(false)} />}
-      {showFindIdPasswordModal && (
-        <FindIdPasswordModal
-          close={() => setShowFindIdPasswordModal(false)}
-          initialTab={findIdPasswordInitialTab}
-        />
-      )}
       {showBusInfoModal && <BusInformationSetup close={() => setShowBusInfoModal(false)} currentUser={user} />}
       {showQuotationModal && <QuotationRequests close={() => setShowQuotationModal(false)} currentUser={user} />}
     </div>
