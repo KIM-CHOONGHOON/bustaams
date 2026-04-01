@@ -1,13 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
-import busLogo from '../assets/images/bustaams_bus_logo.png';
 
 const SignupPage = ({ onBack }) => {
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
   const sigCanvas = useRef(null);
-  
-  // State from original SignUpModal
-  const [userRole, setUserRole] = useState('traveler'); // 'traveler', 'salesperson', or 'driver'
+
+  const [userRole, setUserRole] = useState('traveler'); // 'traveler' | 'salesperson' | 'driver'
   const [userId, setUserId] = useState('');
   const [userName, setUserName] = useState('');
   const [email, setEmail] = useState('');
@@ -15,563 +13,495 @@ const SignupPage = ({ onBack }) => {
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
-  const [confirmationResult, setConfirmationResult] = useState(null);
   const [isPhoneVerified, setIsPhoneVerified] = useState(false);
-  const [firebaseIdToken, setFirebaseIdToken] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [signature, setSignature] = useState('');
   const [hasSignature, setHasSignature] = useState(false);
-  const [timer, setTimer] = useState(0); // 초 단위
-  
-  const [emailError, setEmailError] = useState('');
-  const [phoneError, setPhoneError] = useState('');
+  const [timer, setTimer] = useState(0);
+  const [isSmsLoading, setIsSmsLoading] = useState(false);
+
+  // Error states
   const [idError, setIdError] = useState('');
   const [idSuccess, setIdSuccess] = useState('');
   const [isIdVerified, setIsIdVerified] = useState(false);
+  const [isIdChecking, setIsIdChecking] = useState(false);
+  const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [passwordConfirmError, setPasswordConfirmError] = useState('');
-  const [termsError, setTermsError] = useState(false);
-  const [isIdChecking, setIsIdChecking] = useState(false);
+  const [phoneError, setPhoneError] = useState('');
+  const [smsError, setSmsError] = useState('');
+  const [smsSuccess, setSmsSuccess] = useState('');
+  const [formError, setFormError] = useState('');
 
   const [agreements, setAgreements] = useState({
     all: false, term1: false, term2: false, marketing: false
   });
 
-  // reCAPTCHA 초기화
-  useEffect(() => {
-    if (!window.recaptchaVerifier && window.auth) {
-      window.recaptchaVerifier = new window.firebaseAuth.RecaptchaVerifier(window.auth, 'recaptcha-signup-wrapper', {
-        'size': 'invisible'
-      });
-    }
-  }, []);
-
-  // 타이머 로직
+  // Timer
   useEffect(() => {
     let interval;
     if (timer > 0) {
-      interval = setInterval(() => {
-        setTimer((prev) => prev - 1);
-      }, 1000);
-    } else if (timer === 0) {
-      clearInterval(interval);
+      interval = setInterval(() => setTimer(prev => prev - 1), 1000);
     }
     return () => clearInterval(interval);
   }, [timer]);
 
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  const formatTime = (s) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   };
+
+  const validateEmail = (v) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+
+  const validatePassword = (v) =>
+    /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/.test(v);
 
   const handleAllAgree = (e) => {
-    const checked = e.target.checked;
-    setAgreements({ all: checked, term1: checked, term2: checked, marketing: checked });
-  };
-
-  const validateEmail = (email) => {
-    return String(email)
-      .toLowerCase()
-      .match(
-        /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
-      );
+    const c = e.target.checked;
+    setAgreements({ all: c, term1: c, term2: c, marketing: c });
   };
 
   const handleAgreeChange = (key) => (e) => {
-    const checked = e.target.checked;
+    const c = e.target.checked;
     setAgreements(prev => {
-      const next = { ...prev, [key]: checked };
+      const next = { ...prev, [key]: c };
       next.all = next.term1 && next.term2 && next.marketing;
       return next;
     });
   };
 
   const handleIdCheck = async () => {
-    console.log('handleIdCheck called for ID:', userId);
-    if (!userId.trim()) {
-        window.alert("아이디를 입력해주세요.");
-        return;
-    }
-    setIsIdChecking(true);
+    if (!userId.trim()) { setIdError('아이디를 입력해주세요.'); return; }
+    setIsIdChecking(true); setIdError(''); setIdSuccess('');
     try {
-      console.log('Fetching:', `${API_BASE}/api/auth/check-id?userId=${encodeURIComponent(userId)}`);
       const res = await fetch(`${API_BASE}/api/auth/check-id?userId=${encodeURIComponent(userId)}`);
       const data = await res.json();
-      console.log('ID Check Response:', res.status, data);
-      
-      if (res.status === 409) {
-        setIdError(data.message);
-        setIdSuccess('');
-        setIsIdVerified(false);
-        window.alert(data.message);
-      } else if (res.ok) {
-        setIdError('');
-        setIdSuccess(data.message || '사용 가능한 아이디입니다.');
+      if (res.ok && data.isAvailable) {
+        setIdSuccess('사용 가능한 아이디입니다.');
         setIsIdVerified(true);
-        window.alert(data.message || '사용 가능한 아이디입니다.');
       } else {
-        window.alert(data.error || '중복 확인 중 오류가 발생했습니다.');
+        setIdError(data.message || '이미 사용 중인 아이디입니다.');
+        setIsIdVerified(false);
       }
-    } catch (e) {
-      console.error('ID 중복 검사 실패', e);
-      window.alert('서버와 통신할 수 없습니다.');
+    } catch {
+      setIdError('중복 확인 중 오류가 발생했습니다.');
+      setIsIdVerified(false);
     } finally {
       setIsIdChecking(false);
     }
   };
 
   const handleSendSms = async () => {
-    if (!phoneNumber) return alert("휴대폰 번호를 입력해주세요.");
-    
-    // 번호 형식 체크 (예: 01012345678 -> +821012345678)
-    const purePhone = phoneNumber.replace(/[^0-9]/g, '');
-    const formattedPhone = "+82" + purePhone.replace(/^0/, '');
-
+    if (!phoneNumber.trim()) { setPhoneError('휴대폰 번호를 입력해주세요.'); return; }
+    const cleaned = phoneNumber.replace(/-/g, '');
+    if (!/^01[016789]\d{7,8}$/.test(cleaned)) {
+      setPhoneError('올바른 휴대폰 번호를 입력해주세요.');
+      return;
+    }
+    setPhoneError(''); setSmsError(''); setSmsSuccess('');
+    setIsSmsLoading(true);
     try {
-      if (!window.recaptchaVerifier) {
-        window.recaptchaVerifier = new window.firebaseAuth.RecaptchaVerifier(window.auth, 'recaptcha-signup-wrapper', {
-          'size': 'invisible'
-        });
+      const res = await fetch(`${API_BASE}/api/auth/send-sms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: cleaned })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTimer(180);
+        setSmsSuccess(data.message || '인증번호가 전송되었습니다.');
+      } else {
+        setPhoneError(data.error || 'SMS 전송에 실패했습니다.');
       }
-      
-      // [테스트] 인증번호 발송 생략 및 즉시 인증 완료 처리
-      // const confirmation = await window.firebaseAuth.signInWithPhoneNumber(window.auth, formattedPhone, window.recaptchaVerifier);
-      // setConfirmationResult(confirmation);
-      setIsPhoneVerified(true);
-      setTimer(180);
-      alert("[테스트 모드] 인증번호 발송을 생략하고 즉시 인증 처리되었습니다.");
-    } catch (e) {
-      console.error("SMS Error:", e);
-      alert(`인증번호 전송 실패: ${e.message}`);
-      // reCAPTCHA 초기화 실패 시 재시도 가능하도록 초기화
-      if (window.recaptchaVerifier) {
-          window.recaptchaVerifier.clear();
-          window.recaptchaVerifier = null;
-      }
+    } catch {
+      setPhoneError('SMS 전송 중 오류가 발생했습니다.');
+    } finally {
+      setIsSmsLoading(false);
     }
   };
 
-  const handleVerifyCode = async () => {
-    if (!verificationCode || !confirmationResult) return;
+  const handleVerifySms = async () => {
+    if (!verificationCode.trim()) { setSmsError('인증번호를 입력해주세요.'); return; }
+    setSmsError('');
     try {
-      const result = await confirmationResult.confirm(verificationCode);
-      setFirebaseIdToken(await result.user.getIdToken());
-      setIsPhoneVerified(true);
-      alert('본인 인증 완료!');
-    } catch (e) {
-      alert('인증번호가 올바르지 않습니다.');
+      const cleaned = phoneNumber.replace(/-/g, '');
+      const res = await fetch(`${API_BASE}/api/auth/verify-sms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: cleaned, code: verificationCode })
+      });
+      const data = await res.json();
+      if (res.ok && data.verified) {
+        setIsPhoneVerified(true);
+        setTimer(0);
+        setSmsSuccess('휴대폰 인증이 완료되었습니다.');
+      } else {
+        setSmsError(data.error || '인증번호가 일치하지 않습니다.');
+      }
+    } catch {
+      setSmsError('인증 확인 중 오류가 발생했습니다.');
     }
   };
 
-  const clearSignature = () => {
-    if (sigCanvas.current) sigCanvas.current.clear();
-    setSignature('');
-    setHasSignature(false);
+  const handleSignatureClear = () => {
+    if (sigCanvas.current) { sigCanvas.current.clear(); setHasSignature(false); }
   };
 
-  const handleEndDrawing = () => {
-    if (sigCanvas.current) {
-      setSignature(sigCanvas.current.getCanvas().toDataURL('image/png'));
-      setHasSignature(true);
-    }
+  const handleSignatureEnd = () => {
+    if (sigCanvas.current && !sigCanvas.current.isEmpty()) setHasSignature(true);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!hasSignature) {
-        if (sigCanvas.current && !sigCanvas.current.isEmpty()) {
-            setSignature(sigCanvas.current.getCanvas().toDataURL('image/png'));
-            setHasSignature(true);
-        }
-    }
+    setFormError('');
+    let valid = true;
 
-    if (!userId || !userName || !email || !password) {
-      return alert('모든 필수 입력 항목을 채워주세요.');
-    }
-
-    if (!isIdVerified) {
-      setIdError('아이디 중복 확인이 필요합니다.');
-      return alert('아이디 중복 확인을 해주세요.');
-    }
-
-    if (!agreements.term1 || !agreements.term2) {
-      setTermsError(true);
-      return alert('필수 약관에 동의해야 가입이 가능합니다.');
-    } else {
-      setTermsError(false);
-    }
-
-    if (!validateEmail(email)) {
-      setEmailError('올바른 이메일 형식이 아닙니다.');
-      return alert('올바른 이메일 형식을 입력해주세요.');
-    }
-
-    if (password.length < 8) {
-      setPasswordError('비밀번호는 8자리 이상이어야 합니다.');
-      return alert('비밀번호는 8자리 이상으로 설정해주세요.');
-    }
-
-    if (password !== passwordConfirm) {
-      setPasswordConfirmError('비밀번호가 일치하지 않습니다.');
-      return alert('비밀번호가 일치하지 않습니다.');
-    }
-
-    if (!isPhoneVerified) {
-      return alert('휴대폰 본인 인증을 완료해주세요.');
-    }
+    if (!isIdVerified) { setIdError('아이디 중복 확인을 해주세요.'); valid = false; }
+    if (!email) { setEmailError('이메일을 입력해주세요.'); valid = false; }
+    else if (!validateEmail(email)) { setEmailError('올바른 이메일 형식을 입력해주세요.'); valid = false; }
+    else setEmailError('');
+    if (!password) { setPasswordError('비밀번호를 입력해주세요.'); valid = false; }
+    else if (!validatePassword(password)) { setPasswordError('8자 이상, 영문/숫자/특수문자를 포함해주세요.'); valid = false; }
+    else setPasswordError('');
+    if (password !== passwordConfirm) { setPasswordConfirmError('비밀번호가 일치하지 않습니다.'); valid = false; }
+    else setPasswordConfirmError('');
+    if (!isPhoneVerified) { setPhoneError('휴대폰 인증을 완료해주세요.'); valid = false; }
+    if (!hasSignature) { setFormError('전자 서명을 해주세요.'); valid = false; }
+    if (!agreements.term1 || !agreements.term2) { setFormError('필수 약관에 동의해주세요.'); valid = false; }
+    if (!valid) return;
 
     setIsLoading(true);
     try {
+      const signatureBase64 = sigCanvas.current?.toDataURL('image/png').split(',')[1] || '';
       const agreedTerms = [];
       if (agreements.term1) agreedTerms.push(1);
       if (agreements.term2) agreedTerms.push(2);
-      if (agreements.marketing) agreedTerms.push(4);
-
-      // [보안/버그수정] State 업데이트 지연 방지를 위해 Canvas에서 직접 서명 추출
-      let finalSignature = signature;
-      if (sigCanvas.current && !sigCanvas.current.isEmpty()) {
-          finalSignature = sigCanvas.current.getCanvas().toDataURL('image/png');
-      }
+      if (agreements.marketing) agreedTerms.push(3);
 
       const res = await fetch(`${API_BASE}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId, password, userName, email, phoneNo: phoneNumber,
-          userType: userRole === 'driver' ? 'DRIVER' : (userRole === 'salesperson' ? 'PARTNER' : 'TRAVELER'),
-          signatureBase64: finalSignature,
-          mktAgreeYn: agreements.marketing ? 'Y' : 'N',
-          agreedTerms
+          userId,
+          userName,
+          email,
+          password,
+          phoneNo: phoneNumber.replace(/-/g, ''),
+          smsAuthYn: 'Y',
+          userType: userRole === 'driver' ? 'DRIVER' : userRole === 'salesperson' ? 'SALESPERSON' : 'TRAVELER',
+          agreedTerms,
+          signatureBase64
         })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      alert('회원가입이 완료되었습니다!');
-      onBack();
-    } catch (err) {
-      alert(`[가입 실패] ${err.message}`);
+      if (res.ok || res.status === 201) {
+        alert('회원가입이 완료되었습니다! 로그인해주세요.');
+        if (onBack) onBack();
+      } else {
+        setFormError(data.error || '회원가입에 실패했습니다.');
+      }
+    } catch {
+      setFormError('서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <main className="min-h-screen flex flex-col md:flex-row bg-background font-body text-on-surface antialiased overflow-x-hidden">
-      <div id="recaptcha-signup-wrapper"></div>
-      
-      {/* Left Side: Editorial Visual */}
-      <section className="hidden md:flex md:w-5/12 lg:w-1/2 relative overflow-hidden bg-primary">
+    <div style={{ fontFamily: "'Manrope', sans-serif" }} className="min-h-screen flex flex-col md:flex-row bg-[#f7f9fb]">
+      {/* ── Left Panel ── */}
+      <section className="hidden md:flex md:w-5/12 lg:w-1/2 relative overflow-hidden" style={{ background: '#004e47' }}>
         <div className="absolute inset-0 z-0">
-          <img 
-            alt="Luxury Bus Interior" 
-            className="w-full h-full object-cover opacity-60 mix-blend-overlay scale-105" 
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuBlzDaR7G7PY9kXkxKDxzzCzAuRsJZW8zWR0CNHjG3pFRFFKjADrRxsD9QKJscfZ5Rt3UguF6S0XiTXE7oNZYGqr04hT6KEuN9-svJo0wkuIUsF_T-FJkraabGj3VS5Pw9e-8KHTMd1PHjvgtqXrSnimZSfqW4OtVp_yFXts7FHRFFsSCgzCdn_uBtCYK_jhwlUAORhLllBui9w7qvdGyrhZd9DfNkVi0kwZee5YzEvl2R3Ku80grkH4mHP2UR2DBqScCv4QCK8zFI"
+          <img
+            src="https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=800&auto=format&fit=crop&q=60"
+            alt="Luxury Bus"
+            className="w-full h-full object-cover opacity-40"
+            style={{ mixBlendMode: 'overlay', transform: 'scale(1.05)' }}
           />
         </div>
         <div className="relative z-10 w-full h-full p-16 flex flex-col justify-between">
-          <div className="cursor-pointer" onClick={onBack}>
-            <h1 className="font-headline font-extrabold text-5xl lg:text-7xl text-white tracking-tighter leading-tight">
-              busTaams <br/> Editorial
+          <div>
+            <h1 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800, fontSize: '3.5rem', color: '#fff', lineHeight: 1.1, letterSpacing: '-0.03em' }}>
+              BusTaams
             </h1>
           </div>
-          <div className="max-w-md">
-            <p className="text-primary-fixed font-headline font-bold text-3xl mb-4 leading-snug">
-              고품격 버스 경매의 <br/>새로운 기준을 경험하세요.
+          <div style={{ maxWidth: '24rem' }}>
+            <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: '1.75rem', color: '#a1f1e5', marginBottom: '1rem', lineHeight: 1.4 }}>
+              고품격 버스 여행의<br />새로운 기준을 경험하세요.
             </p>
-            <p className="text-white/80 text-lg">
-              최고의 가치를 지닌 차량들이 당신을 기다립니다. <br/>전문적인 옥션 플랫폼에서 시작하세요.
+            <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '1.05rem' }}>
+              검증된 드라이버 파트너와 함께<br />안전하고 프리미엄한 여행을 시작하세요.
             </p>
           </div>
         </div>
-        <div className="absolute bottom-0 right-0 w-32 h-32 bg-secondary opacity-20 blur-3xl rounded-full -mr-16 -mb-16"></div>
+        <div className="absolute bottom-0 right-0 w-32 h-32 opacity-20 blur-3xl rounded-full -mr-16 -mb-16" style={{ background: '#9d4300' }} />
       </section>
 
-      {/* Right Side: Signup Form Container */}
-      <section className="w-full md:w-7/12 lg:w-1/2 flex items-center justify-center p-6 md:p-12 lg:p-20 bg-surface">
+      {/* ── Right Panel: Form ── */}
+      <section className="w-full md:w-7/12 lg:w-1/2 flex items-start justify-center p-6 md:p-12 lg:p-16 overflow-y-auto">
         <div className="w-full max-w-xl">
-          {/* Branding for Mobile */}
-          <div className="md:hidden mb-12 cursor-pointer" onClick={onBack}>
-            <h1 className="font-headline font-extrabold text-3xl text-primary tracking-tighter">busTaams</h1>
-          </div>
-          
-          <div className="mb-10">
-            <h2 className="font-headline font-extrabold text-4xl text-on-surface mb-2">회원가입</h2>
-            <p className="text-on-surface-variant">busTaams의 회원이 되어 전세버스 역경매 서비스를 경험해보세요.</p>
+          {/* Mobile brand */}
+          <div className="md:hidden mb-10">
+            <h1 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800, fontSize: '1.75rem', color: '#004e47', letterSpacing: '-0.03em' }}>BusTaams</h1>
           </div>
 
-          <div className="flex p-1 bg-surface-container-high rounded-full mb-10 w-fit overflow-x-auto">
-            <button 
-              onClick={() => setUserRole('traveler')}
-              className={`px-6 py-2.5 rounded-full transition-all text-sm font-bold whitespace-nowrap ${userRole === 'traveler' ? 'bg-surface-lowest text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}
-            >
-              일반고객(여행자)
-            </button>
-            <button 
-              onClick={() => setUserRole('salesperson')}
-              className={`px-6 py-2.5 rounded-full transition-all text-sm font-bold whitespace-nowrap ${userRole === 'salesperson' ? 'bg-surface-lowest text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}
-            >
-              일반고객(영업사원)
-            </button>
-            <button 
-              onClick={() => setUserRole('driver')}
-              className={`px-6 py-2.5 rounded-full transition-all text-sm font-bold whitespace-nowrap ${userRole === 'driver' ? 'bg-surface-lowest text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}
-            >
-              버스기사
-            </button>
+          <div className="mb-8">
+            <h2 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800, fontSize: '2.25rem', color: '#191c1e', letterSpacing: '-0.02em', marginBottom: '0.375rem' }}>회원가입</h2>
+            <p style={{ color: '#3e4947' }}>busTaams 회원이 되어 독점적인 혜택을 누리세요.</p>
           </div>
 
-          <form className="space-y-8" onSubmit={handleSubmit}>
-            {/* Email & Basic Info */}
-            <div className="space-y-5">
-              <div className="relative">
-                <label className="block text-xs font-bold text-primary mb-2 uppercase tracking-widest px-1">아이디</label>
-                <div className="flex gap-3">
-                  <input 
-                    className={`flex-1 bg-surface-container-high border-none rounded-lg px-4 py-3.5 focus:ring-2 focus:ring-primary/20 transition-all ${idError ? 'ring-2 ring-error' : (idSuccess ? 'ring-2 ring-primary/20' : '')}`}
-                    placeholder="아이디를 입력하세요" 
+          {/* Role Tabs */}
+          <div style={{ display: 'flex', padding: '4px', background: '#e6e8ea', borderRadius: '9999px', marginBottom: '2rem', width: 'fit-content' }}>
+            {[{ key: 'traveler', label: '일반고객(여행자)' }, { key: 'salesperson', label: '일반고객(영업사원)' }, { key: 'driver', label: '버스기사' }].map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setUserRole(key)}
+                style={{
+                  padding: '0.5rem 1.75rem',
+                  borderRadius: '9999px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontWeight: userRole === key ? 700 : 500,
+                  fontSize: '0.875rem',
+                  background: userRole === key ? '#fff' : 'transparent',
+                  color: userRole === key ? '#004e47' : '#3e4947',
+                  boxShadow: userRole === key ? '0 1px 4px rgba(0,0,0,0.12)' : 'none',
+                  transition: 'all 0.2s'
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+
+            {/* ── Section 1: Basic Info ── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+
+              {/* 아이디 */}
+              <div>
+                <label style={labelStyle}>아이디</label>
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <input
                     type="text"
                     value={userId}
-                    onChange={(e) => {
-                      setUserId(e.target.value);
-                      if (idError) setIdError('');
-                      if (idSuccess) setIdSuccess('');
-                      setIsIdVerified(false);
-                    }}
+                    onChange={e => { setUserId(e.target.value); setIsIdVerified(false); setIdSuccess(''); setIdError(''); }}
+                    placeholder="아이디를 입력하세요"
+                    style={{ ...inputStyle, flex: 1 }}
                   />
-                  <button 
-                    type="button"
-                    onClick={handleIdCheck}
-                    disabled={isIdChecking}
-                    className={`px-6 py-3.5 bg-surface-lowest border border-outline-variant/30 text-primary font-bold rounded-lg hover:bg-surface-variant transition-all text-sm whitespace-nowrap ${isIdChecking ? 'opacity-50 cursor-wait' : ''}`}
-                  >
+                  <button type="button" onClick={handleIdCheck} disabled={isIdChecking} style={outlineButtonStyle}>
                     {isIdChecking ? '확인 중...' : '중복 확인'}
                   </button>
                 </div>
-                {idError && <p className="text-error text-xs mt-1 px-1 font-bold">{idError}</p>}
-                {idSuccess && <p className="text-primary text-xs mt-1 px-1 font-bold">{idSuccess}</p>}
+                {idError && <p style={errorTextStyle}>{idError}</p>}
+                {idSuccess && <p style={successTextStyle}>{idSuccess}</p>}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              {/* 이름 + 이메일 */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div>
-                  <label className="block text-xs font-bold text-primary mb-2 uppercase tracking-widest px-1">이름</label>
-                  <input 
-                    className="w-full bg-surface-container-high border-none rounded-lg px-4 py-3.5 focus:ring-2 focus:ring-primary/20 transition-all" 
-                    placeholder="실명 입력" 
-                    type="text"
-                    value={userName}
-                    onChange={(e) => setUserName(e.target.value)}
-                  />
+                  <label style={labelStyle}>이름</label>
+                  <input type="text" value={userName} onChange={e => setUserName(e.target.value)} placeholder="실명 입력" style={inputStyle} />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-primary mb-2 uppercase tracking-widest px-1">이메일</label>
-                  <input 
-                    className={`w-full bg-surface-container-high border-none rounded-lg px-4 py-3.5 focus:ring-2 focus:ring-primary/20 transition-all ${emailError ? 'ring-2 ring-error' : ''}`} 
-                    placeholder="example@email.com" 
-                    type="email"
-                    value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      if (emailError) setEmailError('');
-                    }}
-                  />
-                  {emailError && <p className="text-error text-[10px] mt-1 font-bold">{emailError}</p>}
+                  <label style={labelStyle}>이메일</label>
+                  <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="example@email.com" style={inputStyle} />
+                  {emailError && <p style={errorTextStyle}>{emailError}</p>}
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              {/* 비밀번호 */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div>
-                  <label className="block text-xs font-bold text-primary mb-2 uppercase tracking-widest px-1">비밀번호</label>
-                  <input 
-                    className={`w-full bg-surface-container-high border-none rounded-lg px-4 py-3.5 focus:ring-2 focus:ring-primary/20 transition-all ${passwordError || (password.length > 0 && password.length < 8) ? 'ring-2 ring-error' : ''}`} 
-                    placeholder="8자 이상 조합" 
-                    type="password"
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      if (passwordError) setPasswordError('');
-                    }}
-                  />
-                  {(passwordError || (password.length > 0 && password.length < 8)) && (
-                    <p className="text-error text-[10px] mt-1 font-bold">비밀번호는 8자리 이상이어야 합니다.</p>
-                  )}
+                  <label style={labelStyle}>비밀번호</label>
+                  <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="8자 이상 조합" style={inputStyle} />
+                  {passwordError && <p style={errorTextStyle}>{passwordError}</p>}
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-primary mb-2 uppercase tracking-widest px-1">비밀번호 확인</label>
-                  <input 
-                    className={`w-full bg-surface-container-high border-none rounded-lg px-4 py-3.5 focus:ring-2 focus:ring-primary/20 transition-all ${passwordConfirmError || (password !== passwordConfirm && passwordConfirm !== '') ? 'ring-2 ring-error' : ''}`}
-                    placeholder="비밀번호 재입력" 
-                    type="password"
-                    value={passwordConfirm}
-                    onChange={(e) => {
-                      setPasswordConfirm(e.target.value);
-                      if (passwordConfirmError) setPasswordConfirmError('');
-                    }}
-                  />
-                  {(passwordConfirmError || (password !== passwordConfirm && passwordConfirm !== '')) && (
-                    <p className="text-error text-[10px] mt-1 font-bold">비밀번호가 일치하지 않습니다.</p>
-                  )}
+                  <label style={labelStyle}>비밀번호 확인</label>
+                  <input type="password" value={passwordConfirm} onChange={e => setPasswordConfirm(e.target.value)} placeholder="비밀번호 재입력" style={inputStyle} />
+                  {passwordConfirmError && <p style={errorTextStyle}>{passwordConfirmError}</p>}
                 </div>
               </div>
             </div>
 
-            {/* Phone Verification */}
-            <div className="space-y-4 pt-4">
-              <label className="block text-xs font-bold text-primary mb-2 uppercase tracking-widest px-1">휴대폰 번호 인증</label>
-              <div className="flex gap-3">
-                <input 
-                  className="flex-1 bg-surface-container-high border-none rounded-lg px-4 py-3.5 focus:ring-2 focus:ring-primary/20 transition-all" 
-                  placeholder="010-0000-0000" 
+            {/* ── Section 2: Phone Verification ── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem', paddingTop: '0.5rem' }}>
+              <label style={labelStyle}>휴대폰 번호 인증</label>
+
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <input
                   type="tel"
                   value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  onChange={e => setPhoneNumber(e.target.value)}
+                  placeholder="010-0000-0000"
                   disabled={isPhoneVerified}
+                  style={{ ...inputStyle, flex: 1, opacity: isPhoneVerified ? 0.6 : 1 }}
                 />
-                <button 
+                <button
                   type="button"
                   onClick={handleSendSms}
-                  disabled={isPhoneVerified}
-                  className="px-6 py-3.5 bg-secondary text-white font-bold rounded-lg shadow-lg shadow-secondary/20 hover:scale-[1.02] transition-all text-sm whitespace-nowrap disabled:opacity-50"
+                  disabled={isSmsLoading || isPhoneVerified}
+                  style={{
+                    padding: '0.875rem 1.25rem',
+                    background: isPhoneVerified ? '#ccc' : 'linear-gradient(135deg, #9d4300 0%, #ff8d4b 100%)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '0.625rem',
+                    fontWeight: 700,
+                    fontSize: '0.8rem',
+                    cursor: isPhoneVerified ? 'not-allowed' : 'pointer',
+                    whiteSpace: 'nowrap',
+                    boxShadow: isPhoneVerified ? 'none' : '0 4px 12px rgba(157,67,0,0.2)',
+                    transition: 'all 0.2s'
+                  }}
                 >
-                  {isPhoneVerified ? '인증 완료' : '인증번호 전송'}
+                  {isSmsLoading ? '전송 중...' : '인증번호 전송'}
                 </button>
               </div>
-              
-              {!isPhoneVerified && confirmationResult && (
-                <div className="flex gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <div className="relative flex-1">
-                    <input 
-                      className="w-full bg-surface-container-high border-none rounded-lg px-4 py-3.5 focus:ring-2 focus:ring-primary/20 transition-all" 
-                      placeholder="인증번호 6자리" 
+
+              {phoneError && <p style={errorTextStyle}>{phoneError}</p>}
+
+              {(timer > 0 || isPhoneVerified) && (
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <input
                       type="text"
                       value={verificationCode}
-                      onChange={(e) => setVerificationCode(e.target.value)}
+                      onChange={e => setVerificationCode(e.target.value)}
+                      placeholder="인증번호 6자리"
+                      disabled={isPhoneVerified}
+                      style={{ ...inputStyle, width: '100%', opacity: isPhoneVerified ? 0.6 : 1 }}
                     />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-error font-bold text-xs font-mono">
-                      {timer > 0 ? formatTime(timer) : "00:00"}
-                    </span>
+                    {timer > 0 && !isPhoneVerified && (
+                      <span style={{ position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#ba1a1a', fontWeight: 700, fontSize: '0.8rem' }}>
+                        {formatTime(timer)}
+                      </span>
+                    )}
                   </div>
-                  <button 
+                  <button
                     type="button"
-                    onClick={handleVerifyCode}
-                    className="px-6 py-3.5 bg-surface-lowest border border-outline-variant/30 text-on-surface-variant font-bold rounded-lg hover:bg-surface-variant transition-all text-sm whitespace-nowrap"
+                    onClick={handleVerifySms}
+                    disabled={isPhoneVerified}
+                    style={{ ...outlineButtonStyle, opacity: isPhoneVerified ? 0.5 : 1, cursor: isPhoneVerified ? 'not-allowed' : 'pointer' }}
                   >
-                    확인
+                    {isPhoneVerified ? '완료' : '확인'}
                   </button>
                 </div>
               )}
+
+              {smsError && <p style={errorTextStyle}>{smsError}</p>}
+              {smsSuccess && <p style={successTextStyle}>{smsSuccess}</p>}
             </div>
 
-            {/* E-Signature Pad */}
-            <div className="pt-4">
-              <div className="flex justify-between items-center mb-3 px-1">
-                <label className="block text-xs font-bold text-primary uppercase tracking-widest">전자 서명</label>
-                {hasSignature && (
-                  <button type="button" onClick={clearSignature} className="text-xs text-on-surface-variant hover:text-primary font-bold">초기화</button>
-                )}
-              </div>
-              <div className="w-full h-40 bg-surface-container-high rounded-xl relative border-2 border-dashed border-outline-variant/30 overflow-hidden group hover:border-primary/30 transition-all">
+            {/* ── Section 3: E-Signature ── */}
+            <div style={{ paddingTop: '0.25rem' }}>
+              <label style={labelStyle}>전자 서명</label>
+              <div style={{ position: 'relative', width: '100%', height: '10rem', background: '#eceef0', borderRadius: '0.75rem', border: '2px dashed rgba(110,121,119,0.3)', overflow: 'hidden', marginTop: '0.5rem' }}>
                 {!hasSignature && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <span className="text-on-surface-variant/40 text-sm">이곳에 서명해 주세요</span>
-                  </div>
+                  <span style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'rgba(25,28,30,0.3)', fontSize: '0.875rem', pointerEvents: 'none' }}>
+                    이곳에 서명해 주세요
+                  </span>
                 )}
-                <SignatureCanvas 
-                  ref={sigCanvas} 
-                  onEnd={handleEndDrawing}
-                  canvasProps={{ className: 'w-full h-full cursor-crosshair' }} 
+                <SignatureCanvas
+                  ref={sigCanvas}
+                  onEnd={handleSignatureEnd}
+                  canvasProps={{ width: 600, height: 160, style: { width: '100%', height: '100%' } }}
+                  penColor="#004e47"
                 />
+                <button
+                  type="button"
+                  onClick={handleSignatureClear}
+                  style={{ position: 'absolute', top: '0.625rem', right: '0.625rem', padding: '0.375rem', background: 'transparent', border: 'none', color: '#3e4947', cursor: 'pointer', fontSize: '1rem' }}
+                >
+                  ↺
+                </button>
               </div>
             </div>
 
-            {/* Terms Agreement */}
-            <div className={`space-y-3 pt-4 border-t border-outline-variant/10 ${termsError ? 'ring-2 ring-error rounded-xl p-4' : ''}`}>
-              <label className="flex items-center gap-3 cursor-pointer group">
-                <input 
-                  className="w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary" 
-                  type="checkbox"
-                  checked={agreements.all}
-                  onChange={handleAllAgree}
-                />
-                <span className="text-sm font-bold text-on-surface">모든 약관에 동의합니다</span>
+            {/* ── Section 4: Terms ── */}
+            <div style={{ paddingTop: '0.5rem', borderTop: '1px solid rgba(190,201,198,0.2)', display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
+                <input type="checkbox" checked={agreements.all} onChange={handleAllAgree} style={{ width: '1.125rem', height: '1.125rem', accentColor: '#004e47' }} />
+                <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#191c1e' }}>모든 약관에 동의합니다</span>
               </label>
-              <div className="pl-8 space-y-2">
-                <label className="flex items-center justify-between cursor-pointer">
-                  <div className="flex items-center gap-3">
-                    <input 
-                      className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary" 
-                      type="checkbox"
-                      checked={agreements.term1}
-                      onChange={handleAgreeChange('term1')}
-                    />
-                    <span className="text-xs text-on-surface-variant">이용약관 동의 (필수)</span>
-                  </div>
-                  <span className="material-symbols-outlined text-sm text-outline-variant">chevron_right</span>
-                </label>
-                <label className="flex items-center justify-between cursor-pointer">
-                  <div className="flex items-center gap-3">
-                    <input 
-                      className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary" 
-                      type="checkbox"
-                      checked={agreements.term2}
-                      onChange={handleAgreeChange('term2')}
-                    />
-                    <span className="text-xs text-on-surface-variant">개인정보 수집 및 이용 동의 (필수)</span>
-                  </div>
-                  <span className="material-symbols-outlined text-sm text-outline-variant">chevron_right</span>
-                </label>
-                <label className="flex items-center justify-between cursor-pointer">
-                  <div className="flex items-center gap-3">
-                    <input 
-                      className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary" 
-                      type="checkbox"
-                      checked={agreements.marketing}
-                      onChange={handleAgreeChange('marketing')}
-                    />
-                    <span className="text-xs text-on-surface-variant">마케팅 정보 활용 동의 (선택)</span>
-                  </div>
-                  <span className="material-symbols-outlined text-sm text-outline-variant">chevron_right</span>
-                </label>
+              <div style={{ paddingLeft: '1.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                {[
+                  { key: 'term1', label: '이용약관 동의 (필수)' },
+                  { key: 'term2', label: '개인정보 수집 및 이용 동의 (필수)' },
+                  { key: 'marketing', label: '마케팅 정보 수신 동의 (선택)' }
+                ].map(({ key, label }) => (
+                  <label key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                      <input type="checkbox" checked={agreements[key]} onChange={handleAgreeChange(key)} style={{ width: '1rem', height: '1rem', accentColor: '#004e47' }} />
+                      <span style={{ fontSize: '0.8rem', color: '#3e4947' }}>{label}</span>
+                    </div>
+                    <span style={{ fontSize: '0.8rem', color: '#bec9c6' }}>›</span>
+                  </label>
+                ))}
               </div>
-              {termsError && <p className="text-error text-[10px] mt-1 font-bold pl-8">필수 약관 동의가 필요합니다.</p>}
             </div>
 
-            {/* Submit Button */}
-            <button 
-              className={`w-full py-4 bg-primary text-white font-headline font-bold text-lg rounded-full shadow-xl shadow-primary/20 hover:scale-[1.01] active:scale-[0.98] transition-all ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+            {formError && (
+              <div style={{ padding: '0.875rem 1rem', background: '#ffdad6', borderRadius: '0.5rem', color: '#93000a', fontSize: '0.875rem', fontWeight: 600 }}>
+                {formError}
+              </div>
+            )}
+
+            {/* Submit */}
+            <button
               type="submit"
               disabled={isLoading}
+              style={{
+                width: '100%',
+                padding: '1.125rem',
+                background: isLoading ? '#ccc' : 'linear-gradient(135deg, #004e47 0%, #00685f 100%)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '9999px',
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
+                fontWeight: 700,
+                fontSize: '1.05rem',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                boxShadow: '0 8px 24px rgba(0,78,71,0.25)',
+                transition: 'all 0.2s',
+              }}
             >
-              {isLoading ? '가입 중...' : '가입 완료하기'}
+              {isLoading ? '가입 처리 중...' : '가입 완료하기'}
             </button>
           </form>
 
-          {/* Social Login Divider */}
-          <div className="relative my-12 text-center">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-outline-variant/20"></div>
+          {/* Social Login */}
+          <div style={{ position: 'relative', margin: '2.5rem 0', textAlign: 'center' }}>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center' }}>
+              <div style={{ width: '100%', borderTop: '1px solid rgba(190,201,198,0.25)' }} />
             </div>
-            <span className="relative bg-surface px-4 text-xs font-bold text-outline-variant uppercase tracking-widest">간편 회원가입</span>
+            <span style={{ position: 'relative', background: '#f7f9fb', padding: '0 1rem', fontSize: '0.7rem', fontWeight: 700, color: '#6e7977', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              간편 회원가입
+            </span>
           </div>
 
-          {/* Social Buttons */}
-          <div className="grid grid-cols-2 gap-4">
-            <button className="flex items-center justify-center gap-3 py-3.5 bg-kakao text-[#3c1e1e] rounded-lg font-bold text-sm hover:brightness-95 transition-all">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3C6.477 3 2 6.48 2 10.791c0 2.763 1.833 5.188 4.606 6.554l-.847 3.123c-.102.378.114.757.48.84.116.027.234.01.338-.04l3.65-2.428c.57.085 1.16.128 1.773.128 5.523 0 10-3.48 10-7.791C22 6.48 17.523 3 12 3z"></path></svg>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
+            <button type="button" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.625rem', padding: '0.875rem', background: '#FEE500', color: '#3c1e1e', border: 'none', borderRadius: '0.625rem', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer' }}>
+              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3C6.477 3 2 6.48 2 10.791c0 2.763 1.833 5.188 4.606 6.554l-.847 3.123c-.102.378.114.757.48.84.116.027.234.01.338-.04l3.65-2.428c.57.085 1.16.128 1.773.128 5.523 0 10-3.48 10-7.791C22 6.48 17.523 3 12 3z" /></svg>
               카카오로 시작
             </button>
-            <button className="flex items-center justify-center gap-3 py-3.5 bg-naver text-white rounded-lg font-bold text-sm hover:brightness-95 transition-all">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M16.273 12.845L7.376 0H0v24h7.727V11.155L16.624 24H24V0h-7.727v12.845z"></path></svg>
+            <button type="button" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.625rem', padding: '0.875rem', background: '#03C75A', color: '#fff', border: 'none', borderRadius: '0.625rem', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer' }}>
+              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M16.273 12.845L7.376 0H0v24h7.727V11.155L16.624 24H24V0h-7.727v12.845z" /></svg>
               네이버로 시작
             </button>
           </div>
 
-          <div className="mt-12 text-center">
-            <p className="text-sm text-on-surface-variant font-medium">
-              이미 계정이 있으신가요? 
-              <button 
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ fontSize: '0.875rem', color: '#3e4947' }}>
+              이미 계정이 있으신가요?{' '}
+              <button
+                type="button"
                 onClick={onBack}
-                className="text-primary font-extrabold ml-2 underline underline-offset-4 decoration-primary/30 hover:decoration-primary transition-all"
+                style={{ color: '#004e47', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: 'rgba(0,78,71,0.3)' }}
               >
                 로그인하기
               </button>
@@ -579,8 +509,60 @@ const SignupPage = ({ onBack }) => {
           </div>
         </div>
       </section>
-    </main>
+    </div>
   );
+};
+
+// ── Style constants ──
+const labelStyle = {
+  display: 'block',
+  fontSize: '0.7rem',
+  fontWeight: 700,
+  color: '#004e47',
+  marginBottom: '0.5rem',
+  textTransform: 'uppercase',
+  letterSpacing: '0.1em',
+  paddingLeft: '0.25rem'
+};
+
+const inputStyle = {
+  background: '#eceef0',
+  border: 'none',
+  borderRadius: '0.625rem',
+  padding: '0.875rem 1rem',
+  fontSize: '0.9rem',
+  color: '#191c1e',
+  outline: 'none',
+  width: '100%',
+  boxSizing: 'border-box',
+  transition: 'box-shadow 0.2s',
+};
+
+const outlineButtonStyle = {
+  padding: '0.875rem 1.25rem',
+  background: '#fff',
+  border: '1px solid rgba(190,201,198,0.4)',
+  borderRadius: '0.625rem',
+  color: '#004e47',
+  fontWeight: 700,
+  fontSize: '0.8rem',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+  transition: 'all 0.2s'
+};
+
+const errorTextStyle = {
+  marginTop: '0.375rem',
+  fontSize: '0.78rem',
+  color: '#ba1a1a',
+  paddingLeft: '0.25rem'
+};
+
+const successTextStyle = {
+  marginTop: '0.375rem',
+  fontSize: '0.78rem',
+  color: '#006a4e',
+  paddingLeft: '0.25rem'
 };
 
 export default SignupPage;

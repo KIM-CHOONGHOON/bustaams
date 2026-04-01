@@ -91,6 +91,65 @@ app.get('/api/auth/check-phone', async (req, res) => {
     }
 });
 
+// ── SMS 인증 코드 인메모리 저장소 (개발용, 실운영시 Redis 권장) ──────────────
+const smsCodeStore = new Map(); // key: phoneNumber, value: { code, expiresAt }
+
+// API 1-3: SMS 인증번호 전송
+app.post('/api/auth/send-sms', async (req, res) => {
+    try {
+        const { phoneNumber } = req.body;
+        if (!phoneNumber) return res.status(400).json({ error: '휴대폰 번호를 입력해주세요.' });
+        const cleaned = phoneNumber.replace(/-/g, '');
+        if (!/^01[016789]\d{7,8}$/.test(cleaned)) {
+            return res.status(400).json({ error: '올바른 휴대폰 번호 형식이 아닙니다.' });
+        }
+
+        // 개발 모드: 고정 인증번호 123456 사용
+        const code = '123456';
+        const expiresAt = Date.now() + 3 * 60 * 1000; // 3분
+        smsCodeStore.set(cleaned, { code, expiresAt });
+
+        console.log(`[SMS] 인증번호 발송 (개발모드): ${cleaned} → ${code}`);
+
+        // TODO: 실 운영시 Firebase Admin SMS 또는 외부 SMS API 연동
+        // const message = { text: `[busTaams] 인증번호: ${code}`, phone: `+82${cleaned.slice(1)}` };
+
+        return res.status(200).json({ message: `인증번호가 전송되었습니다. (개발모드: ${code})` });
+
+    } catch (error) {
+        console.error('SMS 전송 에러:', error.message);
+        res.status(500).json({ error: 'SMS 전송 중 오류가 발생했습니다.' });
+    }
+});
+
+// API 1-4: SMS 인증번호 확인
+app.post('/api/auth/verify-sms', async (req, res) => {
+    try {
+        const { phoneNumber, code } = req.body;
+        if (!phoneNumber || !code) return res.status(400).json({ error: '휴대폰 번호와 인증번호를 입력해주세요.' });
+        const cleaned = phoneNumber.replace(/-/g, '');
+
+        const stored = smsCodeStore.get(cleaned);
+        if (!stored) return res.status(400).json({ verified: false, error: '인증번호를 먼저 요청해주세요.' });
+        if (Date.now() > stored.expiresAt) {
+            smsCodeStore.delete(cleaned);
+            return res.status(400).json({ verified: false, error: '인증번호가 만료되었습니다. 다시 요청해주세요.' });
+        }
+        if (stored.code !== code.trim()) {
+            return res.status(400).json({ verified: false, error: '인증번호가 일치하지 않습니다.' });
+        }
+
+        smsCodeStore.delete(cleaned); // 사용 후 삭제
+        console.log(`[SMS] 인증 성공: ${cleaned}`);
+        return res.status(200).json({ verified: true, message: '휴대폰 인증이 완료되었습니다.' });
+
+    } catch (error) {
+        console.error('SMS 인증 에러:', error.message);
+        res.status(500).json({ error: 'SMS 인증 중 오류가 발생했습니다.' });
+    }
+});
+
+
 // API 2: 최신 약관 목록 조회
 app.get('/api/terms/active', async (req, res) => {
     try {
