@@ -278,8 +278,8 @@ app.post('/api/users/login', async (req, res) => {
             return res.status(400).json({ error: '아이디와 비밀번호를 입력해주세요.' });
         }
 
-        // [보안] 아이디(이메일)는 암호화되어 있으므로 전체 조회 후 비교
-        const [rows] = await pool.execute('SELECT * FROM TB_USER');
+        // [보안] 아이디(이메일)는 암호화되어 있으므로, 전체 조회 시 BIN_TO_UUID 활용하여 조회
+        const [rows] = await pool.execute('SELECT BIN_TO_UUID(USER_UUID) as USER_UUID_STR, TB_USER.* FROM TB_USER');
         const user = rows.find(row => {
             try { return decrypt(row.USER_ID_ENC) === userId; } catch (e) { return false; }
         });
@@ -300,6 +300,7 @@ app.post('/api/users/login', async (req, res) => {
             message: '로그인 성공',
             user: {
                 userId: userId,
+                userUuid: user.USER_UUID_STR || '',
                 email: userId,
                 userName: decryptedUserName,
                 phoneNo: decryptedPhoneNo,
