@@ -3,6 +3,7 @@ import SignatureCanvas from 'react-signature-canvas';
 import DriverProfileModal from './components/DriverProfileModal';
 import SignupPage from './components/SignupPage';
 import AccountSettings from './components/AccountSettings';
+import CreateBusRequest from './components/CreateBusRequest/CreateBusRequest';
 import CustomerDashboard from './components/CustomerDashboard';
 import busLogo from './assets/images/bustaams_bus_logo.png';
 import nameLogo from './assets/images/bustaams_name_logo.png';
@@ -784,9 +785,12 @@ function App() {
   const [showBusInfoModal, setShowBusInfoModal] = useState(false);
   const [showQuotationModal, setShowQuotationModal] = useState(false);
   const [driverView, setDriverView] = useState('dashboard'); // 'dashboard' | 'profileSetup'
+  const [customerView, setCustomerView] = useState('dashboard'); // 'dashboard' | 'createRequest'
 
   const handleLogout = () => {
     setUser(null);
+    setCustomerView('dashboard');
+    setDriverView('dashboard');
   };
   
 
@@ -804,10 +808,15 @@ function App() {
         {currentView === 'home' ? (
           user ? (
             user.userType === 'CONSUMER' || user.userType === 'TRAVELER' || user.userType === 'CUSTOMER' ? (
-               <CustomerDashboard 
-                 user={user} 
-                 setShowAccountSettings={setShowAccountSettings} 
-               />
+              customerView === 'createRequest' ? (
+                <CreateBusRequest onBack={() => setCustomerView('dashboard')} />
+              ) : (
+                <CustomerDashboard 
+                  user={user} 
+                  setShowAccountSettings={setShowAccountSettings} 
+                  onBusRegister={() => setCustomerView('createRequest')}
+                />
+              )
             ) : user.userType === 'DRIVER' ? (
                driverView === 'profileSetup' ? (
                  <DriverProfileSetup 

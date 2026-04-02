@@ -1,6 +1,6 @@
 import React from 'react';
 
-const CustomerDashboard = ({ user, setShowAccountSettings }) => {
+const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister }) => {
   return (
     <div className="bg-surface min-h-screen font-body text-on-surface">
       {/* 
@@ -52,7 +52,10 @@ const CustomerDashboard = ({ user, setShowAccountSettings }) => {
           <h3 className="font-headline text-3xl font-extrabold text-teal-900 mb-10 tracking-tight">주요 서비스</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
             {/* Register Bus */}
-            <div className="bg-surface-container-lowest p-8 rounded-2xl tonal-stacking flex flex-col items-center text-center group cursor-pointer hover:bg-primary hover:text-on-primary transition-all duration-300 no-line-rule">
+            <div 
+              onClick={onBusRegister}
+              className="bg-surface-container-lowest p-8 rounded-2xl tonal-stacking flex flex-col items-center text-center group cursor-pointer hover:bg-primary hover:text-on-primary transition-all duration-300 no-line-rule"
+            >
               <div className="w-14 h-14 bg-surface-container-high rounded-full flex items-center justify-center mb-6 group-hover:bg-primary-container">
                 <span className="material-symbols-outlined text-primary group-hover:text-on-primary-container">directions_bus</span>
               </div>

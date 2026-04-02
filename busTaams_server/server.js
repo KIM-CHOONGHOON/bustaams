@@ -56,10 +56,21 @@ app.get('/api/auth/check-id', async (req, res) => {
         if (!userId) return res.status(400).json({ error: 'userId query parameter is required' });
 
         // [보안] 아이디(이메일)는 DB에 암호화된 상태로 저장되므로, 전체 스캔 후 복호화 비교
-        const [rows] = await pool.execute('SELECT USER_ID_ENC FROM TB_USER');
-        const isDuplicate = rows.some(row => {
-            try { return decrypt(row.USER_ID_ENC) === userId; } catch (e) { return false; }
+        const [rows] = await pool.execute('SELECT USER_ID FROM TB_USER');
+        console.log(`[DEBUG] Check ID: "${userId}", Table rows: ${rows.length}`);
+
+        const isDuplicate = rows.some((row, index) => {
+            try { 
+                const decrypted = decrypt(row.USER_ID);
+                return decrypted === userId; 
+            } catch (e) { 
+                // 복호화 실패 시 (평문 저장 등) 직접 비교 시도
+                return row.USER_ID === userId;
+            }
         });
+        
+        console.log(`[DEBUG] Result isDuplicate: ${isDuplicate}`);
+
         if (isDuplicate) {
             return res.status(409).json({ isAvailable: false, message: '이미 사용 중인 아이디입니다.' });
         }
@@ -79,7 +90,11 @@ app.get('/api/auth/check-phone', async (req, res) => {
         // [보안] 휴대폰 번호는 DB에 암호화된 상태로 저장되므로, 전체 스캔 후 복호화 비교
         const [rows] = await pool.execute('SELECT HP_NO FROM TB_USER');
         const isDuplicate = rows.some(row => {
-            try { return decrypt(row.HP_NO) === phoneNo; } catch (e) { return false; }
+            try { 
+                return decrypt(row.HP_NO) === phoneNo; 
+            } catch (e) { 
+                return row.HP_NO === phoneNo;
+            }
         });
         if (isDuplicate) {
             return res.status(409).json({ isAvailable: false, message: '이미 가입된 휴대폰 번호입니다.' });
@@ -253,7 +268,7 @@ app.post('/api/auth/register', async (req, res) => {
 
             const userQuery = `
                 INSERT INTO TB_USER (
-                    USER_UUID, USER_ID_ENC, PASSWORD, USER_NM, HP_NO, SNS_TYPE, 
+                    USER_UUID, USER_ID, PASSWORD, USER_NM, HP_NO, SNS_TYPE, 
                     SMS_AUTH_YN, USER_TYPE, JOIN_DT, USER_STAT
                 ) VALUES (UUID_TO_BIN(?), ?, ?, ?, ?, 'NONE', ?, ?, NOW(), 'ACTIVE')
             `;
@@ -328,8 +343,8 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
  
-// 로그인 API (POST /api/auth/login)
-app.post('/api/auth/login', async (req, res) => {
+// 로그인 API (POST /api/auth/login 또는 /api/users/login - 팀원 호환성 유지용 별칭)
+app.post(['/api/auth/login', '/api/users/login'], async (req, res) => {
     try {
         const { userId, password } = req.body;
 
@@ -340,7 +355,11 @@ app.post('/api/auth/login', async (req, res) => {
         // [보안] 아이디(이메일)는 암호화되어 있으므로, 전체 조회 시 BIN_TO_UUID 활용하여 조회
         const [rows] = await pool.execute('SELECT BIN_TO_UUID(USER_UUID) as USER_UUID_STR, TB_USER.* FROM TB_USER');
         const user = rows.find(row => {
-            try { return decrypt(row.USER_ID_ENC) === userId; } catch (e) { return false; }
+            try { 
+                return decrypt(row.USER_ID) === userId; 
+            } catch (e) { 
+                return row.USER_ID === userId;
+            }
         });
 
         if (!user) {
@@ -352,8 +371,11 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(401).json({ error: '아이디 또는 비밀번호가 일치하지 않습니다.' });
         }
 
-        const decryptedUserName = user.USER_NM ? decrypt(user.USER_NM) : '';
-        const decryptedPhoneNo = user.HP_NO ? decrypt(user.HP_NO) : '';
+        let decryptedUserName = '';
+        try { decryptedUserName = user.USER_NM ? decrypt(user.USER_NM) : ''; } catch(e) { decryptedUserName = user.USER_NM; }
+
+        let decryptedPhoneNo = '';
+        try { decryptedPhoneNo = user.HP_NO ? decrypt(user.HP_NO) : ''; } catch(e) { decryptedPhoneNo = user.HP_NO; }
 
         res.status(200).json({
             message: '로그인 성공',
