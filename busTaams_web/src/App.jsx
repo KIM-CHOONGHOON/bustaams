@@ -5,13 +5,14 @@ import SignupPage from './components/SignupPage';
 import AccountSettings from './components/AccountSettings';
 import CreateBusRequest from './components/CreateBusRequest/CreateBusRequest';
 import CustomerDashboard from './components/CustomerDashboard';
-import busLogo from './assets/images/bustaams_bus_logo.png';
-import nameLogo from './assets/images/bustaams_name_logo.png';
+import Login from './components/Login/Login';
+import PartnerDashboard from './components/PartnerDashboard/PartnerDashboard';
 import DriverDashboard from './components/DriverDashboard/DriverDashboard';
 import DriverProfileSetup from './components/DriverProfileSetup/DriverProfileSetup';
 import BusInformationSetup from './components/BusInformationSetup/BusInformationSetup';
 import QuotationRequests from './components/QuotationRequests/QuotationRequests';
-import Login from './components/Login/Login';
+import busLogo from './assets/images/bustaams_bus_logo.png';
+import nameLogo from './assets/images/bustaams_name_logo.png';
 
 import { initializeApp } from 'firebase/app';
 import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
@@ -36,7 +37,15 @@ try {
   console.error("Firebase Auth Init Failed", e);
 }
 
-function Header({ setShowLoginModal, setShowDriverProfileModal, setShowAccountSettings, setShowSignUpModal, user, onLogout }) {
+function Header({
+  setShowLoginModal,
+  setShowDriverProfileModal,
+  setShowAccountSettings,
+  setShowSignUpModal,
+  user,
+  onLogout,
+  onLogoClick,
+}) {
   // USER_TYPE 변환 함수
   const translateUserType = (type) => {
     switch (type) {
@@ -52,13 +61,30 @@ function Header({ setShowLoginModal, setShowDriverProfileModal, setShowAccountSe
   return (
     <header className="sticky top-0 z-50 bg-surface/80 backdrop-blur-xl transition-all">
       <div className="container mx-auto px-6 h-24 flex items-center justify-between">
-        <div 
-          className="flex items-center gap-3 cursor-pointer group"
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        <button
+          type="button"
+          className="flex items-center gap-2 md:gap-3 cursor-pointer group rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          onClick={onLogoClick}
+          aria-label="BusTaams 홈 또는 내 대시보드로 이동"
         >
-          <img src={busLogo} alt="busTaams 심볼" className="h-[60px] md:h-[72px] w-auto object-contain transition-transform group-hover:scale-105" />
-          <img src={nameLogo} alt="busTaams 네임" className="h-[60px] md:h-[72px] w-auto object-contain transition-transform group-hover:scale-105" />
-        </div>
+          <img
+            src={busLogo}
+            alt=""
+            width={120}
+            height={120}
+            className="h-11 w-auto max-h-[56px] md:max-h-[64px] object-contain object-left shrink-0 transition-transform group-hover:scale-[1.02]"
+            decoding="async"
+            aria-hidden
+          />
+          <img
+            src={nameLogo}
+            alt="BusTaams"
+            width={280}
+            height={64}
+            className="h-11 w-auto max-h-[56px] md:h-[64px] md:max-h-[64px] max-w-[min(55vw,280px)] object-contain object-left transition-transform group-hover:scale-[1.02]"
+            decoding="async"
+          />
+        </button>
         <nav className="hidden md:flex items-center gap-10 font-medium text-gray-700">
           <a 
             className={`transition-all ${(user?.userType === 'CONSUMER' || user?.userType === 'TRAVELER' || user?.userType === 'CUSTOMER' || user?.userType === 'SALES' || user?.userType === 'PARTNER') ? 'text-primary font-bold cursor-pointer hover:opacity-80' : 'opacity-40 pointer-events-none cursor-not-allowed'}`} 
@@ -151,14 +177,10 @@ function Hero({ user, setShowLoginModal }) {
             여행의 시작,<br />
             <span className="text-secondary bg-clip-text">busTaams</span>와 함께
           </h1>
-          <p className="font-body text-xl lg:text-2xl font-normal text-gray-800 mb-12 max-w-lg leading-relaxed">
+          <p className="font-body text-xl lg:text-2xl font-normal text-gray-800 max-w-lg leading-relaxed">
             전국 어디든, 가장 합리적인 가격으로<br />
             당신의 특별한 여행을 완성하세요.
           </p>
-          <div className="flex flex-wrap gap-5">
-            <button className="px-8 py-4 bg-gradient-to-br from-primary to-primary-container text-white rounded-lg font-bold text-lg shadow-ambient transition-transform hover:-translate-y-1">견적 요청하기</button>
-            <button className="px-8 py-4 bg-surface-lowest text-primary rounded-lg font-bold text-lg shadow-ambient transition-transform hover:-translate-y-1">이용 가이드</button>
-          </div>
         </div>
       </div>
     </section>
@@ -792,10 +814,32 @@ function App() {
     setCustomerView('dashboard');
     setDriverView('dashboard');
   };
-  
+
+  /** 로고 클릭: 비로그인 시 랜딩 상단으로, 로그인 시 역할별 대시보드(메인 화면)로 */
+  const handleLogoClick = () => {
+    setShowLoginModal(false);
+    setShowDriverProfileModal(false);
+    setShowAccountSettings(false);
+    setShowBusInfoModal(false);
+    setShowQuotationModal(false);
+    setCurrentView('home');
+    if (user?.userType === 'DRIVER') {
+      setDriverView('dashboard');
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const driverProfileSetupLocked =
+    currentView === 'home' && user?.userType === 'DRIVER' && driverView === 'profileSetup';
 
   return (
-    <div className="min-h-screen flex flex-col font-body selection:bg-primary/20 selection:text-primary">
+    <div
+      className={`flex flex-col font-body selection:bg-primary/20 selection:text-primary ${
+        driverProfileSetupLocked
+          ? 'h-screen max-h-screen min-h-0 flex-1 overflow-hidden'
+          : 'min-h-screen'
+      }`}
+    >
       <Header 
         setShowLoginModal={setShowLoginModal} 
         setShowDriverProfileModal={setShowDriverProfileModal} 
@@ -803,8 +847,9 @@ function App() {
         setShowSignUpModal={() => setCurrentView('signup')}
         user={user}
         onLogout={handleLogout}
+        onLogoClick={handleLogoClick}
       />
-      <main className="flex-1">
+      <main className="flex-1 min-h-0 flex flex-col">
         {currentView === 'home' ? (
           user ? (
             user.userType === 'CONSUMER' || user.userType === 'TRAVELER' || user.userType === 'CUSTOMER' ? (
@@ -819,10 +864,12 @@ function App() {
               )
             ) : user.userType === 'DRIVER' ? (
                driverView === 'profileSetup' ? (
-                 <DriverProfileSetup 
-                   currentUser={user} 
-                   onBack={() => setDriverView('dashboard')} 
-                 />
+                 <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                   <DriverProfileSetup 
+                     currentUser={user} 
+                     onBack={() => setDriverView('dashboard')} 
+                   />
+                 </div>
                ) : (
                  <DriverDashboard 
                    currentUser={user} 

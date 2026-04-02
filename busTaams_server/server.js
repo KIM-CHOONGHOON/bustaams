@@ -8,6 +8,7 @@ const { Storage } = require('@google-cloud/storage');
 const bcrypt = require('bcrypt');
 const { randomUUID } = require('crypto');
 const { encrypt, decrypt } = require('./crypto');
+const { runDriverVerificationsForProfileSetup } = require('./driverVerification');
 const fs = require('fs');
 
 const app = express();
@@ -45,55 +46,187 @@ const storage = new Storage();
 const bucketName = process.env.GCS_BUCKET_NAME || 'bustaams-secure-data';
 const bucket = storage.bucket(bucketName);
 
+/** Firebase 서비스 계정이 있으면 true — 이 경우에만 클라이언트 Firebase ID 토큰 검증을 강제 */
+function firebaseAdminConfigured() {
+    return !!(process.env.FIREBASE_SERVICE_ACCOUNT_PATH && fs.existsSync(path.resolve(__dirname, process.env.FIREBASE_SERVICE_ACCOUNT_PATH)));
+}
+
+/**
+ * 회원가입(`POST /api/auth/register`)·기사정보(`POST /api/driver/profile-setup`) 공통.
+ * Admin 미설정: 검증 생략(로컬 개발). 설정됨: `verifyIdToken` 필수.
+ */
+async function verifyFirebasePhoneIdTokenIfRequired(idToken) {
+    if (!firebaseAdminConfigured()) {
+        return { ok: true };
+    }
+    if (!idToken || typeof idToken !== 'string') {
+        return { ok: false, error: '휴대전화 인증을 완료해 주세요.' };
+    }
+    try {
+        await admin.auth().verifyIdToken(idToken);
+        return { ok: true };
+    } catch (e) {
+        console.error('Firebase ID token verification failed:', e.message);
+        return { ok: false, error: '휴대전화 인증이 유효하지 않습니다. 다시 인증해 주세요.' };
+    }
+}
+
+/** TB_DRIVER_INFO 테이블이 없으면 생성 (기사 프로필 API에서 INSERT 가능하도록) */
+async function ensureDriverInfoTable(connection) {
+    await connection.execute(`
+        CREATE TABLE IF NOT EXISTS TB_DRIVER_INFO (
+            USER_UUID BINARY(16) NOT NULL,
+            RRN_ENC VARCHAR(512) NOT NULL,
+            LICENSE_TYPE VARCHAR(50) NULL,
+            LICENSE_NO VARCHAR(100) NULL,
+            LICENSE_SERIAL_NO VARCHAR(100) NULL COMMENT '면허 암호일련번호(진위검증용)',
+            LICENSE_ISSUE_DT DATE NULL,
+            LICENSE_EXPIRY_DT DATE NULL,
+            QUAL_CERT_NO VARCHAR(100) NULL,
+            QUAL_CERT_FILE_UUID BINARY(16) NULL,
+            PROFILE_PHOTO_UUID BINARY(16) NULL,
+            BIO_TEXT TEXT NULL,
+            CREATE_DT DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UPDATE_DT DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (USER_UUID)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+}
+
+/** TB_FILE_MASTER — 프로필/자격증 파일 메타 저장용 (없으면 INSERT 실패) */
+async function ensureTbFileMasterTable(connection) {
+    await connection.execute(`
+        CREATE TABLE IF NOT EXISTS TB_FILE_MASTER (
+            FILE_UUID BINARY(16) NOT NULL,
+            FILE_CATEGORY VARCHAR(50) NOT NULL,
+            GCS_BUCKET_NM VARCHAR(100) DEFAULT 'bustaams-secure-data',
+            GCS_PATH VARCHAR(255) NOT NULL,
+            ORG_FILE_NM VARCHAR(255) NULL,
+            FILE_EXT VARCHAR(10) NULL,
+            FILE_SIZE BIGINT NULL,
+            REG_DT DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (FILE_UUID)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+}
+
+/** TB_DRIVER_INFO에 면허 암호일련번호 컬럼이 없으면 추가 (진위 검증 연동용) */
+async function ensureDriverInfoLicenseSerialColumn(connection) {
+    try {
+        await connection.execute(
+            `ALTER TABLE TB_DRIVER_INFO ADD COLUMN LICENSE_SERIAL_NO VARCHAR(100) NULL COMMENT '면허 암호일련번호(진위검증용)'`
+        );
+    } catch (e) {
+        if (e.errno !== 1060 && e.code !== 'ER_DUP_FIELDNAME') throw e;
+    }
+}
+
+/**
+ * 회원가입·아이디 중복검사용 TB_USER — 로컬/신규 DB에 테이블이 없을 때 생성
+ * (`POST /api/auth/register` INSERT 컬럼과 정합)
+ */
+async function ensureTbUserTable(connection) {
+    await connection.execute(`
+        CREATE TABLE IF NOT EXISTS TB_USER (
+            USER_UUID BINARY(16) NOT NULL,
+            USER_ID_ENC VARCHAR(255) NOT NULL COMMENT '로그인 ID (AES 암호문)',
+            PASSWORD VARCHAR(255) NOT NULL,
+            USER_NM VARCHAR(255) NOT NULL,
+            HP_NO VARCHAR(255) NOT NULL,
+            SNS_TYPE VARCHAR(20) NOT NULL DEFAULT 'NONE',
+            SMS_AUTH_YN CHAR(1) NOT NULL DEFAULT 'N',
+            USER_TYPE VARCHAR(20) NOT NULL,
+            JOIN_DT DATETIME DEFAULT CURRENT_TIMESTAMP,
+            USER_STAT VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+            PRIMARY KEY (USER_UUID),
+            UNIQUE KEY UK_USER_ID (USER_ID_ENC)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+}
+
+function formatDateYmd(v) {
+    if (v == null || v === undefined || v === '') return '';
+    if (v instanceof Date && !Number.isNaN(v.getTime())) {
+        return v.toISOString().slice(0, 10);
+    }
+    const s = String(v);
+    return s.length >= 10 ? s.slice(0, 10) : s;
+}
+
+/** 진위 검증 생략 비교용 — TB_DRIVER_INFO 기존 행 */
+async function fetchDriverInfoRow(userUuid) {
+    try {
+        const [rows] = await pool.execute(
+            `SELECT LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO, LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT, QUAL_CERT_NO
+             FROM TB_DRIVER_INFO WHERE USER_UUID = UUID_TO_BIN(?)`,
+            [userUuid]
+        );
+        return rows[0] || null;
+    } catch (e) {
+        if (e.code === 'ER_NO_SUCH_TABLE') return null;
+        throw e;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // REST APIs
 // ---------------------------------------------------------------------------
 
 // API 1-0: 아이디 중복 검사
 app.get('/api/auth/check-id', async (req, res) => {
+    let connection;
     try {
         const { userId } = req.query;
         if (!userId) return res.status(400).json({ error: 'userId query parameter is required' });
 
-        // [보안] 아이디(이메일)는 DB에 암호화된 상태로 저장되므로, 전체 스캔 후 복호화 비교
-        const [rows] = await pool.execute('SELECT USER_ID FROM TB_USER');
-        console.log(`[DEBUG] Check ID: "${userId}", Table rows: ${rows.length}`);
+        connection = await pool.getConnection();
+        await ensureTbUserTable(connection);
 
-        const isDuplicate = rows.some((row, index) => {
-            try { 
-                const decrypted = decrypt(row.USER_ID);
-                return decrypted === userId; 
-            } catch (e) { 
-                // 복호화 실패 시 (평문 저장 등) 직접 비교 시도
-                return row.USER_ID === userId;
+        // [보안] 아이디(이메일)는 DB에 암호화된 상태로 저장되므로, 전체 스캔 후 복호화 비교
+        const [rows] = await connection.execute('SELECT USER_ID_ENC FROM TB_USER');
+        const isDuplicate = rows.some((row) => {
+            try {
+                return decrypt(row.USER_ID_ENC) === userId;
+            } catch (e) {
+                return false;
             }
         });
-        
-        console.log(`[DEBUG] Result isDuplicate: ${isDuplicate}`);
 
         if (isDuplicate) {
             return res.status(409).json({ isAvailable: false, message: '이미 사용 중인 아이디입니다.' });
         }
         return res.status(200).json({ isAvailable: true, message: '사용 가능한 아이디입니다.' });
     } catch (error) {
-        console.error('Check ID error:', error);
-        res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+        console.error('Check ID error:', error.code || error.message, error);
+        if (error.code === 'ER_NO_SUCH_TABLE') {
+            return res.status(200).json({ isAvailable: true, message: '사용 가능한 아이디입니다.' });
+        }
+        res.status(500).json({
+            error: '서버 오류가 발생했습니다.',
+            detail: process.env.NODE_ENV !== 'production' ? String(error.message) : undefined
+        });
+    } finally {
+        if (connection) connection.release();
     }
 });
 
 // API 1-2: 전화번호 중복 검사
 app.get('/api/auth/check-phone', async (req, res) => {
+    let connection;
     try {
         const { phoneNo } = req.query;
         if (!phoneNo) return res.status(400).json({ error: 'phoneNo query parameter is required' });
 
+        connection = await pool.getConnection();
+        await ensureTbUserTable(connection);
+
         // [보안] 휴대폰 번호는 DB에 암호화된 상태로 저장되므로, 전체 스캔 후 복호화 비교
-        const [rows] = await pool.execute('SELECT HP_NO FROM TB_USER');
-        const isDuplicate = rows.some(row => {
-            try { 
-                return decrypt(row.HP_NO) === phoneNo; 
-            } catch (e) { 
-                return row.HP_NO === phoneNo;
+        const [rows] = await connection.execute('SELECT HP_NO FROM TB_USER');
+        const isDuplicate = rows.some((row) => {
+            try {
+                return decrypt(row.HP_NO) === phoneNo;
+            } catch (e) {
+                return false;
             }
         });
         if (isDuplicate) {
@@ -101,8 +234,16 @@ app.get('/api/auth/check-phone', async (req, res) => {
         }
         return res.status(200).json({ isAvailable: true });
     } catch (error) {
-        console.error('Check phone error:', error);
-        res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+        console.error('Check phone error:', error.code || error.message, error);
+        if (error.code === 'ER_NO_SUCH_TABLE') {
+            return res.status(200).json({ isAvailable: true });
+        }
+        res.status(500).json({
+            error: '서버 오류가 발생했습니다.',
+            detail: process.env.NODE_ENV !== 'production' ? String(error.message) : undefined
+        });
+    } finally {
+        if (connection) connection.release();
     }
 });
 
@@ -217,9 +358,12 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(400).json({ error: '필수 항목이 누락되었습니다. (ID, 비밀번호, 이름, 전화번호, 서명, 약관동의, 사용자타입)' });
         }
 
-        // 1. [보안] 인증 토큰 검증 - (테스트 단계: 항상 'Y'로 처리)
-        let smsAuthYn = 'Y';
-        console.log('Test Mode: SMS Auth always bypassed with Y');
+        // 1. [보안] Firebase Phone 인증 ID 토큰 — Admin SDK 설정 시에만 검증 (기사 프로필 API와 동일 로직)
+        const phoneVerify = await verifyFirebasePhoneIdTokenIfRequired(firebaseIdToken);
+        if (!phoneVerify.ok) {
+            return res.status(400).json({ error: phoneVerify.error });
+        }
+        const smsAuthYn = 'Y';
 
         // 2. [보안] 비밀번호 해싱 (bcrypt)
         const saltRounds = 10;
@@ -252,6 +396,7 @@ app.post('/api/auth/register', async (req, res) => {
 
         // 4. DB 트랜잭션 시작
         connection = await pool.getConnection();
+        await ensureTbUserTable(connection);
         await connection.beginTransaction();
 
         try {
@@ -263,12 +408,12 @@ app.post('/api/auth/register', async (req, res) => {
             // UserType Mapping
             let mappedUserType = 'TRAVELER';
             if (userType === 'CONSUMER') mappedUserType = 'TRAVELER';
-            else if (userType === 'SALES') mappedUserType = 'PARTNER';
+            else if (userType === 'SALES' || userType === 'SALESPERSON') mappedUserType = 'PARTNER';
             else if (userType === 'DRIVER') mappedUserType = 'DRIVER';
 
             const userQuery = `
                 INSERT INTO TB_USER (
-                    USER_UUID, USER_ID, PASSWORD, USER_NM, HP_NO, SNS_TYPE, 
+                    USER_UUID, USER_ID_ENC, PASSWORD, USER_NM, HP_NO, SNS_TYPE, 
                     SMS_AUTH_YN, USER_TYPE, JOIN_DT, USER_STAT
                 ) VALUES (UUID_TO_BIN(?), ?, ?, ?, ?, 'NONE', ?, ?, NOW(), 'ACTIVE')
             `;
@@ -300,6 +445,7 @@ app.post('/api/auth/register', async (req, res) => {
                 const termsMapping = {
                     1: 'SERVICE',
                     2: 'PRIVACY',
+                    3: 'MARKETING',
                     4: 'MARKETING'
                 };
 
@@ -354,11 +500,11 @@ app.post(['/api/auth/login', '/api/users/login'], async (req, res) => {
 
         // [보안] 아이디(이메일)는 암호화되어 있으므로, 전체 조회 시 BIN_TO_UUID 활용하여 조회
         const [rows] = await pool.execute('SELECT BIN_TO_UUID(USER_UUID) as USER_UUID_STR, TB_USER.* FROM TB_USER');
-        const user = rows.find(row => {
-            try { 
-                return decrypt(row.USER_ID) === userId; 
-            } catch (e) { 
-                return row.USER_ID === userId;
+        const user = rows.find((row) => {
+            try {
+                return decrypt(row.USER_ID_ENC) === userId;
+            } catch (e) {
+                return false;
             }
         });
 
@@ -391,8 +537,8 @@ app.post(['/api/auth/login', '/api/users/login'], async (req, res) => {
         });
 
     } catch (error) {
-        console.error('로그인 에러:', error.message);
-        res.status(500).json({ error: '로그인 중 서버 오류가 발생했습니다.' });
+        console.error('로그인 에러:', error ? error.stack : 'Unknown error');
+        res.status(500).json({ error: '로그인 중 서버 오류가 발생했습니다.', details: error ? error.toString() : 'Unknown error' });
     }
 });
 
@@ -509,63 +655,187 @@ app.post('/api/driver/profile', async (req, res) => {
     }
 });
  
-// 서버 기동
+// API: 기사 프로필 조회 (폼 채우기)
+app.get('/api/driver/profile-setup', async (req, res) => {
+    try {
+        const { userUuid } = req.query;
+        if (!userUuid) return res.status(400).json({ error: 'userUuid is required' });
+
+        const [uRows] = await pool.execute(
+            `SELECT USER_NM, HP_NO FROM TB_USER WHERE USER_UUID = UUID_TO_BIN(?)`,
+            [userUuid]
+        );
+        if (!uRows.length) return res.status(404).json({ error: '회원을 찾을 수 없습니다.' });
+
+        const u = uRows[0];
+        let userName = '';
+        let phoneNo = '';
+        try {
+            userName = u.USER_NM ? decrypt(u.USER_NM) : '';
+        } catch (_) {
+            userName = '';
+        }
+        try {
+            phoneNo = u.HP_NO ? decrypt(u.HP_NO) : '';
+        } catch (_) {
+            phoneNo = '';
+        }
+
+        let dRows;
+        try {
+            const [dr] = await pool.execute(
+                `SELECT RRN_ENC, LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO, LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT,
+                        QUAL_CERT_NO, BIO_TEXT, PROFILE_PHOTO_UUID, QUAL_CERT_FILE_UUID
+                 FROM TB_DRIVER_INFO WHERE USER_UUID = UUID_TO_BIN(?)`,
+                [userUuid]
+            );
+            dRows = dr;
+        } catch (e) {
+            if (e.code === 'ER_NO_SUCH_TABLE') {
+                return res.json({ exists: false, userName, phoneNo });
+            }
+            throw e;
+        }
+
+        if (!dRows.length) {
+            return res.json({ exists: false, userName, phoneNo });
+        }
+
+        const d = dRows[0];
+        let rrnFront = '';
+        let rrnBack = '';
+        try {
+            const plain = d.RRN_ENC ? decrypt(d.RRN_ENC) : '';
+            const parts = String(plain).trim().split('-');
+            if (parts.length >= 2 && parts[0].length === 6) {
+                rrnFront = parts[0];
+                rrnBack = String(parts[1]).charAt(0) || '';
+            }
+        } catch (_) {
+            /* ignore */
+        }
+
+        return res.json({
+            exists: true,
+            userName,
+            phoneNo,
+            rrnFront,
+            rrnBack,
+            licenseType: d.LICENSE_TYPE || '',
+            licenseNo: d.LICENSE_NO || '',
+            licenseSerialNo: d.LICENSE_SERIAL_NO || '',
+            licenseIssueDt: formatDateYmd(d.LICENSE_ISSUE_DT),
+            licenseExpiryDt: formatDateYmd(d.LICENSE_EXPIRY_DT),
+            qualCertNo: d.QUAL_CERT_NO || '',
+            bioText: d.BIO_TEXT || '',
+            hasProfilePhoto: !!(d.PROFILE_PHOTO_UUID && d.PROFILE_PHOTO_UUID.length),
+            hasQualCertFile: !!(d.QUAL_CERT_FILE_UUID && d.QUAL_CERT_FILE_UUID.length)
+        });
+    } catch (error) {
+        console.error('GET driver profile-setup error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // API: 기사 프로필 설정 (Profile Setup)
 app.post('/api/driver/profile-setup', async (req, res) => {
     let connection;
     try {
         const {
             userUuid, rrn, licenseType, licenseNo, licenseIssueDt, licenseExpiryDt,
-            qualCertNo, bioText, profilePhotoBase64, qualCertBase64
+            licenseSerialNo,
+            qualCertNo, bioText, profilePhotoBase64, qualCertBase64,
+            phoneIdToken,
+            driverName
         } = req.body;
 
         if (!userUuid) return res.status(400).json({ error: 'userUuid is required' });
 
+        const rrnNorm = (rrn || '').trim();
+        if (!/^\d{6}-\d{1}$/.test(rrnNorm)) {
+            return res.status(400).json({
+                error: '주민등록번호는 앞 6자리와 뒤 1자리만 입력해 주세요. (예: 900101-1)'
+            });
+        }
+
+        const phoneVerify = await verifyFirebasePhoneIdTokenIfRequired(phoneIdToken);
+        if (!phoneVerify.ok) {
+            return res.status(400).json({ error: phoneVerify.error });
+        }
+
+        const existingDriverRow = await fetchDriverInfoRow(userUuid);
+
+        const extVerify = await runDriverVerificationsForProfileSetup({
+            driverName: (driverName || '').trim(),
+            rrn: rrnNorm,
+            licenseNo,
+            licenseSerialNo,
+            qualCertNo,
+            licenseType,
+            licenseIssueDt,
+            licenseExpiryDt,
+            existingRow: existingDriverRow
+        });
+        if (!extVerify.ok) {
+            return res.status(400).json({
+                error: extVerify.message || '면허·자격 진위 확인에 실패했습니다.',
+                detail: extVerify.detail
+            });
+        }
+
         connection = await pool.getConnection();
+
+        /* DDL은 암시적 커밋이 있을 수 있어 트랜잭션 시작 전에 실행 */
+        await ensureDriverInfoTable(connection);
+        await ensureTbFileMasterTable(connection);
+        await ensureDriverInfoLicenseSerialColumn(connection);
+
         await connection.beginTransaction();
 
         try {
-            const encryptedRrn = encrypt(rrn || '');
+            const encryptedRrn = encrypt(rrnNorm);
             let profilePhotoUuid = null;
             let qualCertUuid = null;
 
-            // 1. 프로필 사진 업로드
+            const ym = new Date().toISOString().slice(0, 7);
+
+            // 1. 프로필 사진 — ARCHITECTURE: gs://bustaams-secure-data/profiles/driver/{YYYY-MM}/
             if (profilePhotoBase64 && profilePhotoBase64.startsWith('data:image')) {
                 profilePhotoUuid = randomUUID();
                 const buffer = Buffer.from(profilePhotoBase64.replace(/^data:image\/\w+;base64,/, ""), 'base64');
-                const fileName = `profiles/${new Date().toISOString().slice(0, 7).replace('-', '')}/${profilePhotoUuid}.png`;
-                const file = bucket.file(fileName);
+                const gcsPath = `profiles/driver/${ym}/${profilePhotoUuid}.png`;
+                const file = bucket.file(gcsPath);
                 await file.save(buffer, { metadata: { contentType: 'image/png' }, resumable: false });
 
                 await connection.execute(`
                     INSERT INTO TB_FILE_MASTER (FILE_UUID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT)
-                    VALUES (UUID_TO_BIN(?), 'BUS_PHOTO', ?, ?, 'profile.png', 'png', ?, NOW())
-                `, [profilePhotoUuid, bucketName, fileName, buffer.length]);
+                    VALUES (UUID_TO_BIN(?), 'DRIVER_PROFILE_PHOTO', ?, ?, 'profile.png', 'png', ?, NOW())
+                `, [profilePhotoUuid, bucketName, gcsPath, buffer.length]);
             }
 
-            // 2. 자격증 사본 업로드
+            // 2. 운송종사자 자격증 사본 — ARCHITECTURE: gs://bustaams-secure-data/certificates/bus_licenses/
             if (qualCertBase64 && qualCertBase64.startsWith('data:')) {
                 qualCertUuid = randomUUID();
                 const isPdf = qualCertBase64.includes('pdf');
                 const ext = isPdf ? 'pdf' : 'png';
                 const buffer = Buffer.from(qualCertBase64.replace(/^data:[\w\/]+;base64,/, ""), 'base64');
-                const fileName = `certificates/${new Date().toISOString().slice(0, 7).replace('-', '')}/${qualCertUuid}.${ext}`;
-                const file = bucket.file(fileName);
+                const gcsPath = `certificates/bus_licenses/${ym}/${qualCertUuid}.${ext}`;
+                const file = bucket.file(gcsPath);
                 await file.save(buffer, { metadata: { contentType: isPdf ? 'application/pdf' : 'image/png' }, resumable: false });
 
                 await connection.execute(`
                     INSERT INTO TB_FILE_MASTER (FILE_UUID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT)
-                    VALUES (UUID_TO_BIN(?), 'LICENSE', ?, ?, 'cert.${ext}', ?, ?, NOW())
-                `, [qualCertUuid, bucketName, fileName, ext, buffer.length]);
+                    VALUES (UUID_TO_BIN(?), 'BUS_QUAL_CERT', ?, ?, ?, ?, ?, NOW())
+                `, [qualCertUuid, bucketName, gcsPath, `qual_cert.${ext}`, ext, buffer.length]);
             }
 
             // 3. TB_DRIVER_INFO 저장 (Upsert)
             const driverQuery = `
                 INSERT INTO TB_DRIVER_INFO (
-                    USER_UUID, RRN_ENC, LICENSE_TYPE, LICENSE_NO, LICENSE_ISSUE_DT, 
+                    USER_UUID, RRN_ENC, LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO, LICENSE_ISSUE_DT, 
                     LICENSE_EXPIRY_DT, QUAL_CERT_NO, QUAL_CERT_FILE_UUID, PROFILE_PHOTO_UUID, BIO_TEXT, UPDATE_DT
                 ) VALUES (
-                    UUID_TO_BIN(?), ?, ?, ?, ?, ?, ?, 
+                    UUID_TO_BIN(?), ?, ?, ?, ?, ?, ?, ?, 
                     ${qualCertUuid ? 'UUID_TO_BIN(?)' : 'NULL'}, 
                     ${profilePhotoUuid ? 'UUID_TO_BIN(?)' : 'NULL'}, 
                     ?, NOW()
@@ -574,14 +844,26 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                     RRN_ENC = VALUES(RRN_ENC),
                     LICENSE_TYPE = VALUES(LICENSE_TYPE),
                     LICENSE_NO = VALUES(LICENSE_NO),
+                    LICENSE_SERIAL_NO = VALUES(LICENSE_SERIAL_NO),
                     LICENSE_ISSUE_DT = VALUES(LICENSE_ISSUE_DT),
                     LICENSE_EXPIRY_DT = VALUES(LICENSE_EXPIRY_DT),
                     QUAL_CERT_NO = VALUES(QUAL_CERT_NO),
+                    QUAL_CERT_FILE_UUID = IFNULL(VALUES(QUAL_CERT_FILE_UUID), QUAL_CERT_FILE_UUID),
+                    PROFILE_PHOTO_UUID = IFNULL(VALUES(PROFILE_PHOTO_UUID), PROFILE_PHOTO_UUID),
                     BIO_TEXT = VALUES(BIO_TEXT),
                     UPDATE_DT = NOW()
             `;
             
-            const params = [userUuid, encryptedRrn, licenseType, licenseNo, licenseIssueDt, licenseExpiryDt, qualCertNo];
+            const params = [
+                userUuid,
+                encryptedRrn,
+                licenseType,
+                licenseNo,
+                licenseSerialNo || null,
+                licenseIssueDt,
+                licenseExpiryDt,
+                qualCertNo
+            ];
             if (qualCertUuid) params.push(qualCertUuid);
             if (profilePhotoUuid) params.push(profilePhotoUuid);
             params.push(bioText);
@@ -729,6 +1011,21 @@ app.get('/api/driver/quotation-requests', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-    console.log(`🚀 busTaams REST API Server is running beautifully on http://localhost:${PORT}`);
-});
+
+(async function startServer() {
+    try {
+        const connection = await pool.getConnection();
+        try {
+            await ensureTbUserTable(connection);
+            console.log('✅ TB_USER 테이블 확인·생성 완료');
+        } finally {
+            connection.release();
+        }
+    } catch (e) {
+        console.error('⚠️ TB_USER 부트스트랩 실패 (DB 연결·권한 확인):', e.message);
+    }
+
+    app.listen(PORT, () => {
+        console.log(`🚀 busTaams REST API Server is running beautifully on http://localhost:${PORT}`);
+    });
+})();

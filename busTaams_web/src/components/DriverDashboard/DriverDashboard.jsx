@@ -150,19 +150,35 @@ function EarningsSection({ stats }) {
 }
 
 // ─────────────── QuickMenu ───────────────
+/** 바로가기: `기사정보등록_기사 화면.md` — 「기사 정보」→ DriverProfileSetup (`driverView === 'profileSetup'`) */
 function QuickMenu({ onProfileSetup, onBusInfoSetup, onQuotationRequests }) {
   const menus = [
-    { icon: 'person',                  label: '기사 정보',  accent: false, action: onProfileSetup },
-    { icon: 'directions_bus',          label: '버스 정보',  accent: false, action: onBusInfoSetup },
-    { icon: 'request_quote',           label: '견적 리스트', accent: false, action: onQuotationRequests },
-    { icon: 'event_note',              label: '예정 리스트', accent: true  },
-    { icon: 'pending_actions',         label: '보류 리스트', accent: false },
-    { icon: 'task_alt',                label: '완료 리스트', accent: false },
-    { icon: 'cancel',                  label: '거절 리스트', accent: false },
-    { icon: 'forum',                   label: '실시간 채팅', accent: false },
-    { icon: 'account_balance_wallet',  label: '정산 관리',  accent: false },
-    { icon: 'loyalty',                 label: '요금제 선택', accent: false },
+    { key: 'driverProfile', icon: 'person',                  label: '기사 정보',  accent: false },
+    { key: 'busInfo',       icon: 'directions_bus',          label: '버스 정보',  accent: false },
+    { key: 'quotation',     icon: 'request_quote',           label: '견적 리스트', accent: false },
+    { key: null,            icon: 'event_note',              label: '예정 리스트', accent: true  },
+    { key: null,            icon: 'pending_actions',         label: '보류 리스트', accent: false },
+    { key: null,            icon: 'task_alt',                label: '완료 리스트', accent: false },
+    { key: null,            icon: 'cancel',                  label: '거절 리스트', accent: false },
+    { key: null,            icon: 'forum',                   label: '실시간 채팅', accent: false },
+    { key: null,            icon: 'account_balance_wallet',  label: '정산 관리',  accent: false },
+    { key: null,            icon: 'loyalty',                 label: '요금제 선택', accent: false },
   ];
+
+  const handleQuickAction = (key) => {
+    if (key === 'driverProfile') {
+      onProfileSetup?.();
+      return;
+    }
+    if (key === 'busInfo') {
+      onBusInfoSetup?.();
+      return;
+    }
+    if (key === 'quotation') {
+      onQuotationRequests?.();
+      return;
+    }
+  };
 
   return (
     <section className="space-y-6">
@@ -170,8 +186,10 @@ function QuickMenu({ onProfileSetup, onBusInfoSetup, onQuotationRequests }) {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {menus.map((m, i) => (
           <button
-            key={i}
-            onClick={() => m.action && m.action()}
+            key={m.key || `menu-${i}`}
+            type="button"
+            aria-label={m.label}
+            onClick={() => handleQuickAction(m.key)}
             className={`flex flex-col items-center justify-center gap-3 p-6 bg-surface-container-lowest rounded-2xl hover:bg-teal-50/50 transition-all group shadow-sm ${
               m.accent ? 'border-l-4 border-secondary' : ''
             }`}

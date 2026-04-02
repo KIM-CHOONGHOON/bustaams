@@ -79,6 +79,7 @@
 | **RRN_ENC** | VARCHAR(512) | NOT NULL | 주민등록번호 (양방향 암호화) |
 | **LICENSE_TYPE** | VARCHAR(50) | - | 면허 종류 (예: 1종 대형) |
 | **LICENSE_NO** | VARCHAR(100) | - | 면허 번호 |
+| **LICENSE_SERIAL_NO** | VARCHAR(100) | - | 면허 암호일련번호(면허증 우측 소형 사진 아래 영문·숫자, 진위 검증 연동용) |
 | **LICENSE_ISSUE_DT** | DATE | - | 발급 일자 |
 | **LICENSE_EXPIRY_DT** | DATE | - | 유효 기간 |
 | **QUAL_CERT_NO** | VARCHAR(100) | - | 버스운전 자격번호 |
