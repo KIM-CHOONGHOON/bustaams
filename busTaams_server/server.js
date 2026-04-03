@@ -8,7 +8,7 @@ const { Storage } = require('@google-cloud/storage');
 const bcrypt = require('bcrypt');
 const { randomUUID } = require('crypto');
 const { encrypt, decrypt } = require('./crypto');
-const { runDriverVerificationsForProfileSetup } = require('./driverVerification');
+// const { runDriverVerificationsForProfileSetup } = require('./driverVerification');
 const fs = require('fs');
 
 const app = express();
@@ -734,6 +734,165 @@ app.get('/api/driver/profile-setup', async (req, res) => {
     } catch (error) {
         console.error('GET driver profile-setup error:', error);
         res.status(500).json({ error: error.message });
+    }
+});
+
+// API: 견적 요청 저장 (POST /api/auction/request)
+app.post('/api/auction/request', async (req, res) => {
+    let connection;
+    try {
+        const {
+            userUuid, tripTitle, startAddr, endAddr, startDt, endDt,
+            passengerCnt, totalAmount, waypoints, vehicles
+        } = req.body;
+
+        if (!userUuid || !tripTitle || !startAddr || !endAddr || !startDt || !endDt) {
+            return res.status(400).json({ error: '필수 항목이 누락되었습니다.' });
+        }
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        try {
+            const reqUuid = randomUUID();
+            
+            // 1. TB_AUCTION_REQ (Master) Insert
+            const masterQuery = `
+                INSERT INTO TB_AUCTION_REQ (
+                    REQ_UUID, TRAVELER_UUID, TRIP_TITLE, START_ADDR, END_ADDR, 
+                    START_DT, END_DT, PASSENGER_CNT, REQ_STAT, EXPIRE_DT, 
+                    REQ_AMT, REG_DT, REG_ID
+                ) VALUES (
+                    UUID_TO_BIN(?), UUID_TO_BIN(?), ?, ?, ?, 
+                    ?, ?, ?, 'BIDDING', DATE_SUB(?, INTERVAL 1 DAY), 
+                    ?, NOW(), ?
+                )
+            `;
+            
+            await connection.execute(masterQuery, [
+                reqUuid, userUuid, tripTitle, startAddr, endAddr,
+                startDt, endDt, passengerCnt || 0, startDt,
+                totalAmount || 0, userUuid // REG_ID as userUuid for now
+            ]);
+
+            // 2. TB_AUCTION_REQ_BUS (Vehicles) Insert
+            if (vehicles && vehicles.length > 0) {
+                const busQuery = `
+                    INSERT INTO TB_AUCTION_REQ_BUS (
+                        REQ_BUS_UUID, REQ_UUID, BUS_TYPE_CD, REQ_BUS_CNT, REG_DT, REG_ID
+                    ) VALUES (UUID_TO_BIN(?), UUID_TO_BIN(?), ?, ?, NOW(), ?)
+                `;
+                for (const bus of vehicles) {
+                    if (bus.qty > 0) {
+                        const busBusUuid = randomUUID();
+                        await connection.execute(busQuery, [
+                            busBusUuid, reqUuid, bus.type, bus.qty, userUuid
+                        ]);
+                    }
+                }
+            }
+
+            // 3. TB_AUCTION_REQ_VIA (Waypoints) Insert
+            if (waypoints && waypoints.length > 0) {
+                const viaQuery = `
+                    INSERT INTO TB_AUCTION_REQ_VIA (
+                        VIA_UUID, REQ_UUID, VIA_ORD, VIA_ADDR, STOP_TIME_MIN, REG_DT, REG_ID
+                    ) VALUES (UUID_TO_BIN(?), UUID_TO_BIN(?), ?, ?, ?, NOW(), ?)
+                `;
+                for (let i = 0; i < waypoints.length; i++) {
+                    const viaUnitUuid = randomUUID();
+                    await connection.execute(viaQuery, [
+                        viaUnitUuid, reqUuid, i + 1, waypoints[i].address, 0, userUuid
+                    ]);
+                }
+            }
+
+            await connection.commit();
+            res.status(201).json({ message: '견적 요청이 성공적으로 등록되었습니다.', reqUuid });
+
+        } catch (dbError) {
+            await connection.rollback();
+            throw dbError;
+        } finally {
+            connection.release();
+        }
+
+    } catch (error) {
+        console.error('Auction Request Error:', error);
+        res.status(500).json({ error: '견적 요청 저장 중 오류가 발생했습니다.' });
+    }
+});
+
+// 최근 견적 요청 조회 (GET /api/auction/recent/:userUuid)
+app.get('/api/auction/recent/:userUuid', async (req, res) => {
+    try {
+        const { userUuid } = req.params;
+        if (!userUuid) {
+            return res.status(400).json({ error: 'userUuid is required' });
+        }
+
+        const query = `
+            SELECT 
+                BIN_TO_UUID(REQ_UUID) as REQ_UUID_STR, 
+                TRIP_TITLE, START_ADDR, END_ADDR, 
+                START_DT, END_DT, PASSENGER_CNT, REQ_STAT, REQ_AMT
+            FROM TB_AUCTION_REQ 
+            WHERE TRAVELER_UUID = UUID_TO_BIN(?) 
+            ORDER BY REG_DT DESC 
+            LIMIT 1
+        `;
+        
+        const [rows] = await pool.execute(query, [userUuid]);
+        
+        if (rows.length === 0) {
+            return res.status(404).json({ message: '최근 요청이 없습니다.' });
+        }
+
+        const recent = rows[0];
+
+        // 차량 정보도 가져오기
+        const busQuery = `
+            SELECT BUS_TYPE_CD, REQ_BUS_CNT 
+            FROM TB_AUCTION_REQ_BUS 
+            WHERE REQ_UUID = UUID_TO_BIN(?)
+        `;
+        const [buses] = await pool.execute(busQuery, [recent.REQ_UUID_STR]);
+        recent.vehicles = buses;
+
+        res.status(200).json(recent);
+
+    } catch (error) {
+        console.error('Fetch Recent Request Error:', error);
+        res.status(500).json({ error: '최근 요청 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 사용자의 모든 견적 요청 목록 조회 (GET /api/auction/user/:userUuid)
+app.get('/api/auction/user/:userUuid', async (req, res) => {
+    try {
+        const { userUuid } = req.params;
+        if (!userUuid) {
+            return res.status(400).json({ error: 'userUuid is required' });
+        }
+
+        const query = `
+            SELECT 
+                BIN_TO_UUID(r.REQ_UUID) as REQ_UUID_STR, 
+                r.TRIP_TITLE, r.START_ADDR, r.END_ADDR, 
+                r.START_DT, r.END_DT, r.PASSENGER_CNT, r.REQ_STAT, r.REQ_AMT,
+                b.BUS_TYPE_CD, b.REQ_BUS_CNT
+            FROM TB_AUCTION_REQ r
+            LEFT JOIN TB_AUCTION_REQ_BUS b ON r.REQ_UUID = b.REQ_UUID
+            WHERE r.TRAVELER_UUID = UUID_TO_BIN(?) AND r.REQ_STAT = 'BIDDING'
+            ORDER BY r.REG_DT DESC
+        `;
+        
+        const [rows] = await pool.execute(query, [userUuid]);
+        res.status(200).json(rows);
+
+    } catch (error) {
+        console.error('Fetch User Requests Error:', error);
+        res.status(500).json({ error: '사용자 예약 내역 조회 중 오류가 발생했습니다.' });
     }
 });
 

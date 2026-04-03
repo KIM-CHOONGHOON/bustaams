@@ -1,45 +1,73 @@
-import React, { useState } from 'react';
+import React from 'react';
 
-const CreateBusRequest = ({ onBack }) => {
-  const today = new Date().toISOString().split('T')[0];
-  
-  const [formData, setFormData] = useState({
-    title: '',
-    boardingCount: 0,
-    departure: { address: '', detail: '' },
-    arrival: { address: '', detail: '' },
-    waypoints: [], // Array of { id: number, address: string, detail: string }
-    departureDate: today,
-    departureTime: '00:00',
-    arrivalDate: today,
-    arrivalTime: '12:00',
-    premiumQty: 0,
-    standardQty: 0,
-    premiumGoldQty: 0,
-    vvipQty: 0,
-    miniBusQty: 0,
-    largeVanQty: 0,
-  });
+const initialState = {
+  title: '',
+  boardingCount: 0,
+  departure: { address: '', detail: '' },
+  arrival: { address: '', detail: '' },
+  waypoints: [],
+  departureDate: '', // Set in useEffect
+  departureTime: '00:00',
+  arrivalDate: '',
+  arrivalTime: '12:00',
+  premiumQty: 0,
+  standardQty: 0,
+  premiumGoldQty: 0,
+  vvipQty: 0,
+  miniBusQty: 0,
+  largeVanQty: 0,
+};
+
+function reducer(state, action) {
+  console.log('Reducer Action:', action.type, action.payload);
+  switch (action.type) {
+    case 'SET_FIELD':
+      return { ...state, [action.name]: action.value };
+    case 'SET_ADDRESS':
+      if (action.addressType === 'waypoint') {
+        const newWaypoints = state.waypoints.map((wp, i) => 
+          i === action.index ? { ...wp, [action.field]: action.value } : wp
+        );
+        return { ...state, waypoints: newWaypoints };
+      }
+      return {
+        ...state,
+        [action.addressType]: { ...state[action.addressType], [action.field]: action.value }
+      };
+    case 'ADD_WAYPOINT':
+      return { ...state, waypoints: [...state.waypoints, { id: Date.now(), address: '', detail: '' }] };
+    case 'REMOVE_WAYPOINT':
+      return { ...state, waypoints: state.waypoints.filter((_, i) => i !== action.index) };
+    case 'ADJUST_QTY':
+      return { ...state, [action.busType]: Math.max(0, (state[action.busType] || 0) + action.delta) };
+    case 'SET_INITIAL_DATES':
+      return { ...state, departureDate: action.today, arrivalDate: action.today };
+    default:
+      return state;
+  }
+}
+
+const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
+  const [formData, dispatch] = React.useReducer(reducer, initialState);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  React.useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+    dispatch({ type: 'SET_INITIAL_DATES', today });
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const finalValue = name === 'boardingCount' ? (parseInt(value) || 0) : value;
+    dispatch({ type: 'SET_FIELD', name, value: finalValue });
   };
 
   const handleAddressChange = (type, value, index = null) => {
-    if (type === 'waypoint') {
-      const newWaypoints = [...formData.waypoints];
-      newWaypoints[index].detail = value;
-      setFormData(prev => ({ ...prev, waypoints: newWaypoints }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [type]: { ...prev[type], detail: value }
-      }));
-    }
+    dispatch({ type: 'SET_ADDRESS', addressType: type, field: 'detail', value, index });
   };
 
   const openPostcode = (type, index = null) => {
+    console.log('Opening Postcode for:', type, index);
     if (!window.daum || !window.daum.Postcode) {
       alert('주소 검색 서비스를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
       return;
@@ -55,56 +83,39 @@ const CreateBusRequest = ({ onBack }) => {
           if (data.buildingName !== '') extraAddress += extraAddress !== '' ? `, ${data.buildingName}` : data.buildingName;
           fullAddress += extraAddress !== '' ? ` (${extraAddress})` : '';
         }
-
-        if (type === 'waypoint') {
-          const newWaypoints = [...formData.waypoints];
-          newWaypoints[index].address = fullAddress;
-          setFormData(prev => ({ ...prev, waypoints: newWaypoints }));
-        } else {
-          setFormData(prev => ({
-            ...prev,
-            [type]: { ...prev[type], address: fullAddress }
-          }));
-        }
+        
+        console.log('Postcode oncomplete called:', fullAddress);
+        dispatch({ type: 'SET_ADDRESS', addressType: type, field: 'address', value: fullAddress, index });
       }
     }).open();
   };
 
   const addWaypoint = () => {
-    setFormData(prev => ({
-      ...prev,
-      waypoints: [...prev.waypoints, { id: Date.now(), address: '', detail: '' }]
-    }));
+    dispatch({ type: 'ADD_WAYPOINT' });
   };
 
   const removeWaypoint = (index) => {
-    setFormData(prev => ({
-      ...prev,
-      waypoints: prev.waypoints.filter((_, i) => i !== index)
-    }));
+    dispatch({ type: 'REMOVE_WAYPOINT', index });
   };
 
-  const adjustQty = (type, delta) => {
-    setFormData(prev => ({
-      ...prev,
-      [type]: Math.max(0, prev[type] + delta)
-    }));
+  const adjustQty = (busType, delta) => {
+    dispatch({ type: 'ADJUST_QTY', busType, delta });
   };
 
   // 예상 견적 계산 (동적)
   const basePrice = 
-    formData.premiumQty * 850000 + 
-    formData.standardQty * 650000 + 
-    formData.premiumGoldQty * 1100000 + 
-    formData.vvipQty * 1300000 + 
-    formData.miniBusQty * 550000 + 
-    formData.largeVanQty * 450000;
+    (formData.premiumQty || 0) * 850000 + 
+    (formData.standardQty || 0) * 650000 + 
+    (formData.premiumGoldQty || 0) * 1100000 + 
+    (formData.vvipQty || 0) * 1300000 + 
+    (formData.miniBusQty || 0) * 550000 + 
+    (formData.largeVanQty || 0) * 450000;
 
   const distanceSurcharge = 85000 + (formData.waypoints.length * 20000); // 경유지당 추가금 가정
-  const totalVehicles = formData.premiumQty + formData.standardQty + formData.premiumGoldQty + formData.vvipQty + formData.miniBusQty + formData.largeVanQty;
+  const totalVehicles = (formData.premiumQty || 0) + (formData.standardQty || 0) + (formData.premiumGoldQty || 0) + (formData.vvipQty || 0) + (formData.miniBusQty || 0) + (formData.largeVanQty || 0);
   const total = basePrice + distanceSurcharge + 15000 + 25000;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const errors = [];
     if (!formData.title.trim()) errors.push('여정 제목');
     if (formData.boardingCount <= 0) errors.push('승차 인원 (1명 이상)');
@@ -117,9 +128,70 @@ const CreateBusRequest = ({ onBack }) => {
       return;
     }
 
-    // Success - proceed to next step or API call
-    alert('견적 요청이 성공적으로 접수되었습니다!');
-    onBack(); // Return to dashboard for now
+    setIsSubmitting(true);
+    try {
+      let currentUser = userProp;
+
+      if (!currentUser) {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          currentUser = JSON.parse(userStr);
+        }
+      }
+
+      if (!currentUser || !currentUser.userUuid) {
+        alert('로그인 정보가 없습니다. 다시 로그인해주세요.');
+        return;
+      }
+      
+      const payload = {
+        userUuid: currentUser.userUuid,
+        tripTitle: formData.title,
+        startAddr: `${formData.departure.address} ${formData.departure.detail}`.trim(),
+        endAddr: `${formData.arrival.address} ${formData.arrival.detail}`.trim(),
+        startDt: `${formData.departureDate} ${formData.departureTime}:00`,
+        endDt: `${formData.arrivalDate} ${formData.arrivalTime}:00`,
+        passengerCnt: parseInt(formData.boardingCount),
+        totalAmount: total,
+        waypoints: formData.waypoints.map(wp => ({
+          address: `${wp.address} ${wp.detail}`.trim()
+        })),
+        vehicles: [
+          { type: 'STANDARD_28', qty: formData.standardQty },
+          { type: 'PREMIUM_45', qty: formData.premiumQty },
+          { type: 'GOLD_21', qty: formData.premiumGoldQty },
+          { type: 'VVIP_16', qty: formData.vvipQty },
+          { type: 'MINI_25', qty: formData.miniBusQty },
+          { type: 'VAN_11', qty: formData.largeVanQty }
+        ].filter(v => v.qty > 0)
+      };
+
+      const response = await fetch('http://localhost:8080/api/auction/request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert('버스요청등록이 완료되었습니다.');
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          onBack();
+        }
+      } else {
+        alert(`저장 실패: ${result.error || '알 수 없는 오류가 발생했습니다.'}`);
+      }
+    } catch (error) {
+      console.error('Submit Error:', error);
+      alert('서버와의 통신 중 오류가 발생했습니다. 백엔드 서버가 실행 중인지 확인해주세요.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -129,6 +201,8 @@ const CreateBusRequest = ({ onBack }) => {
         <div className="max-w-[1440px] mx-auto px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button 
+              type="button"
+              id="back-button"
               onClick={onBack}
               className="p-2 hover:bg-surface-container-high rounded-full transition-colors"
             >
@@ -201,7 +275,7 @@ const CreateBusRequest = ({ onBack }) => {
                           {formData.departure.address || '출발지를 검색하세요'}
                         </p>
                       </div>
-                      <button onClick={() => openPostcode('departure')} className="p-2 text-primary hover:bg-white rounded-full transition-all">
+                      <button type="button" id="search-departure" onClick={() => openPostcode('departure')} className="p-2 text-primary hover:bg-white rounded-full transition-all">
                         <span className="material-symbols-outlined">search</span>
                       </button>
                     </div>
@@ -230,7 +304,7 @@ const CreateBusRequest = ({ onBack }) => {
                             {wp.address || '경유지를 검색하세요'}
                           </p>
                         </div>
-                        <button onClick={() => removeWaypoint(index)} className="p-2 text-error hover:bg-error/10 rounded-full transition-all">
+                        <button type="button" id={`remove-waypoint-${index}`} onClick={() => removeWaypoint(index)} className="p-2 text-error hover:bg-error/10 rounded-full transition-all">
                           <span className="material-symbols-outlined">close</span>
                         </button>
                       </div>
@@ -249,6 +323,8 @@ const CreateBusRequest = ({ onBack }) => {
                 {/* Add Waypoint Button */}
                 <div className="pl-18">
                   <button 
+                    type="button"
+                    id="add-waypoint-btn"
                     onClick={addWaypoint}
                     className="flex items-center gap-2 text-primary font-bold text-sm py-2 px-4 rounded-full border border-primary/20 hover:bg-primary/5 transition-all"
                   >
@@ -270,7 +346,7 @@ const CreateBusRequest = ({ onBack }) => {
                           {formData.arrival.address || '도착지를 검색하세요'}
                         </p>
                       </div>
-                      <button onClick={() => openPostcode('arrival')} className="p-2 text-primary hover:bg-white rounded-full transition-all">
+                      <button type="button" id="search-arrival" onClick={() => openPostcode('arrival')} className="p-2 text-primary hover:bg-white rounded-full transition-all">
                         <span className="material-symbols-outlined">search</span>
                       </button>
                     </div>
@@ -356,11 +432,11 @@ const CreateBusRequest = ({ onBack }) => {
                     <div className="flex items-center justify-between pt-3 border-t border-surface-variant/30">
                       <p className="text-sm font-extrabold text-primary">₩1,100,000</p>
                       <div className="flex items-center gap-3 bg-surface-container-high rounded-full px-2 py-1">
-                        <button onClick={() => adjustQty('premiumGoldQty', -1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
+                        <button type="button" onClick={() => adjustQty('premiumGoldQty', -1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
                           <span className="material-symbols-outlined text-[14px]">remove</span>
                         </button>
                         <span className="text-sm font-bold">{formData.premiumGoldQty}</span>
-                        <button onClick={() => adjustQty('premiumGoldQty', 1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
+                        <button type="button" onClick={() => adjustQty('premiumGoldQty', 1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
                           <span className="material-symbols-outlined text-[14px]">add</span>
                         </button>
                       </div>
@@ -386,11 +462,11 @@ const CreateBusRequest = ({ onBack }) => {
                     <div className="flex items-center justify-between pt-3 border-t border-surface-variant/30">
                       <p className="text-sm font-extrabold text-primary">₩1,300,000</p>
                       <div className="flex items-center gap-3 bg-surface-container-high rounded-full px-2 py-1">
-                        <button onClick={() => adjustQty('vvipQty', -1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
+                        <button type="button" onClick={() => adjustQty('vvipQty', -1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
                           <span className="material-symbols-outlined text-[14px]">remove</span>
                         </button>
                         <span className="text-sm font-bold">{formData.vvipQty}</span>
-                        <button onClick={() => adjustQty('vvipQty', 1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
+                        <button type="button" onClick={() => adjustQty('vvipQty', 1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
                           <span className="material-symbols-outlined text-[14px]">add</span>
                         </button>
                       </div>
@@ -416,11 +492,11 @@ const CreateBusRequest = ({ onBack }) => {
                     <div className="flex items-center justify-between pt-3 border-t border-surface-variant/30">
                       <p className="text-sm font-extrabold text-primary">₩850,000</p>
                       <div className="flex items-center gap-3 bg-surface-container-high rounded-full px-2 py-1">
-                        <button onClick={() => adjustQty('premiumQty', -1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
+                        <button type="button" id="remove-premium" onClick={() => adjustQty('premiumQty', -1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
                           <span className="material-symbols-outlined text-[14px]">remove</span>
                         </button>
                         <span className="text-sm font-bold">{formData.premiumQty}</span>
-                        <button onClick={() => adjustQty('premiumQty', 1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
+                        <button type="button" id="add-premium" onClick={() => adjustQty('premiumQty', 1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
                           <span className="material-symbols-outlined text-[14px]">add</span>
                         </button>
                       </div>
@@ -446,11 +522,11 @@ const CreateBusRequest = ({ onBack }) => {
                     <div className="flex items-center justify-between pt-3 border-t border-surface-variant/30">
                       <p className="text-sm font-extrabold text-primary">₩550,000</p>
                       <div className="flex items-center gap-3 bg-surface-container-high rounded-full px-2 py-1">
-                        <button onClick={() => adjustQty('miniBusQty', -1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
+                        <button type="button" id="remove-mini" onClick={() => adjustQty('miniBusQty', -1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
                           <span className="material-symbols-outlined text-[14px]">remove</span>
                         </button>
                         <span className="text-sm font-bold">{formData.miniBusQty}</span>
-                        <button onClick={() => adjustQty('miniBusQty', 1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
+                        <button type="button" id="add-mini" onClick={() => adjustQty('miniBusQty', 1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
                           <span className="material-symbols-outlined text-[14px]">add</span>
                         </button>
                       </div>
@@ -476,11 +552,11 @@ const CreateBusRequest = ({ onBack }) => {
                     <div className="flex items-center justify-between pt-3 border-t border-surface-variant/30">
                       <p className="text-sm font-extrabold text-primary">₩650,000</p>
                       <div className="flex items-center gap-3 bg-surface-container-high rounded-full px-2 py-1">
-                        <button onClick={() => adjustQty('standardQty', -1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
+                        <button type="button" id="remove-standard" onClick={() => adjustQty('standardQty', -1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
                           <span className="material-symbols-outlined text-[14px]">remove</span>
                         </button>
                         <span className="text-sm font-bold">{formData.standardQty}</span>
-                        <button onClick={() => adjustQty('standardQty', 1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
+                        <button type="button" id="add-standard" onClick={() => adjustQty('standardQty', 1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
                           <span className="material-symbols-outlined text-[14px]">add</span>
                         </button>
                       </div>
@@ -506,11 +582,11 @@ const CreateBusRequest = ({ onBack }) => {
                     <div className="flex items-center justify-between pt-3 border-t border-surface-variant/30">
                       <p className="text-sm font-extrabold text-primary">₩450,000</p>
                       <div className="flex items-center gap-3 bg-surface-container-high rounded-full px-2 py-1">
-                        <button onClick={() => adjustQty('largeVanQty', -1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
+                        <button type="button" id="remove-van" onClick={() => adjustQty('largeVanQty', -1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
                           <span className="material-symbols-outlined text-[14px]">remove</span>
                         </button>
                         <span className="text-sm font-bold">{formData.largeVanQty}</span>
-                        <button onClick={() => adjustQty('largeVanQty', 1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
+                        <button type="button" id="add-van" onClick={() => adjustQty('largeVanQty', 1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
                           <span className="material-symbols-outlined text-[14px]">add</span>
                         </button>
                       </div>
@@ -559,10 +635,23 @@ const CreateBusRequest = ({ onBack }) => {
                       <span className="text-xs text-outline italic">부가세 포함</span>
                     </div>
                     <button 
+                      type="button"
+                      id="submit-request-btn"
                       onClick={handleSubmit}
-                      className="w-full py-5 rounded-full bg-gradient-to-br from-primary to-primary-container text-white font-bold text-lg hover:shadow-2xl hover:scale-[1.02] transition-all active:scale-95 shadow-lg shadow-primary/20"
+                      disabled={isSubmitting}
+                      className={`w-full py-5 rounded-full bg-gradient-to-br from-primary to-primary-container text-white font-bold text-lg hover:shadow-2xl hover:scale-[1.02] transition-all active:scale-95 shadow-lg shadow-primary/20 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
                     >
-                      견적 요청하기
+                      {isSubmitting ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          제출 중...
+                        </span>
+                      ) : (
+                        '견적 요청하기'
+                      )}
                     </button>
                     <p className="text-center text-[10px] text-outline mt-4 font-medium leading-relaxed">
                       클릭 시 이용 약관 및 컨시어지 서비스 정책에 동의하는 것으로 간주됩니다.

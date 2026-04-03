@@ -4,6 +4,7 @@ import DriverProfileModal from './components/DriverProfileModal';
 import SignupPage from './components/SignupPage';
 import AccountSettings from './components/AccountSettings';
 import CreateBusRequest from './components/CreateBusRequest/CreateBusRequest';
+import ReservationList from './components/ReservationList/ReservationList';
 import CustomerDashboard from './components/CustomerDashboard';
 import Login from './components/Login/Login';
 import PartnerDashboard from './components/PartnerDashboard/PartnerDashboard';
@@ -14,28 +15,10 @@ import QuotationRequests from './components/QuotationRequests/QuotationRequests'
 import busLogo from './assets/images/bustaams_bus_logo.png';
 import nameLogo from './assets/images/bustaams_name_logo.png';
 
-import { initializeApp } from 'firebase/app';
-import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
+import { phoneAuth, RecaptchaVerifier, signInWithPhoneNumber } from './firebasePhoneVerify';
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
-};
-
-try {
-  const app = initializeApp(firebaseConfig);
-  window.auth = getAuth(app);
-  // 테스트 환경(localhost)에서 그림 맞추기(reCAPTCHA) 로직 강제 패스
-  window.auth.settings.appVerificationDisabledForTesting = true;
-  window.firebaseAuth = { RecaptchaVerifier, signInWithPhoneNumber };
-} catch (e) {
-  console.error("Firebase Auth Init Failed", e);
-}
+window.auth = phoneAuth;
+window.firebaseAuth = { RecaptchaVerifier, signInWithPhoneNumber };
 
 function Header({
   setShowLoginModal,
@@ -807,9 +790,18 @@ function App() {
   const [showBusInfoModal, setShowBusInfoModal] = useState(false);
   const [showQuotationModal, setShowQuotationModal] = useState(false);
   const [driverView, setDriverView] = useState('dashboard'); // 'dashboard' | 'profileSetup'
-  const [customerView, setCustomerView] = useState('dashboard'); // 'dashboard' | 'createRequest'
+  const [customerView, setCustomerView] = React.useState('dashboard');
+
+  // Load user from localStorage on mount
+  useEffect(() => {
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
+  }, []);
 
   const handleLogout = () => {
+    localStorage.removeItem('user');
     setUser(null);
     setCustomerView('dashboard');
     setDriverView('dashboard');
@@ -854,12 +846,19 @@ function App() {
           user ? (
             user.userType === 'CONSUMER' || user.userType === 'TRAVELER' || user.userType === 'CUSTOMER' ? (
               customerView === 'createRequest' ? (
-                <CreateBusRequest onBack={() => setCustomerView('dashboard')} />
+                <CreateBusRequest 
+                  user={user} 
+                  onBack={() => setCustomerView('dashboard')} 
+                  onSuccess={() => setCustomerView('reservationList')}
+                />
+              ) : customerView === 'reservationList' ? (
+                <ReservationList user={user} onBack={() => setCustomerView('dashboard')} />
               ) : (
                 <CustomerDashboard 
                   user={user} 
                   setShowAccountSettings={setShowAccountSettings} 
                   onBusRegister={() => setCustomerView('createRequest')}
+                  onViewReservationList={() => setCustomerView('reservationList')}
                 />
               )
             ) : user.userType === 'DRIVER' ? (
@@ -900,6 +899,7 @@ function App() {
             <Login 
               onToggle={() => setShowLoginModal(false)} 
               onLoginSuccess={(userData) => {
+                localStorage.setItem('user', JSON.stringify(userData));
                 setUser(userData);
                 setShowLoginModal(false);
               }}

@@ -1,6 +1,52 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
-const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister }) => {
+const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onViewReservationList }) => {
+  const [recentRequests, setRecentRequests] = useState([]);
+
+  useEffect(() => {
+    if (user && user.userUuid) {
+      fetch(`http://localhost:8080/api/auction/user/${user.userUuid}`)
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            setRecentRequests(data);
+          } else if (data && !data.error && !data.message) {
+            setRecentRequests([data]);
+          }
+        })
+        .catch(err => console.error('Error fetching recent request:', err));
+    }
+  }, [user]);
+
+  // 날짜 포맷 함수
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    } catch (e) {
+      return dateStr;
+    }
+  };
+  
+  // 차량 정보 문자열 생성
+  const getVehicleDisplay = (req) => {
+    if (!req) return '45인승 대형 · 1대';
+    
+    // api/auction/user/ 로 받아오는 경우 BUS_TYPE_CD, REQ_BUS_CNT 가 바로 존재할 수 있습니다.
+    if (req.BUS_TYPE_CD) {
+       return `${req.PASSENGER_CNT}명 (${req.BUS_TYPE_CD} ${req.REQ_BUS_CNT || 1}대)`;
+    }
+
+    if (!req.vehicles || req.vehicles.length === 0) return `${req.PASSENGER_CNT || 0}명`;
+    
+    const vehicleStr = req.vehicles
+      .map(v => `${v.BUS_TYPE_CD} ${v.REQ_BUS_CNT}대`)
+      .join(', ');
+    
+    return `${req.PASSENGER_CNT}명 (${vehicleStr})`;
+  };
+
   return (
     <div className="bg-surface min-h-screen font-body text-on-surface">
       {/* 
@@ -10,41 +56,56 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister }) => {
       */}
       
       <main className="max-w-[1440px] mx-auto px-8 py-12">
-        {/* Hero Section: Active Request */}
-        <section className="mb-16">
-          <div className="hero-gradient rounded-3xl p-12 text-white flex flex-col md:flex-row items-center justify-between relative overflow-hidden tonal-stacking">
-            <div className="relative z-10 max-w-2xl">
-              <div className="flex items-center space-x-3 mb-6">
-                <span className="bg-secondary px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase">실시간 상태</span>
-                <h2 className="text-primary-fixed font-headline font-bold text-lg">진행 중인 견적 요청</h2>
-              </div>
-              <h1 className="text-5xl font-headline font-extrabold mb-8 leading-tight tracking-tighter">
-                서울 서초구 → 부산 해운대구<br/>
-                <span className="text-primary-fixed">대형 전세버스 패키지</span>
-              </h1>
-              <div className="grid grid-cols-2 gap-8 mb-10">
-                <div>
-                  <p className="text-primary-fixed/60 text-xs uppercase font-bold tracking-widest mb-1">출발 일시</p>
-                  <p className="text-xl font-semibold">2024년 10월 24일 09:00</p>
+        {/* Hero Section: Active Requests */}
+        <section className="mb-16 space-y-6">
+          {recentRequests.length === 0 ? (
+             <div className="hero-gradient rounded-3xl p-12 text-white flex flex-col items-center justify-center relative overflow-hidden tonal-stacking text-center">
+               <h1 className="text-3xl font-headline font-extrabold mb-4 mt-8">현재 진행 중인 요청이 없습니다.</h1>
+               <p className="text-primary-fixed mb-8">새로운 여정을 등록하고 최적의 견적을 받아보세요.</p>
+             </div>
+          ) : (
+            recentRequests.map((req, idx) => {
+              const startAddrDisplay = req.START_ADDR || '서울 서초구';
+              const endAddrDisplay = req.END_ADDR || '부산 해운대구';
+              const tripTitleDisplay = req.TRIP_TITLE || '대형 전세버스 패키지';
+              const startDtDisplay = formatDate(req.START_DT) || '2024년 10월 24일 09:00';
+              const passengerCntDisplay = getVehicleDisplay(req);
+
+              return (
+                <div key={req.REQ_UUID_STR || idx} className="hero-gradient rounded-3xl p-12 text-white flex flex-col md:flex-row items-center justify-between relative overflow-hidden tonal-stacking">
+                  <div className="relative z-10 max-w-2xl">
+                    <div className="flex items-center space-x-3 mb-6">
+                      <span className="bg-secondary px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase">
+                        {req.REQ_STAT === 'CONFIRMED' ? '예약 확정' : '진행 중인 견적 요청'}
+                      </span>
+                      <h2 className="text-primary-fixed font-headline font-bold text-lg">견적서 요약</h2>
+                    </div>
+                    <h1 className="text-5xl font-headline font-extrabold mb-8 leading-tight tracking-tighter">
+                      {startAddrDisplay} → {endAddrDisplay}<br/>
+                      <span className="text-primary-fixed">{tripTitleDisplay}</span>
+                    </h1>
+                    <div className="grid grid-cols-2 gap-8 mb-10">
+                      <div>
+                        <p className="text-primary-fixed/60 text-xs uppercase font-bold tracking-widest mb-1">출발 일시</p>
+                        <p className="text-xl font-semibold">{startDtDisplay}</p>
+                      </div>
+                      <div>
+                        <p className="text-primary-fixed/60 text-xs uppercase font-bold tracking-widest mb-1">인원 및 차량</p>
+                        <p className="text-xl font-semibold">{passengerCntDisplay}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="hidden lg:block absolute right-[-10%] bottom-[-20%] w-[600px] h-[600px] opacity-20 pointer-events-none">
+                    <img 
+                      alt="Premium Bus" 
+                      className="w-full h-full object-contain" 
+                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnB-qy8bgCj68b05tkEWLpYiY4ZwW78YbL6_ihG9UV2iKi91YT8DInWGGQPzO8hqj_oE3V7tLKiRBDwtBsvZd0IEjssiPTCBonMM8MLCDhEVK1aQRkjr7oF3QPUpb2SQ4BGc4OCC3xmZM6w9wz-9r2AVBOidU8Zqt-f9oLAlKp17FRpveMs5Pmt7QZ6vF-vhEMPIk4SjEUJQFSe4wCMRy5_3l8fE36gm_83HigLyeQTf8DRLh2vFSnxs0i8uMGZXQpU_B3bH6Rweo" 
+                    />
+                  </div>
                 </div>
-                <div>
-                  <p className="text-primary-fixed/60 text-xs uppercase font-bold tracking-widest mb-1">인원 및 수량</p>
-                  <p className="text-xl font-semibold">45인승 대형 · 1대</p>
-                </div>
-              </div>
-              <button className="accent-gradient px-8 py-4 rounded-full text-white font-bold text-sm flex items-center gap-2 hover:scale-105 transition-transform duration-300 shadow-xl">
-                견적 리스트 확인하기
-                <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
-              </button>
-            </div>
-            <div className="hidden lg:block absolute right-[-10%] bottom-[-20%] w-[600px] h-[600px] opacity-20">
-              <img 
-                alt="Premium Bus" 
-                className="w-full h-full object-contain" 
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnB-qy8bgCj68b05tkEWLpYiY4ZwW78YbL6_ihG9UV2iKi91YT8DInWGGQPzO8hqj_oE3V7tLKiRBDwtBsvZd0IEjssiPTCBonMM8MLCDhEVK1aQRkjr7oF3QPUpb2SQ4BGc4OCC3xmZM6w9wz-9r2AVBOidU8Zqt-f9oLAlKp17FRpveMs5Pmt7QZ6vF-vhEMPIk4SjEUJQFSe4wCMRy5_3l8fE36gm_83HigLyeQTf8DRLh2vFSnxs0i8uMGZXQpU_B3bH6Rweo" 
-              />
-            </div>
-          </div>
+              );
+            })
+          )}
         </section>
 
         {/* Middle Section: Service Grid */}
@@ -61,6 +122,16 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister }) => {
               </div>
               <span className="font-bold text-sm">버스 등록</span>
             </div>
+            {/* Reservation List (Moved to 2nd position) */}
+            <div 
+              onClick={onViewReservationList}
+              className="bg-surface-container-lowest p-8 rounded-2xl tonal-stacking flex flex-col items-center text-center group cursor-pointer hover:bg-primary hover:text-on-primary transition-all duration-300 no-line-rule"
+            >
+              <div className="w-14 h-14 bg-surface-container-high rounded-full flex items-center justify-center mb-6 group-hover:bg-primary-container">
+                <span className="material-symbols-outlined text-primary group-hover:text-on-primary-container">event_available</span>
+              </div>
+              <span className="font-bold text-sm">예약 목록</span>
+            </div>
             {/* Trip History */}
             <div className="bg-surface-container-lowest p-8 rounded-2xl tonal-stacking flex flex-col items-center text-center group cursor-pointer hover:bg-primary hover:text-on-primary transition-all duration-300 no-line-rule">
               <div className="w-14 h-14 bg-surface-container-high rounded-full flex items-center justify-center mb-6 group-hover:bg-primary-container">
@@ -74,13 +145,6 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister }) => {
                 <span className="material-symbols-outlined text-primary group-hover:text-on-primary-container">rate_review</span>
               </div>
               <span className="font-bold text-sm">리뷰 관리</span>
-            </div>
-            {/* Reservation List */}
-            <div className="bg-surface-container-lowest p-8 rounded-2xl tonal-stacking flex flex-col items-center text-center group cursor-pointer hover:bg-primary hover:text-on-primary transition-all duration-300 no-line-rule">
-              <div className="w-14 h-14 bg-surface-container-high rounded-full flex items-center justify-center mb-6 group-hover:bg-primary-container">
-                <span className="material-symbols-outlined text-primary group-hover:text-on-primary-container">event_available</span>
-              </div>
-              <span className="font-bold text-sm">예약 목록</span>
             </div>
             {/* 1:1 Inquiry */}
             <div className="bg-surface-container-lowest p-8 rounded-2xl tonal-stacking flex flex-col items-center text-center group cursor-pointer hover:bg-primary hover:text-on-primary transition-all duration-300 no-line-rule">
