@@ -182,11 +182,14 @@ app.get('/api/auth/check-id', async (req, res) => {
         connection = await pool.getConnection();
         await ensureTbUserTable(connection);
 
-        // [보안] 아이디(이메일)는 DB에 암호화된 상태로 저장되므로, 전체 스캔 후 복호화 비교
-        const [rows] = await connection.execute('SELECT USER_ID_ENC FROM TB_USER');
+        // [보안] 아이디(이메일)는 DB에 암호화되어 있으므로, 전체 스캔 후 복호화 비교
+        const [rows] = await connection.execute('SELECT USER_ID, USER_ID_ENC FROM TB_USER');
         const isDuplicate = rows.some((row) => {
             try {
-                return decrypt(row.USER_ID_ENC) === userId;
+                // USER_ID_ENC를 우선 확인하고, 없으면 USER_ID를 확인
+                const encryptedId = row.USER_ID_ENC || row.USER_ID;
+                if (!encryptedId) return false;
+                return decrypt(encryptedId) === userId;
             } catch (e) {
                 return false;
             }
@@ -502,7 +505,10 @@ app.post(['/api/auth/login', '/api/users/login'], async (req, res) => {
         const [rows] = await pool.execute('SELECT BIN_TO_UUID(USER_UUID) as USER_UUID_STR, TB_USER.* FROM TB_USER');
         const user = rows.find((row) => {
             try {
-                return decrypt(row.USER_ID_ENC) === userId;
+                // USER_ID_ENC를 우선 확인하고, 없으면 USER_ID를 확인 (하위 호환성)
+                const encryptedId = row.USER_ID_ENC || row.USER_ID;
+                if (!encryptedId) return false;
+                return decrypt(encryptedId) === userId;
             } catch (e) {
                 return false;
             }

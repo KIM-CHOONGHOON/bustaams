@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import DetailBusRequestModal from './DetailBusRequestModal';
 
 const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onViewReservationList }) => {
   const [recentRequests, setRecentRequests] = useState([]);
+  const [selectedRequestId, setSelectedRequestId] = useState(null);
 
   useEffect(() => {
     if (user && user.userUuid) {
@@ -73,13 +75,7 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
 
               return (
                 <div key={req.REQ_UUID_STR || idx} className="hero-gradient rounded-3xl p-12 text-white flex flex-col md:flex-row items-center justify-between relative overflow-hidden tonal-stacking">
-                  <div className="relative z-10 max-w-2xl">
-                    <div className="flex items-center space-x-3 mb-6">
-                      <span className="bg-secondary px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase">
-                        {req.REQ_STAT === 'CONFIRMED' ? '예약 확정' : '진행 중인 견적 요청'}
-                      </span>
-                      <h2 className="text-primary-fixed font-headline font-bold text-lg">견적서 요약</h2>
-                    </div>
+                  <div className="relative z-10 max-w-2xl pt-4">
                     <h1 className="text-5xl font-headline font-extrabold mb-8 leading-tight tracking-tighter">
                       {startAddrDisplay} → {endAddrDisplay}<br/>
                       <span className="text-primary-fixed">{tripTitleDisplay}</span>
@@ -95,13 +91,24 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
                       </div>
                     </div>
                   </div>
-                  <div className="hidden lg:block absolute right-[-10%] bottom-[-20%] w-[600px] h-[600px] opacity-20 pointer-events-none">
+                  <button 
+                    className={`hidden lg:block absolute right-[-10%] bottom-[-20%] w-[600px] h-[600px] transition-all duration-300 group/btn cursor-pointer ${selectedRequestId === req.REQ_UUID_STR ? 'opacity-100 z-20' : 'opacity-40 hover:opacity-80 z-10'}`}
+                    onClick={() => setSelectedRequestId(req.REQ_UUID_STR === selectedRequestId ? null : req.REQ_UUID_STR)}
+                  >
                     <img 
                       alt="Premium Bus" 
-                      className="w-full h-full object-contain" 
+                      className={`w-full h-full object-contain transition-transform duration-700 ${selectedRequestId === req.REQ_UUID_STR ? 'scale-110 drop-shadow-2xl' : 'group-hover/btn:scale-105 drop-shadow-lg'}`} 
                       src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnB-qy8bgCj68b05tkEWLpYiY4ZwW78YbL6_ihG9UV2iKi91YT8DInWGGQPzO8hqj_oE3V7tLKiRBDwtBsvZd0IEjssiPTCBonMM8MLCDhEVK1aQRkjr7oF3QPUpb2SQ4BGc4OCC3xmZM6w9wz-9r2AVBOidU8Zqt-f9oLAlKp17FRpveMs5Pmt7QZ6vF-vhEMPIk4SjEUJQFSe4wCMRy5_3l8fE36gm_83HigLyeQTf8DRLh2vFSnxs0i8uMGZXQpU_B3bH6Rweo" 
                     />
-                  </div>
+                    <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${selectedRequestId === req.REQ_UUID_STR ? 'opacity-100' : 'opacity-0 group-hover/btn:opacity-100'}`}>
+                      <span className={`font-bold px-6 py-3 rounded-full shadow-lg transition-all duration-300 flex items-center gap-2 ${selectedRequestId === req.REQ_UUID_STR ? 'bg-primary text-white scale-110' : 'bg-white text-primary transform translate-y-4 group-hover/btn:translate-y-0'}`}>
+                        <span className="material-symbols-outlined">
+                          {selectedRequestId === req.REQ_UUID_STR ? 'check_circle' : 'receipt_long'}
+                        </span>
+                        {selectedRequestId === req.REQ_UUID_STR ? '열기' : '견적서 상세'}
+                      </span>
+                    </div>
+                  </button>
                 </div>
               );
             })
@@ -235,6 +242,13 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
           </div>
         </div>
       </footer>
+
+      {selectedRequestId && (
+        <DetailBusRequestModal 
+          reqData={recentRequests.find(r => r.REQ_UUID_STR === selectedRequestId)} 
+          onClose={() => setSelectedRequestId(null)} 
+        />
+      )}
     </div>
   );
 };
