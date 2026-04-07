@@ -76,38 +76,6 @@ function SideNavBar({ driver, onLogout, activeMenu, setActiveMenu }) {
   );
 }
 
-// ─────────────── TopAppBar ───────────────
-function TopAppBar() {
-  return (
-    <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl flex justify-between items-center px-8 h-20 shadow-[0_20px_40px_-15px_rgba(0,104,95,0.08)]">
-      <div className="flex items-center gap-12">
-        <h1 className="text-2xl font-bold italic text-teal-800 tracking-tight"
-          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-        >대시보드</h1>
-        <nav className="hidden lg:flex gap-8 items-center text-sm font-semibold">
-          <a href="#" className="text-teal-700 border-b-2 border-teal-600 pb-1">대시보드</a>
-          <a href="#" className="text-slate-500 hover:text-teal-600 transition-colors">경매</a>
-          <a href="#" className="text-slate-500 hover:text-teal-600 transition-colors">운행 일정</a>
-          <a href="#" className="text-slate-500 hover:text-teal-600 transition-colors">견적 관리</a>
-        </nav>
-      </div>
-      <div className="flex items-center gap-6">
-        <div className="bg-surface-container-high rounded-full px-4 py-2 flex items-center gap-2 w-64">
-          <span className="material-symbols-outlined text-slate-400 text-sm">search</span>
-          <input className="bg-transparent border-none focus:ring-0 text-sm w-full outline-none" placeholder="검색어를 입력하세요" type="text" />
-        </div>
-        <button className="text-slate-500 hover:text-teal-600 transition-colors relative">
-          <span className="material-symbols-outlined">notifications</span>
-          <span className="absolute -top-1 -right-1 w-2 h-2 bg-secondary rounded-full"></span>
-        </button>
-        <button className="text-slate-500 hover:text-teal-600 transition-colors">
-          <span className="material-symbols-outlined">account_circle</span>
-        </button>
-      </div>
-    </header>
-  );
-}
-
 // ─────────────── EarningsSection ───────────────
 function EarningsSection({ stats }) {
   return (
@@ -151,11 +119,11 @@ function EarningsSection({ stats }) {
 
 // ─────────────── QuickMenu ───────────────
 /** 바로가기: `기사정보등록_기사 화면.md` — 「기사 정보」→ DriverProfileSetup (`driverView === 'profileSetup'`) */
-function QuickMenu({ onProfileSetup, onBusInfoSetup, onQuotationRequests }) {
+function QuickMenu({ onProfileSetup, onBusInfoSetup, onQuotationList }) {
   const menus = [
     { key: 'driverProfile', icon: 'person',                  label: '기사 정보',  accent: false },
     { key: 'busInfo',       icon: 'directions_bus',          label: '버스 정보',  accent: false },
-    { key: 'quotation',     icon: 'request_quote',           label: '견적 리스트', accent: false },
+    { key: 'quotation',     icon: 'request_quote',           label: '여행자 견적 목록', accent: false },
     { key: null,            icon: 'event_note',              label: '예정 리스트', accent: true  },
     { key: null,            icon: 'pending_actions',         label: '보류 리스트', accent: false },
     { key: null,            icon: 'task_alt',                label: '완료 리스트', accent: false },
@@ -175,7 +143,7 @@ function QuickMenu({ onProfileSetup, onBusInfoSetup, onQuotationRequests }) {
       return;
     }
     if (key === 'quotation') {
-      onQuotationRequests?.();
+      onQuotationList?.();
       return;
     }
   };
@@ -306,7 +274,7 @@ function AuctionList({ auctions }) {
 }
 
 // ─────────────── Main DriverDashboard ───────────────
-const DriverDashboard = ({ currentUser, onLogout, onProfileSetup, onBusInfoSetup, onQuotationRequests }) => {
+const DriverDashboard = ({ currentUser, onLogout, onProfileSetup, onBusInfoSetup, onQuotationList }) => {
   const [activeMenu, setActiveMenu] = useState('dashboard');
   const [stats, setStats] = useState(null);
   const [schedule, setSchedule] = useState(null);
@@ -355,16 +323,17 @@ const DriverDashboard = ({ currentUser, onLogout, onProfileSetup, onBusInfoSetup
         setActiveMenu={setActiveMenu}
       />
 
-      {/* Main area */}
       <main className="flex-1 min-h-screen relative overflow-x-hidden">
-        <TopAppBar />
-
-        <div className="pt-28 px-12 pb-12 max-w-7xl mx-auto space-y-12">
+        <div className="px-12 pb-12 pt-8 max-w-7xl mx-auto space-y-12">
           {/* Earnings */}
           <EarningsSection stats={stats} />
 
           {/* Quick Menu */}
-          <QuickMenu onProfileSetup={onProfileSetup} onBusInfoSetup={onBusInfoSetup} onQuotationRequests={onQuotationRequests} />
+          <QuickMenu
+            onProfileSetup={onProfileSetup}
+            onBusInfoSetup={onBusInfoSetup}
+            onQuotationList={onQuotationList}
+          />
 
           {/* Schedule + Auctions */}
           <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">

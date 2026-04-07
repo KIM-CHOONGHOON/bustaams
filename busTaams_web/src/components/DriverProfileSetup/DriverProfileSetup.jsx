@@ -1,7 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { phoneAuth, RecaptchaVerifier, signInWithPhoneNumber, signOut } from '../../firebasePhoneVerify';
+import CommonView from '../CommonView/CommonView';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const ALLOWED_DOC_TYPES   = [...ALLOWED_IMAGE_TYPES, 'application/pdf'];
+const ACCEPT_IMAGE = ALLOWED_IMAGE_TYPES.join(',');
+const ACCEPT_DOC   = ALLOWED_DOC_TYPES.join(',');
 
 /** 국내 휴대전화 → E.164 (+82...) */
 function toE164KR(phone) {
@@ -19,7 +25,7 @@ const STEPS = [
   { id: 3, label: '운송종사자 자격' },
 ];
 
-const DriverProfileSetup = ({ currentUser, onBack }) => {
+const DriverProfileSetup = ({ currentUser, onBack, close }) => {
   const [formData, setFormData] = useState({
     name: currentUser?.userName || currentUser?.name || '',
     rrnFront: '',
@@ -36,6 +42,7 @@ const DriverProfileSetup = ({ currentUser, onBack }) => {
   });
 
   const [profilePhoto, setProfilePhoto] = useState(null);
+  const profilePhotoBlobRef = useRef(null); // blob URL cleanup 용
   const [qualCert, setQualCert] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [phoneSmsSending, setPhoneSmsSending] = useState(false);
@@ -50,6 +57,12 @@ const DriverProfileSetup = ({ currentUser, onBack }) => {
   const [qualFieldsLocked, setQualFieldsLocked] = useState(false);
   const [hasProfilePhotoOnServer, setHasProfilePhotoOnServer] = useState(false);
   const [hasQualCertFileOnServer, setHasQualCertFileOnServer] = useState(false);
+  /** 서버에 등록된 자격증 사본 파일 UUID — CommonView 호출 시 사용 */
+  const [qualCertFileUuid, setQualCertFileUuid] = useState(null);
+  /** 버스운전 자격번호 검증 상태 — UNVERIFIED / VERIFIED / SKIPPED */
+  const [qualCertVerifyStatus, setQualCertVerifyStatus] = useState('UNVERIFIED');
+  /** 자격증 사본 문서 보기 모달 */
+  const [showQualCertViewer, setShowQualCertViewer] = useState(false);
   /** 저장 성공 안내 모달 */
   const [successModal, setSuccessModal] = useState({ open: false, message: '' });
   /** 1: 기본 인적사항(프로필사진~인적) 2: 면허 3: 운송자격+자기소개+제출 */
@@ -167,6 +180,8 @@ const DriverProfileSetup = ({ currentUser, onBack }) => {
         setProfileExistsOnServer(true);
         setHasProfilePhotoOnServer(!!data.hasProfilePhoto);
         setHasQualCertFileOnServer(!!data.hasQualCertFile);
+        setQualCertFileUuid(data.qualCertFileUuid || null);
+        setQualCertVerifyStatus(data.qualCertVerifyStatus || 'UNVERIFIED');
         setLicenseFieldsLocked(true);
         setQualFieldsLocked(true);
         setFormData((prev) => ({
@@ -183,12 +198,35 @@ const DriverProfileSetup = ({ currentUser, onBack }) => {
           qualCertNo: data.qualCertNo ?? '',
           bioText: data.bioText ?? prev.bioText,
         }));
+
+        // 기존 프로필 사진 로드 — 스트리밍 API → blob URL
+        if (data.profilePhotoUuid) {
+          try {
+            const photoRes = await fetch(
+              `${API_BASE}/api/driver/profile-photo?userUuid=${encodeURIComponent(uid)}&fileUuid=${encodeURIComponent(data.profilePhotoUuid)}`
+            );
+            if (!cancelled && photoRes.ok) {
+              const blob = await photoRes.blob();
+              if (!cancelled) {
+                const url = URL.createObjectURL(blob);
+                profilePhotoBlobRef.current = url;
+                setProfilePhoto(url);
+              }
+            }
+          } catch (_) {
+            /* 사진 로드 실패는 무시 — 기존 플레이스홀더 표시 */
+          }
+        }
       } catch (e) {
         console.error('기사 프로필 조회 실패:', e);
       }
     })();
     return () => {
       cancelled = true;
+      if (profilePhotoBlobRef.current) {
+        URL.revokeObjectURL(profilePhotoBlobRef.current);
+        profilePhotoBlobRef.current = null;
+      }
     };
   }, [currentUser]);
 
@@ -286,6 +324,23 @@ const DriverProfileSetup = ({ currentUser, onBack }) => {
     const file = e.target.files[0];
     if (!file) return;
 
+    const allowed = type === 'profile' ? ALLOWED_IMAGE_TYPES : ALLOWED_DOC_TYPES;
+    if (!allowed.includes(file.type)) {
+      const label = type === 'profile'
+        ? 'JPG, PNG, WEBP, GIF 이미지'
+        : 'JPG, PNG, WEBP, GIF 이미지 또는 PDF';
+      alert(`지원하지 않는 파일 형식입니다.\n허용 형식: ${label}`);
+      e.target.value = '';
+      return;
+    }
+
+    const MAX_MB = 10;
+    if (file.size > MAX_MB * 1024 * 1024) {
+      alert(`파일 크기가 너무 큽니다. ${MAX_MB}MB 이하 파일을 선택해 주세요.`);
+      e.target.value = '';
+      return;
+    }
+
     const reader = new FileReader();
     reader.onloadend = () => {
       if (type === 'profile') setProfilePhoto(reader.result);
@@ -339,6 +394,15 @@ const DriverProfileSetup = ({ currentUser, onBack }) => {
         setLicenseFieldsLocked(true);
         setQualFieldsLocked(true);
       }
+      // POST 응답의 최신 검증 상태로 갱신
+      if (data.qualCertVerifyStatus) {
+        setQualCertVerifyStatus(data.qualCertVerifyStatus);
+      }
+      // POST 후 새로 저장된 자격증 파일 UUID 갱신
+      if (data.qualCertFileUuid) {
+        setQualCertFileUuid(data.qualCertFileUuid);
+        setHasQualCertFileOnServer(true);
+      }
       setSuccessModal({
         open: true,
         message: wasExistingProfile
@@ -356,7 +420,25 @@ const DriverProfileSetup = ({ currentUser, onBack }) => {
   const submitPrimaryLabel = profileExistsOnServer ? '수정' : '등록';
 
   return (
-    <div className="bg-background font-body text-on-surface flex w-full flex-1 min-h-0 flex-col overflow-hidden">
+    <>
+      <div
+        className="fixed inset-0 z-[100] flex min-h-0 items-center justify-center overflow-y-auto bg-gray-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+        style={{ fontFamily: "'Manrope', 'Plus Jakarta Sans', sans-serif" }}
+      >
+        <div className="absolute inset-0" aria-hidden />
+        <div className="relative my-auto flex min-h-0 w-full max-w-6xl max-h-[95vh] flex-col overflow-hidden rounded-3xl bg-surface-lowest bg-background shadow-ambient animate-in zoom-in-95 duration-200 text-on-background">
+        <div className="bg-background font-body text-on-surface flex w-full flex-1 min-h-0 flex-col overflow-hidden">
+      {showQualCertViewer && qualCertFileUuid && (
+        <CommonView
+          close={() => setShowQualCertViewer(false)}
+          fileUuid={qualCertFileUuid}
+          userUuid={currentUser?.userUuid || currentUser?.uuid}
+          docTitle="버스운전 자격증 사본"
+          metaPath="/api/driver/qual-cert/meta"
+          streamPath="/api/driver/qual-cert/file"
+          downloadPath="/api/driver/qual-cert/download"
+        />
+      )}
       {successModal.open && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4"
@@ -387,50 +469,31 @@ const DriverProfileSetup = ({ currentUser, onBack }) => {
         </div>
       )}
       <div className="relative flex min-h-0 w-full min-w-0 flex-1 overflow-hidden">
-        {/* 왼쪽 앱 메뉴: 전역 Header(h-24) 바로 아래 고정, 세로 스크롤 시에도 뷰에 유지 */}
-        <aside
-          className="fixed left-0 top-24 z-30 hidden h-[calc(100vh-6rem)] w-72 flex-col gap-4 overflow-y-auto border-r border-outline-variant/10 bg-slate-50/50 px-6 pb-6 pt-4 md:flex"
-          aria-label="기사 앱 메뉴"
-        >
-          <div className="flex items-center gap-4 mb-6 p-2">
-            <div className="w-12 h-12 rounded-full overflow-hidden bg-surface-container-high">
-              <img 
-                src={profilePhoto || "https://lh3.googleusercontent.com/aida-public/AB6AXuDyfbTDE22uiGCRoBcu6vYjS5bte5LQ3KVhR8FWfMLFJXmCHzeCxChnorafSXiXUvkCe1tZKgjTMlXo0iTcnLWwkJ-c8t9BuPz2eZr9z5ggj7FgP_FBqnPm6ae4zi6rIKJaYpGRuYTMa0pXO1AC9k_Kxv4MFrBVFhDvet6M1lVAZzGkaN2jCVSjE7DxdI3QQ1_6FILHflppumZBH2UU7regHdHtOlFFxUP6xDXiwNfFgD_OOR-e3ISRanILs6B1YLgCxiPH3aBXj3I"} 
-                alt="프로필" 
-                className="w-full h-full object-cover" 
-              />
-            </div>
-            <div>
-              <h3 className="font-headline font-bold text-primary leading-tight">{formData.name || '프리미엄 캡틴'}</h3>
-              <p className="text-xs text-slate-500">인증 회원</p>
-            </div>
-          </div>
-          <nav className="flex flex-col gap-2">
-            <a className="flex items-center gap-3 p-3 text-slate-500 font-semibold" href="#"><span className="material-symbols-outlined">directions_bus</span>차량 관리</a>
-            <a className="flex items-center gap-3 p-3 text-slate-500 font-semibold" href="#"><span className="material-symbols-outlined">gavel</span>실시간 입찰</a>
-            <a className="flex items-center gap-3 p-3 text-slate-500 font-semibold" href="#"><span className="material-symbols-outlined">event_available</span>배차 내역</a>
-            <a className="flex items-center gap-3 p-3 text-slate-500 font-semibold" href="#"><span className="material-symbols-outlined">payments</span>정산 관리</a>
-            <a className="flex items-center gap-3 p-3 bg-white text-primary rounded-xl shadow-sm font-semibold" href="#"><span className="material-symbols-outlined">verified_user</span>인증 센터</a>
-            <a className="flex items-center gap-3 p-3 text-slate-500 font-semibold" href="#"><span className="material-symbols-outlined">settings</span>설정</a>
-          </nav>
-        </aside>
-
-        {/* Main: fixed 사이드바 폭만큼 여백(md:ml-72) */}
-        <main className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden md:ml-72">
+        {/* Main */}
+        <main className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
           {/* Firebase invisible reCAPTCHA용 컨테이너 (display:none 사용 금지) */}
           <div id="driver-phone-recaptcha" aria-hidden="true" />
-          <header className="flex-shrink-0 z-20 px-4 md:px-8 lg:px-10 pt-4 pb-4 border-b border-outline-variant/10 bg-background">
-            <h2 className="text-3xl md:text-4xl font-headline font-extrabold text-primary tracking-tight mb-2">
-              운전 기사 기본 정보
-            </h2>
-            <p className="text-on-surface-variant font-medium">
-              busTaams의 프리미엄 캡틴이 되기 위한 필수 정보를 입력해주세요.
-            </p>
-            {profileExistsOnServer && (
-              <p className="mt-2 text-sm font-medium text-primary">
-                저장된 기사 정보를 불러왔습니다. 운전면허·운송종사자 자격은 「수정」을 눌러 변경할 수 있습니다.
+          <header className="flex shrink-0 items-start justify-between border-b border-outline-variant/10 bg-background px-4 md:px-8 lg:px-10 pt-4 pb-4">
+            <div>
+              <h2 className="text-3xl md:text-4xl font-headline font-extrabold text-primary tracking-tight mb-2">
+                운전 기사 기본 정보
+              </h2>
+              <p className="text-on-surface-variant font-medium">
+                busTaams의 프리미엄 캡틴이 되기 위한 필수 정보를 입력해주세요.
               </p>
-            )}
+              {profileExistsOnServer && (
+                <p className="mt-2 text-sm font-medium text-primary">
+                  저장된 기사 정보를 불러왔습니다. 운전면허·운송종사자 자격은 「수정」을 눌러 변경할 수 있습니다.
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={close || onBack}
+              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-low transition-colors duration-200 text-gray-500 shrink-0 ml-4"
+            >
+              <span className="material-symbols-outlined">close</span>
+            </button>
           </header>
 
           <div className="flex min-h-0 flex-1 flex-col items-stretch gap-6 overflow-hidden px-4 pb-4 pt-4 md:px-8 lg:flex-row lg:gap-8 lg:px-10">
@@ -530,7 +593,7 @@ const DriverProfileSetup = ({ currentUser, onBack }) => {
                       type="file" 
                       ref={fileInputRef} 
                       className="hidden" 
-                      accept="image/*" 
+                      accept={ACCEPT_IMAGE} 
                       onChange={(e) => handleFileChange(e, 'profile')} 
                     />
                     <button 
@@ -791,38 +854,91 @@ const DriverProfileSetup = ({ currentUser, onBack }) => {
                     </div>
                     <div className="flex flex-col gap-4">
                       <p className="text-sm font-bold text-on-surface-variant">자격증 사본 업로드</p>
+
+                      {/* 자격번호 검증 상태 — 정보성 배지 (업로드 차단 목적이 아님) */}
+                      {profileExistsOnServer && (
+                        qualCertVerifyStatus === 'VERIFIED'
+                          ? (
+                            <p className="text-xs font-semibold text-teal-700 flex items-center gap-1">
+                              <span className="material-symbols-outlined text-sm">verified</span>
+                              자격번호 검증 완료
+                            </p>
+                          ) : qualCertVerifyStatus === 'SKIPPED'
+                          ? (
+                            <p className="text-xs font-semibold text-teal-700 flex items-center gap-1">
+                              <span className="material-symbols-outlined text-sm">verified</span>
+                              자격 API 비활성(개발 환경)
+                            </p>
+                          ) : (
+                            <p className="text-xs font-semibold text-amber-600 flex items-center gap-1">
+                              <span className="material-symbols-outlined text-sm">info</span>
+                              자격번호 검증 전입니다. 정보 저장 시 검증이 진행됩니다.
+                            </p>
+                          )
+                      )}
+
                       {hasQualCertFileOnServer && !qualCert && (
                         <p className="text-xs font-semibold text-primary">이미 서버에 등록된 자격증 파일이 있습니다. 새로 선택하면 교체됩니다.</p>
+                      )}
+                      {profileExistsOnServer && qualFieldsLocked && (
+                        <p className="text-xs font-semibold text-amber-600 flex items-center gap-1">
+                          <span className="material-symbols-outlined text-sm">lock</span>
+                          자격증 파일을 교체하려면 위 「수정」 버튼을 먼저 클릭하세요.
+                        </p>
                       )}
                       <input 
                         type="file" 
                         ref={certInputRef} 
                         className="hidden" 
-                        accept="image/*,application/pdf" 
+                        accept={ACCEPT_DOC} 
                         onChange={(e) => handleFileChange(e, 'cert')} 
                       />
-                      <div 
-                        onClick={() => {
-                          if (profileExistsOnServer && qualFieldsLocked) return;
-                          certInputRef.current?.click();
-                        }}
-                        className={`w-full h-40 border-2 border-dashed border-outline-variant rounded-2xl flex flex-col items-center justify-center gap-2 transition-colors group ${
-                          profileExistsOnServer && qualFieldsLocked
-                            ? 'cursor-not-allowed bg-slate-50/80 opacity-70'
-                            : 'cursor-pointer hover:bg-slate-50'
-                        }`}
-                      >
-                        {qualCert ? (
-                          <div className="flex items-center gap-2 text-primary font-bold">
-                            <span className="material-symbols-outlined">description</span>
-                            <span>파일이 선택되었습니다</span>
+                      {/* 신규 등록 또는 수정 모드(잠금 해제)일 때만 업로드 가능 */}
+                      {(() => {
+                        const disabled = profileExistsOnServer && qualFieldsLocked;
+                        return (
+                          <div 
+                            onClick={() => {
+                              if (disabled) return;
+                              certInputRef.current?.click();
+                            }}
+                            className={`w-full h-40 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-2 transition-colors group ${
+                              disabled
+                                ? 'cursor-not-allowed bg-slate-50/80 opacity-60 border-outline-variant'
+                                : 'cursor-pointer hover:bg-slate-50 border-outline-variant'
+                            }`}
+                          >
+                            {qualCert ? (
+                              <div className="flex items-center gap-2 text-primary font-bold">
+                                <span className="material-symbols-outlined">description</span>
+                                <span>파일이 선택되었습니다</span>
+                              </div>
+                            ) : (
+                              <>
+                                <span className={`material-symbols-outlined text-3xl transition-colors ${disabled ? 'text-outline/40' : 'text-outline group-hover:text-primary'}`}>cloud_upload</span>
+                                <span className="text-sm text-outline-variant font-medium">JPG, PNG, PDF (최대 10MB)</span>
+                              </>
+                            )}
                           </div>
-                        ) : (
-                          <>
-                            <span className="material-symbols-outlined text-3xl text-outline group-hover:text-primary transition-colors">cloud_upload</span>
-                            <span className="text-sm text-outline-variant font-medium">JPG, PNG, PDF (최대 5MB)</span>
-                          </>
-                        )}
+                        );
+                      })()}
+
+                      {/* 문서 보기 버튼 — 서버에 등록된 파일이 있을 때만 활성화 */}
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          disabled={!hasQualCertFileOnServer}
+                          title={hasQualCertFileOnServer ? '자격증 사본 문서 보기' : '서버에 등록된 파일이 없습니다'}
+                          className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold transition-all ${
+                            hasQualCertFileOnServer
+                              ? 'bg-secondary text-white hover:bg-secondary/90 active:scale-95 shadow-sm'
+                              : 'bg-slate-100 text-slate-400 cursor-not-allowed opacity-60'
+                          }`}
+                          onClick={() => setShowQualCertViewer(true)}
+                        >
+                          <span className="material-symbols-outlined text-base">visibility</span>
+                          문서 보기
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -862,7 +978,10 @@ const DriverProfileSetup = ({ currentUser, onBack }) => {
           </div>
         </main>
       </div>
-    </div>
+        </div>
+        </div>
+      </div>
+    </>
   );
 };
 

@@ -11,7 +11,7 @@ import PartnerDashboard from './components/PartnerDashboard/PartnerDashboard';
 import DriverDashboard from './components/DriverDashboard/DriverDashboard';
 import DriverProfileSetup from './components/DriverProfileSetup/DriverProfileSetup';
 import BusInformationSetup from './components/BusInformationSetup/BusInformationSetup';
-import QuotationRequests from './components/QuotationRequests/QuotationRequests';
+import ListOfTravelerQuotations from './components/ListOfTravelerQuotations/ListOfTravelerQuotations';
 import busLogo from './assets/images/bustaams_bus_logo.png';
 import nameLogo from './assets/images/bustaams_name_logo.png';
 
@@ -788,8 +788,9 @@ function App() {
   const [user, setUser] = useState(null);
 
   const [showBusInfoModal, setShowBusInfoModal] = useState(false);
+  const [showProfileSetupModal, setShowProfileSetupModal] = useState(false);
   const [showQuotationModal, setShowQuotationModal] = useState(false);
-  const [driverView, setDriverView] = useState('dashboard'); // 'dashboard' | 'profileSetup'
+  const [driverView, setDriverView] = useState('dashboard');
   const [customerView, setCustomerView] = React.useState('dashboard');
 
   // Load user from localStorage on mount
@@ -813,7 +814,7 @@ function App() {
     setShowDriverProfileModal(false);
     setShowAccountSettings(false);
     setShowBusInfoModal(false);
-    setShowQuotationModal(false);
+    setShowProfileSetupModal(false);
     setCurrentView('home');
     if (user?.userType === 'DRIVER') {
       setDriverView('dashboard');
@@ -821,17 +822,8 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const driverProfileSetupLocked =
-    currentView === 'home' && user?.userType === 'DRIVER' && driverView === 'profileSetup';
-
   return (
-    <div
-      className={`flex flex-col font-body selection:bg-primary/20 selection:text-primary ${
-        driverProfileSetupLocked
-          ? 'h-screen max-h-screen min-h-0 flex-1 overflow-hidden'
-          : 'min-h-screen'
-      }`}
-    >
+    <div className="flex flex-col min-h-screen font-body selection:bg-primary/20 selection:text-primary">
       <Header 
         setShowLoginModal={setShowLoginModal} 
         setShowDriverProfileModal={setShowDriverProfileModal} 
@@ -862,22 +854,13 @@ function App() {
                 />
               )
             ) : user.userType === 'DRIVER' ? (
-               driverView === 'profileSetup' ? (
-                 <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                   <DriverProfileSetup 
-                     currentUser={user} 
-                     onBack={() => setDriverView('dashboard')} 
-                   />
-                 </div>
-               ) : (
-                 <DriverDashboard 
-                   currentUser={user} 
-                   onLogout={handleLogout} 
-                   onProfileSetup={() => setDriverView('profileSetup')}
-                   onBusInfoSetup={() => setShowBusInfoModal(true)}
-                   onQuotationRequests={() => setShowQuotationModal(true)}
-                 />
-               )
+                <DriverDashboard 
+                  currentUser={user} 
+                  onLogout={handleLogout} 
+                  onProfileSetup={() => setShowProfileSetupModal(true)}
+                  onBusInfoSetup={() => setShowBusInfoModal(true)}
+                  onQuotationList={() => setShowQuotationModal(true)}
+                />
             ) : null
           ) : (
             <>
@@ -924,7 +907,8 @@ function App() {
       )}
       {showSignUpModal && <SignUpModal close={() => setShowSignUpModal(false)} />}
       {showBusInfoModal && <BusInformationSetup close={() => setShowBusInfoModal(false)} currentUser={user} />}
-      {showQuotationModal && <QuotationRequests close={() => setShowQuotationModal(false)} currentUser={user} />}
+      {showProfileSetupModal && <DriverProfileSetup close={() => setShowProfileSetupModal(false)} currentUser={user} />}
+      {showQuotationModal && <ListOfTravelerQuotations close={() => setShowQuotationModal(false)} currentUser={user} />}
     </div>
   );
 }

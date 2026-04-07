@@ -1,5 +1,5 @@
--- TB_DRIVER_BUS — 기사 보유 차량 (차량 정보 등록 화면)
--- ADAS: HAS_ADAS CHAR(1) Y/N (화면 「최신 ADAS」 토글과 동기화)
+-- @deprecated 운영·신규 구축은 TB_BUS_DRIVER_VEHICLE 사용 (sql/tb_bus_driver_vehicle.sql)
+-- 레거시 호환용으로만 유지. PK 명칭: BUS_UUID → 신규 테이블에서는 BUS_ID
 
 CREATE TABLE IF NOT EXISTS TB_DRIVER_BUS (
     BUS_UUID BINARY(16) NOT NULL PRIMARY KEY,
@@ -19,7 +19,4 @@ CREATE TABLE IF NOT EXISTS TB_DRIVER_BUS (
     VEHICLE_PHOTOS_JSON JSON NULL COMMENT '차량 사진 FILE_UUID 문자열 배열(최대 8)',
     REG_DT DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-COMMENT='기사 보유 차량';
-
--- Already deployed without HAS_ADAS:
--- ALTER TABLE TB_DRIVER_BUS ADD COLUMN HAS_ADAS CHAR(1) NOT NULL DEFAULT 'N' COMMENT 'ADAS 장착 여부 Y/N' AFTER AMENITIES;
+COMMENT='[레거시] 기사 보유 차량 — 마이그레이션 대상 TB_BUS_DRIVER_VEHICLE';
