@@ -34,16 +34,31 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
   // 차량 정보 문자열 생성
   const getVehicleDisplay = (req) => {
     if (!req) return '45인승 대형 · 1대';
+
+    const getVehicleLabel = (type) => {
+      if (!type) return '';
+      const map = {
+        'STANDARD_28': '일반 고속 (45인승)', // 기존 데이터 매핑 오류 대응
+        'STANDARD_45': '일반 고속 (45인승)',
+        'PREMIUM_45': '우등 고속 (28인승)',  // 기존 데이터 매핑 오류 대응
+        'PREMIUM_28': '우등 고속 (28인승)',
+        'GOLD_21': '프리미엄 골드 (21인승)',
+        'VVIP_16': 'V-VIP (16인승)',
+        'MINI_25': '중형/미니 (25인승)',
+        'VAN_11': '대형 밴 (11인승)'
+      };
+      return map[type] || type;
+    };
     
     // api/auction/user/ 로 받아오는 경우 BUS_TYPE_CD, REQ_BUS_CNT 가 바로 존재할 수 있습니다.
     if (req.BUS_TYPE_CD) {
-       return `${req.PASSENGER_CNT}명 (${req.BUS_TYPE_CD} ${req.REQ_BUS_CNT || 1}대)`;
+       return `${req.PASSENGER_CNT}명 (${getVehicleLabel(req.BUS_TYPE_CD)} ${req.REQ_BUS_CNT || 1}대)`;
     }
 
     if (!req.vehicles || req.vehicles.length === 0) return `${req.PASSENGER_CNT || 0}명`;
     
     const vehicleStr = req.vehicles
-      .map(v => `${v.BUS_TYPE_CD} ${v.REQ_BUS_CNT}대`)
+      .map(v => `${getVehicleLabel(v.BUS_TYPE_CD)} ${v.REQ_BUS_CNT}대`)
       .join(', ');
     
     return `${req.PASSENGER_CNT}명 (${vehicleStr})`;

@@ -791,12 +791,16 @@ app.post(['/api/auth/login', '/api/users/login'], async (req, res) => {
         let decryptedPhoneNo = '';
         try { decryptedPhoneNo = user.HP_NO ? decrypt(user.HP_NO) : ''; } catch(e) { decryptedPhoneNo = user.HP_NO; }
 
+        let decryptedUserEmail = '';
+        try { decryptedUserEmail = user.USER_EMAIL_ENC ? decrypt(user.USER_EMAIL_ENC) : ''; } catch(e) { decryptedUserEmail = user.USER_EMAIL_ENC || ''; }
+
         res.status(200).json({
             message: '로그인 성공',
             user: {
                 userId: userId,
                 userUuid: user.USER_UUID_STR || '',
-                email: userId,
+                email: decryptedUserEmail || userId, // 이메일 없으면 아이디로 대체
+                userEmail: decryptedUserEmail,
                 userName: decryptedUserName,
                 phoneNo: decryptedPhoneNo,
                 phoneNumber: decryptedPhoneNo,
@@ -807,6 +811,107 @@ app.post(['/api/auth/login', '/api/users/login'], async (req, res) => {
     } catch (error) {
         console.error('로그인 에러:', error ? error.stack : 'Unknown error');
         res.status(500).json({ error: '로그인 중 서버 오류가 발생했습니다.', details: error ? error.toString() : 'Unknown error' });
+    }
+});
+
+// 사용자 통합 정보 수정 API (이메일, 휴대폰, 비밀번호)
+app.put('/api/user/profile', async (req, res) => {
+    try {
+        const { userUuid, email, phoneNo, currentPassword, newPassword } = req.body;
+        console.log(`[DEBUG] Update Profile Request: UUID=${userUuid}, Email=${email}`);
+
+        if (!userUuid || !currentPassword) {
+            return res.status(400).json({ error: '필수 정보(UUID, 현재 비밀번호)가 누락되었습니다.' });
+        }
+
+        // 1. 현재 비밀번호 확인 (본인 확인 필수)
+        // BIN_TO_UUID를 사용하여 문자열 기반으로 정확히 매칭합니다.
+        const [userRows] = await pool.execute('SELECT PASSWORD FROM TB_USER WHERE BIN_TO_UUID(USER_UUID) = ?', [userUuid]);
+        
+        if (userRows.length === 0) {
+            console.error(`[DEBUG] User not found for UUID: ${userUuid}`);
+            return res.status(404).json({ error: '사용자를 찾을 수 없습니다. (UUID 불일치)' });
+        }
+
+        const user = userRows[0];
+        const isMatch = await bcrypt.compare(currentPassword, user.PASSWORD);
+        console.log(`[DEBUG] Password Match Result: ${isMatch}`);
+
+        if (!isMatch) {
+            return res.status(401).json({ error: '현재 비밀번호가 일치하지 않습니다. 다시 확인해주세요.' });
+        }
+
+        // 2. 기본 정보(이메일, 휴대폰) 업데이트 준비
+        const encryptedEmail = encrypt(email);
+        const encryptedPhone = encrypt(phoneNo);
+        let query = 'UPDATE TB_USER SET USER_ID = ?, HP_NO = ?';
+        let queryParams = [encryptedEmail, encryptedPhone];
+
+        // 3. 새 비밀번호가 제공된 경우 해싱 후 업데이트
+        if (newPassword && newPassword.trim() !== '') {
+            console.log('[DEBUG] Hashing new password for update...');
+            const hashedPassword = await bcrypt.hash(newPassword, 10);
+            query += ', PASSWORD = ?';
+            queryParams.push(hashedPassword);
+        }
+
+        // WHERE 조건도 BIN_TO_UUID 기반의 문자열 비교로 안정성 확보
+        query += ' WHERE BIN_TO_UUID(USER_UUID) = ?';
+        queryParams.push(userUuid);
+
+        const [result] = await pool.execute(query, queryParams);
+        console.log(`[DEBUG] Update result: affectedRows=${result.affectedRows}`);
+
+        if (result.affectedRows === 0) {
+            console.error('[DEBUG] Update failed: No rows affected.');
+            return res.status(500).json({ error: '데이터를 저장하는 데 실패했습니다. 다시 시도해주세요.' });
+        }
+
+        res.status(200).json({ 
+            message: newPassword ? '회원 정보와 비밀번호가 모두 성공적으로 변경되었습니다.' : '회원 정보가 성공적으로 업데이트되었습니다.' 
+        });
+    } catch (error) {
+        console.error('[DEBUG] Update Profile Error:', error);
+        res.status(500).json({ error: '정보 업데이트 중 서버 오류가 발생했습니다.' });
+    }
+});
+
+// 비밀번호 변경 API
+app.put('/api/user/password', async (req, res) => {
+    try {
+        const { userUuid, currentPassword, newPassword, confirmPassword } = req.body;
+        if (!userUuid || !currentPassword || !newPassword) {
+            return res.status(400).json({ error: '필수 비밀번호 정보가 누락되었습니다.' });
+        }
+
+        // 1. 현재 사용자 조회 (현재 비밀번호 가져오기)
+        const [rows] = await pool.execute('SELECT PASSWORD FROM TB_USER WHERE USER_UUID = UUID_TO_BIN(?)', [userUuid]);
+        if (rows.length === 0) {
+            return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+        }
+
+        const user = rows[0];
+
+        // 2. 현재 비밀번호 검증 (최우선 순위)
+        const isMatch = await bcrypt.compare(currentPassword, user.PASSWORD);
+        if (!isMatch) {
+            return res.status(401).json({ error: '현재 비밀번호가 정확하지 않습니다.' });
+        }
+
+        // 3. 새 비밀번호 일치 여부 (현재 비밀번호가 맞을 경우에만 체크)
+        if (newPassword !== confirmPassword) {
+            return res.status(400).json({ error: '새 비밀번호와 확인 비밀번호가 서로 일치하지 않습니다.' });
+        }
+
+        // 3. 새 비밀번호 해싱 및 업데이트
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        const updateQuery = 'UPDATE TB_USER SET PASSWORD = ? WHERE USER_UUID = UUID_TO_BIN(?)';
+        await pool.execute(updateQuery, [hashedPassword, userUuid]);
+
+        res.status(200).json({ message: '비밀번호가 성공적으로 변경되었습니다.' });
+    } catch (error) {
+        console.error('Update Password Error:', error);
+        res.status(500).json({ error: '비밀번호 변경 중 서버 오류가 발생했습니다.' });
     }
 });
 
@@ -1171,7 +1276,7 @@ app.get('/api/auction/recent/:userUuid', async (req, res) => {
 
         const recent = rows[0];
 
-        // 차량 정보도 가져오기
+        // 차량 정보 가져오기
         const busQuery = `
             SELECT BUS_TYPE_CD, REQ_BUS_CNT 
             FROM TB_AUCTION_REQ_BUS 
@@ -1179,6 +1284,16 @@ app.get('/api/auction/recent/:userUuid', async (req, res) => {
         `;
         const [buses] = await pool.execute(busQuery, [recent.REQ_UUID_STR]);
         recent.vehicles = buses;
+
+        // 경유지 정보 가져오기
+        const viaQuery = `
+            SELECT VIA_ADDR as address, VIA_ORD 
+            FROM TB_AUCTION_REQ_VIA 
+            WHERE REQ_UUID = UUID_TO_BIN(?) 
+            ORDER BY VIA_ORD ASC
+        `;
+        const [vias] = await pool.execute(viaQuery, [recent.REQ_UUID_STR]);
+        recent.waypoints = vias;
 
         res.status(200).json(recent);
 
@@ -1209,6 +1324,19 @@ app.get('/api/auction/user/:userUuid', async (req, res) => {
         `;
         
         const [rows] = await pool.execute(query, [userUuid]);
+        
+        // 각 예약 건의 경유지 정보 추가
+        for (let row of rows) {
+            const viaQuery = `
+                SELECT VIA_ADDR as address, VIA_ORD 
+                FROM TB_AUCTION_REQ_VIA 
+                WHERE REQ_UUID = UUID_TO_BIN(?) 
+                ORDER BY VIA_ORD ASC
+            `;
+            const [vias] = await pool.execute(viaQuery, [row.REQ_UUID_STR]);
+            row.waypoints = vias;
+        }
+
         res.status(200).json(rows);
 
     } catch (error) {

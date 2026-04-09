@@ -42,6 +42,21 @@ const ReservationList = ({ user, onBack }) => {
     }
   };
 
+  const getVehicleLabel = (type) => {
+    if (!type) return '';
+    const map = {
+      'STANDARD_28': '일반 고속 (45인승)', // 기존 데이터 매핑 오류 대응
+      'STANDARD_45': '일반 고속 (45인승)',
+      'PREMIUM_45': '우등 고속 (28인승)',  // 기존 데이터 매핑 오류 대응
+      'PREMIUM_28': '우등 고속 (28인승)',
+      'GOLD_21': '프리미엄 골드 (21인승)',
+      'VVIP_16': 'V-VIP (16인승)',
+      'MINI_25': '중형/미니 (25인승)',
+      'VAN_11': '대형 밴 (11인승)'
+    };
+    return map[type] || type;
+  };
+
   console.log('ReservationList rendered, reservations:', reservations);
   return (
     <div className="flex bg-background font-body text-on-surface min-h-[calc(100vh-96px)]">
@@ -111,7 +126,8 @@ const ReservationList = ({ user, onBack }) => {
             <div className="grid grid-cols-1 gap-12">
               {reservations.map((item, idx) => {
                 const statusInfo = getStatusLabel(item.REQ_STAT);
-                const vehicleStr = item.BUS_TYPE_CD ? `${item.BUS_TYPE_CD} ${item.REQ_BUS_CNT || 1}대` : `${item.PASSENGER_CNT}명`;
+                const vehicleLabel = getVehicleLabel(item.BUS_TYPE_CD);
+                const vehicleStr = item.BUS_TYPE_CD ? `${vehicleLabel} ${item.REQ_BUS_CNT || 1}대` : `${item.PASSENGER_CNT}명`;
                 const dateStr = formatDate(item.START_DT);
                 const imageSrc = idx % 2 === 0 
                   ? "https://lh3.googleusercontent.com/aida-public/AB6AXuBg9J8iJdgo8HEhMiaVDvFzsYgyrdwtu7TSwoAIHqz2XQ-Vq9iGUvcL_rPwFT5qW86-wIU2ySC3AuSDyuYYD_5FVRyhuMP5Ey3U5qs5CZtZ-QCHstmbXFzb-Hgw0ow2vZ5zINObREN5oYY1Bn9oDECyHaRPDHmT8oXXVnWz426pyihThXiiL8kejXMgdmQK5geAh3WA7A3pBE5Xd-0-gZ88xi9bfvTGmgARcl1HwiOWYpON4-d9QHEr5ur7Nc7sKgCECTF8DbHOfIY"
@@ -156,7 +172,7 @@ const ReservationList = ({ user, onBack }) => {
                           </div>
                           <div>
                             <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-1">희망/최대 금액</p>
-                            <p className="font-bold text-on-surface text-primary">₩{item.REQ_AMT ? item.REQ_AMT.toLocaleString() : '입찰 진행중'}</p>
+                            <p className="font-bold text-on-surface text-primary">{item.REQ_AMT ? Number(item.REQ_AMT).toLocaleString() + '원' : '입찰 진행중'}</p>
                           </div>
                         </div>
                       </div>

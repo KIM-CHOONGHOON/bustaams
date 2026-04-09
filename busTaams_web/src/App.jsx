@@ -903,6 +903,7 @@ function App() {
           user={user} 
           onBack={() => setShowAccountSettings(false)} 
           onLogout={handleLogout}
+          onUpdateUser={(updatedUser) => setUser(updatedUser)}
         />
       )}
       {showSignUpModal && <SignUpModal close={() => setShowSignUpModal(false)} />}
