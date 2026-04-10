@@ -12,13 +12,29 @@ import DriverDashboard from './components/DriverDashboard/DriverDashboard';
 import DriverProfileSetup from './components/DriverProfileSetup/DriverProfileSetup';
 import BusInformationSetup from './components/BusInformationSetup/BusInformationSetup';
 import ListOfTravelerQuotations from './components/ListOfTravelerQuotations/ListOfTravelerQuotations';
+import TravelerQuoteRequestDetails from './components/TravelerQuoteRequestDetails/TravelerQuoteRequestDetails';
+import LiveChatTraveler from './components/LiveChatTraveler/LiveChatTraveler';
 import busLogo from './assets/images/bustaams_bus_logo.png';
+import { registerWebFcmTokenIfPossible } from './firebaseMessagingRegister';
 import nameLogo from './assets/images/bustaams_name_logo.png';
 
 import { phoneAuth, RecaptchaVerifier, signInWithPhoneNumber } from './firebasePhoneVerify';
 
 window.auth = phoneAuth;
 window.firebaseAuth = { RecaptchaVerifier, signInWithPhoneNumber };
+
+/** 로그인 응답·localStorage 복원 시 userType·uuid 필드 정규화 (DB/클라이언트 대소문자 차이 대비) */
+function normalizeUserSession(raw) {
+  if (!raw || typeof raw !== 'object') return raw;
+  const u = { ...raw };
+  const t = u.userType ?? u.USER_TYPE;
+  if (t != null && String(t).trim() !== '') {
+    u.userType = String(t).trim().toUpperCase();
+  }
+  if (!u.uuid && u.userUuid) u.uuid = u.userUuid;
+  if (!u.userUuid && u.uuid) u.userUuid = u.uuid;
+  return u;
+}
 
 function Header({
   setShowLoginModal,
@@ -790,22 +806,38 @@ function App() {
   const [showBusInfoModal, setShowBusInfoModal] = useState(false);
   const [showProfileSetupModal, setShowProfileSetupModal] = useState(false);
   const [showQuotationModal, setShowQuotationModal] = useState(false);
+  /** 실시간 입찰 기회 카드 → 여행자 견적 요청 상세 */
+  const [travelerQuoteReqUuid, setTravelerQuoteReqUuid] = useState(null);
   const [driverView, setDriverView] = useState('dashboard');
   const [customerView, setCustomerView] = React.useState('dashboard');
+  const [showLiveChatTraveler, setShowLiveChatTraveler] = useState(false);
 
   // Load user from localStorage on mount
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
-      setUser(JSON.parse(savedUser));
+      try {
+        setUser(normalizeUserSession(JSON.parse(savedUser)));
+      } catch {
+        setUser(null);
+      }
     }
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    const uid = user.userUuid || user.uuid;
+    if (!uid) return;
+    registerWebFcmTokenIfPossible(uid).catch(() => {});
+  }, [user]);
 
   const handleLogout = () => {
     localStorage.removeItem('user');
     setUser(null);
     setCustomerView('dashboard');
     setDriverView('dashboard');
+    setTravelerQuoteReqUuid(null);
+    setShowLiveChatTraveler(false);
   };
 
   /** 로고 클릭: 비로그인 시 랜딩 상단으로, 로그인 시 역할별 대시보드(메인 화면)로 */
@@ -815,6 +847,8 @@ function App() {
     setShowAccountSettings(false);
     setShowBusInfoModal(false);
     setShowProfileSetupModal(false);
+    setTravelerQuoteReqUuid(null);
+    setShowLiveChatTraveler(false);
     setCurrentView('home');
     if (user?.userType === 'DRIVER') {
       setDriverView('dashboard');
@@ -851,15 +885,16 @@ function App() {
                   setShowAccountSettings={setShowAccountSettings} 
                   onBusRegister={() => setCustomerView('createRequest')}
                   onViewReservationList={() => setCustomerView('reservationList')}
+                  onOpenLiveChat={() => setShowLiveChatTraveler(true)}
                 />
               )
             ) : user.userType === 'DRIVER' ? (
                 <DriverDashboard 
                   currentUser={user} 
-                  onLogout={handleLogout} 
                   onProfileSetup={() => setShowProfileSetupModal(true)}
                   onBusInfoSetup={() => setShowBusInfoModal(true)}
                   onQuotationList={() => setShowQuotationModal(true)}
+                  onTravelerQuoteDetail={(reqUuid) => setTravelerQuoteReqUuid(reqUuid)}
                 />
             ) : null
           ) : (
@@ -882,9 +917,11 @@ function App() {
             <Login 
               onToggle={() => setShowLoginModal(false)} 
               onLoginSuccess={(userData) => {
-                localStorage.setItem('user', JSON.stringify(userData));
-                setUser(userData);
+                const normalized = normalizeUserSession(userData);
+                localStorage.setItem('user', JSON.stringify(normalized));
+                setUser(normalized);
                 setShowLoginModal(false);
+                setCurrentView('home');
               }}
               setCurrentView={setCurrentView}
             />
@@ -910,6 +947,18 @@ function App() {
       {showBusInfoModal && <BusInformationSetup close={() => setShowBusInfoModal(false)} currentUser={user} />}
       {showProfileSetupModal && <DriverProfileSetup close={() => setShowProfileSetupModal(false)} currentUser={user} />}
       {showQuotationModal && <ListOfTravelerQuotations close={() => setShowQuotationModal(false)} currentUser={user} />}
+      {travelerQuoteReqUuid && (
+        <TravelerQuoteRequestDetails
+          reqUuid={travelerQuoteReqUuid}
+          close={() => setTravelerQuoteReqUuid(null)}
+          currentUser={user}
+        />
+      )}
+      <LiveChatTraveler
+        open={showLiveChatTraveler}
+        onClose={() => setShowLiveChatTraveler(false)}
+        travelerUuid={user?.userUuid || user?.uuid}
+      />
     </div>
   );
 }

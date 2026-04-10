@@ -1,116 +1,71 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import UpcomingTripsModal from '../UpcomingTrips/UpcomingTripsModal';
+import LiveChatBusDriver from '../LiveChatBusDriver/LiveChatBusDriver';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
 
-// ─────────────── SideNavBar ───────────────
-function SideNavBar({ driver, onLogout, activeMenu, setActiveMenu }) {
-  const navItems = [
-    { key: 'dashboard', icon: 'directions_bus', label: '메인 플릿' },
-    { key: 'auction',   icon: 'gavel',          label: '실시간 입찰' },
-    { key: 'schedule',  icon: 'event_available', label: '운행 일정' },
-    { key: 'payment',   icon: 'payments',        label: '결제 내역' },
-    { key: 'cert',      icon: 'verified_user',   label: '인증 정보' },
-    { key: 'settings',  icon: 'settings',        label: '설정' },
-  ];
+// ─────────────── DashboardTopSection — 좌: 오늘의 일정 · 우: 총 운임 + 활성 입찰 (`총 운임 비교`·`활성 입찰` 명세) ───────────────
+function DashboardTopSection({ stats, scheduleItems, onTravelerQuoteDetail }) {
+  const now = new Date();
+  const y = stats?.year ?? now.getFullYear();
+  const mo = stats?.month ?? now.getMonth() + 1;
+  const freightTitle = `${y}년 ${mo}월 총 운임 금액`;
+  const currentMonthTotal = Number(stats?.currentMonthTotal ?? 0);
+  const diffFromPrevious = Number(stats?.diffFromPrevious ?? 0);
+  const gtePrev = stats?.compareTone ? stats.compareTone === 'gte_prev' : diffFromPrevious >= 0;
+  const compareClass = gtePrev ? 'text-red-600' : 'text-blue-600';
+  const diffLabel =
+    diffFromPrevious >= 0
+      ? `전월 대비 +₩${diffFromPrevious.toLocaleString('ko-KR')}`
+      : `전월 대비 -₩${Math.abs(diffFromPrevious).toLocaleString('ko-KR')}`;
+  const trendIcon = diffFromPrevious >= 0 ? 'trending_up' : 'trending_down';
 
-  return (
-    <aside className="hidden md:flex flex-col p-6 gap-4 h-screen w-72 sticky left-0 top-0 bg-slate-100/50 transition-all duration-300 ease-out text-sm font-semibold"
-      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-    >
-      {/* Brand */}
-      <div className="mb-8 px-2">
-        <span className="text-2xl font-bold italic text-teal-800">busTaams</span>
-      </div>
+  const bidCount = Number(stats?.bidCount ?? stats?.activeBids ?? 0);
+  const bidAmountSum = Number(stats?.bidAmountSum ?? 0);
+  const confirmCount = Number(stats?.confirmCount ?? 0);
+  const confirmAmountSum = Number(stats?.confirmAmountSum ?? 0);
 
-      {/* Driver Profile */}
-      <div className="flex items-center gap-4 mb-8 p-3 bg-white rounded-2xl shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)]">
-        <img
-          alt="드라이버 프로필 사진"
-          className="w-12 h-12 rounded-full object-cover"
-          src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfHq5nUEawxkFp_KpjVVL2R4S3Adj9siu6OQkocMqSWdNszV5zcW6_0-ruqFi3VMVcieh5pnz1QlWcbF77sQtKnZfyd4KVxCPumy4gHm7RANeM9EZ0H1CfeL308mTBXctIff-ktR7WDsQEgNUwcVdhQkQJP6EqpF1GcFKglDXYn_yN3hcc2dn9_z4jFI3XCz4uaaFjl7wxJlXvrrFW6ajJcsgOLCIHgb2_9VKU8MXuGxpiGu0QyPbTx1NXVVyAk3eX_sj_iLLZiWY"
-        />
-        <div>
-          <p className="text-on-surface font-bold">{driver?.name || '프리미엄 캡틴'}</p>
-          <p className="text-xs text-slate-500">인증된 멤버</p>
-        </div>
-      </div>
-
-      {/* Nav Items */}
-      <nav className="flex-1 flex flex-col gap-1">
-        {navItems.map(item => (
-          <a
-            key={item.key}
-            href="#"
-            onClick={e => { e.preventDefault(); setActiveMenu(item.key); }}
-            className={`flex items-center gap-3 p-3 rounded-xl transition-transform duration-200 ${
-              activeMenu === item.key
-                ? 'bg-white text-teal-700 shadow-sm'
-                : 'text-slate-500 hover:translate-x-1 hover:bg-teal-50/50'
-            }`}
-          >
-            <span className="material-symbols-outlined">{item.icon}</span>
-            <span>{item.label}</span>
-          </a>
-        ))}
-      </nav>
-
-      {/* 신규 버스 등록 */}
-      <button className="mt-4 mb-8 bg-gradient-to-br from-primary to-primary-container text-white py-4 rounded-full font-bold shadow-lg active:scale-95 transition-all">
-        신규 버스 등록
-      </button>
-
-      {/* Bottom Links */}
-      <div className="mt-auto border-t border-slate-200/50 pt-4 flex flex-col gap-1">
-        <a href="#" className="flex items-center gap-3 p-3 text-slate-500 hover:text-teal-600 transition-colors">
-          <span className="material-symbols-outlined">help_outline</span>
-          <span>고객지원</span>
-        </a>
-        <a href="#" onClick={e => { e.preventDefault(); onLogout(); }}
-          className="flex items-center gap-3 p-3 text-slate-500 hover:text-error transition-colors"
-        >
-          <span className="material-symbols-outlined">logout</span>
-          <span>로그아웃</span>
-        </a>
-      </div>
-    </aside>
-  );
-}
-
-// ─────────────── EarningsSection ───────────────
-function EarningsSection({ stats }) {
   return (
     <section className="grid grid-cols-12 gap-8 items-start">
-      <div className="col-span-12 lg:col-span-4 space-y-4">
-        <h2 className="text-4xl font-extrabold tracking-tighter text-on-surface leading-none">
-          오늘의 성과<span className="text-primary">.</span>
-        </h2>
-        <p className="text-slate-500 max-w-xs">실시간 입찰 현황과 수익 지표를 한눈에 확인하고 비즈니스를 관리하세요.</p>
+      <div className="col-span-12 lg:col-span-4 min-w-0">
+        <TodaySchedule items={scheduleItems} onTravelerQuoteDetail={onTravelerQuoteDetail} />
       </div>
       <div className="col-span-12 lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* 총 수익 카드 */}
         <div className="bg-surface-container-lowest rounded-2xl p-8 shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)] relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-700"></div>
-          <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">총 수익</p>
+          <p className="text-sm font-bold text-slate-400 mb-2">{freightTitle}</p>
           <h3 className="text-3xl font-bold text-on-surface">
-            {stats?.totalRevenue ? `₩${stats.totalRevenue.toLocaleString()}` : '₩1,240,000'}
+            ₩{currentMonthTotal.toLocaleString('ko-KR')}
           </h3>
-          <div className="mt-4 flex items-center gap-2 text-primary font-bold">
-            <span className="material-symbols-outlined">trending_up</span>
-            <span>지난주 대비 {stats?.revenueGrowth || 12}% 상승</span>
+          <div className={`mt-4 flex items-center gap-2 font-bold ${compareClass}`}>
+            <span className="material-symbols-outlined">{trendIcon}</span>
+            <span>{diffLabel}</span>
           </div>
         </div>
-        {/* 활성 입찰 카드 */}
-        <div className="bg-primary text-white rounded-2xl p-8 shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)] flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-primary-fixed/60 text-sm font-bold uppercase tracking-widest">활성 입찰</p>
-              <h3 className="text-4xl font-bold">{String(stats?.activeBids || 8).padStart(2, '0')}</h3>
+        <div className="bg-primary text-white rounded-2xl p-8 shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)] flex flex-col min-h-[280px]">
+          <div className="flex justify-between items-start mb-6">
+            <p className="text-white/60 text-sm font-bold tracking-widest">활성 입찰</p>
+            <span className="material-symbols-outlined text-4xl opacity-20 shrink-0">gavel</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 flex-1 text-sm">
+            <div className="space-y-1">
+              <p className="text-white/70 font-medium">입찰 건수</p>
+              <p className="text-2xl font-bold tabular-nums">{bidCount.toLocaleString('ko-KR')}건</p>
             </div>
-            <span className="material-symbols-outlined text-4xl opacity-20">gavel</span>
+            <div className="space-y-1">
+              <p className="text-white/70 font-medium">입찰 금액</p>
+              <p className="text-2xl font-bold tabular-nums">₩{bidAmountSum.toLocaleString('ko-KR')}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-white/70 font-medium">운행 예정</p>
+              <p className="text-2xl font-bold tabular-nums">{confirmCount.toLocaleString('ko-KR')}건</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-white/70 font-medium">운행 예정 금액</p>
+              <p className="text-2xl font-bold tabular-nums">₩{confirmAmountSum.toLocaleString('ko-KR')}</p>
+            </div>
           </div>
-          <div className="h-1 w-full bg-white/20 rounded-full mt-6 overflow-hidden">
-            <div className="h-full bg-white" style={{ width: `${Math.min(((stats?.activeBids || 8) / 12) * 100, 100)}%` }}></div>
-          </div>
+          <div className="h-1 w-full bg-white/20 rounded-full mt-6 shrink-0" aria-hidden />
         </div>
       </div>
     </section>
@@ -118,19 +73,17 @@ function EarningsSection({ stats }) {
 }
 
 // ─────────────── QuickMenu ───────────────
-/** 바로가기: `기사정보등록_기사 화면.md` — 「기사 정보」→ DriverProfileSetup (`driverView === 'profileSetup'`) */
-function QuickMenu({ onProfileSetup, onBusInfoSetup, onQuotationList }) {
+/** 바로가기: `기사정보등록_기사 화면.md` — 「기사 정보 관리」→ DriverProfileSetup (`driverView === 'profileSetup'`) */
+function QuickMenu({ onProfileSetup, onBusInfoSetup, onQuotationList, onUpcomingTrips, onLiveChat }) {
   const menus = [
-    { key: 'driverProfile', icon: 'person',                  label: '기사 정보',  accent: false },
-    { key: 'busInfo',       icon: 'directions_bus',          label: '버스 정보',  accent: false },
-    { key: 'quotation',     icon: 'request_quote',           label: '여행자 견적 목록', accent: false },
-    { key: null,            icon: 'event_note',              label: '예정 리스트', accent: true  },
-    { key: null,            icon: 'pending_actions',         label: '보류 리스트', accent: false },
+    { key: 'driverProfile', icon: 'person',                  label: '기사 정보 관리', accent: false },
+    { key: 'busInfo',       icon: 'directions_bus',          label: '버스 정보 관리', accent: false },
+    { key: 'quotation',     icon: 'request_quote',           label: '여행자 견적 목록 조회', accent: false },
+    { key: 'upcomingTrips', icon: 'event_note',              label: '운행예정목록 조회', accent: true  },
     { key: null,            icon: 'task_alt',                label: '완료 리스트', accent: false },
     { key: null,            icon: 'cancel',                  label: '거절 리스트', accent: false },
-    { key: null,            icon: 'forum',                   label: '실시간 채팅', accent: false },
+    { key: 'liveChat',      icon: 'forum',                   label: '실시간 채팅', accent: false },
     { key: null,            icon: 'account_balance_wallet',  label: '정산 관리',  accent: false },
-    { key: null,            icon: 'loyalty',                 label: '요금제 선택', accent: false },
   ];
 
   const handleQuickAction = (key) => {
@@ -144,6 +97,14 @@ function QuickMenu({ onProfileSetup, onBusInfoSetup, onQuotationList }) {
     }
     if (key === 'quotation') {
       onQuotationList?.();
+      return;
+    }
+    if (key === 'upcomingTrips') {
+      onUpcomingTrips?.();
+      return;
+    }
+    if (key === 'liveChat') {
+      onLiveChat?.();
       return;
     }
   };
@@ -177,169 +138,395 @@ function QuickMenu({ onProfileSetup, onBusInfoSetup, onQuotationList }) {
   );
 }
 
-// ─────────────── TodaySchedule ───────────────
-function TodaySchedule({ schedule }) {
-  const item = schedule?.[0];
+// ─────────────── TodaySchedule — `오늘의 일정 섹션.md` ───────────────
+function formatScheduleTimeKorean(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+function scheduleRouteTitle(item) {
+  if (!item) return '';
+  const t = item.tripTitle?.trim();
+  if (t) return t;
+  const a = item.startAddr || '';
+  const b = item.endAddr || '';
+  if (a && b) return `${a} ↔ ${b}`;
+  return a || b || '';
+}
+
+/** GET /api/driver/schedule/today 의 items[0] 형태 */
+function TodaySchedule({ items, onTravelerQuoteDetail }) {
+  const list = Array.isArray(items) ? items : [];
+  const item = list[0];
+  const timeLabel = formatScheduleTimeKorean(item?.startDt);
+  const routeTitle = scheduleRouteTitle(item);
+  const departure = item?.startAddr || '';
+  const busText = item?.busLabel?.trim() || '차량 정보 없음';
+  const statusLabel = item?.statusLabel || '운행 예정';
+
   return (
-    <div className="lg:col-span-1 space-y-6">
-      <div className="flex justify-between items-end">
-        <h3 className="text-xl font-bold text-on-surface">오늘의 일정</h3>
-        <a href="#" className="text-xs font-bold text-primary">전체보기</a>
-      </div>
-      <div className="bg-surface-container-lowest rounded-2xl p-6 shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)] border-l-4 border-secondary">
-        <div className="flex items-center justify-between mb-4">
-          <span className="px-3 py-1 bg-secondary-container text-on-secondary-container text-[10px] font-bold rounded-full uppercase">운행 예정</span>
-          <span className="text-xs font-bold text-slate-400">{item?.time || '오후 02:30'}</span>
-        </div>
-        <h4 className="text-lg font-bold mb-2">{item?.route || '서울 ↔ 부산 정기 운행'}</h4>
-        <div className="space-y-3 mt-4">
-          <div className="flex items-center gap-3 text-sm text-slate-500">
-            <span className="material-symbols-outlined text-sm">location_on</span>
-            <span>{item?.departure || '서울 고속버스터미널'}</span>
-          </div>
-          <div className="flex items-center gap-3 text-sm text-slate-500">
-            <span className="material-symbols-outlined text-sm">airport_shuttle</span>
-            <span>{item?.bus || '프리미엄 45인승 (가-1234)'}</span>
-          </div>
-        </div>
-        <button className="w-full mt-6 py-3 bg-surface-container-high rounded-xl text-sm font-bold hover:bg-surface-container-highest transition-colors">
-          운행 시작하기
-        </button>
+    <div className="space-y-6 w-full min-w-0">
+      <h3 className="text-xl font-bold text-on-surface">오늘의 일정</h3>
+      <div className="bg-white rounded-2xl p-6 shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)] border-t border-r border-b border-slate-100 border-l-[6px] border-l-amber-900">
+        {!item ? (
+          <p className="text-center text-sm text-slate-400 py-8">오늘 확정된 일정이 없습니다</p>
+        ) : (
+          <>
+            <div className="flex items-center justify-between mb-4 gap-2">
+              <span className="px-3 py-1.5 bg-orange-100 text-orange-900 text-[11px] font-bold rounded-full">
+                {statusLabel}
+              </span>
+              <span className="text-xs font-semibold text-slate-400 tabular-nums shrink-0">{timeLabel}</span>
+            </div>
+            <h4 className="text-lg font-bold mb-2 text-on-surface leading-snug">{routeTitle}</h4>
+            <div className="space-y-3 mt-4">
+              <div className="flex items-start gap-3 text-sm text-slate-600">
+                <span className="material-symbols-outlined text-lg text-slate-500 shrink-0">location_on</span>
+                <span className="break-words">{departure || '—'}</span>
+              </div>
+              <div className="flex items-start gap-3 text-sm text-slate-600">
+                <span className="material-symbols-outlined text-lg text-slate-500 shrink-0">airport_shuttle</span>
+                <span className="break-words">{busText}</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => item?.reqUuid && onTravelerQuoteDetail?.(item.reqUuid)}
+              className="w-full mt-6 py-3 bg-slate-100 rounded-xl text-sm font-bold text-on-surface hover:bg-slate-200 transition-colors"
+            >
+              운행 시작하기
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
-// ─────────────── AuctionList ───────────────
-function AuctionList({ auctions }) {
-  const defaultAuctions = [
-    {
-      id: 1,
-      badge: '실시간 경매',
-      badgeColor: 'secondary',
-      title: '인천 공항 ↔ 평창 리조트',
-      desc: '외국인 관광객 20명 단체 투어 | 2024/05/20',
-      price: 850000,
-      img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAPCo3FlmpLIkM1Tvpv4eSchT7zh4qqrE2cyPCk4IsMOPF79k9iZN4lk3JalVszxDUvjY6Fe568ijY3addlL22HaDI4MtQAbkejaFQegtF3zqaSHXF0GS742WdEKbQDU5a8VHbgoeCYS4dHw-W80x_X5RgEXCwQFBhBxRjOItWCVTrFe_pQDQV5xXQnX7xKmGCcpsOVVibvXmP--3XBfvu0ApPUBGVSo37fJtcx3LX6rYK83kyqv0dEBB0q5aANhW8t2iQrOizyKpY',
-    },
-    {
-      id: 2,
-      badge: '마감 임박',
-      badgeColor: 'primary',
-      title: '판교 IT 밸리 ↔ 워크샵 이동',
-      desc: '기업 임직원 40명 | 2024/05/22',
-      price: 1100000,
-      img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBHJiOxXQAns6r72uoiVdzEUkAJpuGd-1y990p6-QXIrHa9A2SrDE3PqoSJbUcGwZdfw9uwIdXaKkO3h9gBnnVMxjI6q7dvmfIWJvwSteB96r-lDn8AAOhJIcz9ROk_DUyZvPR-tXIxuQbNqaFWHtmYGhtbWSk2V5w_gVhL6jdGDt9n0h3oNyUAgBuxocew8CJqrf5V9wh05d9oBUY4gTBViC8HbVyoBjQwmHHLXBOzVucz7tKyFAOPChkfhuwZ1HA4eC5dctsFjLY',
-    },
-  ];
+// ─────────────── AuctionList — 실시간 입찰 기회 (`실시간 입찰 기회 섹션.md`) ───────────────
+function formatCardDateTime(dt) {
+  if (!dt) return '—';
+  const d = new Date(dt);
+  if (Number.isNaN(d.getTime())) return String(dt);
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const h = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${y}/${mo}/${day} ${h}:${min}`;
+}
 
-  const list = auctions?.length ? auctions : defaultAuctions;
+/** GET /api/auction-list 응답 항목 기준 */
+function AuctionList({
+  items,
+  loading,
+  loadError,
+  emptyMessage = '등록된 입찰이 없습니다',
+  onBidClick,
+  onRetry,
+}) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  useEffect(() => {
+    setCurrentIndex(0);
+  }, [items]);
+
+  const len = items?.length || 0;
+
+  useEffect(() => {
+    if (len <= 1) return undefined;
+    const id = window.setInterval(() => {
+      setCurrentIndex((i) => ((i + 1) % len));
+    }, 5000);
+    return () => window.clearInterval(id);
+  }, [len]);
+
+  const windowItems = !len ? [] : items.slice(currentIndex, currentIndex + 1);
+
+  const buttonLabel = (myBidStat) => (myBidStat === 'REQ' ? '입찰 제시 변경' : '입찰 참여');
 
   return (
-    <div className="lg:col-span-2 space-y-6">
+    <div className="space-y-6 w-full">
       <div className="flex justify-between items-end">
         <h3 className="text-xl font-bold text-on-surface">실시간 입찰 기회</h3>
-        <div className="flex gap-2">
-          <button className="p-1 text-slate-400 hover:text-primary">
-            <span className="material-symbols-outlined">filter_list</span>
+      </div>
+
+      {loading && (
+        <div className="flex items-center justify-center py-12 text-slate-400 gap-2">
+          <span className="material-symbols-outlined animate-spin">progress_activity</span>
+          <span className="text-sm font-medium">불러오는 중…</span>
+        </div>
+      )}
+
+      {!loading && loadError && (
+        <div className="rounded-2xl bg-red-50 border border-red-100 p-6 text-center">
+          <p className="text-sm text-red-600 font-medium mb-3">{loadError}</p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="px-5 py-2 rounded-full bg-primary text-white text-sm font-bold"
+          >
+            다시 시도
           </button>
         </div>
-      </div>
-      <div className="space-y-4">
-        {list.map(item => (
-          <div key={item.id} className="bg-white rounded-2xl p-6 flex flex-col md:flex-row gap-6 items-center shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)] relative group overflow-hidden">
-            <div className="w-full md:w-32 h-24 rounded-xl overflow-hidden bg-slate-100 shrink-0">
-              <img className="w-full h-full object-cover" src={item.img} alt={item.title} />
-            </div>
-            <div className="flex-1 space-y-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className={`w-2 h-2 bg-${item.badgeColor} rounded-full`}></span>
-                <span className={`text-[10px] font-extrabold text-${item.badgeColor} tracking-tighter uppercase`}>{item.badge}</span>
+      )}
+
+      {!loading && !loadError && windowItems.length === 0 && (
+        <div className="rounded-2xl border border-slate-100 bg-white p-10 text-center text-slate-400 text-sm">
+          {emptyMessage}
+        </div>
+      )}
+
+      {!loading && !loadError && windowItems.length > 0 && (
+        <div className="overflow-hidden">
+          {windowItems.map((item) => {
+            const title = item.tripTitle?.trim()
+              ? item.tripTitle
+              : `${item.startAddr || ''} ↔ ${item.endAddr || ''}`;
+            const route = [item.startAddr, item.endAddr].filter(Boolean).join(' → ') || '—';
+            const statLabel = (item.reqStat || 'BIDDING').toString().toUpperCase();
+            const price = Number(item.reqAmt) || 0;
+            const label = buttonLabel(item.myBidStat);
+            const isChange = label === '입찰 제시 변경';
+            const busType = item.busType?.trim() || '—';
+            const busCnt = Number(item.busCnt) > 0 ? Number(item.busCnt) : 1;
+            return (
+              <div
+                key={`${item.reqUuid}-${currentIndex}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => onBidClick?.(item.reqUuid)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onBidClick?.(item.reqUuid);
+                  }
+                }}
+                className="bg-white rounded-2xl p-5 md:p-6 shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)] border border-slate-100 text-left cursor-pointer hover:border-primary/30 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/40 animate-auction-slide-up"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3 gap-y-2">
+                  <div className="flex flex-wrap items-center gap-2 min-w-0">
+                    <h4 className="text-lg font-bold text-on-surface truncate">{title}</h4>
+                    <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-emerald-800">
+                      {statLabel}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2 text-xs text-slate-600 shrink-0">
+                    <span className="material-symbols-outlined text-base text-slate-500">schedule</span>
+                    <span className="font-medium">등록</span>
+                    <span className="font-semibold text-slate-700 tabular-nums">
+                      {formatCardDateTime(item.regDt)}
+                    </span>
+                  </div>
+                </div>
+                <p className="mt-3 text-sm text-slate-600 leading-snug break-words">{route}</p>
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div className="flex items-start gap-2 text-slate-700">
+                    <span className="material-symbols-outlined text-lg text-slate-500 shrink-0">calendar_clock</span>
+                    <span>
+                      <span className="text-slate-500">출발: </span>
+                      <span className="font-medium tabular-nums">{formatCardDateTime(item.startDt)}</span>
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2 text-slate-700">
+                    <span className="material-symbols-outlined text-lg text-slate-500 shrink-0">event_available</span>
+                    <span>
+                      <span className="text-slate-500">도착: </span>
+                      <span className="font-medium tabular-nums">{formatCardDateTime(item.endDt)}</span>
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2 text-slate-700">
+                    <span className="material-symbols-outlined text-lg text-slate-500 shrink-0">group</span>
+                    <span>
+                      <span className="text-slate-500">탑승: </span>
+                      <span className="font-medium">{item.passengerCnt ?? '—'}명</span>
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2 text-slate-700 min-w-0">
+                    <span className="material-symbols-outlined text-lg text-slate-500 shrink-0">directions_bus</span>
+                    <span className="break-all">
+                      <span className="font-medium">{busType}</span>
+                      <span className="text-slate-500"> × </span>
+                      <span className="font-medium">{busCnt}대</span>
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-5 flex items-center justify-between gap-3 pt-1">
+                  <div className="flex items-center gap-2 min-w-0 text-primary font-bold">
+                    <span className="material-symbols-outlined text-xl shrink-0">payments</span>
+                    <span className="text-sm sm:text-base truncate">
+                      예산 총액: ₩{price.toLocaleString('ko-KR')}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onBidClick?.(item.reqUuid);
+                      }}
+                      className={`px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
+                        isChange
+                          ? 'border-2 border-primary text-primary bg-white hover:bg-teal-50'
+                          : 'bg-primary text-white hover:bg-primary-container'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                    <span className="material-symbols-outlined text-slate-300 text-2xl" aria-hidden>
+                      chevron_right
+                    </span>
+                  </div>
+                </div>
               </div>
-              <h4 className="text-lg font-bold">{item.title}</h4>
-              <p className="text-sm text-slate-400">{item.desc}</p>
-            </div>
-            <div className="text-right shrink-0">
-              <p className="text-xs text-slate-400 font-bold mb-1">현재 최고가</p>
-              <p className="text-xl font-black text-on-surface">₩{item.price.toLocaleString()}</p>
-              <button className="mt-2 bg-primary text-white px-6 py-2 rounded-full text-sm font-bold hover:bg-primary-container transition-all">
-                입찰 참여
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
 // ─────────────── Main DriverDashboard ───────────────
-const DriverDashboard = ({ currentUser, onLogout, onProfileSetup, onBusInfoSetup, onQuotationList }) => {
-  const [activeMenu, setActiveMenu] = useState('dashboard');
+const DriverDashboard = ({
+  currentUser,
+  onProfileSetup,
+  onBusInfoSetup,
+  onQuotationList,
+  onTravelerQuoteDetail,
+}) => {
   const [stats, setStats] = useState(null);
-  const [schedule, setSchedule] = useState(null);
-  const [auctions, setAuctions] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [todayScheduleItems, setTodayScheduleItems] = useState([]);
+  const [auctionList, setAuctionList] = useState([]);
+  const [auctionEmptyMessage, setAuctionEmptyMessage] = useState('등록된 입찰이 없습니다');
+  const [auctionListError, setAuctionListError] = useState(null);
+  const [auctionLoading, setAuctionLoading] = useState(true);
+  const [showUpcomingTripsModal, setShowUpcomingTripsModal] = useState(false);
+  const [showLiveChatBusDriver, setShowLiveChatBusDriver] = useState(false);
 
   useEffect(() => {
-    if (!currentUser?.uuid) return;
+    const driverUuid = currentUser?.uuid || currentUser?.userUuid || currentUser?.USER_UUID_STR;
+    if (!driverUuid) {
+      setAuctionLoading(false);
+      setAuctionList([]);
+      setAuctionEmptyMessage('등록된 입찰이 없습니다');
+      setAuctionListError(null);
+      setTodayScheduleItems([]);
+      return;
+    }
 
     const fetchAll = async () => {
       try {
         const headers = { 'Content-Type': 'application/json' };
+        const enc = encodeURIComponent(driverUuid);
 
-        const [statsRes, scheduleRes, auctionsRes] = await Promise.allSettled([
-          fetch(`${API_BASE}/api/driver/dashboard?uuid=${currentUser.uuid}`, { headers }),
-          fetch(`${API_BASE}/api/driver/schedule/today?uuid=${currentUser.uuid}`, { headers }),
-          fetch(`${API_BASE}/api/driver/auctions`, { headers }),
+        const [statsRes, scheduleRes, auctionRes] = await Promise.allSettled([
+          fetch(`${API_BASE}/api/driver/dashboard?uuid=${enc}`, { headers }),
+          fetch(`${API_BASE}/api/driver/schedule/today?uuid=${enc}`, { headers }),
+          fetch(`${API_BASE}/api/auction-list?driverUuid=${enc}`, { headers }),
         ]);
 
         if (statsRes.status === 'fulfilled' && statsRes.value.ok) {
-          const d = await statsRes.value.json(); setStats(d);
+          const d = await statsRes.value.json();
+          setStats(d);
         }
         if (scheduleRes.status === 'fulfilled' && scheduleRes.value.ok) {
-          const d = await scheduleRes.value.json(); setSchedule(d);
+          const d = await scheduleRes.value.json();
+          setTodayScheduleItems(Array.isArray(d.items) ? d.items : []);
+        } else {
+          setTodayScheduleItems([]);
         }
-        if (auctionsRes.status === 'fulfilled' && auctionsRes.value.ok) {
-          const d = await auctionsRes.value.json(); setAuctions(d);
+        setAuctionListError(null);
+        if (auctionRes.status === 'fulfilled' && auctionRes.value.ok) {
+          const d = await auctionRes.value.json();
+          setAuctionList(Array.isArray(d.items) ? d.items : []);
+          setAuctionEmptyMessage(
+            typeof d.emptyMessage === 'string' ? d.emptyMessage : '등록된 입찰이 없습니다'
+          );
+        } else if (auctionRes.status === 'fulfilled') {
+          const t = await auctionRes.value.text();
+          let msg = `서버 오류 (${auctionRes.value.status})`;
+          try {
+            const j = JSON.parse(t);
+            if (j.error) msg = j.error;
+          } catch (_) { /* ignore */ }
+          setAuctionListError(msg);
+          setAuctionList([]);
+        } else {
+          setAuctionListError('실시간 입찰 목록을 불러오지 못했습니다.');
+          setAuctionList([]);
         }
       } catch (err) {
         console.error('Dashboard fetch error:', err);
+        setAuctionListError(err.message || '네트워크 오류');
       } finally {
-        setLoading(false);
+        setAuctionLoading(false);
       }
     };
 
     fetchAll();
   }, [currentUser]);
 
+  const refetchAuctionList = useCallback(async () => {
+    const driverUuid = currentUser?.uuid || currentUser?.userUuid || currentUser?.USER_UUID_STR;
+    if (!driverUuid) return;
+    setAuctionLoading(true);
+    setAuctionListError(null);
+    try {
+      const r = await fetch(
+        `${API_BASE}/api/auction-list?driverUuid=${encodeURIComponent(driverUuid)}`
+      );
+      if (r.ok) {
+        const d = await r.json();
+        setAuctionList(Array.isArray(d.items) ? d.items : []);
+        setAuctionEmptyMessage(
+          typeof d.emptyMessage === 'string' ? d.emptyMessage : '등록된 입찰이 없습니다'
+        );
+      } else {
+        let msg = `서버 오류 (${r.status})`;
+        try {
+          const j = await r.json();
+          if (j.error) msg = j.error;
+        } catch (_) { /* ignore */ }
+        setAuctionListError(msg);
+        setAuctionList([]);
+      }
+    } catch (e) {
+      setAuctionListError(e.message || '네트워크 오류');
+      setAuctionList([]);
+    } finally {
+      setAuctionLoading(false);
+    }
+  }, [currentUser]);
+
   return (
-    <div className="bg-background text-on-background min-h-screen flex">
-      {/* SideNav */}
-      <SideNavBar
-        driver={currentUser}
-        onLogout={onLogout}
-        activeMenu={activeMenu}
-        setActiveMenu={setActiveMenu}
-      />
-
-      <main className="flex-1 min-h-screen relative overflow-x-hidden">
+    <div className="bg-background text-on-background min-h-screen">
+      <main className="min-h-screen relative overflow-x-hidden">
         <div className="px-12 pb-12 pt-8 max-w-7xl mx-auto space-y-12">
-          {/* Earnings */}
-          <EarningsSection stats={stats} />
+          <DashboardTopSection
+            stats={stats}
+            scheduleItems={todayScheduleItems}
+            onTravelerQuoteDetail={onTravelerQuoteDetail}
+          />
 
-          {/* Quick Menu */}
           <QuickMenu
             onProfileSetup={onProfileSetup}
             onBusInfoSetup={onBusInfoSetup}
             onQuotationList={onQuotationList}
+            onUpcomingTrips={() => setShowUpcomingTripsModal(true)}
+            onLiveChat={() => setShowLiveChatBusDriver(true)}
           />
 
-          {/* Schedule + Auctions */}
-          <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <TodaySchedule schedule={schedule} />
-            <AuctionList auctions={auctions} />
-          </section>
+          <AuctionList
+            items={auctionList}
+            loading={auctionLoading}
+            loadError={auctionListError}
+            emptyMessage={auctionEmptyMessage}
+            onBidClick={(reqUuid) => onTravelerQuoteDetail?.(reqUuid)}
+            onRetry={refetchAuctionList}
+          />
         </div>
       </main>
 
@@ -349,6 +536,23 @@ const DriverDashboard = ({ currentUser, onLogout, onProfileSetup, onBusInfoSetup
           <span className="material-symbols-outlined text-3xl">add</span>
         </button>
       </div>
+
+      <UpcomingTripsModal
+        open={showUpcomingTripsModal}
+        onClose={() => setShowUpcomingTripsModal(false)}
+        driverUuid={currentUser?.uuid || currentUser?.userUuid || currentUser?.USER_UUID_STR}
+        onTravelerQuoteDetail={(reqUuid) => {
+          setShowUpcomingTripsModal(false);
+          onTravelerQuoteDetail?.(reqUuid);
+        }}
+      />
+
+      <LiveChatBusDriver
+        open={showLiveChatBusDriver}
+        onClose={() => setShowLiveChatBusDriver(false)}
+        driverUuid={currentUser?.uuid || currentUser?.userUuid || currentUser?.USER_UUID_STR}
+        initialReqUuid={null}
+      />
     </div>
   );
 };

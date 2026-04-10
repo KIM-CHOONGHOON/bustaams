@@ -4,8 +4,8 @@ import TravelerQuoteRequestDetails from '../TravelerQuoteRequestDetails/Traveler
 /**
  * 여행자 견적 목록 (ListOfTravelerQuotations)
  * - 운전기사 대시보드 → 바로가기 메뉴 → 「여행자 견적 목록」 클릭 시 호출
- * - GET /api/list-of-traveler-quotations — TB_BID_REQUEST WHERE STATUS = 'OPEN'
- * - 항목 클릭 → TravelerQuoteRequestDetails 모달 호출 (requestId 전달)
+ * - GET /api/list-of-traveler-quotations?driverUuid= — BIDDING + 기사별 동일출발일 제외(CONFIRM)
+ * - 항목 클릭 → TravelerQuoteRequestDetails 모달 호출 (reqUuid 전달)
  * - 배경 클릭으로 닫히지 않음 / X 버튼·닫기 버튼으로만 닫힘
  */
 const ListOfTravelerQuotations = ({ close, currentUser }) => {
@@ -14,13 +14,18 @@ const ListOfTravelerQuotations = ({ close, currentUser }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
-  const [selectedRequestId, setSelectedRequestId] = useState(null);
+  const [selectedReqUuid, setSelectedReqUuid] = useState(null);
 
   const fetchList = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/list-of-traveler-quotations`);
+      const driverUuid =
+        currentUser?.uuid || currentUser?.userUuid || currentUser?.USER_UUID_STR;
+      const q = driverUuid
+        ? `?driverUuid=${encodeURIComponent(driverUuid)}`
+        : '';
+      const res = await fetch(`${API_BASE}/api/list-of-traveler-quotations${q}`);
       if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
       const json = await res.json();
       setItems(json.items || []);
@@ -29,7 +34,7 @@ const ListOfTravelerQuotations = ({ close, currentUser }) => {
     } finally {
       setLoading(false);
     }
-  }, [API_BASE]);
+  }, [API_BASE, currentUser]);
 
   useEffect(() => { fetchList(); }, [fetchList]);
 
@@ -120,32 +125,28 @@ const ListOfTravelerQuotations = ({ close, currentUser }) => {
               <div className="space-y-4">
                 {items.map((item) => (
                   <button
-                    key={item.requestId}
+                    key={item.reqUuid}
                     type="button"
-                    onClick={() => setSelectedRequestId(item.requestId)}
+                    onClick={() => setSelectedReqUuid(item.reqUuid)}
                     className="w-full text-left rounded-2xl border border-gray-100 bg-white hover:border-teal-200 hover:shadow-md transition-all duration-200 p-5 group"
                   >
                     <div className="flex items-start justify-between gap-4">
                       {/* 왼쪽: 여정 정보 */}
                       <div className="flex-1 min-w-0">
-                        {/* 노선 제목 + 상태 배지 */}
-                        <div className="flex items-center gap-2 mb-2">
+                        {/* 여정 제목 + 상태 배지 */}
+                        <div className="flex items-center gap-2 mb-1">
                           <span className="text-base font-bold text-gray-900 group-hover:text-teal-700 transition-colors truncate">
-                            {item.startAddr} → {item.endAddr}
+                            {item.tripTitle || `${item.startAddr} → ${item.endAddr}`}
                           </span>
                           <span className="shrink-0 px-2 py-0.5 rounded-full text-[11px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
-                            OPEN
+                            BIDDING
                           </span>
-                          {item.roundTripYn === 'Y' && (
-                            <span className="shrink-0 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-600 border border-blue-200">
-                              왕복
-                            </span>
-                          )}
                         </div>
-
-                        {/* 세부 요구사항 */}
-                        {item.comment && (
-                          <p className="text-xs text-gray-500 mb-2 truncate">"{item.comment}"</p>
+                        {/* 노선 */}
+                        {item.tripTitle && (
+                          <p className="text-xs text-gray-500 mb-2 truncate">
+                            {item.startAddr} → {item.endAddr}
+                          </p>
                         )}
 
                         {/* 세부 정보 그리드 */}
@@ -215,10 +216,10 @@ const ListOfTravelerQuotations = ({ close, currentUser }) => {
       </div>
 
       {/* 상세 모달 */}
-      {selectedRequestId && (
+      {selectedReqUuid && (
         <TravelerQuoteRequestDetails
-          requestId={selectedRequestId}
-          close={() => setSelectedRequestId(null)}
+          reqUuid={selectedReqUuid}
+          close={() => setSelectedReqUuid(null)}
           currentUser={currentUser}
         />
       )}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import DetailBusRequestModal from './DetailBusRequestModal';
 
-const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onViewReservationList }) => {
+const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onViewReservationList, onOpenLiveChat }) => {
   const [recentRequests, setRecentRequests] = useState([]);
   const [selectedRequestId, setSelectedRequestId] = useState(null);
 
@@ -168,12 +168,15 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
               </div>
               <span className="font-bold text-sm">리뷰 관리</span>
             </div>
-            {/* 1:1 Inquiry */}
-            <div className="bg-surface-container-lowest p-8 rounded-2xl tonal-stacking flex flex-col items-center text-center group cursor-pointer hover:bg-primary hover:text-on-primary transition-all duration-300 no-line-rule">
+            {/* 실시간 채팅 (기사와 동일 견적 스레드) */}
+            <div
+              onClick={() => onOpenLiveChat?.()}
+              className="bg-surface-container-lowest p-8 rounded-2xl tonal-stacking flex flex-col items-center text-center group cursor-pointer hover:bg-primary hover:text-on-primary transition-all duration-300 no-line-rule"
+            >
               <div className="w-14 h-14 bg-surface-container-high rounded-full flex items-center justify-center mb-6 group-hover:bg-primary-container">
-                <span className="material-symbols-outlined text-primary group-hover:text-on-primary-container">support_agent</span>
+                <span className="material-symbols-outlined text-primary group-hover:text-on-primary-container">chat</span>
               </div>
-              <span className="font-bold text-sm">1:1 문의</span>
+              <span className="font-bold text-sm">실시간 채팅</span>
             </div>
             {/* Member Info */}
             <div 

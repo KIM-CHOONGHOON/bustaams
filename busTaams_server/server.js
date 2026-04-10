@@ -10,6 +10,10 @@ const { randomUUID } = require('crypto');
 const { encrypt, decrypt } = require('./crypto');
 // const { runDriverVerificationsForProfileSetup } = require('./driverVerification');
 const fs = require('fs');
+const createLiveChatBusDriverRouter = require('./routes/liveChatBusDriver');
+const createLiveChatTravelerRouter = require('./routes/liveChatTraveler');
+const createUserDeviceTokenRouter = require('./routes/userDeviceToken');
+const { migrateTbChatLogColumns } = require('./migrations/tbChatLogMigrate');
 
 const app = express();
 
@@ -51,24 +55,36 @@ function firebaseAdminConfigured() {
     return !!(process.env.FIREBASE_SERVICE_ACCOUNT_PATH && fs.existsSync(path.resolve(__dirname, process.env.FIREBASE_SERVICE_ACCOUNT_PATH)));
 }
 
+/** `verify-sms` 성공 번호 — 회원가입 시 Firebase 토큰 없이 매칭 (아래 `smsCodeStore`와 함께 유지) */
+const smsVerifiedPhoneStore = new Map();
+const SMS_VERIFIED_TTL_MS = 15 * 60 * 1000;
+
 /**
  * 회원가입(`POST /api/auth/register`)·기사정보(`POST /api/driver/profile-setup`) 공통.
- * Admin 미설정: 검증 생략(로컬 개발). 설정됨: `verifyIdToken` 필수.
+ * Admin 미설정: 검증 생략(로컬 개발). 설정됨: Firebase `idToken` 또는 SMS 서버 인증 완료 번호.
  */
-async function verifyFirebasePhoneIdTokenIfRequired(idToken) {
+async function verifyFirebasePhoneIdTokenIfRequired(idToken, options = {}) {
     if (!firebaseAdminConfigured()) {
         return { ok: true };
     }
-    if (!idToken || typeof idToken !== 'string') {
-        return { ok: false, error: '휴대전화 인증을 완료해 주세요.' };
+    const { smsVerifiedPhone } = options;
+    if (idToken && typeof idToken === 'string') {
+        try {
+            await admin.auth().verifyIdToken(idToken);
+            return { ok: true };
+        } catch (e) {
+            console.error('Firebase ID token verification failed:', e.message);
+            return { ok: false, error: '휴대전화 인증이 유효하지 않습니다. 다시 인증해 주세요.' };
+        }
     }
-    try {
-        await admin.auth().verifyIdToken(idToken);
-        return { ok: true };
-    } catch (e) {
-        console.error('Firebase ID token verification failed:', e.message);
-        return { ok: false, error: '휴대전화 인증이 유효하지 않습니다. 다시 인증해 주세요.' };
+    if (smsVerifiedPhone && smsVerifiedPhoneStore.has(smsVerifiedPhone)) {
+        const entry = smsVerifiedPhoneStore.get(smsVerifiedPhone);
+        if (entry && Date.now() <= entry.expiresAt) {
+            return { ok: true };
+        }
+        smsVerifiedPhoneStore.delete(smsVerifiedPhone);
     }
+    return { ok: false, error: '휴대전화 인증을 완료해 주세요.' };
 }
 
 /** TB_DRIVER_INFO 테이블이 없으면 생성 (기사 프로필 API에서 INSERT 가능하도록) */
@@ -167,6 +183,22 @@ async function ensureTbUserTable(connection) {
             PRIMARY KEY (USER_UUID),
             UNIQUE KEY UK_USER_ID (USER_ID_ENC)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+}
+
+/** FCM 등 푸시 토큰 (앱·웹) — 사용자별 다중 기기 */
+async function ensureTbUserDeviceTokenTable(connection) {
+    await connection.execute(`
+        CREATE TABLE IF NOT EXISTS TB_USER_DEVICE_TOKEN (
+            ROW_ID BIGINT NOT NULL AUTO_INCREMENT,
+            USER_UUID BINARY(16) NOT NULL,
+            FCM_TOKEN VARCHAR(512) NOT NULL,
+            CLIENT_KIND VARCHAR(20) NOT NULL DEFAULT 'web',
+            UPD_DT DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (ROW_ID),
+            UNIQUE KEY UK_USER_FCM_TOKEN (USER_UUID, FCM_TOKEN(256)),
+            KEY IDX_USER_DEVICE_UPD (USER_UUID, UPD_DT)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='FCM 기기 토큰 (채팅 알림 등)'
     `);
 }
 
@@ -561,6 +593,7 @@ app.post('/api/auth/verify-sms', async (req, res) => {
         }
 
         smsCodeStore.delete(cleaned); // 사용 후 삭제
+        smsVerifiedPhoneStore.set(cleaned, { expiresAt: Date.now() + SMS_VERIFIED_TTL_MS });
         console.log(`[SMS] 인증 성공: ${cleaned}`);
         return res.status(200).json({ verified: true, message: '휴대폰 인증이 완료되었습니다.' });
 
@@ -623,8 +656,11 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(400).json({ error: '필수 항목이 누락되었습니다. (ID, 비밀번호, 이름, 전화번호, 서명, 약관동의, 사용자타입)' });
         }
 
-        // 1. [보안] Firebase Phone 인증 ID 토큰 — Admin SDK 설정 시에만 검증 (기사 프로필 API와 동일 로직)
-        const phoneVerify = await verifyFirebasePhoneIdTokenIfRequired(firebaseIdToken);
+        // 1. [보안] Firebase ID 토큰 또는 SMS 서버 인증(verify-sms) 완료 번호
+        const cleanedPhoneForVerify = String(phoneNo).replace(/-/g, '');
+        const phoneVerify = await verifyFirebasePhoneIdTokenIfRequired(firebaseIdToken, {
+            smsVerifiedPhone: cleanedPhoneForVerify,
+        });
         if (!phoneVerify.ok) {
             return res.status(400).json({ error: phoneVerify.error });
         }
@@ -730,7 +766,8 @@ app.post('/api/auth/register', async (req, res) => {
             }
 
             await connection.commit();
-            
+            smsVerifiedPhoneStore.delete(cleanedPhoneForVerify);
+
             res.status(201).json({
                 message: "회원가입이 성공적으로 완료되었습니다.",
                 signFileUuid: signFileUuid 
@@ -2229,39 +2266,309 @@ app.get('/api/quotation-requests', (req, res) => {
 });
 
 /**
- * 여행자 견적 목록 (역경매) — STATUS = 'OPEN' 목록 조회
- * GET /api/list-of-traveler-quotations
+ * 오늘의 일정 (기사 대시보드 TodaySchedule)
+ * GET /api/driver/schedule/today?uuid=
  *
- * TB_BID_REQUEST WHERE STATUS = 'OPEN'
- * + TB_BID_WAYPOINT 경유지 건수 LEFT JOIN
+ * 조건:
+ * - TB_AUCTION_REQ.REQ_STAT = 'BIDDING'
+ * - DATE(TB_AUCTION_REQ.START_DT) = 서버 기준 당일 (CURDATE)
+ * - TB_BUS_RESERVATION.REQ_UUID = TB_AUCTION_REQ.REQ_UUID
+ * - TRAVELER_UUID: 예약에 값이 있으면 TB_AUCTION_REQ.TRAVELER_UUID 와 동일해야 함 (NULL 이면 REQ_UUID 로만 연결)
+ * - TB_BUS_RESERVATION.DRIVER_UUID = 요청 기사
+ * - TB_BUS_RESERVATION.RES_STAT = 'CONFIRM'
+ */
+function formatScheduleBusLabel(row) {
+    const parts = [row.serviceClass, row.modelNm].filter(Boolean).join(' ').trim();
+    const vn = (row.vehicleNo && String(row.vehicleNo).trim()) || '';
+    if (parts && vn) return `${parts} (${vn})`;
+    if (parts) return parts;
+    if (vn) return `(${vn})`;
+    return '';
+}
+
+app.get('/api/driver/schedule/today', async (req, res) => {
+    const { uuid } = req.query;
+    if (!uuid) {
+        return res.status(400).json({ error: 'uuid가 필요합니다.' });
+    }
+    let connection;
+    try {
+        connection = await pool.getConnection();
+        await ensureTbBusDriverVehicleSchema(connection);
+        const [rows] = await connection.execute(
+            `SELECT
+                BIN_TO_UUID(r.REQ_UUID)     AS reqUuid,
+                r.TRIP_TITLE                AS tripTitle,
+                r.START_ADDR                AS startAddr,
+                r.END_ADDR                  AS endAddr,
+                r.START_DT                  AS startDt,
+                v.SERVICE_CLASS             AS serviceClass,
+                v.MODEL_NM                  AS modelNm,
+                v.VEHICLE_NO                AS vehicleNo
+             FROM TB_AUCTION_REQ r
+             INNER JOIN TB_BUS_RESERVATION res
+                     ON res.REQ_UUID = r.REQ_UUID
+                    AND res.DRIVER_UUID = UUID_TO_BIN(?)
+                    AND res.RES_STAT = 'CONFIRM'
+                    AND (res.TRAVELER_UUID IS NULL OR res.TRAVELER_UUID = r.TRAVELER_UUID)
+             LEFT JOIN TB_BUS_DRIVER_VEHICLE v
+                    ON v.BUS_ID = res.BUS_UUID
+                   AND v.USER_UUID = res.DRIVER_UUID
+             WHERE r.REQ_STAT = 'BIDDING'
+               AND DATE(r.START_DT) = CURDATE()
+             ORDER BY r.START_DT ASC`,
+            [uuid]
+        );
+        const items = rows.map((row) => {
+            const busLabel = formatScheduleBusLabel(row);
+            return {
+                reqUuid: row.reqUuid,
+                tripTitle: row.tripTitle,
+                startAddr: row.startAddr,
+                endAddr: row.endAddr,
+                startDt: row.startDt,
+                busLabel: busLabel || null,
+                statusLabel: '운행 예정',
+            };
+        });
+        res.status(200).json({ total: items.length, items });
+    } catch (error) {
+        console.error('driver/schedule/today:', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+/**
+ * 운행 예정 목록 (UpcomingTrips)
+ * GET /api/upcoming-trips?driverUuid=
+ *
+ * 조건:
+ * - TB_AUCTION_REQ.REQ_STAT = 'BIDDING'
+ * - DATE(TB_AUCTION_REQ.START_DT) > 서버 기준 당일 (CURDATE) — 당일 출발 제외, 익일 이후
+ * - TB_BUS_RESERVATION.REQ_UUID = TB_AUCTION_REQ.REQ_UUID
+ * - TB_BUS_RESERVATION.TRAVELER_UUID = TB_AUCTION_REQ.TRAVELER_UUID
+ * - TB_BUS_RESERVATION.RES_STAT = 'CONFIRM'
+ * - TB_BUS_RESERVATION.DRIVER_UUID = 요청 기사
+ */
+app.get('/api/upcoming-trips', async (req, res) => {
+    const { driverUuid } = req.query;
+    if (!driverUuid) {
+        return res.status(400).json({ error: 'driverUuid가 필요합니다.' });
+    }
+    let connection;
+    try {
+        connection = await pool.getConnection();
+        await ensureTbBusDriverVehicleSchema(connection);
+        const [rows] = await connection.execute(
+            `SELECT
+                BIN_TO_UUID(r.REQ_UUID)          AS reqUuid,
+                r.TRIP_TITLE                     AS tripTitle,
+                r.START_ADDR                     AS startAddr,
+                r.END_ADDR                       AS endAddr,
+                r.START_DT                       AS startDt,
+                r.END_DT                         AS endDt,
+                r.PASSENGER_CNT                  AS passengerCnt,
+                COALESCE(res.DRIVER_BIDDING_PRICE, 0) AS contractAmount,
+                res.RES_STAT                     AS resStat,
+                v.SERVICE_CLASS                  AS serviceClass,
+                v.MODEL_NM                       AS modelNm,
+                v.VEHICLE_NO                     AS vehicleNo
+             FROM TB_AUCTION_REQ r
+             INNER JOIN TB_BUS_RESERVATION res
+                     ON res.REQ_UUID = r.REQ_UUID
+                    AND res.DRIVER_UUID = UUID_TO_BIN(?)
+                    AND res.RES_STAT = 'CONFIRM'
+                    AND res.TRAVELER_UUID = r.TRAVELER_UUID
+             LEFT JOIN TB_BUS_DRIVER_VEHICLE v
+                    ON v.BUS_ID = res.BUS_UUID
+                   AND v.USER_UUID = res.DRIVER_UUID
+             WHERE r.REQ_STAT = 'BIDDING'
+               AND DATE(r.START_DT) > CURDATE()
+             ORDER BY r.START_DT ASC`,
+            [driverUuid]
+        );
+        const items = rows.map((row) => ({
+            reqUuid: row.reqUuid,
+            tripTitle: row.tripTitle,
+            startAddr: row.startAddr,
+            endAddr: row.endAddr,
+            startDt: row.startDt,
+            endDt: row.endDt,
+            passengerCnt: row.passengerCnt,
+            contractAmount: Number(row.contractAmount ?? 0),
+            resStat: row.resStat,
+            serviceClass: row.serviceClass,
+            modelNm: row.modelNm,
+            vehicleNo: row.vehicleNo,
+        }));
+        res.status(200).json({ total: items.length, items });
+    } catch (error) {
+        console.error('upcoming-trips:', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+/**
+ * 기사 메인 대시보드 요약 (총 운임 비교 + 활성 입찰 지표)
+ * GET /api/driver/dashboard?uuid=
+ *
+ * - 당월 합계: 현재 년·월 1일 ~ CURDATE(), RES_STAT = DONE, SUM(DRIVER_BIDDING_PRICE)
+ * - 전월 합계: 직전 달 1일 ~ 말일, RES_STAT = DONE, SUM(DRIVER_BIDDING_PRICE)
+ * - 기간 판정: MOD_DT (완료 처리 시각 기준)
+ * - 활성 입찰: REQ 건수·입찰가 합계, CONFIRM 건수·입찰가 합계 (동일 기사 DRIVER_UUID)
+ */
+app.get('/api/driver/dashboard', async (req, res) => {
+    const { uuid } = req.query;
+    if (!uuid) {
+        return res.status(400).json({ error: 'uuid가 필요합니다.' });
+    }
+    let connection;
+    try {
+        connection = await pool.getConnection();
+        const [[ym]] = await connection.execute(
+            `SELECT YEAR(CURDATE()) AS y, MONTH(CURDATE()) AS m`
+        );
+        const year = Number(ym.y);
+        const month = Number(ym.m);
+
+        const [[prevSum]] = await connection.execute(
+            `SELECT COALESCE(SUM(DRIVER_BIDDING_PRICE), 0) AS total
+               FROM TB_BUS_RESERVATION
+              WHERE DRIVER_UUID = UUID_TO_BIN(?)
+                AND RES_STAT = 'DONE'
+                AND MOD_DT >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+                AND MOD_DT < DATE_FORMAT(CURDATE(), '%Y-%m-01')`,
+            [uuid]
+        );
+        const [[currSum]] = await connection.execute(
+            `SELECT COALESCE(SUM(DRIVER_BIDDING_PRICE), 0) AS total
+               FROM TB_BUS_RESERVATION
+              WHERE DRIVER_UUID = UUID_TO_BIN(?)
+                AND RES_STAT = 'DONE'
+                AND MOD_DT >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                AND DATE(MOD_DT) <= CURDATE()`,
+            [uuid]
+        );
+
+        const previousMonthTotal = Number(prevSum.total || 0);
+        const currentMonthTotal = Number(currSum.total || 0);
+        const diffFromPrevious = currentMonthTotal - previousMonthTotal;
+
+        const [[agg]] = await connection.execute(
+            `SELECT
+                COALESCE(SUM(CASE WHEN RES_STAT = 'REQ' THEN 1 ELSE 0 END), 0) AS bid_count,
+                COALESCE(SUM(CASE WHEN RES_STAT = 'REQ' THEN DRIVER_BIDDING_PRICE ELSE 0 END), 0) AS bid_amount_sum,
+                COALESCE(SUM(CASE WHEN RES_STAT = 'CONFIRM' THEN 1 ELSE 0 END), 0) AS confirm_count,
+                COALESCE(SUM(CASE WHEN RES_STAT = 'CONFIRM' THEN DRIVER_BIDDING_PRICE ELSE 0 END), 0) AS confirm_amount_sum
+               FROM TB_BUS_RESERVATION
+              WHERE DRIVER_UUID = UUID_TO_BIN(?)`,
+            [uuid]
+        );
+
+        const bidCount = Number(agg.bid_count ?? agg.bidCount ?? 0);
+        const bidAmountSum = Number(agg.bid_amount_sum ?? agg.bidAmountSum ?? 0);
+        const confirmCount = Number(agg.confirm_count ?? agg.confirmCount ?? 0);
+        const confirmAmountSum = Number(agg.confirm_amount_sum ?? agg.confirmAmountSum ?? 0);
+
+        res.status(200).json({
+            year,
+            month,
+            currentMonthTotal,
+            previousMonthTotal,
+            diffFromPrevious,
+            compareTone: diffFromPrevious >= 0 ? 'gte_prev' : 'lt_prev',
+            activeBids: bidCount,
+            bidCount,
+            bidAmountSum,
+            confirmCount,
+            confirmAmountSum,
+        });
+    } catch (error) {
+        if (error.code === 'ER_NO_SUCH_TABLE') {
+            const now = new Date();
+            return res.status(200).json({
+                year: now.getFullYear(),
+                month: now.getMonth() + 1,
+                currentMonthTotal: 0,
+                previousMonthTotal: 0,
+                diffFromPrevious: 0,
+                compareTone: 'gte_prev',
+                activeBids: 0,
+                bidCount: 0,
+                bidAmountSum: 0,
+                confirmCount: 0,
+                confirmAmountSum: 0,
+            });
+        }
+        console.error('driver/dashboard:', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+/**
+ * 여행자 견적 목록 (역경매)
+ * GET /api/list-of-traveler-quotations?driverUuid=
+ *
+ * TB_AUCTION_REQ: REQ_STAT = 'BIDDING' (문서·업무 명칭 RES_STAT 와 동일)
+ * + DATE(START_DT) > CURDATE() — 출발 **일자**가 시스템 오늘(CURDATE) **다음날부터** (당일 출발 제외)
+ * + TB_AUCTION_REQ_BUS · TB_AUCTION_REQ_VIA
+ *
+ * driverUuid 가 있으면: 동일 기사가 다른 견적(ar.REQ_UUID <> r.REQ_UUID)에 대해
+ * 같은 출발일(DATE(START_DT))에 TB_BUS_RESERVATION.RES_STAT = 'CONFIRM' 인 행이 있으면 제외
  */
 app.get('/api/list-of-traveler-quotations', async (req, res) => {
     let connection;
     try {
         connection = await pool.getConnection();
+        const { driverUuid } = req.query;
+
+        const sameDayBlock = driverUuid
+            ? ` AND NOT EXISTS (
+                SELECT 1
+                  FROM TB_BUS_RESERVATION res
+                  INNER JOIN TB_AUCTION_REQ ar ON ar.REQ_UUID = res.REQ_UUID
+                 WHERE res.DRIVER_UUID = UUID_TO_BIN(?)
+                   AND res.RES_STAT = 'CONFIRM'
+                   AND DATE(ar.START_DT) = DATE(r.START_DT)
+                   AND ar.REQ_UUID <> r.REQ_UUID
+              )`
+            : '';
+
+        const params = driverUuid ? [driverUuid] : [];
 
         const [rows] = await connection.execute(
             `SELECT
-                r.REQUEST_ID              AS requestId,
-                r.USER_ID                 AS userId,
-                r.BUS_TYPE                AS busType,
-                r.BUS_CNT                 AS busCnt,
-                r.PASSENGER_CNT           AS passengerCnt,
-                r.START_DT                AS startDt,
-                r.END_DT                  AS endDt,
-                r.START_ADDR              AS startAddr,
-                r.END_ADDR                AS endAddr,
-                r.ROUND_TRIP_YN           AS roundTripYn,
-                r.EST_TOTAL_SERVICE_PRICE AS estTotalServicePrice,
-                r.COMMENT                 AS comment,
-                r.STATUS                  AS status,
-                r.REG_DT                  AS regDt,
-                COUNT(w.WAYPOINT_ID)      AS waypointCount
-             FROM TB_BID_REQUEST r
-             LEFT JOIN TB_BID_WAYPOINT w ON w.REQUEST_ID = r.REQUEST_ID
-             WHERE r.STATUS = 'OPEN'
-             GROUP BY r.REQUEST_ID
-             ORDER BY r.REG_DT DESC`
+                BIN_TO_UUID(r.REQ_UUID)          AS reqUuid,
+                r.TRIP_TITLE                     AS tripTitle,
+                r.START_ADDR                     AS startAddr,
+                r.END_ADDR                       AS endAddr,
+                r.START_DT                       AS startDt,
+                r.END_DT                         AS endDt,
+                r.PASSENGER_CNT                  AS passengerCnt,
+                r.REQ_STAT                       AS reqStat,
+                COALESCE(r.REQ_AMT, 0)           AS estTotalServicePrice,
+                r.EXPIRE_DT                      AS expireDt,
+                r.REG_DT                         AS regDt,
+                ANY_VALUE(b.BUS_TYPE_CD)         AS busType,
+                COALESCE(ANY_VALUE(b.REQ_BUS_CNT), 1) AS busCnt,
+                COUNT(DISTINCT v.VIA_UUID)       AS waypointCount
+             FROM TB_AUCTION_REQ r
+             LEFT JOIN TB_AUCTION_REQ_BUS b ON b.REQ_UUID = r.REQ_UUID
+             LEFT JOIN TB_AUCTION_REQ_VIA v ON v.REQ_UUID = r.REQ_UUID
+             WHERE r.REQ_STAT = 'BIDDING'
+               AND DATE(r.START_DT) > CURDATE()
+             ${sameDayBlock}
+             GROUP BY r.REQ_UUID, r.TRIP_TITLE, r.START_ADDR, r.END_ADDR,
+                      r.START_DT, r.END_DT, r.PASSENGER_CNT, r.REQ_STAT,
+                      r.REQ_AMT, r.EXPIRE_DT, r.REG_DT
+             ORDER BY r.REG_DT DESC`,
+            params
         );
 
         if (rows.length === 0) {
@@ -2269,8 +2576,8 @@ app.get('/api/list-of-traveler-quotations', async (req, res) => {
                 total: 2,
                 items: [
                     {
-                        requestId:            1,
-                        userId:               'traveler_demo_01',
+                        reqUuid:              'demo-uuid-0001-0000-000000000001',
+                        tripTitle:            '제주도 관광 여행',
                         busType:              '대형 45인승',
                         busCnt:               1,
                         passengerCnt:         45,
@@ -2278,16 +2585,15 @@ app.get('/api/list-of-traveler-quotations', async (req, res) => {
                         endDt:                '2024-05-26T18:00:00',
                         startAddr:            '제주 국제공항',
                         endAddr:              '서귀포 중문 관광단지',
-                        roundTripYn:          'N',
                         estTotalServicePrice: 2380000,
-                        comment:              '전문 관광 기사 요청',
-                        status:               'OPEN',
+                        reqStat:              'BIDDING',
+                        expireDt:             '2024-05-23T23:59:00',
                         regDt:                '2024-05-20T10:00:00',
                         waypointCount:        2,
                     },
                     {
-                        requestId:            2,
-                        userId:               'traveler_demo_02',
+                        reqUuid:              'demo-uuid-0002-0000-000000000002',
+                        tripTitle:            '서울-부산 왕복 전세버스',
                         busType:              '우등 28인승',
                         busCnt:               1,
                         passengerCnt:         28,
@@ -2295,10 +2601,9 @@ app.get('/api/list-of-traveler-quotations', async (req, res) => {
                         endDt:                '2024-06-01T21:00:00',
                         startAddr:            '서울 강남역',
                         endAddr:              '부산 해운대',
-                        roundTripYn:          'Y',
                         estTotalServicePrice: 1200000,
-                        comment:              null,
-                        status:               'OPEN',
+                        reqStat:              'BIDDING',
+                        expireDt:             '2024-05-31T23:59:00',
                         regDt:                '2024-05-28T09:00:00',
                         waypointCount:        0,
                     },
@@ -2309,6 +2614,80 @@ app.get('/api/list-of-traveler-quotations', async (req, res) => {
         res.status(200).json({ total: rows.length, items: rows });
     } catch (error) {
         console.error('list-of-traveler-quotations:', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+/**
+ * 실시간 입찰 기회 (운전기사 대시보드 AuctionList)
+ * GET /api/auction-list?driverUuid=
+ *
+ * TB_AUCTION_REQ: REQ_STAT = 'BIDDING' + DATE(START_DT) > CURDATE()
+ * + 동일 출발일에 다른 견적에 대해 RES_STAT = 'CONFIRM' 이면 제외 (ar.REQ_UUID <> r.REQ_UUID)
+ * + TB_AUCTION_REQ_BUS (차량 유형)
+ * + TB_BUS_RESERVATION 서브쿼리로 기사별 최신 입찰 상태(myBidStat)
+ */
+app.get('/api/auction-list', async (req, res) => {
+    const { driverUuid } = req.query;
+    if (!driverUuid) {
+        return res.status(400).json({ error: 'driverUuid가 필요합니다.' });
+    }
+    let connection;
+    try {
+        connection = await pool.getConnection();
+        const [rows] = await connection.execute(
+            `SELECT
+                BIN_TO_UUID(r.REQ_UUID)          AS reqUuid,
+                r.TRIP_TITLE                     AS tripTitle,
+                r.START_ADDR                     AS startAddr,
+                r.END_ADDR                       AS endAddr,
+                r.START_DT                       AS startDt,
+                r.END_DT                         AS endDt,
+                r.PASSENGER_CNT                  AS passengerCnt,
+                r.REQ_STAT                       AS reqStat,
+                COALESCE(r.REQ_AMT, 0)           AS reqAmt,
+                r.EXPIRE_DT                      AS expireDt,
+                r.REG_DT                         AS regDt,
+                ANY_VALUE(b.BUS_TYPE_CD)        AS busType,
+                COALESCE(SUM(b.REQ_BUS_CNT), 1) AS busCnt,
+                (SELECT res.RES_STAT
+                   FROM TB_BUS_RESERVATION res
+                  WHERE res.REQ_UUID = r.REQ_UUID
+                    AND res.DRIVER_UUID = UUID_TO_BIN(?)
+                  ORDER BY res.BID_SEQ DESC
+                  LIMIT 1
+                )                                AS myBidStat
+             FROM TB_AUCTION_REQ r
+             LEFT JOIN TB_AUCTION_REQ_BUS b ON b.REQ_UUID = r.REQ_UUID
+             WHERE r.REQ_STAT = 'BIDDING'
+               AND DATE(r.START_DT) > CURDATE()
+               AND NOT EXISTS (
+                    SELECT 1
+                      FROM TB_BUS_RESERVATION res2
+                      INNER JOIN TB_AUCTION_REQ ar ON ar.REQ_UUID = res2.REQ_UUID
+                     WHERE res2.DRIVER_UUID = UUID_TO_BIN(?)
+                       AND res2.RES_STAT = 'CONFIRM'
+                       AND DATE(ar.START_DT) = DATE(r.START_DT)
+                       AND ar.REQ_UUID <> r.REQ_UUID
+                   )
+             GROUP BY r.REQ_UUID, r.TRIP_TITLE, r.START_ADDR, r.END_ADDR,
+                      r.START_DT, r.END_DT, r.PASSENGER_CNT, r.REQ_STAT,
+                      r.REQ_AMT, r.EXPIRE_DT, r.REG_DT
+             ORDER BY r.REG_DT DESC`,
+            [driverUuid, driverUuid]
+        );
+        const payload = {
+            total: rows.length,
+            items: rows,
+        };
+        if (rows.length === 0) {
+            payload.emptyMessage = '등록된 입찰이 없습니다';
+        }
+        res.status(200).json(payload);
+    } catch (error) {
+        console.error('auction-list:', error);
         res.status(500).json({ error: error.message });
     } finally {
         if (connection) connection.release();
@@ -2382,99 +2761,165 @@ async function ensureBidTables(connection) {
             CONSTRAINT FK_WAYPOINT_REQ FOREIGN KEY (REQUEST_ID) REFERENCES TB_BID_REQUEST (REQUEST_ID) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='입찰 요청 경유지 상세'
     `);
+
+    // ── TB_BUS_RESERVATION 생성 (없을 경우)
+    await connection.execute(`
+        CREATE TABLE IF NOT EXISTS TB_BUS_RESERVATION (
+            RES_UUID             BINARY(16)    NOT NULL PRIMARY KEY              COMMENT '예약 고유 식별자 (UUID)',
+            REQUEST_ID           BIGINT        NOT NULL DEFAULT 0                COMMENT '연결된 입찰 요청 ID (TB_BID_REQUEST.REQUEST_ID 참조)',
+            TRAVELER_UUID        BINARY(16)    NOT NULL                          COMMENT '여행자 UUID (TB_USER.USER_UUID 참조)',
+            DRIVER_UUID          BINARY(16)    DEFAULT NULL                      COMMENT '입찰/확정 기사 UUID (TB_USER.USER_UUID 참조)',
+            BUS_UUID             BINARY(16)    DEFAULT NULL                      COMMENT '확정 차량 UUID',
+            DRIVER_BIDDING_PRICE DECIMAL(18,3) NOT NULL DEFAULT 0               COMMENT '버스기사 입찰가격',
+            RES_STAT             ENUM('REQ','CONFIRM','DONE','TRAVELER_CANCEL','DRIVER_CANCEL') DEFAULT 'REQ'
+                                                                                 COMMENT '예약 상태 (REQ:요청, CONFIRM:확정, DONE:완료, TRAVELER_CANCEL:여행자취소, DRIVER_CANCEL:기사취소)',
+            CONFIRM_DT           DATETIME      DEFAULT NULL                      COMMENT '예약 확정 일시',
+            REG_DT               DATETIME      DEFAULT CURRENT_TIMESTAMP        COMMENT '등록 일시',
+            REG_ID               VARCHAR(30)   DEFAULT NULL                     COMMENT '등록자 ID',
+            MOD_DT               DATETIME      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '수정 일시',
+            MOD_ID               VARCHAR(30)   DEFAULT NULL                     COMMENT '수정자 ID',
+            KEY FK_RES_REQUEST  (REQUEST_ID),
+            KEY FK_RES_TRAVELER (TRAVELER_UUID),
+            KEY FK_RES_DRIVER   (DRIVER_UUID)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='버스 예약 및 매칭 확정 정보'
+    `);
+
+    // ── 기존 TB_BUS_RESERVATION 컬럼 마이그레이션 (누락 컬럼 추가)
+    const resMigrations = [
+        `ALTER TABLE TB_BUS_RESERVATION ADD COLUMN REQUEST_ID BIGINT NOT NULL DEFAULT 0 COMMENT '입찰 요청 ID (TB_BID_REQUEST)' AFTER RES_UUID`,
+        // TB_AUCTION_REQ 연결용 UUID (역경매 원본 테이블 참조)
+        `ALTER TABLE TB_BUS_RESERVATION ADD COLUMN REQ_UUID BINARY(16) DEFAULT NULL COMMENT 'TB_AUCTION_REQ 연결 UUID' AFTER REQUEST_ID`,
+        `ALTER TABLE TB_BUS_RESERVATION ADD COLUMN DRIVER_BIDDING_PRICE DECIMAL(18,3) NOT NULL DEFAULT 0 COMMENT '버스기사 입찰가격' AFTER BUS_UUID`,
+        // 입찰 회차 (1부터 시작, 취소 후 재입찰 시 +1 자동 증가)
+        `ALTER TABLE TB_BUS_RESERVATION ADD COLUMN BID_SEQ INT NOT NULL DEFAULT 1 COMMENT '입찰 회차' AFTER DRIVER_BIDDING_PRICE`,
+        // RES_STAT ENUM 확장: 입찰취소 / 역경매취소 추가
+        `ALTER TABLE TB_BUS_RESERVATION MODIFY COLUMN RES_STAT ENUM(
+            'REQ','CONFIRM','DONE','TRAVELER_CANCEL','DRIVER_CANCEL',
+            'CANCELLATION_OF_BID','CANCELLATION_OF_AUCTION'
+         ) DEFAULT 'REQ' COMMENT '예약 상태'`,
+        // 최초 입찰(INSERT) 시 여행자 UUID 없이도 등록 가능하도록 nullable 허용
+        `ALTER TABLE TB_BUS_RESERVATION MODIFY COLUMN TRAVELER_UUID BINARY(16) DEFAULT NULL COMMENT '여행자 UUID (TB_USER.USER_UUID 참조)'`,
+        // REQ_UUID 인덱스
+        `ALTER TABLE TB_BUS_RESERVATION ADD KEY IDX_RES_REQ_UUID (REQ_UUID)`,
+    ];
+    for (const sql of resMigrations) {
+        try { await connection.execute(sql); } catch (e) { /* 이미 적용된 마이그레이션 무시 */ }
+    }
+}
+
+/** TB_CHAT_LOG — 기사·여행자 실시간 채팅 (견적 REQ 단위) */
+async function ensureTbChatLogTable(connection) {
+    await connection.execute(`
+        CREATE TABLE IF NOT EXISTS TB_CHAT_LOG (
+            CHAT_LOG_UUID BINARY(16) NOT NULL PRIMARY KEY COMMENT '채팅 로그 PK',
+            REQ_UUID BINARY(16) NOT NULL COMMENT 'TB_AUCTION_REQ.REQ_UUID',
+            RES_UUID BINARY(16) NULL COMMENT 'TB_BUS_RESERVATION.RES_UUID',
+            TRAVELER_UUID BINARY(16) NOT NULL COMMENT '여행자 USER_UUID',
+            DRIVER_UUID BINARY(16) NOT NULL COMMENT '기사 USER_UUID',
+            SENDER_UUID BINARY(16) NOT NULL COMMENT '발신자 USER_UUID',
+            SENDER_ROLE ENUM('TRAVELER','DRIVER','SYSTEM') NOT NULL,
+            MSG_KIND VARCHAR(20) NOT NULL DEFAULT 'TEXT' COMMENT 'TEXT, IMAGE, FILE, SYSTEM',
+            MSG_BODY TEXT NULL COMMENT '본문 또는 시스템 문구',
+            FILE_UUID BINARY(16) NULL COMMENT '첨부 시 TB_FILE_MASTER',
+            REG_DT DATETIME DEFAULT CURRENT_TIMESTAMP,
+            KEY IDX_CHAT_LOG_REQ_REG (REQ_UUID, REG_DT),
+            KEY IDX_CHAT_LOG_DRIVER (DRIVER_UUID, REG_DT),
+            KEY IDX_CHAT_LOG_THREAD (REQ_UUID, DRIVER_UUID, TRAVELER_UUID)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='실시간 채팅 로그'
+    `);
 }
 
 /**
  * 여행자 견적 요청 상세 조회
- * GET /api/traveler-quote-request-details?requestId=
- * - TB_BID_REQUEST (마스터) + TB_BID_WAYPOINT (경유지) 조회
+ * GET /api/traveler-quote-request-details?reqUuid=&driverUuid=
+ * - TB_AUCTION_REQ (마스터) + TB_AUCTION_REQ_BUS (차량) + TB_AUCTION_REQ_VIA (경유지) 조회
+ * - TB_BUS_RESERVATION — 기사 입찰가 / 상태 / 회차 별도 조회
  * - 데이터 없을 경우 개발용 더미 데이터 반환
  */
 app.get('/api/traveler-quote-request-details', async (req, res) => {
     let connection;
     try {
-        const { requestId } = req.query;
-        if (!requestId) return res.status(400).json({ error: 'requestId가 필요합니다.' });
+        const { reqUuid, driverUuid } = req.query;
+        if (!reqUuid) return res.status(400).json({ error: 'reqUuid가 필요합니다.' });
 
         connection = await pool.getConnection();
 
-        // 1. 마스터 조회
+        // 1. TB_AUCTION_REQ 마스터 조회
         const [rows] = await connection.execute(
             `SELECT
-                r.REQUEST_ID              AS requestId,
-                r.USER_ID                 AS userId,
-                r.BUS_TYPE                AS busType,
-                r.BUS_FUEL_EFF            AS busFuelEff,
-                r.PASSENGER_CNT           AS passengerCnt,
-                r.CALC_BUS_CNT            AS calcBusCnt,
-                r.BUS_CNT                 AS busCnt,
-                r.START_DT                AS startDt,
-                r.END_DT                  AS endDt,
-                r.ROUND_TRIP_YN           AS roundTripYn,
-                r.START_ADDR              AS startAddr,
-                r.START_DETAIL_ADDR       AS startDetailAddr,
-                r.START_LAT               AS startLat,
-                r.START_LNG               AS startLng,
-                r.END_ADDR                AS endAddr,
-                r.END_DETAIL_ADDR         AS endDetailAddr,
-                r.END_LAT                 AS endLat,
-                r.END_LNG                 AS endLng,
-                r.TOTAL_DISTANCE_KM       AS totalDistanceKm,
-                r.TOTAL_DURATION_MIN      AS totalDurationMin,
-                r.REST_AREA_CNT           AS restAreaCnt,
-                r.FUEL_PRICE_PER_L        AS fuelPricePerL,
-                r.EST_FUEL_COST           AS estFuelCost,
-                r.TOTAL_TOLL_FEE          AS totalTollFee,
-                r.MEAL_PRICE              AS mealPrice,
-                r.LODGING_PRICE           AS lodgingPrice,
-                r.TIP_PRICE               AS tipPrice,
-                r.INCIDENTAL_SUBTOTAL     AS incidentalSubtotal,
-                r.COMMENT                 AS comment,
-                r.EST_TOTAL_SERVICE_PRICE AS estTotalServicePrice,
-                r.STATUS                  AS status,
-                r.REG_DT                  AS regDt
-             FROM TB_BID_REQUEST r
-             WHERE r.REQUEST_ID = ?`,
-            [requestId]
+                BIN_TO_UUID(r.REQ_UUID)      AS reqUuid,
+                BIN_TO_UUID(r.TRAVELER_UUID) AS travelerUuid,
+                r.TRIP_TITLE                 AS tripTitle,
+                r.START_ADDR                 AS startAddr,
+                r.END_ADDR                   AS endAddr,
+                r.START_DT                   AS startDt,
+                r.END_DT                     AS endDt,
+                r.PASSENGER_CNT              AS passengerCnt,
+                r.REQ_STAT                   AS reqStat,
+                COALESCE(r.REQ_AMT, 0)       AS estTotalServicePrice,
+                r.EXPIRE_DT                  AS expireDt,
+                r.REG_DT                     AS regDt
+             FROM TB_AUCTION_REQ r
+             WHERE r.REQ_UUID = UUID_TO_BIN(?)`,
+            [reqUuid]
         );
 
+        // 2. TB_BUS_RESERVATION 별도 조회 (최신 회차 레코드 + 이전 취소 입찰가)
+        let resUuid = null, driverBiddingPrice = 0, resStat = 'REQ', prevBidPrice = 0, bidSeq = 0;
+        if (driverUuid) {
+            // 최신 입찰 레코드 (BID_SEQ DESC LIMIT 1)
+            const [resRows] = await connection.execute(
+                `SELECT BIN_TO_UUID(RES_UUID)             AS resUuid,
+                        COALESCE(DRIVER_BIDDING_PRICE, 0) AS driverBiddingPrice,
+                        COALESCE(RES_STAT, 'REQ')         AS resStat,
+                        COALESCE(BID_SEQ, 1)              AS bidSeq
+                   FROM TB_BUS_RESERVATION
+                  WHERE REQ_UUID = UUID_TO_BIN(?) AND DRIVER_UUID = UUID_TO_BIN(?)
+                  ORDER BY BID_SEQ DESC LIMIT 1`,
+                [reqUuid, driverUuid]
+            );
+            if (resRows.length > 0) {
+                resUuid            = resRows[0].resUuid;
+                driverBiddingPrice = Number(resRows[0].driverBiddingPrice) || 0;
+                resStat            = resRows[0].resStat || 'REQ';
+                bidSeq             = Number(resRows[0].bidSeq) || 1;
+            }
+            // 이전 취소 입찰가 (CANCELLATION_OF_BID 중 BID_SEQ 최대)
+            const [prevRows] = await connection.execute(
+                `SELECT COALESCE(DRIVER_BIDDING_PRICE, 0) AS prevBidPrice
+                   FROM TB_BUS_RESERVATION
+                  WHERE REQ_UUID = UUID_TO_BIN(?) AND DRIVER_UUID = UUID_TO_BIN(?)
+                    AND RES_STAT = 'CANCELLATION_OF_BID'
+                  ORDER BY BID_SEQ DESC LIMIT 1`,
+                [reqUuid, driverUuid]
+            );
+            if (prevRows.length > 0) prevBidPrice = Number(prevRows[0].prevBidPrice) || 0;
+        }
+
         if (rows.length === 0) {
+            // TB_AUCTION_REQ 데이터 없음 → 더미 반환
             return res.status(200).json({
-                requestId:            Number(requestId),
-                userId:               'traveler_demo_01',
+                reqUuid,
+                tripTitle:            '제주도 관광 여행 (더미)',
                 busType:              '대형 45인승',
-                busFuelEff:           4.5,
-                passengerCnt:         45,
-                calcBusCnt:           1,
                 busCnt:               1,
+                passengerCnt:         45,
                 startDt:              '2024-05-24T09:00:00',
                 endDt:                '2024-05-26T18:00:00',
-                roundTripYn:          'N',
                 startAddr:            '제주 국제공항',
-                startDetailAddr:      null,
-                startLat:             33.5112,
-                startLng:             126.4921,
                 endAddr:              '서귀포 중문 관광단지',
-                endDetailAddr:        null,
-                endLat:               33.2534,
-                endLng:               126.4123,
-                totalDistanceKm:      98.5,
-                totalDurationMin:     150,
-                restAreaCnt:          2,
-                fuelPricePerL:        1600,
-                estFuelCost:          35000,
-                totalTollFee:         12000,
-                mealPrice:            30000,
-                lodgingPrice:         80000,
-                tipPrice:             0,
-                incidentalSubtotal:   110000,
-                comment:              '전문 관광 기사 요청, 영어 가능 선호',
                 estTotalServicePrice: 2380000,
-                status:               'OPEN',
+                reqStat:              'BIDDING',
+                expireDt:             '2024-05-23T23:59:00',
                 regDt:                '2024-05-20T10:00:00',
+                resUuid,
+                driverBiddingPrice,
+                resStat,
+                bidSeq,
+                prevBidPrice,
                 waypoints: [
-                    { waypointId: 1, waypointAddr: '성산일출봉', waypointDetailAddr: null, lat: 33.4583, lng: 126.9422, sortOrder: 1, distFromPrev: 45.2, tollFromPrev: 0, durationFromPrev: 60 },
-                    { waypointId: 2, waypointAddr: '협재 해수욕장', waypointDetailAddr: null, lat: 33.3945, lng: 126.2393, sortOrder: 2, distFromPrev: 53.3, tollFromPrev: 0, durationFromPrev: 75 },
+                    { waypointId: 1, waypointAddr: '성산일출봉', sortOrder: 1, stopTimeMin: 60 },
+                    { waypointId: 2, waypointAddr: '협재 해수욕장', sortOrder: 2, stopTimeMin: 45 },
                 ],
                 priceGuide: { avgBid: null },
             });
@@ -2482,30 +2927,40 @@ app.get('/api/traveler-quote-request-details', async (req, res) => {
 
         const master = rows[0];
 
-        // 2. 경유지 조회
-        const [waypointRows] = await connection.execute(
+        // 3. TB_AUCTION_REQ_BUS 차량 정보 조회
+        const [busRows] = await connection.execute(
+            `SELECT BUS_TYPE_CD AS busType, REQ_BUS_CNT AS busCnt
+               FROM TB_AUCTION_REQ_BUS
+              WHERE REQ_UUID = UUID_TO_BIN(?)`,
+            [reqUuid]
+        );
+        const busInfo = busRows.length > 0 ? busRows[0] : { busType: null, busCnt: 1 };
+
+        // 4. TB_AUCTION_REQ_VIA 경유지 조회
+        const [viaRows] = await connection.execute(
             `SELECT
-                w.WAYPOINT_ID          AS waypointId,
-                w.WAYPOINT_ADDR        AS waypointAddr,
-                w.WAYPOINT_DETAIL_ADDR AS waypointDetailAddr,
-                w.LAT                  AS lat,
-                w.LNG                  AS lng,
-                w.SORT_ORDER           AS sortOrder,
-                w.DIST_FROM_PREV       AS distFromPrev,
-                w.TOLL_FROM_PREV       AS tollFromPrev,
-                w.DURATION_FROM_PREV   AS durationFromPrev
-             FROM TB_BID_WAYPOINT w
-             WHERE w.REQUEST_ID = ?
-             ORDER BY w.SORT_ORDER`,
-            [requestId]
+                VIA_ORD       AS sortOrder,
+                VIA_ADDR      AS waypointAddr,
+                STOP_TIME_MIN AS stopTimeMin
+             FROM TB_AUCTION_REQ_VIA
+             WHERE REQ_UUID = UUID_TO_BIN(?)
+             ORDER BY VIA_ORD`,
+            [reqUuid]
         );
 
-        // 3. 가격 가이드 (TODO: TB_BID 낙찰 테이블 연동 시 MAX/AVG 집계로 교체)
+        // 5. 가격 가이드
         const priceGuide = { avgBid: null };
 
         res.status(200).json({
             ...master,
-            waypoints: waypointRows,
+            busType:  busInfo.busType,
+            busCnt:   busInfo.busCnt,
+            resUuid,
+            driverBiddingPrice,
+            resStat,
+            bidSeq,
+            prevBidPrice,
+            waypoints: viaRows,
             priceGuide,
         });
     } catch (error) {
@@ -2516,7 +2971,175 @@ app.get('/api/traveler-quote-request-details', async (req, res) => {
     }
 });
 
+/**
+ * 기사 입찰가 수정 / 신규 등록
+ * PUT /api/traveler-quote-request-details/bid
+ * Body: { resUuid?, reqUuid?, driverUuid?, bidPrice }
+ * - resStat = 'REQ' 일 때만 DRIVER_BIDDING_PRICE 갱신 허용
+ * - resUuid 또는 (reqUuid + driverUuid) 중 하나 필수
+ */
+const RES_STAT_LABEL = { CONFIRM: '확정', DONE: '완료', TRAVELER_CANCEL: '여행자 취소', DRIVER_CANCEL: '버스기사 취소' };
+app.put('/api/traveler-quote-request-details/bid', async (req, res) => {
+    let connection;
+    try {
+        const { resUuid, reqUuid, driverUuid, bidPrice } = req.body;
+        const bidPriceNum = Number(String(bidPrice ?? '').replace(/,/g, ''));
+        if (isNaN(bidPriceNum) || bidPriceNum < 0) {
+            return res.status(400).json({ error: '유효한 입찰가(bidPrice)가 필요합니다.' });
+        }
+        if (!resUuid && !(reqUuid && driverUuid)) {
+            return res.status(400).json({ error: 'resUuid 또는 (reqUuid + driverUuid)가 필요합니다.' });
+        }
 
+        connection = await pool.getConnection();
+
+        // ── 기존 레코드 조회
+        let resStat, resUuidBin;
+        if (resUuid) {
+            const [rows] = await connection.execute(
+                `SELECT RES_UUID, RES_STAT FROM TB_BUS_RESERVATION WHERE RES_UUID = UUID_TO_BIN(?)`,
+                [resUuid]
+            );
+            if (rows.length > 0) {
+                resStat    = rows[0].RES_STAT;
+                resUuidBin = rows[0].RES_UUID;
+            }
+        } else {
+            const [rows] = await connection.execute(
+                `SELECT RES_UUID, RES_STAT FROM TB_BUS_RESERVATION
+                  WHERE REQ_UUID = UUID_TO_BIN(?) AND DRIVER_UUID = UUID_TO_BIN(?)
+                  ORDER BY BID_SEQ DESC LIMIT 1`,
+                [reqUuid, driverUuid]
+            );
+            if (rows.length > 0) {
+                resStat    = rows[0].RES_STAT;
+                resUuidBin = rows[0].RES_UUID;
+            }
+        }
+
+        // ── 기존 레코드 있으면 UPDATE, 없거나 CANCELLATION_OF_BID이면 신규 INSERT
+        const shouldInsert = !resUuidBin || resStat === 'CANCELLATION_OF_BID';
+        if (!shouldInsert) {
+            // 상태 검증: REQ 일 때만 수정 허용
+            if (resStat !== 'REQ') {
+                return res.status(409).json({
+                    error: `예약 상태(${RES_STAT_LABEL[resStat] || resStat})가 '요청(REQ)' 상태가 아니므로 입찰가를 수정할 수 없습니다.`,
+                    resStat,
+                });
+            }
+            await connection.execute(
+                `UPDATE TB_BUS_RESERVATION SET DRIVER_BIDDING_PRICE = ?, MOD_DT = NOW() WHERE RES_UUID = ?`,
+                [bidPriceNum, resUuidBin]
+            );
+            res.status(200).json({ success: true, message: '입찰가가 성공적으로 수정되었습니다.', isNew: false });
+        } else {
+            // 신규 입찰 등록 (최초 or 입찰 취소 후 재등록): UUID 생성 + BID_SEQ 자동 계산 후 INSERT
+            if (!reqUuid || !driverUuid) {
+                return res.status(400).json({ error: '신규 등록 시 reqUuid와 driverUuid가 필요합니다.' });
+            }
+            // 현재 최대 BID_SEQ 조회 → +1 (없으면 1)
+            const [[{ maxSeq }]] = await connection.execute(
+                `SELECT COALESCE(MAX(BID_SEQ), 0) AS maxSeq
+                   FROM TB_BUS_RESERVATION
+                  WHERE REQ_UUID = UUID_TO_BIN(?) AND DRIVER_UUID = UUID_TO_BIN(?)`,
+                [reqUuid, driverUuid]
+            );
+            const nextBidSeq = Number(maxSeq) + 1;
+            const [[{ newUuid }]] = await connection.execute('SELECT UUID() AS newUuid');
+            await connection.execute(
+                `INSERT INTO TB_BUS_RESERVATION
+                    (RES_UUID, REQ_UUID, DRIVER_UUID, BID_SEQ, DRIVER_BIDDING_PRICE, RES_STAT, REG_DT, MOD_DT)
+                 VALUES
+                    (UUID_TO_BIN(?), UUID_TO_BIN(?), UUID_TO_BIN(?), ?, ?, 'REQ', NOW(), NOW())`,
+                [newUuid, reqUuid, driverUuid, nextBidSeq, bidPriceNum]
+            );
+            res.status(200).json({ success: true, message: '입찰가가 성공적으로 등록되었습니다.', isNew: true, resUuid: newUuid, bidSeq: nextBidSeq });
+        }
+    } catch (error) {
+        console.error('traveler-quote-request-details/bid PUT:', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * PUT /api/traveler-quote-request-details/bid-cancel
+ * 입찰 취소: RES_STAT = 'REQ' 인 경우에만 CANCELLATION_OF_BID 로 변경
+ */
+const BID_CANCEL_ERROR_MSG = {
+    CONFIRM:                  "본 경매는 확정되어 '입찰 취소'할 수 없습니다.",
+    DONE:                     "본 경매는 여행 완료되어 '입찰 취소'할 수 없습니다.",
+    TRAVELER_CANCEL:          "본 경매는 여행자가 여행 확정 취소하여 '입찰 취소'할 수 없습니다.",
+    DRIVER_CANCEL:            "본 경매는 버스 기사가 여행 확정 취소하여 '입찰 취소'할 수 없습니다.",
+    CANCELLATION_OF_BID:      "본 경매는 버스 기사가 입찰 취소하여 '입찰 취소'할 수 없습니다.",
+    CANCELLATION_OF_AUCTION:  "본 경매는 여행자가 경매 취소하여 '입찰 취소'할 수 없습니다.",
+};
+
+app.put('/api/traveler-quote-request-details/bid-cancel', async (req, res) => {
+    let connection;
+    try {
+        const { resUuid, reqUuid, driverUuid } = req.body;
+
+        if (!resUuid && !(reqUuid && driverUuid)) {
+            return res.status(400).json({ error: 'resUuid 또는 (reqUuid + driverUuid) 중 하나는 필수입니다.' });
+        }
+
+        connection = await pool.getConnection();
+
+        // 예약 정보 조회 (최신 회차 기준 — BID_SEQ DESC)
+        let row;
+        if (resUuid) {
+            const [rows] = await connection.execute(
+                `SELECT BIN_TO_UUID(RES_UUID) AS resUuid, RES_STAT, BID_SEQ
+                   FROM TB_BUS_RESERVATION
+                  WHERE RES_UUID = UUID_TO_BIN(?)`,
+                [resUuid]
+            );
+            row = rows[0];
+        } else {
+            const [rows] = await connection.execute(
+                `SELECT BIN_TO_UUID(RES_UUID) AS resUuid, RES_STAT, BID_SEQ
+                   FROM TB_BUS_RESERVATION
+                  WHERE REQ_UUID = UUID_TO_BIN(?) AND DRIVER_UUID = UUID_TO_BIN(?)
+                  ORDER BY BID_SEQ DESC LIMIT 1`,
+                [reqUuid, driverUuid]
+            );
+            row = rows[0];
+        }
+
+        if (!row) {
+            return res.status(404).json({ error: '입찰 정보를 찾을 수 없습니다.' });
+        }
+
+        // REQ 상태가 아닌 경우 → 상태별 오류 메시지 반환
+        if (row.RES_STAT !== 'REQ') {
+            const message = BID_CANCEL_ERROR_MSG[row.RES_STAT] || `현재 상태(${row.RES_STAT})에서는 입찰 취소할 수 없습니다.`;
+            return res.status(409).json({ error: message, resStat: row.RES_STAT });
+        }
+
+        // RES_STAT → CANCELLATION_OF_BID 갱신
+        await connection.execute(
+            `UPDATE TB_BUS_RESERVATION
+                SET RES_STAT = 'CANCELLATION_OF_BID', MOD_DT = NOW()
+              WHERE RES_UUID = UUID_TO_BIN(?)`,
+            [row.resUuid]
+        );
+
+        res.status(200).json({ success: true, message: '입찰이 취소되었습니다.', resStat: 'CANCELLATION_OF_BID' });
+    } catch (error) {
+        console.error('traveler-quote-request-details/bid-cancel PUT:', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+app.use('/api/live-chat-bus-driver', createLiveChatBusDriverRouter(pool));
+app.use('/api/live-chat-traveler', createLiveChatTravelerRouter(pool));
+app.use('/api/user/device-token', createUserDeviceTokenRouter(pool));
 
 (async function startServer() {
     // ── 서버 시작 시 DB 스키마 마이그레이션 (테이블·컬럼 자동 생성·추가) ──
@@ -2526,6 +3149,9 @@ app.get('/api/traveler-quote-request-details', async (req, res) => {
 
         await ensureTbUserTable(connection);
         console.log('✅ TB_USER 확인 완료');
+
+        await ensureTbUserDeviceTokenTable(connection);
+        console.log('✅ TB_USER_DEVICE_TOKEN 확인 완료');
 
         await ensureDriverInfoTable(connection);
         console.log('✅ TB_DRIVER_INFO 확인 완료');
@@ -2548,6 +3174,10 @@ app.get('/api/traveler-quote-request-details', async (req, res) => {
 
         await ensureBidTables(connection);
         console.log('✅ TB_BID_REQUEST / TB_BID_WAYPOINT 확인 완료');
+
+        await ensureTbChatLogTable(connection);
+        await migrateTbChatLogColumns(connection);
+        console.log('✅ TB_CHAT_LOG 확인·마이그레이션 완료');
 
     } catch (e) {
         console.error('⚠️ DB 부트스트랩 실패 (DB 연결·권한 확인):', e.message);

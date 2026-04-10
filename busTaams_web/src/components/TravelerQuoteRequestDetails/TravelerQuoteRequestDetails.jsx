@@ -2,31 +2,48 @@ import React, { useState, useEffect, useCallback } from 'react';
 
 /**
  * 여행자 견적 요청 상세 (TravelerQuoteRequestDetails)
- * - ListOfTravelerQuotations 모달에서 항목 클릭 시 requestId(bigint)를 받아 호출
- * - GET /api/traveler-quote-request-details?requestId=
- * - 데이터 출처: TB_BID_REQUEST (마스터) + TB_BID_WAYPOINT (경유지)
- * - UI 기준: Downloads/bustaams_web/입찰상세및수정_기사/BidDetailEdit.html
+ * - ListOfTravelerQuotations 모달에서 항목 클릭 시 reqUuid(string)를 받아 호출
+ * - GET /api/traveler-quote-request-details?reqUuid=
+ * - 데이터 출처: TB_AUCTION_REQ (마스터) + TB_AUCTION_REQ_BUS (차량) + TB_AUCTION_REQ_VIA (경유지)
  */
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
 
-const TravelerQuoteRequestDetails = ({ close, requestId, currentUser }) => {
-    const [loading, setLoading]     = useState(true);
-    const [loadError, setLoadError] = useState(null);
-    const [data, setData]           = useState(null);
+const RES_STAT_LABEL = { REQ: '요청', CONFIRM: '확정', DONE: '완료', TRAVELER_CANCEL: '여행자 취소', DRIVER_CANCEL: '버스기사 취소', CANCELLATION_OF_BID: '입찰 취소', CANCELLATION_OF_AUCTION: '역경매 취소' };
+const RES_STAT_COLOR = { REQ: 'text-blue-600 bg-blue-50', CONFIRM: 'text-green-600 bg-green-50', DONE: 'text-slate-600 bg-slate-100', TRAVELER_CANCEL: 'text-red-600 bg-red-50', DRIVER_CANCEL: 'text-orange-600 bg-orange-50', CANCELLATION_OF_BID: 'text-rose-600 bg-rose-50', CANCELLATION_OF_AUCTION: 'text-purple-600 bg-purple-50' };
+
+const TravelerQuoteRequestDetails = ({ close, reqUuid, currentUser }) => {
+    const [loading, setLoading]         = useState(true);
+    const [loadError, setLoadError]     = useState(null);
+    const [data, setData]               = useState(null);
+
+    // 예약 상태 (TB_BUS_RESERVATION)
+    const [resUuid, setResUuid]         = useState(null);
+    const [resStat, setResStat]         = useState('REQ');
 
     // 입찰 가격 입력 상태
-    const [bidPrice, setBidPrice]               = useState('');
-    const [accommodation, setAccommodation]     = useState('');
-    const [toll, setToll]                       = useState('');
-    const [fuel, setFuel]                       = useState('');
+    const [bidPrice, setBidPrice]         = useState('');
+    const [prevBidPrice, setPrevBidPrice] = useState(0); // 이전 취소 입찰가
+    const [bidSeq, setBidSeq]             = useState(0); // 입찰 회차
+
+    // 입찰가 수정 상태
+    const [updating, setUpdating]           = useState(false);
+    const [updateError, setUpdateError]     = useState(null);
+    const [updateSuccess, setUpdateSuccess] = useState(false);
+
+    // 입찰 취소 상태
+    const [cancelling, setCancelling]       = useState(false);
+    const [cancelPopup, setCancelPopup]     = useState(null); // { type: 'error'|'confirm', message }
+    const [cancelSuccess, setCancelSuccess] = useState(false);
 
     const fetchData = useCallback(async () => {
-        if (!requestId) return;
+        if (!reqUuid) return;
         setLoading(true);
         setLoadError(null);
         try {
-            const res  = await fetch(`${API_BASE}/api/traveler-quote-request-details?requestId=${encodeURIComponent(requestId)}`);
+            const driverUuid = currentUser?.userUuid || currentUser?.USER_UUID_STR || '';
+            const url = `${API_BASE}/api/traveler-quote-request-details?reqUuid=${encodeURIComponent(reqUuid)}${driverUuid ? `&driverUuid=${encodeURIComponent(driverUuid)}` : ''}`;
+            const res  = await fetch(url);
             const text = await res.text();
             const trimmed = text.trimStart();
             if (trimmed.startsWith('<') || trimmed.startsWith('<!')) {
@@ -35,16 +52,134 @@ const TravelerQuoteRequestDetails = ({ close, requestId, currentUser }) => {
             if (!res.ok) throw new Error(JSON.parse(text)?.error || `${res.status}`);
             const json = JSON.parse(text);
             setData(json);
-            // 비용 필드 초기값 설정
-            if (json.lodgingPrice)  setAccommodation(Number(json.lodgingPrice).toLocaleString('ko-KR'));
-            if (json.totalTollFee)  setToll(Number(json.totalTollFee).toLocaleString('ko-KR'));
-            if (json.estFuelCost)   setFuel(Number(json.estFuelCost).toLocaleString('ko-KR'));
+
+            // 이전 취소 입찰가 저장
+            setPrevBidPrice(Number(json.prevBidPrice) || 0);
+
+            if (json.resStat === 'CANCELLATION_OF_BID') {
+                // 입찰 취소 상태 → 이전 입찰가를 prevBidPrice로, 새 입찰 등록 모드
+                setPrevBidPrice(Number(json.driverBiddingPrice) || 0);
+                setBidPrice('');
+                setResUuid(null);        // 기존 UUID 무시 → PUT /bid 시 신규 INSERT
+                setResStat('REQ');
+                setBidSeq(Number(json.bidSeq) || 0); // 취소된 회차 (다음 등록 시 +1)
+            } else {
+                setResUuid(json.resUuid || null);
+                setResStat(json.resStat || 'REQ');
+                setBidSeq(Number(json.bidSeq) || 0);
+                if (json.driverBiddingPrice > 0) {
+                    setBidPrice(Number(json.driverBiddingPrice).toLocaleString('ko-KR'));
+                }
+            }
         } catch (e) {
             setLoadError(e.message);
         } finally {
             setLoading(false);
         }
-    }, [requestId]);
+    }, [reqUuid, currentUser]);
+
+    const handleBidUpdate = useCallback(async () => {
+        if (resStat !== 'REQ') {
+            setUpdateError(`예약 상태(${RES_STAT_LABEL[resStat] || resStat})가 '요청(REQ)' 상태가 아니므로 입찰가를 수정할 수 없습니다.`);
+            return;
+        }
+        const bidPriceNum = Number(String(bidPrice).replace(/,/g, ''));
+        if (!bidPriceNum || bidPriceNum <= 0) {
+            setUpdateError('유효한 입찰가를 입력해 주세요.');
+            return;
+        }
+        const driverUuid = currentUser?.userUuid || currentUser?.USER_UUID_STR || '';
+        if (!resUuid && !driverUuid) {
+            setUpdateError('기사 정보를 확인할 수 없습니다. 다시 로그인해 주세요.');
+            return;
+        }
+        setUpdating(true);
+        setUpdateError(null);
+        setUpdateSuccess(false);
+        try {
+            // resUuid가 없으면(최초/재등록) reqUuid + driverUuid 포함
+            const body = resUuid
+                ? { resUuid, reqUuid, driverUuid, bidPrice: bidPriceNum }
+                : { reqUuid, driverUuid, bidPrice: bidPriceNum };
+            const res = await fetch(`${API_BASE}/api/traveler-quote-request-details/bid`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const rawText = await res.text();
+            const trimmed = rawText.trimStart();
+            if (trimmed.startsWith('<') || trimmed.startsWith('<!')) {
+                throw new Error('백엔드 서버가 응답하지 않습니다. 서버를 재시작한 후 다시 시도해 주세요.');
+            }
+            const json = JSON.parse(rawText);
+            if (!res.ok) throw new Error(json.error || `서버 오류 (${res.status})`);
+            // 신규 등록 시 반환된 resUuid / bidSeq 저장
+            if (json.isNew && json.resUuid) setResUuid(json.resUuid);
+            if (json.bidSeq) setBidSeq(json.bidSeq);
+            setUpdateSuccess(true);
+            setTimeout(() => setUpdateSuccess(false), 3000);
+        } catch (e) {
+            setUpdateError(e.message);
+        } finally {
+            setUpdating(false);
+        }
+    }, [resStat, bidPrice, resUuid, reqUuid, currentUser]);
+
+    // RES_STAT별 입찰 취소 불가 메시지
+    const BID_CANCEL_ERROR_MSG = {
+        CONFIRM:                 "본 경매는 확정되어 '입찰 취소'할 수 없습니다.",
+        DONE:                    "본 경매는 여행 완료되어 '입찰 취소'할 수 없습니다.",
+        TRAVELER_CANCEL:         "본 경매는 여행자가 여행 확정 취소하여 '입찰 취소'할 수 없습니다.",
+        DRIVER_CANCEL:           "본 경매는 버스 기사가 여행 확정 취소하여 '입찰 취소'할 수 없습니다.",
+        CANCELLATION_OF_BID:     "본 경매는 버스 기사가 입찰 취소하여 '입찰 취소'할 수 없습니다.",
+        CANCELLATION_OF_AUCTION: "본 경매는 여행자가 경매 취소하여 '입찰 취소'할 수 없습니다.",
+    };
+
+    const handleBidCancel = useCallback(async () => {
+        // REQ가 아닌 경우 즉시 오류 팝업
+        if (resStat !== 'REQ') {
+            setCancelPopup({
+                type: 'error',
+                message: BID_CANCEL_ERROR_MSG[resStat] || `현재 상태(${RES_STAT_LABEL[resStat] || resStat})에서는 입찰 취소할 수 없습니다.`,
+            });
+            return;
+        }
+        // REQ인 경우 확인 팝업
+        setCancelPopup({ type: 'confirm', message: '입찰을 취소하시겠습니까?\n취소 후에는 되돌릴 수 없습니다.' });
+    }, [resStat]);
+
+    const executeBidCancel = useCallback(async () => {
+        setCancelPopup(null);
+        const driverUuid = currentUser?.userUuid || currentUser?.USER_UUID_STR || '';
+        setCancelling(true);
+        setCancelSuccess(false);
+        try {
+            const body = resUuid
+                ? { resUuid }
+                : { reqUuid, driverUuid };
+            const res = await fetch(`${API_BASE}/api/traveler-quote-request-details/bid-cancel`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const rawText = await res.text();
+            if (rawText.trimStart().startsWith('<')) {
+                throw new Error('백엔드 서버가 응답하지 않습니다. 서버를 재시작한 후 다시 시도해 주세요.');
+            }
+            const json = JSON.parse(rawText);
+            if (!res.ok) {
+                setCancelPopup({ type: 'error', message: json.error || `서버 오류 (${res.status})` });
+                return;
+            }
+            setResStat('CANCELLATION_OF_BID');
+            setCancelSuccess(true);
+            setTimeout(() => setCancelSuccess(false), 3000);
+        } catch (e) {
+            setCancelPopup({ type: 'error', message: e.message });
+        } finally {
+            setCancelling(false);
+        }
+    }, [resUuid, reqUuid, currentUser]);
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -75,6 +210,40 @@ const TravelerQuoteRequestDetails = ({ close, requestId, currentUser }) => {
 
     return (
         <>
+            {/* ── 입찰 취소 팝업 모달 ── */}
+            {cancelPopup && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-8 flex flex-col gap-6 animate-in zoom-in-95 duration-150">
+                        <div className="flex items-start gap-4">
+                            <span className={`material-symbols-outlined text-3xl flex-shrink-0 ${cancelPopup.type === 'error' ? 'text-error' : 'text-amber-500'}`}>
+                                {cancelPopup.type === 'error' ? 'error' : 'help'}
+                            </span>
+                            <p className="text-base font-semibold text-on-surface leading-relaxed whitespace-pre-line">
+                                {cancelPopup.message}
+                            </p>
+                        </div>
+                        <div className="flex gap-3 justify-end">
+                            {cancelPopup.type === 'confirm' && (
+                                <button
+                                    type="button"
+                                    onClick={executeBidCancel}
+                                    className="px-6 py-2.5 bg-error text-white rounded-full font-bold hover:opacity-90 transition-opacity"
+                                >
+                                    취소 확인
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => setCancelPopup(null)}
+                                className="px-6 py-2.5 bg-slate-100 text-slate-600 rounded-full font-bold hover:bg-slate-200 transition-colors"
+                            >
+                                {cancelPopup.type === 'error' ? '확인' : '닫기'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div
                 className="fixed inset-0 z-[200] flex min-h-0 items-center justify-center overflow-y-auto bg-gray-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200"
                 style={{ fontFamily: "'Manrope', sans-serif" }}
@@ -126,13 +295,13 @@ const TravelerQuoteRequestDetails = ({ close, requestId, currentUser }) => {
                                                 <span className="w-2 h-2 bg-secondary rounded-full animate-pulse"></span>
                                                 실시간 입찰
                                             </span>
-                                            <span className="text-slate-400 text-sm">
-                                                요청 ID: #{data?.requestId || 'N/A'}
+                                            <span className="text-slate-400 text-xs font-mono truncate max-w-[200px]" title={data?.reqUuid}>
+                                                REQ: {data?.reqUuid ? data.reqUuid.slice(0, 8) + '…' : 'N/A'}
                                             </span>
-                                            {data?.roundTripYn === 'Y' && (
-                                                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">왕복</span>
-                                            )}
                                         </div>
+                                        {data?.tripTitle && (
+                                            <p className="text-sm font-semibold text-primary mb-1">{data.tripTitle}</p>
+                                        )}
                                         <h1
                                             className="text-4xl font-extrabold text-on-surface tracking-tighter mb-4"
                                             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
@@ -142,10 +311,6 @@ const TravelerQuoteRequestDetails = ({ close, requestId, currentUser }) => {
                                         <p className="text-slate-500 text-lg">
                                             입찰 상세 및 수정
                                         </p>
-                                    </div>
-                                    <div className="flex gap-4">
-                                        <button type="button" className="px-6 py-3 border border-outline-variant rounded-full text-slate-600 hover:bg-surface-container-low transition-colors font-semibold">신고하기</button>
-                                        <button type="button" className="px-6 py-3 border border-outline-variant rounded-full text-slate-600 hover:bg-surface-container-low transition-colors font-semibold">공유</button>
                                     </div>
                                 </header>
 
@@ -278,11 +443,23 @@ const TravelerQuoteRequestDetails = ({ close, requestId, currentUser }) => {
                                                 >
                                                     입찰 수정하기
                                                 </h2>
-                                                <div className="flex items-center gap-2 text-primary bg-primary/5 px-4 py-2 rounded-full">
-                                                    <span className="material-symbols-outlined text-sm">trending_down</span>
-                                                    <span className="text-sm font-bold">평균가 대비 5% 저렴</span>
-                                                </div>
+                                                {/* 예약 상태 배지 */}
+                                                <span className={`px-4 py-2 rounded-full text-sm font-bold ${RES_STAT_COLOR[resStat] || 'text-slate-500 bg-slate-100'}`}>
+                                                    {RES_STAT_LABEL[resStat] || resStat}
+                                                </span>
                                             </div>
+
+                                            {/* REQ가 아닐 때 수정 불가 안내 */}
+                                            {resStat !== 'REQ' && (
+                                                <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3">
+                                                    <span className="material-symbols-outlined text-amber-500">lock</span>
+                                                    <p className="text-sm font-semibold text-amber-700">
+                                                        현재 예약 상태({RES_STAT_LABEL[resStat] || resStat})에서는 입찰가를 수정할 수 없습니다.
+                                                        요청(REQ) 상태일 때만 수정 가능합니다.
+                                                    </p>
+                                                </div>
+                                            )}
+
                                             <div className="space-y-10">
 
                                                 {/* 최종 입찰 가격 */}
@@ -291,64 +468,70 @@ const TravelerQuoteRequestDetails = ({ close, requestId, currentUser }) => {
                                                     <div className="relative group">
                                                         <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-bold text-on-surface-variant group-focus-within:text-primary transition-colors">₩</span>
                                                         <input
-                                                            className="w-full bg-surface-container-high border-none rounded-2xl py-6 pl-14 pr-10 text-3xl font-black text-on-surface focus:ring-4 focus:ring-primary-container/10 transition-all placeholder:text-slate-300"
+                                                            className={`w-full border-none rounded-2xl py-6 pl-14 pr-10 text-3xl font-black text-on-surface focus:ring-4 focus:ring-primary-container/10 transition-all placeholder:text-slate-300 ${resStat !== 'REQ' ? 'bg-slate-100 cursor-not-allowed text-slate-400' : 'bg-surface-container-high'}`}
                                                             type="text"
                                                             value={bidPrice}
-                                                            onChange={(e) => setBidPrice(e.target.value)}
+                                                            onChange={(e) => {
+                                                                if (resStat !== 'REQ') return;
+                                                                const raw = e.target.value.replace(/[^0-9]/g, '');
+                                                                setBidPrice(raw === '' ? '' : Number(raw).toLocaleString('ko-KR'));
+                                                            }}
                                                             placeholder="0"
+                                                            readOnly={resStat !== 'REQ'}
                                                         />
                                                         <div className="absolute right-6 top-1/2 -translate-y-1/2 bg-surface-container-highest px-3 py-1 rounded-lg text-xs font-bold text-slate-500">VAT 포함</div>
                                                     </div>
-                                                    <div className="mt-4 flex gap-2">
-                                                        <button type="button" onClick={() => adjustBidPrice(-50000)} className="px-4 py-2 bg-surface-container text-xs font-bold rounded-full hover:bg-slate-200 transition-colors">-₩50,000</button>
-                                                        <button type="button" onClick={() => adjustBidPrice(-10000)} className="px-4 py-2 bg-surface-container text-xs font-bold rounded-full hover:bg-slate-200 transition-colors">-₩10,000</button>
-                                                        <button type="button" onClick={() => adjustBidPrice(10000)}  className="px-4 py-2 bg-surface-container text-xs font-bold rounded-full hover:bg-slate-200 transition-colors">+₩10,000</button>
-                                                        <button type="button" onClick={() => adjustBidPrice(50000)}  className="px-4 py-2 bg-surface-container text-xs font-bold rounded-full hover:bg-slate-200 transition-colors">+₩50,000</button>
-                                                    </div>
+                                                    {resStat === 'REQ' && (
+                                                        <div className="mt-4 flex gap-2">
+                                                            <button type="button" onClick={() => adjustBidPrice(-50000)} className="px-4 py-2 bg-surface-container text-xs font-bold rounded-full hover:bg-slate-200 transition-colors">-₩50,000</button>
+                                                            <button type="button" onClick={() => adjustBidPrice(-10000)} className="px-4 py-2 bg-surface-container text-xs font-bold rounded-full hover:bg-slate-200 transition-colors">-₩10,000</button>
+                                                            <button type="button" onClick={() => adjustBidPrice(10000)}  className="px-4 py-2 bg-surface-container text-xs font-bold rounded-full hover:bg-slate-200 transition-colors">+₩10,000</button>
+                                                            <button type="button" onClick={() => adjustBidPrice(50000)}  className="px-4 py-2 bg-surface-container text-xs font-bold rounded-full hover:bg-slate-200 transition-colors">+₩50,000</button>
+                                                        </div>
+                                                    )}
                                                 </div>
 
-                                                {/* 상세 비용 산출 */}
-                                                <div className="pt-10 border-t border-slate-100">
-                                                    <h3 className="text-lg font-bold mb-6" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>상세 비용 산출</h3>
-                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                        <div className="bg-surface-container-low p-5 rounded-xl">
-                                                            <div className="flex items-center justify-between mb-4">
-                                                                <span className="material-symbols-outlined text-primary text-xl">hotel</span>
-                                                                <span className="text-xs font-bold text-slate-400">숙박비 (LODGING_PRICE)</span>
-                                                            </div>
-                                                            <input className="w-full bg-transparent border-none p-0 text-xl font-bold text-on-surface focus:ring-0" type="text" value={accommodation} onChange={e => setAccommodation(e.target.value)} placeholder="0" />
-                                                        </div>
-                                                        <div className="bg-surface-container-low p-5 rounded-xl">
-                                                            <div className="flex items-center justify-between mb-4">
-                                                                <span className="material-symbols-outlined text-primary text-xl">toll</span>
-                                                                <span className="text-xs font-bold text-slate-400">통행료 (TOTAL_TOLL_FEE)</span>
-                                                            </div>
-                                                            <input className="w-full bg-transparent border-none p-0 text-xl font-bold text-on-surface focus:ring-0" type="text" value={toll} onChange={e => setToll(e.target.value)} placeholder="0" />
-                                                        </div>
-                                                        <div className="bg-surface-container-low p-5 rounded-xl">
-                                                            <div className="flex items-center justify-between mb-4">
-                                                                <span className="material-symbols-outlined text-primary text-xl">local_gas_station</span>
-                                                                <span className="text-xs font-bold text-slate-400">유류비 (EST_FUEL_COST)</span>
-                                                            </div>
-                                                            <input className="w-full bg-transparent border-none p-0 text-xl font-bold text-on-surface focus:ring-0" type="text" value={fuel} onChange={e => setFuel(e.target.value)} placeholder="0" />
-                                                        </div>
+                                                {/* 수정 결과 메시지 */}
+                                                {updateError && (
+                                                    <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
+                                                        <span className="material-symbols-outlined text-error">error</span>
+                                                        <p className="text-sm font-semibold text-error">{updateError}</p>
                                                     </div>
-                                                    <div className="mt-6 p-4 bg-tertiary-fixed/30 rounded-xl flex items-center gap-3">
-                                                        <span className="material-symbols-outlined text-tertiary">info</span>
-                                                        <p className="text-xs text-tertiary-container font-semibold">각 항목별 비용은 입찰 승인 후 영수증 증빙을 통해 정산될 수 있습니다.</p>
+                                                )}
+                                                {updateSuccess && (
+                                                    <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
+                                                        <span className="material-symbols-outlined text-green-600">check_circle</span>
+                                                        <p className="text-sm font-semibold text-green-700">입찰가가 성공적으로 수정되었습니다.</p>
                                                     </div>
-                                                </div>
+                                                )}
+
+                                                {/* 입찰 취소 성공 메시지 */}
+                                                {cancelSuccess && (
+                                                    <div className="flex items-center gap-3 p-4 bg-rose-50 border border-rose-200 rounded-xl">
+                                                        <span className="material-symbols-outlined text-rose-500">cancel</span>
+                                                        <p className="text-sm font-semibold text-rose-700">입찰이 취소되었습니다.</p>
+                                                    </div>
+                                                )}
 
                                                 {/* 액션 버튼 */}
                                                 <div className="pt-10 flex gap-4">
                                                     <button
                                                         type="button"
-                                                        className="flex-1 bg-gradient-to-r from-primary to-primary-container text-white py-5 rounded-full text-lg font-black shadow-xl shadow-primary/20 hover:scale-[1.02] transition-transform active:scale-95"
+                                                        onClick={handleBidUpdate}
+                                                        disabled={updating || resStat !== 'REQ'}
+                                                        className={`flex-1 py-5 rounded-full text-lg font-black shadow-xl transition-all ${resStat !== 'REQ' ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : 'bg-gradient-to-r from-primary to-primary-container text-white shadow-primary/20 hover:scale-[1.02] active:scale-95'}`}
                                                         style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                                                     >
-                                                        입찰 정보 수정 완료
+                                                        {updating ? '저장 중...' : '입찰 정보 수정 완료'}
                                                     </button>
-                                                    <button type="button" className="px-10 py-5 bg-error/5 text-error border border-error/20 rounded-full font-bold hover:bg-error/10 transition-colors">입찰 취소</button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleBidCancel}
+                                                        disabled={cancelling}
+                                                        className="px-10 py-5 bg-error/5 text-error border border-error/20 rounded-full font-bold hover:bg-error/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        {cancelling ? '처리 중...' : '입찰 취소'}
+                                                    </button>
                                                 </div>
                                             </div>
                                         </section>
@@ -359,7 +542,14 @@ const TravelerQuoteRequestDetails = ({ close, requestId, currentUser }) => {
 
                                         {/* 가격 가이드 */}
                                         <section className="bg-surface-container-lowest p-8 rounded-2xl shadow-[0_40px_60px_-15px_rgba(0,104,95,0.04)] border border-outline-variant/10">
-                                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">가격 가이드</h3>
+                                            <div className="flex items-center justify-between mb-6">
+                                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">가격 가이드</h3>
+                                                {bidSeq > 0 && (
+                                                    <span className="px-2.5 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full">
+                                                        {bidSeq}회차 입찰
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div className="space-y-6">
                                                 <div>
                                                     <div className="flex justify-between items-end mb-2">
@@ -383,6 +573,16 @@ const TravelerQuoteRequestDetails = ({ close, requestId, currentUser }) => {
                                                         <div className="h-full bg-primary" style={{ width: '45%' }}></div>
                                                     </div>
                                                 </div>
+                                                {prevBidPrice > 0 && (
+                                                    <div className="pt-4 border-t border-slate-100">
+                                                        <div className="flex justify-between items-end">
+                                                            <span className="text-xs font-semibold text-slate-400">이전 입찰가</span>
+                                                            <span className="text-base font-bold text-slate-400 line-through">
+                                                                ₩{Number(prevBidPrice).toLocaleString('ko-KR')}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="mt-8 p-4 bg-surface-container-high rounded-xl">
                                                 <p className="text-sm text-slate-600 leading-relaxed">
@@ -393,42 +593,6 @@ const TravelerQuoteRequestDetails = ({ close, requestId, currentUser }) => {
                                             </div>
                                         </section>
 
-                                        {/* 경로 지도 미리보기 */}
-                                        <section className="bg-surface-container-lowest rounded-2xl shadow-[0_40px_60px_-15px_rgba(0,104,95,0.04)] overflow-hidden relative group">
-                                            <div className="h-80 w-full relative">
-                                                <img
-                                                    className="w-full h-full object-cover grayscale opacity-50 transition-opacity group-hover:opacity-80"
-                                                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7nSHvY1lSyDBF8v_-PZi16pM7QI8qsqQP_LZvvjJOSTL81davfLlQt2yWMVW0zpSBOvpBWS7Cw0vtX8ANUBGm8n5NA8YZdU1VZkNC6lLpxMcofZ6qXIdL3-WPbWKHzV7OsuyrkmRTPXjIO7c2jx5Fw4ClG-rzPYbu5CE_lUFoNylnXP2BFpyzo9NrCHlAk6qPvEjpc39jhh39uYbD6IJ7kmb01EQJ_EbF_Ud9bZ9ggyl93f-ZN4BoJy9fP2ESFpyqZ1UrNYX13GQ"
-                                                    alt="경로 미리보기"
-                                                />
-                                                <div className="absolute inset-0 flex items-center justify-center">
-                                                    <div className="p-6 bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl text-center border border-white/50">
-                                                        <span className="material-symbols-outlined text-4xl text-primary mb-2">location_on</span>
-                                                        <h4 className="font-bold text-on-surface" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>경로 미리보기</h4>
-                                                        <p className="text-xs text-slate-500 mt-1">{data?.startAddr || ''} 경로</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="p-6">
-                                                <h3 className="font-bold text-on-surface mb-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>총 주행 예상 거리</h3>
-                                                <div className="flex justify-between items-center">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="material-symbols-outlined text-slate-400">distance</span>
-                                                        <span className="text-lg font-black">
-                                                            {data?.totalDistanceKm > 0 ? `${data.totalDistanceKm}km` : '—'}
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="material-symbols-outlined text-slate-400">schedule</span>
-                                                        <span className="text-lg font-black">
-                                                            {data?.totalDurationMin > 0
-                                                                ? `${Math.floor(data.totalDurationMin / 60)}시간 ${data.totalDurationMin % 60}분`
-                                                                : '—'}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </section>
                                     </div>
                                 </div>
                             </main>

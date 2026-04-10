@@ -11,8 +11,8 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-const app = initializeApp(firebaseConfig);
-export const phoneAuth = getAuth(app);
+export const firebaseApp = initializeApp(firebaseConfig);
+export const phoneAuth = getAuth(firebaseApp);
 
 // 테스트 환경(localhost)에서 그림 맞추기(reCAPTCHA) 로직 강제 패스
 phoneAuth.settings.appVerificationDisabledForTesting = true;

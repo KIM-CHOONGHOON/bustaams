@@ -34,6 +34,8 @@ export default {
         'on-surface-variant': '#3e4947',
         kakao: "#FEE500",
         naver: "#03C75A",
+        /** LiveChat.html (`bg-background`) 과 동일 */
+        background: '#f7f9fb',
       },
       fontFamily: {
         display: ['"Plus Jakarta Sans"', 'sans-serif'],
@@ -49,7 +51,16 @@ export default {
       },
       boxShadow: {
         ambient: '0 12px 40px rgba(0, 104, 95, 0.06)',
-      }
+      },
+      keyframes: {
+        auctionSlideUp: {
+          '0%': { opacity: '0', transform: 'translateY(12px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
+      animation: {
+        'auction-slide-up': 'auctionSlideUp 0.45s ease-out both',
+      },
     },
   },
   plugins: [
