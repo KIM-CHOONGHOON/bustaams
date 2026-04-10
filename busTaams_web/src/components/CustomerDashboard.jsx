@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import DetailBusRequestModal from './DetailBusRequestModal';
 
-const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onViewReservationList, onOpenLiveChat }) => {
+const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onViewReservationList, onViewConfirmedList, onOpenLiveChat }) => {
   const [recentRequests, setRecentRequests] = useState([]);
   const [selectedRequestId, setSelectedRequestId] = useState(null);
 
@@ -153,6 +153,16 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
                 <span className="material-symbols-outlined text-primary group-hover:text-on-primary-container">event_available</span>
               </div>
               <span className="font-bold text-sm">예약 목록</span>
+            </div>
+            {/* Trip History (Moved to 4th position or similar) */}
+            <div 
+              onClick={onViewConfirmedList}
+              className="bg-surface-container-lowest p-8 rounded-2xl tonal-stacking flex flex-col items-center text-center group cursor-pointer hover:bg-primary hover:text-on-primary transition-all duration-300 no-line-rule"
+            >
+              <div className="w-14 h-14 bg-surface-container-high rounded-full flex items-center justify-center mb-6 group-hover:bg-primary-container">
+                <span className="material-symbols-outlined text-primary group-hover:text-on-primary-container">task_alt</span>
+              </div>
+              <span className="font-bold text-sm">확정 예약 목록</span>
             </div>
             {/* Trip History */}
             <div className="bg-surface-container-lowest p-8 rounded-2xl tonal-stacking flex flex-col items-center text-center group cursor-pointer hover:bg-primary hover:text-on-primary transition-all duration-300 no-line-rule">

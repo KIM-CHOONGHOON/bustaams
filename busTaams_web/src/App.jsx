@@ -5,6 +5,7 @@ import SignupPage from './components/SignupPage';
 import AccountSettings from './components/AccountSettings';
 import CreateBusRequest from './components/CreateBusRequest/CreateBusRequest';
 import ReservationList from './components/ReservationList/ReservationList';
+import ReservationCompletedList from './components/ReservationList/ReservationCompletedList';
 import CustomerDashboard from './components/CustomerDashboard';
 import Login from './components/Login/Login';
 import PartnerDashboard from './components/PartnerDashboard/PartnerDashboard';
@@ -885,9 +886,12 @@ function App() {
                   setShowAccountSettings={setShowAccountSettings} 
                   onBusRegister={() => setCustomerView('createRequest')}
                   onViewReservationList={() => setCustomerView('reservationList')}
+                  onViewConfirmedList={() => setCustomerView('confirmedList')}
                   onOpenLiveChat={() => setShowLiveChatTraveler(true)}
                 />
-              )
+              ) : customerView === 'confirmedList' ? (
+                <ReservationCompletedList user={user} onBack={() => setCustomerView('dashboard')} />
+              ) : (
             ) : user.userType === 'DRIVER' ? (
                 <DriverDashboard 
                   currentUser={user} 

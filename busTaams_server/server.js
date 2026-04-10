@@ -1356,7 +1356,9 @@ app.get('/api/auction/user/:userUuid', async (req, res) => {
                 b.BUS_TYPE_CD, b.REQ_BUS_CNT
             FROM TB_AUCTION_REQ r
             LEFT JOIN TB_AUCTION_REQ_BUS b ON r.REQ_UUID = b.REQ_UUID
-            WHERE r.TRAVELER_UUID = UUID_TO_BIN(?) AND r.REQ_STAT = 'BIDDING'
+            WHERE r.TRAVELER_UUID = UUID_TO_BIN(?) 
+              AND r.REQ_STAT = 'BIDDING'
+              AND r.START_DT > NOW()
             ORDER BY r.REG_DT DESC
         `;
         
@@ -1379,6 +1381,228 @@ app.get('/api/auction/user/:userUuid', async (req, res) => {
     } catch (error) {
         console.error('Fetch User Requests Error:', error);
         res.status(500).json({ error: '사용자 예약 내역 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 사용자의 확정된 예약 목록 조회 (GET /api/auction/confirmed/:userUuid)
+app.get('/api/auction/confirmed/:userUuid', async (req, res) => {
+    try {
+        const { userUuid } = req.params;
+        if (!userUuid) {
+            return res.status(400).json({ error: 'userUuid is required' });
+        }
+
+        // 1. 여정 마스터 정보 조회 (CONFIRM 상태인 것만)
+        const masterQuery = `
+            SELECT 
+                BIN_TO_UUID(r.REQ_UUID) as REQ_UUID_STR, 
+                r.TRIP_TITLE, r.START_ADDR, r.END_ADDR, 
+                r.START_DT, r.END_DT, r.PASSENGER_CNT, r.REQ_STAT, r.REQ_AMT
+            FROM TB_AUCTION_REQ r
+            WHERE r.TRAVELER_UUID = UUID_TO_BIN(?) 
+              AND r.REQ_STAT = 'CONFIRM' 
+              AND r.START_DT > NOW()
+            ORDER BY r.REG_DT DESC
+        `;
+        
+        const [masters] = await pool.execute(masterQuery, [userUuid]);
+        
+        // 2. 각 여정별로 포함된 모든 차량 상세 정보(TB_AUCTION_REQ_BUS) 가져오기
+        for (let master of masters) {
+            const busQuery = `
+                SELECT 
+                    BIN_TO_UUID(REQ_BUS_UUID) as REQ_BUS_UUID_STR,
+                    BUS_TYPE_CD, 
+                    REQ_BUS_CNT,
+                    REQ_STAT  -- 'BIDDING', 'CLOSED', 'CANCELED' 등
+                FROM TB_AUCTION_REQ_BUS 
+                WHERE REQ_UUID = UUID_TO_BIN(?)
+            `;
+            const [buses] = await pool.execute(busQuery, [master.REQ_UUID_STR]);
+            master.vehicles = buses;
+
+            // 경유지 정보도 함께 가져오기
+            const viaQuery = `
+                SELECT VIA_ADDR as address, VIA_ORD 
+                FROM TB_AUCTION_REQ_VIA 
+                WHERE REQ_UUID = UUID_TO_BIN(?) 
+                ORDER BY VIA_ORD ASC
+            `;
+            const [vias] = await pool.execute(viaQuery, [master.REQ_UUID_STR]);
+            master.waypoints = vias;
+        }
+
+        res.status(200).json(masters);
+
+    } catch (error) {
+        console.error('Fetch Confirmed Requests Error:', error);
+        res.status(500).json({ error: '확정 예약 내역 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// API: 개별 차량 취소 처리 (여행 단위 내 특정 차량 취소)
+// POST /api/auction/cancel-bus
+app.post('/api/auction/cancel-bus', async (req, res) => {
+    let connection;
+    try {
+        const { reqBusUuid } = req.body;
+        if (!reqBusUuid) return res.status(400).json({ error: 'reqBusUuid is required' });
+
+        connection = await pool.getConnection();
+        
+        // TB_AUCTION_REQ_BUS 테이블의 REQ_STAT을 'CANCELED'로 변경
+        const [result] = await connection.execute(`
+            UPDATE TB_AUCTION_REQ_BUS
+            SET REQ_STAT = 'CANCELED'
+            WHERE REQ_BUS_UUID = UUID_TO_BIN(?)
+        `, [reqBusUuid]);
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: '해당 차량 예약 정보를 찾을 수 없습니다.' });
+        }
+
+        res.status(200).json({ message: '해당 차량 예약이 취소되었습니다.' });
+
+    } catch (error) {
+        console.error('Cancel Bus Error:', error);
+        res.status(500).json({ error: '차량 취소 처리 중 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// API: 예약 취소 처리 (사용자 전체 취소)
+// POST /api/auction/cancel-reservation
+app.post('/api/auction/cancel-reservation', async (req, res) => {
+    let connection;
+    try {
+        const { reqUuid } = req.body;
+        if (!reqUuid) return res.status(400).json({ error: 'reqUuid is required' });
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        // 1. 해당 요청서와 연결된 모든 예약(입찰) 상태를 'TRAVELER_CANCEL'로 변경
+        await connection.execute(`
+            UPDATE TB_BUS_RESERVATION 
+            SET RES_STAT = 'TRAVELER_CANCEL',
+                MOD_DT = NOW()
+            WHERE REQ_UUID = UUID_TO_BIN(?)
+        `, [reqUuid]);
+
+        // 2. 상위 요청서의 상태를 'TRAVELER_CANCEL'로 변경
+        await connection.execute(`
+            UPDATE TB_AUCTION_REQ 
+            SET REQ_STAT = 'TRAVELER_CANCEL',
+                MOD_DT = NOW()
+            WHERE REQ_UUID = UUID_TO_BIN(?)
+        `, [reqUuid]);
+
+        await connection.commit();
+        res.status(200).json({ message: '예약이 취소되었습니다.' });
+
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('Cancel Reservation Error:', error);
+        res.status(500).json({ error: '예약 취소 처리 중 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// API: 예약 확정 처리 (지금 예약하기)
+// POST /api/auction/confirm
+app.post('/api/auction/confirm', async (req, res) => {
+    let connection;
+    try {
+        const { reqUuid, driverUuid, bidSeq } = req.body;
+        if (!reqUuid || !driverUuid) {
+            return res.status(400).json({ error: 'reqUuid and driverUuid are required' });
+        }
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        // 1. 해당 기사의 특정 입찰(bidSeq)을 'CONFIRM'으로 변경
+        const [resUpdate] = await connection.execute(`
+            UPDATE TB_BUS_RESERVATION 
+            SET RES_STAT = 'CONFIRM',
+                MOD_DT = NOW()
+            WHERE REQ_UUID = UUID_TO_BIN(?) 
+              AND DRIVER_UUID = UUID_TO_BIN(?)
+              AND BID_SEQ = ?
+        `, [reqUuid, driverUuid, bidSeq || 1]);
+
+        if (resUpdate.affectedRows === 0) {
+            throw new Error('해당 입찰 정보를 찾을 수 없거나 이미 처리되었습니다.');
+        }
+
+        // 2. 상위 요청서의 상태를 'CONFIRM'으로 변경
+        await connection.execute(`
+            UPDATE TB_AUCTION_REQ 
+            SET REQ_STAT = 'CONFIRM',
+                MOD_DT = NOW()
+            WHERE REQ_UUID = UUID_TO_BIN(?)
+        `, [reqUuid]);
+
+        // 3. (옵션) 동일 요청에 대한 다른 기사들의 입찰을 'CLOSED' 처리하거나 그대로 둚
+        // 여기서는 일단 명시적으로 확정된 것 외엔 건드리지 않음 (필요 시 로직 추가)
+
+        await connection.commit();
+        res.status(200).json({ success: true, message: '예약이 확정되었습니다.' });
+
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('Confirm Reservation Error:', error);
+        res.status(500).json({ error: error.message || '예약 확정 처리 중 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// API: 특정 입찰(견적) 정보 상세 조회 (6개 테이블 조인)
+// GET /api/auction/bid-detail/:bidUuid
+app.get('/api/auction/bid-detail/:bidUuid', async (req, res) => {
+    let connection;
+    try {
+        const { bidUuid } = req.params;
+        if (!bidUuid) return res.status(400).json({ error: 'bidUuid is required' });
+
+        connection = await pool.getConnection();
+        
+        const query = `
+            SELECT 
+                BIN_TO_UUID(res.RES_UUID) as bidUuid,
+                res.DRIVER_BIDDING_PRICE as bidPrice,
+                res.BID_SEQ as bidSeq,
+                BIN_TO_UUID(res.DRIVER_UUID) as driverUuid,
+                u.USER_NM as driverName,
+                di.BIO_TEXT as driverBio,
+                di.PROFILE_PHOTO_BASE64 as driverProfilePhoto,
+                v.MODEL_NM as busModel,
+                v.SERVICE_CLASS as busClass,
+                v.VEHICLE_NO as busNo,
+                v.VEHICLE_PHOTOS_JSON as busPhotos,  -- JSON list of GCS paths
+                v.CAPACITY as busCapacity
+            FROM TB_BUS_RESERVATION res
+            JOIN TB_USER u ON res.DRIVER_UUID = u.USER_UUID
+            LEFT JOIN TB_DRIVER_INFO di ON res.DRIVER_UUID = di.USER_UUID
+            LEFT JOIN TB_BUS_DRIVER_VEHICLE v ON res.BUS_UUID = v.BUS_ID
+            WHERE res.RES_UUID = UUID_TO_BIN(?)
+        `;
+
+        const [rows] = await connection.execute(query, [bidUuid]);
+        if (rows.length === 0) {
+            return res.status(404).json({ error: '견적 정보를 찾을 수 없습니다.' });
+        }
+
+        res.status(200).json(rows[0]);
+
+    } catch (error) {
+        console.error('Get Bid Detail Error:', error);
+        res.status(500).json({ error: '견적 상세 조회 중 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release();
     }
 });
 
