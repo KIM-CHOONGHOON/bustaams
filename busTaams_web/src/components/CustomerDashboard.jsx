@@ -142,7 +142,7 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
               <div className="w-14 h-14 bg-surface-container-high rounded-full flex items-center justify-center mb-6 group-hover:bg-primary-container">
                 <span className="material-symbols-outlined text-primary group-hover:text-on-primary-container">directions_bus</span>
               </div>
-              <span className="font-bold text-sm">버스 등록</span>
+              <span className="font-bold text-sm">여행버스 예약 등록</span>
             </div>
             {/* Reservation List (Moved to 2nd position) */}
             <div 

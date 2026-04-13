@@ -3,10 +3,12 @@ import React from 'react';
 const initialState = {
   title: '',
   boardingCount: 0,
-  departure: { address: '', detail: '' },
-  arrival: { address: '', detail: '' },
+  departure: { address: '', detail: '', lat: null, lng: null, distFromPrev: 0 },
+  arrival: { address: '', detail: '', lat: null, lng: null, distFromPrev: 0 },
   waypoints: [],
-  departureDate: '', // Set in useEffect
+  returnWaypoints: [],
+  finalArrival: { address: '', detail: '', lat: null, lng: null, distFromPrev: 0 },
+  departureDate: '',
   departureTime: '00:00',
   arrivalDate: '',
   arrivalTime: '12:00',
@@ -16,78 +18,247 @@ const initialState = {
   vvipQty: 0,
   miniBusQty: 0,
   largeVanQty: 0,
+  premiumPrice: 0,
+  standardPrice: 0,
+  premiumGoldPrice: 0,
+  vvipPrice: 0,
+  miniBusPrice: 0,
+  largeVanPrice: 0,
+  busTypes: [], // Store CD_FNUM information
 };
 
+function formatComma(num) {
+  if (!num && num !== 0) return '';
+  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+function parseComma(str) {
+  if (!str) return 0;
+  return parseInt(str.toString().replace(/,/g, '')) || 0;
+}
+
 function reducer(state, action) {
-  console.log('Reducer Action:', action.type, action.payload);
   switch (action.type) {
     case 'SET_FIELD':
       return { ...state, [action.name]: action.value };
-    case 'SET_ADDRESS':
+    case 'SET_ADDRESS': {
       if (action.addressType === 'waypoint') {
         const newWaypoints = state.waypoints.map((wp, i) => 
-          i === action.index ? { ...wp, [action.field]: action.value } : wp
+          i === action.index ? { ...wp, [action.field || 'address']: action.value } : wp
         );
         return { ...state, waypoints: newWaypoints };
       }
+      if (action.addressType === 'returnWaypoint') {
+        const newWaypoints = state.returnWaypoints.map((wp, i) => 
+          i === action.index ? { ...wp, [action.field || 'address']: action.value } : wp
+        );
+        return { ...state, returnWaypoints: newWaypoints };
+      }
       return {
         ...state,
-        [action.addressType]: { ...state[action.addressType], [action.field]: action.value }
+        [action.addressType]: { ...state[action.addressType], [action.field || 'address']: action.value }
       };
+    }
+    case 'UPDATE_FULL_ADDRESS': {
+       const { addressType, index, address, lat, lng } = action.payload;
+       let nextState = { ...state };
+       if (addressType === 'waypoint') {
+         nextState.waypoints = state.waypoints.map((wp, i) => 
+           i === index ? { ...wp, address, lat, lng } : wp
+         );
+       } else if (addressType === 'returnWaypoint') {
+         nextState.returnWaypoints = state.returnWaypoints.map((wp, i) => 
+           i === index ? { ...wp, address, lat, lng } : wp
+         );
+       } else {
+         nextState[addressType] = { ...state[addressType], address, lat, lng };
+       }
+       return nextState;
+    }
     case 'ADD_WAYPOINT':
-      return { ...state, waypoints: [...state.waypoints, { id: Date.now(), address: '', detail: '' }] };
+      return { ...state, waypoints: [...state.waypoints, { id: Date.now(), address: '', detail: '', lat: null, lng: null, distFromPrev: 0 }] };
     case 'REMOVE_WAYPOINT':
       return { ...state, waypoints: state.waypoints.filter((_, i) => i !== action.index) };
+    case 'ADD_RETURN_WAYPOINT':
+      return { ...state, returnWaypoints: [...state.returnWaypoints, { id: Date.now(), address: '', detail: '', lat: null, lng: null, distFromPrev: 0 }] };
+    case 'REMOVE_RETURN_WAYPOINT':
+      return { ...state, returnWaypoints: state.returnWaypoints.filter((_, i) => i !== action.index) };
     case 'ADJUST_QTY':
       return { ...state, [action.busType]: Math.max(0, (state[action.busType] || 0) + action.delta) };
     case 'SET_INITIAL_DATES':
       return { ...state, departureDate: action.today, arrivalDate: action.today };
+    case 'SET_BUS_TYPES':
+      return { ...state, busTypes: action.payload };
+    case 'SET_OPTIMIZED_PATH': {
+      const { waypoints, returnWaypoints, totalDistance } = action.payload;
+      return { ...state, waypoints, returnWaypoints, totalDistance };
+    }
     default:
       return state;
   }
 }
 
+const BusCard = ({ title, img, type, qty, price, desc, color, fuelCost, adjustQty, handleChange }) => (
+  <div className="group bg-slate-50 border border-slate-100 rounded-2xl overflow-hidden hover:shadow-xl transition-all p-4">
+    <div className="flex gap-4 mb-4">
+      <div className="w-24 h-24 rounded-xl overflow-hidden shrink-0 border border-white shadow-sm">
+        <img className="w-full h-full object-cover" src={img} alt={title} />
+      </div>
+      <div className="flex-1">
+        <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-block mb-1 text-white bg-${color}`}>
+          {title.split(' ')[0]}
+        </div>
+        <h4 className="font-bold text-slate-800 text-sm">{title}</h4>
+        <p className="text-[10px] text-slate-400 mt-1">{desc}</p>
+      </div>
+    </div>
+    
+    <div className="space-y-3 pt-3 border-t border-slate-200/50">
+      <div className="flex items-center justify-between">
+         <span className="text-[11px] font-bold text-slate-500 uppercase">차량 대수</span>
+         <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-full px-2 py-1">
+           <button type="button" onClick={() => adjustQty(`${type}Qty`, -1)} className="w-6 h-6 rounded-full hover:bg-slate-100 text-primary flex items-center justify-center">
+             <span className="material-symbols-outlined text-[14px]">remove</span>
+           </button>
+           <span className="text-sm font-black w-4 text-center">{qty}</span>
+           <button type="button" onClick={() => adjustQty(`${type}Qty`, 1)} className="w-6 h-6 rounded-full hover:bg-slate-100 text-primary flex items-center justify-center">
+             <span className="material-symbols-outlined text-[14px]">add</span>
+           </button>
+         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500">
+         <div className="bg-white p-2 rounded-lg border border-slate-100">
+           <p className="font-bold mb-1">연료비</p>
+           <p className={fuelCost > 0 ? "text-primary font-black" : "text-slate-400"}>
+             {fuelCost > 0 ? `₩${formatComma(fuelCost)}` : "자동 계산 예정"}
+           </p>
+         </div>
+         <div className="bg-white p-2 rounded-lg border border-slate-100">
+           <p className="font-bold mb-1">톨게이트 비</p>
+           <p className="text-slate-400">자동 계산 예정</p>
+         </div>
+      </div>
+
+      <div>
+         <p className="text-[11px] font-bold text-slate-500 uppercase mb-1">버스 가격 (1대당)</p>
+         <div className="relative">
+           <input 
+             type="text"
+             name={`${type}Price`}
+             value={formatComma(price)}
+             onChange={handleChange}
+             placeholder="0"
+             className="w-full bg-white border border-slate-200 rounded-lg p-2 text-right pr-6 font-bold text-primary focus:ring-2 focus:ring-primary/20 transition-all"
+           />
+           <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">원</span>
+         </div>
+      </div>
+    </div>
+  </div>
+);
+
 const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
   const [formData, dispatch] = React.useReducer(reducer, initialState);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const modalRef = React.useRef(null);
 
   React.useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
     dispatch({ type: 'SET_INITIAL_DATES', today });
+    
+    // Fetch Bus Types for Fuel Efficiency (CD_FNUM)
+    const fetchBusTypes = async () => {
+       try {
+          const res = await fetch('http://localhost:8080/api/common-codes?grpCd=BUS_TYPE');
+          if (res.ok) {
+             const data = await res.json();
+             dispatch({ type: 'SET_BUS_TYPES', payload: data.items });
+          }
+       } catch (err) { console.error('Failed to fetch bus types:', err); }
+    };
+    fetchBusTypes();
+
+    if (modalRef.current) {
+      modalRef.current.focus();
+    }
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
   }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name.endsWith('Price')) {
+        dispatch({ type: 'SET_FIELD', name, value: parseComma(value) });
+        return;
+    }
     const finalValue = name === 'boardingCount' ? (parseInt(value) || 0) : value;
     dispatch({ type: 'SET_FIELD', name, value: finalValue });
   };
 
-  const handleAddressChange = (type, value, index = null) => {
-    dispatch({ type: 'SET_ADDRESS', addressType: type, field: 'detail', value, index });
+  const handleAddressChange = (type, value, index = null, field = 'detail') => {
+    dispatch({ type: 'SET_ADDRESS', addressType: type, field, value, index });
+  };
+
+  const getDistance = (lat1, lon1, lat2, lon2) => {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
+    const R = 6371; // km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return parseFloat((R * c).toFixed(2));
   };
 
   const openPostcode = (type, index = null) => {
-    console.log('Opening Postcode for:', type, index);
+    // Get existing address to use as search query
+    let initialQuery = '';
+    if (type === 'waypoint') initialQuery = formData.waypoints[index]?.address;
+    else if (type === 'returnWaypoint') initialQuery = formData.returnWaypoints[index]?.address;
+    else initialQuery = formData[type]?.address || '';
+
     if (!window.daum || !window.daum.Postcode) {
       alert('주소 검색 서비스를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
       return;
     }
-
     new window.daum.Postcode({
       oncomplete: (data) => {
-        let fullAddress = data.address;
-        let extraAddress = '';
-
-        if (data.addressType === 'R') {
-          if (data.bname !== '') extraAddress += data.bname;
-          if (data.buildingName !== '') extraAddress += extraAddress !== '' ? `, ${data.buildingName}` : data.buildingName;
-          fullAddress += extraAddress !== '' ? ` (${extraAddress})` : '';
-        }
+        const fullAddress = data.address;
         
-        console.log('Postcode oncomplete called:', fullAddress);
-        dispatch({ type: 'SET_ADDRESS', addressType: type, field: 'address', value: fullAddress, index });
+        // Use Kakao Geocoder to get coordinates
+        if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
+           const geocoder = new window.kakao.maps.services.Geocoder();
+           geocoder.addressSearch(fullAddress, (result, status) => {
+              if (status === window.kakao.maps.services.Status.OK) {
+                 const lat = parseFloat(result[0].y);
+                 const lng = parseFloat(result[0].x);
+                 dispatch({ 
+                    type: 'UPDATE_FULL_ADDRESS', 
+                    payload: { addressType: type, index, address: fullAddress, lat, lng }
+                 });
+              } else {
+                 // Fallback if geocoding fails
+                 dispatch({ type: 'SET_ADDRESS', addressType: type, field: 'address', value: fullAddress, index });
+              }
+           });
+        } else {
+           dispatch({ type: 'SET_ADDRESS', addressType: type, field: 'address', value: fullAddress, index });
+        }
       }
-    }).open();
+    }).open({
+      q: initialQuery // Pass existing text as search query
+    });
+  };
+
+  const handleKeyDown = (e, type, index = null) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      openPostcode(type, index);
+    }
   };
 
   const addWaypoint = () => {
@@ -102,581 +273,414 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
     dispatch({ type: 'ADJUST_QTY', busType, delta });
   };
 
-  // 예상 견적 계산 (동적)
-  const basePrice = 
-    (formData.premiumQty || 0) * 850000 + 
-    (formData.standardQty || 0) * 650000 + 
-    (formData.premiumGoldQty || 0) * 1100000 + 
-    (formData.vvipQty || 0) * 1300000 + 
-    (formData.miniBusQty || 0) * 550000 + 
-    (formData.largeVanQty || 0) * 450000;
-
-  const distanceSurcharge = 85000 + (formData.waypoints.length * 20000); // 경유지당 추가금 가정
-  const totalVehicles = (formData.premiumQty || 0) + (formData.standardQty || 0) + (formData.premiumGoldQty || 0) + (formData.vvipQty || 0) + (formData.miniBusQty || 0) + (formData.largeVanQty || 0);
-  const total = basePrice + distanceSurcharge + 15000 + 25000;
-
-  const handleSubmit = async () => {
-    const errors = [];
-    if (!formData.title.trim()) errors.push('여정 제목');
-    if (formData.boardingCount <= 0) errors.push('승차 인원 (1명 이상)');
-    if (!formData.departure.address) errors.push('출발지');
-    if (!formData.arrival.address) errors.push('도착지');
-    if (totalVehicles <= 0) errors.push('차량 선택 (최소 1대 이상)');
-
-    if (errors.length > 0) {
-      alert(`필수 입력 항목이 누락되었습니다:\n\n${errors.map(err => `• ${err}`).join('\n')}`);
+  const calculateAndSortPath = async () => {
+    if (!window.kakao || !window.kakao.maps || !window.kakao.maps.services) {
+      alert('카카오 지도 라이브러리가 로드되지 않았습니다.');
       return;
     }
 
+    const geocoder = new window.kakao.maps.services.Geocoder();
+
+    const getCoords = (addr) => {
+      return new Promise((resolve) => {
+        if (!addr) return resolve(null);
+        geocoder.addressSearch(addr, (result, status) => {
+          if (status === window.kakao.maps.services.Status.OK) {
+            resolve({ lat: parseFloat(result[0].y), lng: parseFloat(result[0].x) });
+          } else {
+            resolve(null);
+          }
+        });
+      });
+    };
+
+    const processPoint = async (point) => {
+      if (point.lat && point.lng) return point;
+      const coords = await getCoords(point.address);
+      return coords ? { ...point, ...coords } : point;
+    };
+
+    // Geocode all points that might be missing coordinates
+    const updatedDeparture = await processPoint(formData.departure);
+    const updatedArrival = await processPoint(formData.arrival);
+    const updatedFinalArrival = await processPoint(formData.finalArrival);
+    
+    const updatedWaypoints = await Promise.all(
+      formData.waypoints.map(wp => processPoint(wp))
+    );
+    const updatedReturnWaypoints = await Promise.all(
+      formData.returnWaypoints.map(wp => processPoint(wp))
+    );
+
+    const sortPoints = (start, candidates) => {
+       let sorted = [];
+       let current = start;
+       let pool = [...candidates].filter(c => c.lat && c.lng);
+       
+       while (pool.length > 0) {
+          let nearestIdx = 0;
+          let minDist = Infinity;
+          for(let i=0; i<pool.length; i++) {
+             const d = getDistance(current.lat, current.lng, pool[i].lat, pool[i].lng);
+             if(d < minDist) { minDist = d; nearestIdx = i; }
+          }
+          current = pool[nearestIdx];
+          sorted.push(current);
+          pool.splice(nearestIdx, 1);
+       }
+       return sorted;
+    };
+
+    // 1. Sort Start Waypoints (Departure -> Waypoints -> Arrival)
+    const sortedWaypoints = sortPoints(updatedDeparture, updatedWaypoints);
+    
+    // 2. Sort Return Waypoints (Arrival -> ReturnWaypoints -> FinalArrival)
+    const sortedReturnWaypoints = sortPoints(updatedArrival, updatedReturnWaypoints);
+
+    // 3. Calculate Total Distance
+    let totalDist = 0;
+    const finalPoints = [
+      updatedDeparture,
+      ...sortedWaypoints,
+      updatedArrival,
+      ...sortedReturnWaypoints,
+      updatedFinalArrival
+    ].filter(p => p.lat && p.lng);
+
+    for(let i=1; i<finalPoints.length; i++) {
+       totalDist += getDistance(finalPoints[i-1].lat, finalPoints[i-1].lng, finalPoints[i].lat, finalPoints[i].lng);
+    }
+
+    dispatch({ 
+      type: 'SET_OPTIMIZED_PATH', 
+      payload: { 
+        waypoints: sortedWaypoints, 
+        returnWaypoints: sortedReturnWaypoints, 
+        totalDistance: totalDist 
+      } 
+    });
+    alert(`경로 최적화 및 연비 계산이 완료되었습니다.\n총 예상 이동 거리: ${totalDist.toFixed(1)}km`);
+  };
+
+  const getFuelCost = (busType) => {
+    if (!formData.totalDistance) return 0;
+    const busInfo = formData.busTypes.find(b => b.dtlCd === busType);
+    if (!busInfo || !busInfo.cdFnum || busInfo.cdFnum <= 0) return 0;
+    
+    const fuelPrice = 1600; // 고정 유가 (디젤 기준)
+    const cost = (formData.totalDistance / busInfo.cdFnum) * fuelPrice;
+    return Math.floor(cost / 100) * 100; // 100원 단위 절사
+  };
+
+  const getBusTotal = (qty, price) => (qty || 0) * (price || 0);
+  
+  const totalAmount = 
+    getBusTotal(formData.premiumQty, formData.premiumPrice) +
+    getBusTotal(formData.standardQty, formData.standardPrice) +
+    getBusTotal(formData.premiumGoldQty, formData.premiumGoldPrice) +
+    getBusTotal(formData.vvipQty, formData.vvipPrice) +
+    getBusTotal(formData.miniBusQty, formData.miniBusPrice) +
+    getBusTotal(formData.largeVanQty, formData.largeVanPrice);
+
+  const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      let currentUser = userProp;
+        let currentUser = userProp || JSON.parse(localStorage.getItem('user'));
+        
+        // Prepare journey point sequence for database storage
+        // Sequence: Departure -> Waypoints -> Arrival -> ReturnWaypoints -> FinalArrival
+        const mainJourney = [
+          { ...formData.departure, type: 'START_NODE' },
+          ...formData.waypoints.map(wp => ({ ...wp, type: 'START_WAY' })),
+          { ...formData.arrival, type: 'ROUND_TRIP' }
+        ];
 
-      if (!currentUser) {
-        const userStr = localStorage.getItem('user');
-        if (userStr) {
-          currentUser = JSON.parse(userStr);
-        }
-      }
+        const returnJourney = [
+          ...formData.returnWaypoints.map(wp => ({ ...wp, type: 'END_WAY' })),
+          { ...formData.finalArrival, type: 'END_NODE' }
+        ];
 
-      if (!currentUser || !currentUser.userUuid) {
-        alert('로그인 정보가 없습니다. 다시 로그인해주세요.');
-        return;
-      }
-      
-      const payload = {
-        userUuid: currentUser.userUuid,
-        tripTitle: formData.title,
-        startAddr: `${formData.departure.address} ${formData.departure.detail}`.trim(),
-        endAddr: `${formData.arrival.address} ${formData.arrival.detail}`.trim(),
-        startDt: `${formData.departureDate} ${formData.departureTime}:00`,
-        endDt: `${formData.arrivalDate} ${formData.arrivalTime}:00`,
-        passengerCnt: parseInt(formData.boardingCount),
-        totalAmount: total,
-        waypoints: formData.waypoints.map(wp => ({
-          address: `${wp.address} ${wp.detail}`.trim()
-        })),
-        vehicles: [
-          { type: 'STANDARD_28', qty: formData.standardQty },
-          { type: 'PREMIUM_45', qty: formData.premiumQty },
-          { type: 'GOLD_21', qty: formData.premiumGoldQty },
-          { type: 'VVIP_16', qty: formData.vvipQty },
-          { type: 'MINI_25', qty: formData.miniBusQty },
-          { type: 'VAN_11', qty: formData.largeVanQty }
-        ].filter(v => v.qty > 0)
-      };
+        const allPoints = [...mainJourney, ...returnJourney];
 
-      const response = await fetch('http://localhost:8080/api/auction/request', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
-      });
+        // Format for backend with sequential VIA_ORD
+        const enrichedWaypoints = allPoints.map((p, i) => ({
+          address: `${p.address} ${p.detail || ''}`.trim(),
+          lat: p.lat,
+          lng: p.lng,
+          type: p.type,
+          ord: i + 1 // Sequential order for VIA_ORD
+        }));
 
-      const result = await response.json();
-
-      if (response.ok) {
-        alert('버스요청등록이 완료되었습니다.');
-        if (onSuccess) {
-          onSuccess();
+        const payload = {
+            userUuid: currentUser.userUuid,
+            userId: currentUser.userId || currentUser.email, // Use userId for REG_ID
+            tripTitle: formData.title,
+            startAddr: enrichedWaypoints[0].address,
+            endAddr: enrichedWaypoints[enrichedWaypoints.length - 1].address,
+            startDt: `${formData.departureDate} ${formData.departureTime}:00`,
+            endDt: `${formData.arrivalDate} ${formData.arrivalTime}:00`,
+            passengerCnt: parseInt(formData.boardingCount),
+            totalAmount: totalAmount,
+            waypoints: enrichedWaypoints,
+            vehicles: [
+                { type: 'STANDARD_28', qty: formData.standardQty, price: formData.standardPrice },
+                { type: 'PREMIUM_45', qty: formData.premiumQty, price: formData.premiumPrice },
+                { type: 'GOLD_21', qty: formData.premiumGoldQty, price: formData.premiumGoldPrice },
+                { type: 'VVIP_16', qty: formData.vvipQty, price: formData.vvipPrice },
+                { type: 'MINI_25', qty: formData.miniBusQty, price: formData.miniBusPrice },
+                { type: 'VAN_11', qty: formData.largeVanQty, price: formData.largeVanPrice }
+            ].filter(v => v.qty > 0)
+        };
+        const response = await fetch('http://localhost:8080/api/auction/request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (response.ok) {
+            alert('버스요청등록이 완료되었습니다.');
+            onSuccess();
         } else {
-          onBack();
+            alert('저장 실패');
         }
-      } else {
-        alert(`저장 실패: ${result.error || '알 수 없는 오류가 발생했습니다.'}`);
-      }
-    } catch (error) {
-      console.error('Submit Error:', error);
-      alert('서버와의 통신 중 오류가 발생했습니다. 백엔드 서버가 실행 중인지 확인해주세요.');
+    } catch (e) {
+        alert('통신 오류');
     } finally {
-      setIsSubmitting(false);
+        setIsSubmitting(false);
     }
   };
 
+
   return (
-    <div className="bg-background text-on-surface font-body min-h-screen">
-      {/* Navigation */}
-      <nav className="bg-white/80 backdrop-blur-xl border-b border-surface-variant/30 sticky top-0 z-40">
-        <div className="max-w-[1440px] mx-auto px-8 py-4 flex items-center justify-between">
+    <div 
+      ref={modalRef}
+      tabIndex="-1"
+      className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-md overflow-y-auto animate-in fade-in duration-300 flex items-center justify-center p-4 outline-none"
+    >
+      <div className="w-full max-w-[1240px] h-[95vh] bg-white rounded-[40px] shadow-2xl relative overflow-y-auto overflow-x-hidden animate-in zoom-in-95 duration-300 border border-white/20">
+      <nav className="bg-white/90 backdrop-blur-md border-b border-slate-100 sticky top-0 z-50">
+        <div className="max-w-[1200px] mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button 
-              type="button"
-              id="back-button"
-              onClick={onBack}
-              className="p-2 hover:bg-surface-container-high rounded-full transition-colors"
-            >
-              <span className="material-symbols-outlined">arrow_back</span>
+            <button onClick={onBack} className="p-2 hover:bg-slate-50 rounded-full transition-all">
+              <span className="material-symbols-outlined text-slate-600">close</span>
             </button>
-            <h2 className="font-headline font-bold text-xl tracking-tight">견적 요청하기</h2>
+            <div>
+               <h2 className="font-black text-2xl tracking-tighter text-slate-800">여행버스 예약 등록</h2>
+               <p className="text-[10px] text-primary font-bold uppercase tracking-widest">Premium Concierge Service</p>
+            </div>
           </div>
-          <div className="flex items-center gap-2 text-primary font-bold text-sm bg-primary/5 px-4 py-2 rounded-full">
-            <span className="material-symbols-outlined text-sm">info</span>
-            에디토리얼 벨로시티 프리미엄 서비스
+          <div className="hidden md:flex items-center gap-3">
+             <div className="text-right">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">실시간 총 견적</p>
+                <p className="text-2xl font-black text-primary">₩{formatComma(totalAmount)}</p>
+             </div>
+             <button 
+               onClick={handleSubmit} 
+               disabled={isSubmitting}
+               className="bg-primary text-white px-8 py-3 rounded-xl font-bold hover:shadow-lg hover:shadow-primary/20 active:scale-95 transition-all"
+             >
+               등록 완료
+             </button>
           </div>
         </div>
       </nav>
 
-      <main className="pt-12 pb-24 px-8 max-w-[1440px] mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-          {/* Left: Editorial Form Section */}
-          <div className="lg:col-span-8 space-y-16">
-            {/* Journey Identity */}
-            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <span className="text-secondary font-bold uppercase tracking-widest text-xs mb-4 block">01단계</span>
-              <h1 className="text-5xl md:text-6xl font-extrabold font-headline tracking-tighter mb-8 leading-tight">
-                여정 <br/><span className="text-primary italic">정보</span>
-              </h1>
-              <div className="bg-surface-container-low p-8 rounded-xl shadow-sm space-y-6">
-                <div>
-                  <label className="block text-xs font-bold text-outline mb-2 uppercase tracking-tight">여정 제목</label>
-                  <input 
-                    className="w-full bg-surface-container-lowest border-none rounded-lg p-4 text-lg focus:ring-2 focus:ring-primary/20 placeholder:text-surface-dim transition-all shadow-inner" 
-                    placeholder="예: 2024 하계 워크숍 부산행" 
-                    type="text"
-                    name="title"
-                    value={formData.title}
-                    onChange={handleChange}
-                  />
+      <div className="max-w-[1200px] mx-auto px-6 py-12">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
+          <div className="lg:col-span-8 space-y-20">
+            <section>
+              <h3 className="text-3xl font-black tracking-tight mb-8 flex items-center gap-3">
+                <span className="w-1.5 h-8 bg-primary rounded-full"></span>
+                여정 정보
+              </h3>
+              <div className="space-y-8 bg-slate-50/50 p-8 rounded-3xl border border-slate-100 shadow-sm transition-all hover:bg-white hover:shadow-xl group">
+                <div className="grid grid-cols-2 gap-8">
+                   <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">출발 일시</label>
+                      <div className="flex gap-3">
+                         <input type="date" name="departureDate" value={formData.departureDate} onChange={handleChange} className="flex-1 bg-white border border-slate-200 rounded-2xl p-4 text-xl font-black text-slate-700 shadow-sm focus:ring-4 focus:ring-primary/5 transition-all" />
+                         <input type="time" name="departureTime" value={formData.departureTime} onChange={handleChange} className="w-32 bg-white border border-slate-200 rounded-2xl p-4 text-xl font-black text-slate-700 shadow-sm focus:ring-4 focus:ring-primary/5 transition-all" />
+                      </div>
+                   </div>
+                   <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">도착 일시</label>
+                      <div className="flex gap-3">
+                         <input type="date" name="arrivalDate" value={formData.arrivalDate} onChange={handleChange} className="flex-1 bg-white border border-slate-200 rounded-2xl p-4 text-xl font-black text-slate-700 shadow-sm focus:ring-4 focus:ring-primary/5 transition-all" />
+                         <input type="time" name="arrivalTime" value={formData.arrivalTime} onChange={handleChange} className="w-32 bg-white border border-slate-200 rounded-2xl p-4 text-xl font-black text-slate-700 shadow-sm focus:ring-4 focus:ring-primary/5 transition-all" />
+                      </div>
+                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-outline mb-2 uppercase tracking-tight">승차 인원</label>
-                  <div className="flex items-center gap-4">
-                    <input 
-                      className="w-32 bg-surface-container-lowest border-none rounded-lg p-4 text-lg focus:ring-2 focus:ring-primary/20 placeholder:text-surface-dim transition-all shadow-inner" 
-                      placeholder="0" 
-                      type="number"
-                      name="boardingCount"
-                      value={formData.boardingCount}
-                      onChange={handleChange}
-                      min="0"
-                    />
-                    <span className="text-on-surface font-bold">명</span>
-                  </div>
+                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">여정 제목</label>
+                   <input 
+                     type="text" 
+                     name="title"
+                     value={formData.title}
+                     onChange={handleChange}
+                     className="w-full bg-white border border-slate-200 rounded-2xl p-6 text-xl font-bold placeholder:text-slate-300 focus:ring-4 focus:ring-primary/5 transition-all"
+                     placeholder="예: 2024년 하계 정기 워크숍"
+                   />
+                </div>
+                <div>
+                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">동승 인원</label>
+                   <div className="flex items-center gap-3">
+                      <input 
+                        type="number" 
+                        name="boardingCount"
+                        value={formData.boardingCount}
+                        onChange={handleChange}
+                        className="w-32 bg-white border border-slate-200 rounded-xl p-4 text-center font-black text-xl text-primary" 
+                      />
+                      <span className="font-bold text-slate-400">명</span>
+                   </div>
                 </div>
               </div>
             </section>
-
-            {/* Route Configuration */}
-            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
-              <span className="text-secondary font-bold uppercase tracking-widest text-xs mb-4 block">02단계</span>
-              <h2 className="text-4xl font-extrabold font-headline tracking-tight mb-8">경로 설정</h2>
-              <div className="space-y-6">
-                {/* Departure */}
-                <div className="flex items-start gap-6 group">
-                  <div className="mt-2 flex-none w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary-container flex items-center justify-center text-white shadow-lg">
-                    <span className="material-symbols-outlined">location_on</span>
-                  </div>
-                  <div className="flex-grow space-y-2">
-                    <div className="bg-surface-container-low p-4 rounded-xl flex items-center justify-between hover:bg-surface-container-high transition-colors">
-                      <div className="flex-grow cursor-pointer" onClick={() => openPostcode('departure')}>
-                        <label className="block text-[10px] font-bold text-outline uppercase">출발지</label>
-                        <p className={`text-on-surface font-medium ${!formData.departure.address ? 'text-surface-dim' : ''}`}>
-                          {formData.departure.address || '출발지를 검색하세요'}
-                        </p>
-                      </div>
-                      <button type="button" id="search-departure" onClick={() => openPostcode('departure')} className="p-2 text-primary hover:bg-white rounded-full transition-all">
-                        <span className="material-symbols-outlined">search</span>
-                      </button>
-                    </div>
-                    {formData.departure.address && (
-                      <input 
-                        className="w-full bg-surface-container-lowest border-none rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary/10 placeholder:text-surface-dim shadow-inner"
-                        placeholder="상세 위치 (예: 역 앞 3번 출구)"
-                        value={formData.departure.detail}
-                        onChange={(e) => handleAddressChange('departure', e.target.value)}
-                      />
-                    )}
-                  </div>
-                </div>
-
-                {/* Waypoints */}
-                {formData.waypoints.map((wp, index) => (
-                  <div key={wp.id} className="flex items-start gap-6 group animate-in slide-in-from-left-4 duration-300">
-                    <div className="mt-2 flex-none w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center text-outline">
-                      <span className="material-symbols-outlined">more_vert</span>
-                    </div>
-                    <div className="flex-grow space-y-2 relative">
-                      <div className="bg-surface-container-low p-4 rounded-xl flex items-center justify-between hover:bg-surface-container-high transition-colors">
-                        <div className="flex-grow cursor-pointer" onClick={() => openPostcode('waypoint', index)}>
-                          <label className="block text-[10px] font-bold text-outline uppercase">경유지 {index + 1}</label>
-                          <p className={`text-on-surface font-medium ${!wp.address ? 'text-surface-dim' : ''}`}>
-                            {wp.address || '경유지를 검색하세요'}
-                          </p>
+            <section>
+              <h3 className="text-3xl font-black tracking-tight mb-8">경로 설정</h3>
+              <div className="space-y-4 relative">
+                <div className="bg-slate-50 p-6 rounded-2xl space-y-4 border border-slate-200/50">
+                   <div className="flex items-start gap-4">
+                     <span className="material-symbols-outlined text-primary mt-1">location_on</span>
+                     <div className="flex-1">
+                        <div className="flex gap-2">
+                           <input value={formData.departure.address} onKeyDown={(e) => handleKeyDown(e, 'departure')} onChange={(e) => handleAddressChange('departure', e.target.value, null, 'address')} placeholder="출발지를 검색하거나 입력하세요" className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all" />
+                           <button onClick={() => openPostcode('departure')} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold">검색</button>
                         </div>
-                        <button type="button" id={`remove-waypoint-${index}`} onClick={() => removeWaypoint(index)} className="p-2 text-error hover:bg-error/10 rounded-full transition-all">
-                          <span className="material-symbols-outlined">close</span>
+                        <input placeholder="상세 위치" value={formData.departure.detail} onChange={(e) => handleAddressChange('departure', e.target.value)} className="w-full mt-2 bg-white/50 border border-slate-200 rounded-lg p-2 text-xs" />
+                     </div>
+                   </div>
+                   {formData.waypoints.map((wp, i) => (
+                     <div key={wp.id} className="flex items-start gap-4 animate-in slide-in-from-left-2 duration-200">
+                        <span className="material-symbols-outlined text-slate-400 mt-1">more_vert</span>
+                        <div className="flex-1">
+                            <div className="flex gap-2">
+                               <input value={wp.address} onKeyDown={(e) => handleKeyDown(e, 'waypoint', i)} onChange={(e) => handleAddressChange('waypoint', e.target.value, i, 'address')} placeholder={`경유지 ${i+1}`} className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all" />
+                               <button onClick={() => openPostcode('waypoint', i)} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold">검색</button>
+                               <button onClick={() => removeWaypoint(i)} className="p-2 text-slate-300 hover:text-red-500 transition-colors"><span className="material-symbols-outlined text-[18px]">delete</span></button>
+                            </div>
+                        </div>
+                     </div>
+                   ))}
+                   <button onClick={addWaypoint} className="ml-10 text-xs font-black text-primary border-b border-primary/30 pb-0.5">+ 경유지 추가</button>
+                   <div className="flex items-start gap-4 pt-4 border-t border-slate-200/40">
+                     <span className="material-symbols-outlined text-secondary mt-1">flag</span>
+                     <div className="flex-1">
+                        <div className="flex gap-2">
+                           <input value={formData.arrival.address} onKeyDown={(e) => handleKeyDown(e, 'arrival')} onChange={(e) => handleAddressChange('arrival', e.target.value, null, 'address')} placeholder="목적지를 검색하거나 입력하세요" className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all" />
+                           <button onClick={() => openPostcode('arrival')} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold">검색</button>
+                        </div>
+                        <input placeholder="상세 위치" value={formData.arrival.detail} onChange={(e) => handleAddressChange('arrival', e.target.value, null, 'detail')} className="w-full mt-2 bg-white/50 border border-slate-200 rounded-lg p-2 text-xs" />
+                        
+                        <button onClick={() => dispatch({ type: 'ADD_RETURN_WAYPOINT' })} className="mt-4 text-xs font-black text-primary border-b border-primary/30 pb-0.5 whitespace-nowrap">
+                           + 경유지 추가
                         </button>
-                      </div>
-                      {wp.address && (
-                        <input 
-                          className="w-full bg-surface-container-lowest border-none rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary/10 placeholder:text-surface-dim shadow-inner"
-                          placeholder="상세 위치 (선택 사항)"
-                          value={wp.detail}
-                          onChange={(e) => handleAddressChange('waypoint', e.target.value, index)}
-                        />
-                      )}
-                    </div>
-                  </div>
-                ))}
+                        
+                        <div className="mt-6 space-y-4">
+                           {formData.returnWaypoints.map((wp, i) => (
+                              <div key={wp.id} className="flex items-start gap-4 animate-in slide-in-from-left-2 duration-200">
+                                  <span className="material-symbols-outlined text-slate-400 mt-1">more_vert</span>
+                                  <div className="flex-1">
+                                      <div className="flex gap-2">
+                                        <input value={wp.address} onKeyDown={(e) => handleKeyDown(e, 'returnWaypoint', i)} onChange={(e) => handleAddressChange('returnWaypoint', e.target.value, i, 'address')} placeholder={`도착지 검색 ${i+1}`} className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all" />
+                                        <button onClick={() => openPostcode('returnWaypoint', i)} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold">검색</button>
+                                        <button onClick={() => dispatch({ type: 'REMOVE_RETURN_WAYPOINT', index: i })} className="p-2 text-slate-300 hover:text-red-500 transition-colors"><span className="material-symbols-outlined text-[18px]">delete</span></button>
+                                      </div>
+                                  </div>
+                              </div>
+                           ))}
+                        </div>
 
-                {/* Add Waypoint Button */}
-                <div className="pl-18">
-                  <button 
-                    type="button"
-                    id="add-waypoint-btn"
-                    onClick={addWaypoint}
-                    className="flex items-center gap-2 text-primary font-bold text-sm py-2 px-4 rounded-full border border-primary/20 hover:bg-primary/5 transition-all"
-                  >
-                    <span className="material-symbols-outlined text-sm">add</span>
-                    경유지 추가
-                  </button>
-                </div>
-
-                {/* Arrival */}
-                <div className="flex items-start gap-6 group">
-                  <div className="mt-2 flex-none w-12 h-12 rounded-full bg-gradient-to-br from-secondary to-secondary-container flex items-center justify-center text-white shadow-lg">
-                    <span className="material-symbols-outlined">flag</span>
-                  </div>
-                  <div className="flex-grow space-y-2">
-                    <div className="bg-surface-container-low p-4 rounded-xl flex items-center justify-between hover:bg-surface-container-high transition-colors">
-                      <div className="flex-grow cursor-pointer" onClick={() => openPostcode('arrival')}>
-                        <label className="block text-[10px] font-bold text-outline uppercase">도착지</label>
-                        <p className={`text-on-surface font-medium ${!formData.arrival.address ? 'text-surface-dim' : ''}`}>
-                          {formData.arrival.address || '도착지를 검색하세요'}
-                        </p>
-                      </div>
-                      <button type="button" id="search-arrival" onClick={() => openPostcode('arrival')} className="p-2 text-primary hover:bg-white rounded-full transition-all">
-                        <span className="material-symbols-outlined">search</span>
-                      </button>
-                    </div>
-                    {formData.arrival.address && (
-                      <input 
-                        className="w-full bg-surface-container-lowest border-none rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary/10 placeholder:text-surface-dim shadow-inner"
-                        placeholder="상세 위치 (예: 호텔 로비 앞)"
-                        value={formData.arrival.detail}
-                        onChange={(e) => handleAddressChange('arrival', e.target.value)}
-                      />
-                    )}
+                        <div className="flex items-start gap-4 pt-4 border-t border-slate-200/40 mt-4">
+                           <span className="material-symbols-outlined text-primary mt-1">location_on</span>
+                           <div className="flex-1">
+                              <div className="flex gap-2">
+                                 <input value={formData.finalArrival.address} onKeyDown={(e) => handleKeyDown(e, 'finalArrival')} onChange={(e) => handleAddressChange('finalArrival', e.target.value, null, 'address')} placeholder="최종 도착지를 검색하세요" className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all" />
+                                 <button onClick={() => openPostcode('finalArrival')} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold">검색</button>
+                              </div>
+                              <input placeholder="상세 위치" value={formData.finalArrival.detail} onChange={(e) => handleAddressChange('finalArrival', e.target.value, null, 'detail')} className="w-full mt-2 bg-white/50 border border-slate-200 rounded-lg p-2 text-xs" />
+                           </div>
+                        </div>
+                     </div>
                   </div>
                 </div>
               </div>
             </section>
-
-            {/* Schedule */}
-            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200">
-              <span className="text-secondary font-bold uppercase tracking-widest text-xs mb-4 block">03단계</span>
-              <h2 className="text-4xl font-extrabold font-headline tracking-tight mb-8">일정 설정</h2>
+            <section>
+              <div className="flex items-end justify-between mb-8">
+                 <h3 className="text-3xl font-black tracking-tight">차량 선택</h3>
+                 <button 
+                  onClick={calculateAndSortPath}
+                  className="flex items-center gap-2 px-5 py-2 bg-primary/10 text-primary font-bold rounded-full text-xs hover:bg-primary/20 transition-all shadow-sm active:scale-95"
+                 >
+                    <span className="material-symbols-outlined text-[18px]">auto_fix</span>
+                    연비 계산 및 경로 최적화
+                 </button>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-surface-container-low p-6 rounded-xl">
-                  <label className="block text-xs font-bold text-outline mb-4 uppercase tracking-tight">출발 일시</label>
-                  <div className="flex gap-4">
-                    <input 
-                      className="bg-surface-container-lowest border-none rounded-lg p-3 w-full focus:ring-2 focus:ring-primary/20" 
-                      type="date"
-                      name="departureDate"
-                      value={formData.departureDate}
-                      onChange={handleChange}
-                    />
-                    <input 
-                      className="bg-surface-container-lowest border-none rounded-lg p-3 w-32 focus:ring-2 focus:ring-primary/20" 
-                      type="time"
-                      name="departureTime"
-                      value={formData.departureTime}
-                      onChange={handleChange}
-                    />
-                  </div>
-                </div>
-                <div className="bg-surface-container-low p-6 rounded-xl border-l-4 border-secondary">
-                  <label className="block text-xs font-bold text-outline mb-4 uppercase tracking-tight">도착 일시</label>
-                  <div className="flex gap-4">
-                    <input 
-                      className="bg-surface-container-lowest border-none rounded-lg p-3 w-full focus:ring-2 focus:ring-primary/20" 
-                      type="date"
-                      name="arrivalDate"
-                      value={formData.arrivalDate}
-                      onChange={handleChange}
-                    />
-                    <input 
-                      className="bg-surface-container-lowest border-none rounded-lg p-3 w-32 focus:ring-2 focus:ring-primary/20" 
-                      type="time"
-                      name="arrivalTime"
-                      value={formData.arrivalTime}
-                      onChange={handleChange}
-                    />
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* Bus Selection */}
-            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-300">
-              <span className="text-secondary font-bold uppercase tracking-widest text-xs mb-4 block">04단계</span>
-              <h2 className="text-4xl font-extrabold font-headline tracking-tight mb-8">차량 선택</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-                {/* Premium Gold Bus */}
-                <div className="group bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
-                  <div className="h-40 relative overflow-hidden">
-                    <img 
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
-                      alt="Premium Gold" 
-                      src="/images/buses/premium_gold.png"
-                    />
-                    <div className="absolute top-4 left-4 bg-[#D4AF37] text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase">Gold</div>
-                  </div>
-                  <div className="p-5">
-                    <div className="mb-4">
-                      <h3 className="text-lg font-bold font-headline">프리미엄 골드 (21석)</h3>
-                      <p className="text-[10px] text-outline">최고급 전용 좌석, 프라이빗 커튼</p>
-                    </div>
-                    <div className="flex items-center justify-between pt-3 border-t border-surface-variant/30">
-                      <p className="text-sm font-extrabold text-primary">₩1,100,000</p>
-                      <div className="flex items-center gap-3 bg-surface-container-high rounded-full px-2 py-1">
-                        <button type="button" onClick={() => adjustQty('premiumGoldQty', -1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
-                          <span className="material-symbols-outlined text-[14px]">remove</span>
-                        </button>
-                        <span className="text-sm font-bold">{formData.premiumGoldQty}</span>
-                        <button type="button" onClick={() => adjustQty('premiumGoldQty', 1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
-                          <span className="material-symbols-outlined text-[14px]">add</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* V-VIP Bus */}
-                <div className="group bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
-                  <div className="h-40 relative overflow-hidden">
-                    <img 
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
-                      alt="V-VIP" 
-                      src="/images/buses/v_vip.png"
-                    />
-                    <div className="absolute top-4 left-4 bg-black text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase">V-VIP</div>
-                  </div>
-                  <div className="p-5">
-                    <div className="mb-4">
-                      <h3 className="text-lg font-bold font-headline">V-VIP (16석)</h3>
-                      <p className="text-[10px] text-outline">최상위 의전용, 리무진 시트</p>
-                    </div>
-                    <div className="flex items-center justify-between pt-3 border-t border-surface-variant/30">
-                      <p className="text-sm font-extrabold text-primary">₩1,300,000</p>
-                      <div className="flex items-center gap-3 bg-surface-container-high rounded-full px-2 py-1">
-                        <button type="button" onClick={() => adjustQty('vvipQty', -1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
-                          <span className="material-symbols-outlined text-[14px]">remove</span>
-                        </button>
-                        <span className="text-sm font-bold">{formData.vvipQty}</span>
-                        <button type="button" onClick={() => adjustQty('vvipQty', 1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
-                          <span className="material-symbols-outlined text-[14px]">add</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Premium Bus (28) */}
-                <div className="group bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
-                  <div className="h-40 relative overflow-hidden">
-                    <img 
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
-                      alt="Premium Bus" 
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuAGncAn9mwP0CppdRcVNcRyyp7BM0Fwr-7IAo-UukujgT7dSh2z_8Ba0-8jHE15cYFNL1CW_lTPzVeSOiKP9OvIwyPH7sUwITsY_pZIwfEo8Us4ucyhl70uOHt6njBNLkODWl9T37DIWWsUWRerSxgzmhYBw7L-a45ye0ewYfPS9sY9Dj9O2wx2Q62XKSoHR7t0ol0eOTUQGqVGpnA0hqylsq4zJc6AmqSUSV_9IzmJGprI0TaVm5kP2ih028fYvHDVfAjM1oqvTLE"
-                    />
-                    <div className="absolute top-4 left-4 bg-primary text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase">Premium</div>
-                  </div>
-                  <div className="p-5">
-                    <div className="mb-4">
-                      <h3 className="text-lg font-bold font-headline">우등 고속 (28석)</h3>
-                      <p className="text-[10px] text-outline">쾌적한 공간, USB 포트 완비</p>
-                    </div>
-                    <div className="flex items-center justify-between pt-3 border-t border-surface-variant/30">
-                      <p className="text-sm font-extrabold text-primary">₩850,000</p>
-                      <div className="flex items-center gap-3 bg-surface-container-high rounded-full px-2 py-1">
-                        <button type="button" id="remove-premium" onClick={() => adjustQty('premiumQty', -1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
-                          <span className="material-symbols-outlined text-[14px]">remove</span>
-                        </button>
-                        <span className="text-sm font-bold">{formData.premiumQty}</span>
-                        <button type="button" id="add-premium" onClick={() => adjustQty('premiumQty', 1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
-                          <span className="material-symbols-outlined text-[14px]">add</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Mid/Mini Bus (25) */}
-                <div className="group bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
-                  <div className="h-40 relative overflow-hidden">
-                    <img 
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
-                      alt="Mini Bus" 
-                      src="/images/buses/mini_bus.png"
-                    />
-                    <div className="absolute top-4 left-4 bg-secondary text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase">Mini</div>
-                  </div>
-                  <div className="p-5">
-                    <div className="mb-4">
-                      <h3 className="text-lg font-bold font-headline">중형/미니 (25석)</h3>
-                      <p className="text-[10px] text-outline">소규모 단체, 경제적 이동</p>
-                    </div>
-                    <div className="flex items-center justify-between pt-3 border-t border-surface-variant/30">
-                      <p className="text-sm font-extrabold text-primary">₩550,000</p>
-                      <div className="flex items-center gap-3 bg-surface-container-high rounded-full px-2 py-1">
-                        <button type="button" id="remove-mini" onClick={() => adjustQty('miniBusQty', -1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
-                          <span className="material-symbols-outlined text-[14px]">remove</span>
-                        </button>
-                        <span className="text-sm font-bold">{formData.miniBusQty}</span>
-                        <button type="button" id="add-mini" onClick={() => adjustQty('miniBusQty', 1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
-                          <span className="material-symbols-outlined text-[14px]">add</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Standard Bus (45) */}
-                <div className="group bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
-                  <div className="h-40 relative overflow-hidden">
-                    <img 
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
-                      alt="Standard Bus" 
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuAfK78k5ZUsYSniO-ql0ZmiRyc1AoDCtW69CIjw1G3fTvwXaM1WWnx61DQshz68pgzkuOrTbpW-B4_scGSd1XIdySNfhJkSxYFdvur9B5KpmX3CYtQox2eqsSZz0jRCDYbDnLr6cuy_GAOlx3wl7CJW_h2BtJGU-zroRQYQy35IvU5-eweGfcCFLRdaOkScLoUdn4B3rdiS4Mb-7xWuAHQKFhKLuIBuk654T5MMPKbt2cIwMoS1KcLILRtEGlFw4wBHN2o_oisl0go"
-                    />
-                    <div className="absolute top-4 left-4 bg-outline text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase">Standard</div>
-                  </div>
-                  <div className="p-5">
-                    <div className="mb-4">
-                      <h3 className="text-lg font-bold font-headline">일반 고속 (45석)</h3>
-                      <p className="text-[10px] text-outline">대규모 단체 최적화, 합리적</p>
-                    </div>
-                    <div className="flex items-center justify-between pt-3 border-t border-surface-variant/30">
-                      <p className="text-sm font-extrabold text-primary">₩650,000</p>
-                      <div className="flex items-center gap-3 bg-surface-container-high rounded-full px-2 py-1">
-                        <button type="button" id="remove-standard" onClick={() => adjustQty('standardQty', -1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
-                          <span className="material-symbols-outlined text-[14px]">remove</span>
-                        </button>
-                        <span className="text-sm font-bold">{formData.standardQty}</span>
-                        <button type="button" id="add-standard" onClick={() => adjustQty('standardQty', 1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
-                          <span className="material-symbols-outlined text-[14px]">add</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Large Van (11) */}
-                <div className="group bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
-                  <div className="h-40 relative overflow-hidden">
-                    <img 
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
-                      alt="Large Van" 
-                      src="/images/buses/large_van.png"
-                    />
-                    <div className="absolute top-4 left-4 bg-primary-container text-primary text-[10px] font-bold px-3 py-1 rounded-full uppercase">Van</div>
-                  </div>
-                  <div className="p-5">
-                    <div className="mb-4">
-                      <h3 className="text-lg font-bold font-headline">대형 밴 (11석)</h3>
-                      <p className="text-[10px] text-outline">VIP 소수 인원, 도심 이동 최적</p>
-                    </div>
-                    <div className="flex items-center justify-between pt-3 border-t border-surface-variant/30">
-                      <p className="text-sm font-extrabold text-primary">₩450,000</p>
-                      <div className="flex items-center gap-3 bg-surface-container-high rounded-full px-2 py-1">
-                        <button type="button" id="remove-van" onClick={() => adjustQty('largeVanQty', -1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
-                          <span className="material-symbols-outlined text-[14px]">remove</span>
-                        </button>
-                        <span className="text-sm font-bold">{formData.largeVanQty}</span>
-                        <button type="button" id="add-van" onClick={() => adjustQty('largeVanQty', 1)} className="w-6 h-6 rounded-full hover:bg-white text-primary flex items-center justify-center transition-all">
-                          <span className="material-symbols-outlined text-[14px]">add</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                 <BusCard title="프리미엄 골드 (21석)" img="/images/buses/premium_gold.png" type="premiumGold" qty={formData.premiumGoldQty} price={formData.premiumGoldPrice} color="[#D4AF37]" fuelCost={getFuelCost('GOLD_21')} desc="최고급 전용 좌석" adjustQty={adjustQty} handleChange={handleChange} />
+                 <BusCard title="V-VIP 리무진 (16석)" img="/images/buses/v_vip.png" type="vvip" qty={formData.vvipQty} price={formData.vvipPrice} color="black" fuelCost={getFuelCost('VVIP_16')} desc="최상위 의전용 차량" adjustQty={adjustQty} handleChange={handleChange} />
+                 <BusCard title="우등 고속 (28석)" img="https://lh3.googleusercontent.com/aida-public/AB6AXuAGncAn9mwP0CppdRcVNcRyyp7BM0Fwr-7IAo-UukujgT7dSh2z_8Ba0-8jHE15cYFNL1CW_lTPzVeSOiKP9OvIwyPH7sUwITsY_pZIwfEo8Us4ucyhl70uOHt6njBNLkODWl9T37DIWWsUWRerSxgzmhYBw7L-a45ye0ewYfPS9sY9Dj9O2wx2Q62XKSoHR7t0ol0eOTUQGqVGpnA0hqylsq4zJc6AmqSUSV_9IzmJGprI0TaVm5kP2ih028fYvHDVfAjM1oqvTLE" type="premium" qty={formData.premiumQty} price={formData.premiumPrice} color="primary" fuelCost={getFuelCost('STANDARD_28')} desc="안락한 우등 버스" adjustQty={adjustQty} handleChange={handleChange} />
+                 <BusCard title="일반 고속 (45석)" img="https://lh3.googleusercontent.com/aida-public/AB6AXuAfK78k5ZUsYSniO-ql0ZmiRyc1AoDCtW69CIjw1G3fTvwXaM1WWnx61DQshz68pgzkuOrTbpW-B4_scGSd1XIdySNfhJkSxYFdvur9B5KpmX3CYtQox2eqsSZz0jRCDYbDnLr6cuy_GAOlx3wl7CJW_h2BtJGU-zroRQYQy35IvU5-eweGfcCFLRdaOkScLoUdn4B3rdiS4Mb-7xWuAHQKFhKLuIBuk654T5MMPKbt2cIwMoS1KcLILRtEGlFw4wBHN2o_oisl0go" type="standard" qty={formData.standardQty} price={formData.standardPrice} color="slate-400" fuelCost={getFuelCost('PREMIUM_45')} desc="합리적인 단체 이동" adjustQty={adjustQty} handleChange={handleChange} />
+                 <BusCard title="중형 미니버스 (25석)" img="/images/buses/mini_bus.png" type="miniBus" qty={formData.miniBusQty} price={formData.miniBusPrice} color="secondary" fuelCost={getFuelCost('MINI_25')} desc="소규모 실속 여정" adjustQty={adjustQty} handleChange={handleChange} />
+                 <BusCard title="대형 밴 (11석)" img="/images/buses/large_van.png" type="largeVan" qty={formData.largeVanQty} price={formData.largeVanPrice} color="primary" fuelCost={getFuelCost('VAN_11')} desc="소수 VIP 전문 차량" adjustQty={adjustQty} handleChange={handleChange} />
               </div>
             </section>
           </div>
-
-          {/* Right: Cost Breakdown Sidebar */}
           <div className="lg:col-span-4">
-            <div className="sticky top-24 space-y-8 animate-in fade-in zoom-in-95 duration-500 delay-500">
-              <div className="bg-surface-container-lowest p-8 rounded-2xl shadow-xl relative overflow-hidden border border-surface-variant/20">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16"></div>
-                <h2 className="text-2xl font-extrabold font-headline mb-8">예상 견적 상세</h2>
-                <div className="space-y-6">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-outline font-medium">기본 대여료</span>
-                    <span className="font-bold">₩{basePrice.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-outline font-medium">거리 할증 {formData.waypoints.length > 0 && `(경유지 ${formData.waypoints.length}곳 포함)`}</span>
-                    <span className="font-bold">₩{distanceSurcharge.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm text-primary font-bold bg-primary/5 p-2 rounded-lg">
-                    <span className="text-[10px] uppercase">선택 차량 수</span>
-                    <span>{(formData.premiumQty + formData.standardQty + formData.premiumGoldQty + formData.vvipQty + formData.miniBusQty + formData.largeVanQty)}대</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-outline font-medium">시간 외 수당</span>
-                    <span className="font-bold text-secondary">+ ₩15,000</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-outline font-medium">부대비용 (톨비/주차/유류비)</span>
-                    <span className="font-bold">₩25,000</span>
-                  </div>
-                  <div className="pt-6 border-t border-surface-variant/50">
-                    <div className="flex justify-between items-end mb-8">
-                      <div>
-                        <p className="text-[10px] font-bold text-outline uppercase tracking-widest">총 요청 견적</p>
-                        <p className="text-4xl font-extrabold font-headline text-primary">
-                          ₩{total.toLocaleString()}
-                        </p>
-                      </div>
-                      <span className="text-xs text-outline italic">부가세 포함</span>
-                    </div>
-                    <button 
-                      type="button"
-                      id="submit-request-btn"
-                      onClick={handleSubmit}
-                      disabled={isSubmitting}
-                      className={`w-full py-5 rounded-full bg-gradient-to-br from-primary to-primary-container text-white font-bold text-lg hover:shadow-2xl hover:scale-[1.02] transition-all active:scale-95 shadow-lg shadow-primary/20 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
-                    >
-                      {isSubmitting ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          제출 중...
-                        </span>
-                      ) : (
-                        '견적 요청하기'
+             <div className="sticky top-32 bg-slate-900 rounded-[32px] p-8 text-white shadow-2xl shadow-slate-900/20 overflow-hidden">
+                <div className="relative z-10">
+                   <h4 className="text-xs font-black text-slate-400 uppercase tracking-[4px] mb-8">Summary</h4>
+                   <h2 className="text-2xl font-black mb-10 leading-tight">예상 견적 상세</h2>
+                   <div className="space-y-6 mb-12">
+                      {[
+                        { label: '프리미엄 골드 (21석)', qty: formData.premiumGoldQty, price: formData.premiumGoldPrice },
+                        { label: 'V-VIP 리무진 (16석)', qty: formData.vvipQty, price: formData.vvipPrice },
+                        { label: '우등 고속 (28석)', qty: formData.premiumQty, price: formData.premiumPrice },
+                        { label: '일반 고속 (45석)', qty: formData.standardQty, price: formData.standardPrice },
+                        { label: '중형 미니버스 (25석)', qty: formData.miniBusQty, price: formData.miniBusPrice },
+                        { label: '대형 밴 (11석)', qty: formData.largeVanQty, price: formData.largeVanPrice }
+                      ].filter(v => v.qty > 0).map((v, i) => (
+                        <div key={i} className="flex justify-between items-end animate-in fade-in slide-in-from-bottom-2">
+                           <div className="text-slate-400">
+                             <p className="text-[10px] font-bold uppercase">{v.label}</p>
+                             <p className="text-sm font-medium">₩{formatComma(v.price)} × {v.qty}대</p>
+                           </div>
+                           <p className="text-lg font-black text-primary-fixed">₩{formatComma(v.price * v.qty)}</p>
+                        </div>
+                      ))}
+                      {totalAmount === 0 && (
+                        <p className="text-sm text-slate-500 italic py-8 border-y border-white/10 text-center">선택한 차량이 없습니다.</p>
                       )}
-                    </button>
-                    <p className="text-center text-[10px] text-outline mt-4 font-medium leading-relaxed">
-                      클릭 시 이용 약관 및 컨시어지 서비스 정책에 동의하는 것으로 간주됩니다.
-                    </p>
-                  </div>
+                   </div>
+                   <div className="pt-8 border-t border-white/10">
+                      <div className="flex justify-between items-end mb-10">
+                         <div>
+                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Amount</p>
+                            <p className="text-5xl font-black tracking-tighter text-white">
+                               <span className="text-primary-fixed text-3xl mr-1">₩</span>
+                               {formatComma(totalAmount)}
+                            </p>
+                         </div>
+                      </div>
+                      <button 
+                        onClick={handleSubmit}
+                        disabled={isSubmitting || totalAmount === 0}
+                        className={`w-full py-6 rounded-2xl bg-white text-slate-900 font-black text-xl hover:bg-primary-fixed hover:text-white transition-all transform hover:scale-[1.02] active:scale-95 disabled:opacity-30 disabled:pointer-events-none`}
+                      >
+                        등록 신청하기
+                      </button>
+                   </div>
                 </div>
-              </div>
-              {/* Side Info Card */}
-              <div className="bg-primary/5 p-6 rounded-2xl border-l-4 border-primary">
-                <div className="flex gap-4">
-                  <span className="material-symbols-outlined text-primary">verified_user</span>
-                  <div>
-                    <h4 className="font-bold text-sm">에디토리얼 보증</h4>
-                    <p className="text-xs text-on-surface-variant leading-relaxed mt-1">
-                      검증된 파트너 드라이버와 24/7 VIP 컨시어지 지원을 약속드립니다.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
+                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-secondary/5 rounded-full blur-3xl -ml-32 -mb-32"></div>
+             </div>
           </div>
         </div>
-      </main>
+      </div>
+      </div>
     </div>
   );
 };
 
 export default CreateBusRequest;
+

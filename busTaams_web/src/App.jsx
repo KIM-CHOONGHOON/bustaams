@@ -811,6 +811,7 @@ function App() {
   const [travelerQuoteReqUuid, setTravelerQuoteReqUuid] = useState(null);
   const [driverView, setDriverView] = useState('dashboard');
   const [customerView, setCustomerView] = React.useState('dashboard');
+  const [showBusRegisterModal, setShowBusRegisterModal] = useState(false);
   const [showLiveChatTraveler, setShowLiveChatTraveler] = useState(false);
 
   // Load user from localStorage on mount
@@ -836,6 +837,7 @@ function App() {
     localStorage.removeItem('user');
     setUser(null);
     setCustomerView('dashboard');
+    setShowBusRegisterModal(false);
     setDriverView('dashboard');
     setTravelerQuoteReqUuid(null);
     setShowLiveChatTraveler(false);
@@ -846,6 +848,7 @@ function App() {
     setShowLoginModal(false);
     setShowDriverProfileModal(false);
     setShowAccountSettings(false);
+    setShowBusRegisterModal(false);
     setShowBusInfoModal(false);
     setShowProfileSetupModal(false);
     setTravelerQuoteReqUuid(null);
@@ -872,26 +875,20 @@ function App() {
         {currentView === 'home' ? (
           user ? (
             user.userType === 'CONSUMER' || user.userType === 'TRAVELER' || user.userType === 'CUSTOMER' ? (
-              customerView === 'createRequest' ? (
-                <CreateBusRequest 
-                  user={user} 
-                  onBack={() => setCustomerView('dashboard')} 
-                  onSuccess={() => setCustomerView('reservationList')}
-                />
-              ) : customerView === 'reservationList' ? (
+              customerView === 'reservationList' ? (
                 <ReservationList user={user} onBack={() => setCustomerView('dashboard')} />
+              ) : customerView === 'confirmedList' ? (
+                <ReservationCompletedList user={user} onBack={() => setCustomerView('dashboard')} />
               ) : (
                 <CustomerDashboard 
                   user={user} 
                   setShowAccountSettings={setShowAccountSettings} 
-                  onBusRegister={() => setCustomerView('createRequest')}
+                  onBusRegister={() => setShowBusRegisterModal(true)}
                   onViewReservationList={() => setCustomerView('reservationList')}
                   onViewConfirmedList={() => setCustomerView('confirmedList')}
                   onOpenLiveChat={() => setShowLiveChatTraveler(true)}
                 />
-              ) : customerView === 'confirmedList' ? (
-                <ReservationCompletedList user={user} onBack={() => setCustomerView('dashboard')} />
-              ) : (
+              )
             ) : user.userType === 'DRIVER' ? (
                 <DriverDashboard 
                   currentUser={user} 
@@ -963,6 +960,16 @@ function App() {
         onClose={() => setShowLiveChatTraveler(false)}
         travelerUuid={user?.userUuid || user?.uuid}
       />
+      {showBusRegisterModal && (
+        <CreateBusRequest 
+          user={user} 
+          onBack={() => setShowBusRegisterModal(false)}
+          onSuccess={() => {
+            setShowBusRegisterModal(false);
+            setCustomerView('reservationList');
+          }}
+        />
+      )}
     </div>
   );
 }

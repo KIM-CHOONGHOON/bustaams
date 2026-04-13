@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import QuotationList from '../QuotationList/QuotationList';
 
 const ReservationList = ({ user, onBack }) => {
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedReqUuid, setSelectedReqUuid] = useState(null);
+  const [showQuotationList, setShowQuotationList] = useState(false);
 
   useEffect(() => {
     if (user && user.userUuid) {
@@ -22,6 +25,22 @@ const ReservationList = ({ user, onBack }) => {
       setLoading(false);
     }
   }, [user]);
+
+  const handleOpenQuotations = (reqUuid) => {
+    setSelectedReqUuid(reqUuid);
+    setShowQuotationList(true);
+  };
+
+  const handleCloseQuotations = () => {
+    setShowQuotationList(false);
+    setSelectedReqUuid(null);
+  };
+
+  // 상세 보기 (테스트용 콘솔)
+  const handleViewDetail = (bidUuid) => {
+    console.log('Viewing Bid Detail:', bidUuid);
+    alert(`견적 상세보기 기능 준비중입니다. (Bid UUID: ${bidUuid})`);
+  };
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -45,9 +64,8 @@ const ReservationList = ({ user, onBack }) => {
   const getVehicleLabel = (type) => {
     if (!type) return '';
     const map = {
-      'STANDARD_28': '일반 고속 (45인승)', // 기존 데이터 매핑 오류 대응
+      'STANDARD_28': '우등 고속 (28인승)',
       'STANDARD_45': '일반 고속 (45인승)',
-      'PREMIUM_45': '우등 고속 (28인승)',  // 기존 데이터 매핑 오류 대응
       'PREMIUM_28': '우등 고속 (28인승)',
       'GOLD_21': '프리미엄 골드 (21인승)',
       'VVIP_16': 'V-VIP (16인승)',
@@ -57,7 +75,17 @@ const ReservationList = ({ user, onBack }) => {
     return map[type] || type;
   };
 
-  console.log('ReservationList rendered, reservations:', reservations);
+  if (showQuotationList && selectedReqUuid) {
+    return (
+      <QuotationList 
+        user={user} 
+        reqUuid={selectedReqUuid} 
+        onBack={handleCloseQuotations}
+        onViewDetail={handleViewDetail}
+      />
+    );
+  }
+
   return (
     <div className="flex bg-background font-body text-on-surface min-h-[calc(100vh-96px)]">
       {/* SideNavBar */}
@@ -66,8 +94,8 @@ const ReservationList = ({ user, onBack }) => {
           <h2 className="font-headline text-xl font-extrabold text-primary tracking-tight">고객 포털</h2>
           <p className="text-xs text-slate-500 font-medium uppercase tracking-widest mt-1">스마트한 버스 여정 관리</p>
         </div>
-        <nav className="flex flex-col gap-1">
-          <button onClick={onBack} className="flex items-center gap-4 px-8 py-4 text-slate-500 hover:text-orange-600 transition-all font-medium text-sm text-left">
+        <nav className="flex flex-col gap-1 text-left">
+          <button onClick={onBack} className="flex items-center gap-4 px-8 py-4 text-slate-500 hover:text-orange-600 transition-all font-medium text-sm w-full">
             <span className="material-symbols-outlined">arrow_back</span> 대시보드로 돌아가기
           </button>
           <a className="flex items-center gap-4 px-8 py-4 text-slate-500 hover:text-orange-600 transition-all font-medium text-sm" href="#">
@@ -102,7 +130,7 @@ const ReservationList = ({ user, onBack }) => {
         {/* Main Content */}
         <main className="pt-12 pb-20 px-12 max-w-7xl">
           {/* Header Section */}
-          <section className="mb-16">
+          <section className="mb-16 text-left">
             <span className="text-secondary font-bold tracking-[0.2em] uppercase text-xs mb-4 block">예약 관리</span>
             <h1 className="font-headline text-5xl font-extrabold text-on-surface tracking-tighter leading-none mb-6">
               나의 예약 내역
@@ -113,7 +141,6 @@ const ReservationList = ({ user, onBack }) => {
           </section>
 
           {/* Reservation List */}
-          {/* Reservation List Loading / Empty State */}
           {loading ? (
             <div className="py-20 text-center text-slate-500">데이터를 불러오는 중입니다...</div>
           ) : reservations.length === 0 ? (
@@ -134,7 +161,7 @@ const ReservationList = ({ user, onBack }) => {
                   : "https://lh3.googleusercontent.com/aida-public/AB6AXuD1A-gP1H5XqL3rv3CYdw9jJtEPpIeRuQkZpT9r-9MxBPZPTcHZXH5iddUvv_4M-j9nQr5dthrcTl50VB7qbfT_U03lWPpqVW4CcBqJqLXA97Gdq5t7lg82hAKFEL1vjvDt5iTOuw24PCYX-O32c2InmJvzXBAItblQriopcPN4zPMAqk6ra6n_FzjBXbb3YTyCLTPh-E_e8gs1pBu-QNIxL85sQQDsSnBLUnFG-V1sq7IGkbIbAt3GXXfPuNATRFpEY9kabf7fzDQ";
 
                 return (
-                  <div key={item.REQ_UUID_STR || idx} className="group relative flex flex-col lg:flex-row bg-surface-container-lowest rounded-2xl overflow-hidden shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)] transition-all hover:-translate-y-1 border border-surface-variant/20">
+                  <div key={item.REQ_UUID_STR || idx} className="group relative flex flex-col lg:flex-row bg-surface-container-lowest rounded-2xl overflow-hidden shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)] transition-all hover:-translate-y-1 border border-surface-variant/20 text-left">
                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-secondary z-10"></div>
                     
                     <div className="lg:w-1/3 h-64 lg:h-auto overflow-hidden">
@@ -178,7 +205,10 @@ const ReservationList = ({ user, onBack }) => {
                       </div>
 
                       <div className="mt-10 flex gap-4">
-                        <button className="flex-1 bg-gradient-to-r from-primary to-primary-container text-white py-4 rounded-full font-bold text-sm tracking-tight shadow-lg shadow-primary/20 hover:brightness-110 active:scale-[0.98] transition-all">
+                        <button 
+                          onClick={() => handleOpenQuotations(item.REQ_UUID_STR)}
+                          className="flex-1 bg-gradient-to-r from-primary to-primary-container text-white py-4 rounded-full font-bold text-sm tracking-tight shadow-lg shadow-primary/20 hover:brightness-110 active:scale-[0.98] transition-all"
+                        >
                           {item.REQ_STAT === 'BIDDING' ? '견적리스트 확인' : '티켓 확인'}
                         </button>
                         <button className="px-8 py-4 border border-outline-variant text-on-surface-variant rounded-full font-bold text-sm hover:bg-surface-container-high transition-all">
