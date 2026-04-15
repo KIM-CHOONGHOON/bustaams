@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import DetailBusRequestModal from './DetailBusRequestModal';
+import TripHistoryModal from './ReservationList/TripHistoryModal';
 
 const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onViewReservationList, onViewConfirmedList, onOpenLiveChat }) => {
   const [recentRequests, setRecentRequests] = useState([]);
   const [selectedRequestId, setSelectedRequestId] = useState(null);
+  const [showTripHistory, setShowTripHistory] = useState(false);
 
   useEffect(() => {
     if (user && user.userUuid) {
@@ -165,7 +167,10 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
               <span className="font-bold text-sm">확정 예약 목록</span>
             </div>
             {/* Trip History */}
-            <div className="bg-surface-container-lowest p-8 rounded-2xl tonal-stacking flex flex-col items-center text-center group cursor-pointer hover:bg-primary hover:text-on-primary transition-all duration-300 no-line-rule">
+            <div 
+              onClick={() => setShowTripHistory(true)}
+              className="bg-surface-container-lowest p-8 rounded-2xl tonal-stacking flex flex-col items-center text-center group cursor-pointer hover:bg-primary hover:text-on-primary transition-all duration-300 no-line-rule"
+            >
               <div className="w-14 h-14 bg-surface-container-high rounded-full flex items-center justify-center mb-6 group-hover:bg-primary-container">
                 <span className="material-symbols-outlined text-primary group-hover:text-on-primary-container">history</span>
               </div>
@@ -275,6 +280,13 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
         <DetailBusRequestModal 
           reqData={recentRequests.find(r => r.REQ_UUID_STR === selectedRequestId)} 
           onClose={() => setSelectedRequestId(null)} 
+        />
+      )}
+
+      {showTripHistory && (
+        <TripHistoryModal 
+          user={user}
+          onClose={() => setShowTripHistory(false)} 
         />
       )}
     </div>

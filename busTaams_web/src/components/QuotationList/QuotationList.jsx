@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const QuotationList = ({ user, reqUuid, onBack, onViewDetail }) => {
+const QuotationList = ({ user, reqUuid, onBack, onViewDetail, isModal = false, onConfirmSuccess }) => {
   const [bids, setBids] = useState([]);
   const [reqInfo, setReqInfo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -45,6 +45,33 @@ const QuotationList = ({ user, reqUuid, onBack, onViewDetail }) => {
     fetchData();
   }, [reqUuid, user]);
 
+  const handleConfirm = async (bid) => {
+    if (!confirm(`${bid.driverName} 기사님의 견적으로 예약을 확정하시겠습니까?`)) return;
+
+    try {
+      const response = await fetch('http://localhost:8080/api/auction/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reqUuid: reqUuid,
+          driverUuid: bid.DRIVER_UUID,
+          bidSeq: bid.BID_SEQ
+        })
+      });
+
+      const result = await response.json();
+      if (response.ok) {
+        alert('예약이 성공적으로 확정되었습니다!');
+        if (onConfirmSuccess) onConfirmSuccess();
+      } else {
+        alert(`확정 실패: ${result.error || '알 수 없는 오류'}`);
+      }
+    } catch (err) {
+      console.error('Confirm error:', err);
+      alert('서버와 통신 중 오류가 발생했습니다.');
+    }
+  };
+
   const sortedBids = [...bids].sort((a, b) => {
     if (sortBy === 'price') return a.bidPrice - b.bidPrice;
     // 평점 로직은 di 테이블 연동 필요 (현재는 0으로 처리하거나 백엔드 수정 필요)
@@ -87,58 +114,60 @@ const QuotationList = ({ user, reqUuid, onBack, onViewDetail }) => {
 
   return (
     <div className="flex bg-[#f7f9fb] font-body text-on-surface min-h-[calc(100vh-96px)] w-full">
-      {/* ── SideNavBar ── */}
-      <aside className="w-72 bg-slate-50 flex flex-col py-12 gap-2 shrink-0 border-r border-slate-200/50 sticky top-0 self-start min-h-screen">
-        <div className="px-8 mb-8">
-          <h2 className="font-headline text-xl font-extrabold text-primary tracking-tight">고객 포털</h2>
-          <p className="text-xs text-slate-500 font-medium uppercase tracking-widest mt-1">나의 플릿 여정 관리</p>
-        </div>
-        <nav className="flex flex-col gap-1 px-4 text-left">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-orange-600 transition-all font-medium text-sm w-full"
-          >
-            <span className="material-symbols-outlined">arrow_back</span> 예약 내역으로 돌아가기
-          </button>
-          <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-orange-600 transition-all font-medium text-sm" href="#">
-            <span className="material-symbols-outlined">chat_bubble</span> 1:1 문의하기
-          </a>
-          <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-orange-600 transition-all font-medium text-sm" href="#">
-            <span className="material-symbols-outlined">history</span> 문의 내역
-          </a>
-          <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-orange-600 transition-all font-medium text-sm" href="#">
-            <span className="material-symbols-outlined">person_check</span> 프로필
-          </a>
-          <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-orange-600 transition-all font-medium text-sm" href="#">
-            <span className="material-symbols-outlined">event_available</span> 예약 리스트
-          </a>
-          <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-orange-600 transition-all font-medium text-sm" href="#">
-            <span className="material-symbols-outlined">event_busy</span> 취소 내역
-          </a>
-          <a className="bg-white text-teal-700 shadow-sm rounded-r-full mr-4 flex items-center gap-3 px-4 py-3 font-bold text-sm" href="#">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>request_quote</span> 견적 리스트
-          </a>
-          <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-orange-600 transition-all font-medium text-sm" href="#">
-            <span className="material-symbols-outlined">rate_review</span> 리뷰 관리
-          </a>
-          <div className="mt-6 border-t border-slate-200/50 pt-4">
-            <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-orange-600 transition-all font-medium text-sm" href="#">
-              <span className="material-symbols-outlined">settings</span> 설정
-            </a>
+      {/* ── SideNavBar - Hidden in Modal ── */}
+      {!isModal && (
+        <aside className="w-72 bg-slate-50 flex flex-col py-12 gap-2 shrink-0 border-r border-slate-200/50 sticky top-0 self-start min-h-screen">
+          <div className="px-8 mb-8">
+            <h2 className="font-headline text-xl font-extrabold text-primary tracking-tight">고객 포털</h2>
+            <p className="text-xs text-slate-500 font-medium uppercase tracking-widest mt-1">나의 플릿 여정 관리</p>
           </div>
-        </nav>
-      </aside>
+          <nav className="flex flex-col gap-1 px-4 text-left">
+            <button
+              onClick={onBack}
+              className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-orange-600 transition-all font-medium text-sm w-full"
+            >
+              <span className="material-symbols-outlined">arrow_back</span> 예약 내역으로 돌아가기
+            </button>
+            <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-orange-600 transition-all font-medium text-sm" href="#">
+              <span className="material-symbols-outlined">chat_bubble</span> 1:1 문의하기
+            </a>
+            <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-orange-600 transition-all font-medium text-sm" href="#">
+              <span className="material-symbols-outlined">history</span> 문의 내역
+            </a>
+            <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-orange-600 transition-all font-medium text-sm" href="#">
+              <span className="material-symbols-outlined">person_check</span> 프로필
+            </a>
+            <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-orange-600 transition-all font-medium text-sm" href="#">
+              <span className="material-symbols-outlined">event_available</span> 예약 리스트
+            </a>
+            <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-orange-600 transition-all font-medium text-sm" href="#">
+              <span className="material-symbols-outlined">event_busy</span> 취소 내역
+            </a>
+            <a className="bg-white text-teal-700 shadow-sm rounded-r-full mr-4 flex items-center gap-3 px-4 py-3 font-bold text-sm" href="#">
+              <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>request_quote</span> 견적 리스트
+            </a>
+            <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-orange-600 transition-all font-medium text-sm" href="#">
+              <span className="material-symbols-outlined">rate_review</span> 리뷰 관리
+            </a>
+            <div className="mt-6 border-t border-slate-200/50 pt-4">
+              <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-orange-600 transition-all font-medium text-sm" href="#">
+                <span className="material-symbols-outlined">settings</span> 설정
+              </a>
+            </div>
+          </nav>
+        </aside>
+      )}
 
       {/* ── Main Content ── */}
-      <main className="flex-1 px-12 py-16 max-w-[1400px]">
-        <header className="flex justify-between items-end mb-14">
+      <main className={`flex-1 ${isModal ? 'px-10 py-10' : 'px-12 py-16'} max-w-[1400px] mx-auto w-full`}>
+        <header className={`flex justify-between items-end ${isModal ? 'mb-8' : 'mb-14'}`}>
           <div className="max-w-2xl text-left">
-            <span className="text-secondary font-bold tracking-[0.2em] uppercase text-xs mb-3 block">플릿 관리</span>
-            <h1 className="font-headline text-5xl font-extrabold tracking-tighter text-on-surface leading-tight">
-              견적 현황 리스트
+            {!isModal && <span className="text-secondary font-bold tracking-[0.2em] uppercase text-xs mb-3 block">플릿 관리</span>}
+            <h1 className={`font-headline ${isModal ? 'text-3xl' : 'text-5xl'} font-extrabold tracking-tighter text-on-surface leading-tight`}>
+              {isModal ? '입찰 참여 기사님 현황' : '견적 현황 리스트'}
             </h1>
-            <p className="mt-4 text-on-surface-variant text-lg leading-relaxed">
-              신청하신 차량별 실시간 견적 제안을 확인하고 관리하세요. 최적의 파트너를 선택하여 품격 있는 여정을 시작하십시오.
+            <p className={`mt-4 text-on-surface-variant ${isModal ? 'text-base' : 'text-lg'} leading-relaxed`}>
+              {isModal ? '기사님들이 제안한 실시간 견적 가격을 한눈에 비교하고 최고의 파트너를 선택하세요.' : '신청하신 차량별 실시간 견적 제안을 확인하고 관리하세요. 최적의 파트너를 선택하여 품격 있는 여정을 시작하십시오.'}
             </p>
 
             {reqInfo && (
@@ -233,7 +262,7 @@ const QuotationList = ({ user, reqUuid, onBack, onViewDetail }) => {
                       <div className="text-right">
                         <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1">제시 견적가</p>
                         <p className="text-3xl font-black text-primary tracking-tighter">
-                          {formatPrice(bid.bidPrice)}
+                          {formatPrice(bid.DRIVER_BIDDING_PRICE)}
                         </p>
                       </div>
                     </div>
@@ -259,15 +288,19 @@ const QuotationList = ({ user, reqUuid, onBack, onViewDetail }) => {
                       </div>
                     </div>
 
-                    <div className="flex gap-3">
+                    <div className="flex gap-4">
                       <button 
                         onClick={() => onViewDetail(bid.bidUuid)}
-                        className="flex-1 bg-gradient-to-br from-primary to-[#00685f] text-white py-4 rounded-full font-bold hover:shadow-xl hover:brightness-110 transition-all active:scale-95 text-sm"
+                        className="flex-1 border border-slate-200 text-slate-600 py-4 rounded-xl font-bold hover:bg-slate-50 transition-all active:scale-95 text-sm"
                       >
                         상세보기
                       </button>
-                      <button className="px-6 py-4 rounded-full border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-all active:scale-95 text-sm">
-                        채팅상담
+                      <button 
+                        onClick={() => handleConfirm(bid)}
+                        className="flex-[2] bg-gradient-to-br from-primary to-[#00685f] text-white py-4 rounded-xl font-black shadow-lg shadow-primary/20 hover:shadow-xl hover:brightness-110 transition-all active:scale-95 text-base flex items-center justify-center gap-2"
+                      >
+                        <span className="material-symbols-outlined text-xl">how_to_reg</span>
+                        본 예약 확정하기
                       </button>
                     </div>
                   </div>

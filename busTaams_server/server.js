@@ -1277,6 +1277,44 @@ app.post('/api/auction/request', async (req, res) => {
             await connection.commit();
             res.status(201).json({ message: '견적 요청이 성공적으로 등록되었습니다.', reqUuid });
 
+            // [비동기] 해당 종류의 버스를 소유한 모든 기사님께 SMS 발송 및 로그 기록
+            (async () => {
+                try {
+                    // 1. 등록한 고객의 성함 조회
+                    const [uRows] = await pool.execute('SELECT USER_NM FROM TB_USER WHERE USER_UUID = UUID_TO_BIN(?)', [userUuid]);
+                    let userName = '고객님';
+                    if (uRows.length > 0) {
+                        try { userName = decrypt(uRows[0].USER_NM); } catch (e) { userName = uRows[0].USER_NM; }
+                    }
+
+                    // 2. 해당 차종을 보유한 기사님들의 연락처 정보 조회
+                    const busTypes = vehicles.filter(v => v.qty > 0).map(v => v.type);
+                    if (busTypes.length === 0) return;
+
+                    const [drivers] = await pool.query(`
+                        SELECT DISTINCT BIN_TO_UUID(u.USER_UUID) as driverUuid, u.HP_NO 
+                        FROM TB_USER u
+                        INNER JOIN TB_BUS_DRIVER_VEHICLE v ON u.USER_UUID = v.USER_UUID
+                        WHERE v.SERVICE_CLASS IN (?) AND u.USER_TYPE = 'DRIVER' AND u.USER_STAT = 'ACTIVE'
+                    `, [busTypes]);
+
+                    // 3. 각 기사님께 문자 발송 및 이력 저장
+                    for (const driver of drivers) {
+                        const smsContent = `[busTaams] 신규 예약 등록 안내\n고객명: ${userName}\n여정명: ${tripTitle}\n여정날짜: ${startDt.split('T')[0]}\n해당 차량의 새로운 견적 요청이 등록되었습니다. 지금 확인해 보세요!`;
+                        
+                        await sendSmsAndLog({
+                            reqUuid,
+                            receiverUuid: driver.driverUuid,
+                            receiverPhone: driver.HP_NO,
+                            content: smsContent,
+                            category: 'REQ_REG'
+                        });
+                    }
+                } catch (smsErr) {
+                    console.error('Background SMS sending error:', smsErr);
+                }
+            })();
+
         } catch (dbError) {
             await connection.rollback();
             throw dbError;
@@ -1362,7 +1400,7 @@ app.get('/api/auction/user/:userUuid', async (req, res) => {
             LEFT JOIN TB_AUCTION_REQ_BUS b ON r.REQ_UUID = b.REQ_UUID
             WHERE r.TRAVELER_UUID = UUID_TO_BIN(?) 
               AND r.REQ_STAT = 'BIDDING'
-              AND r.START_DT > NOW()
+              AND r.START_DT > CURDATE()
             ORDER BY r.REG_DT DESC
         `;
         
@@ -1397,15 +1435,16 @@ app.get('/api/auction/confirmed/:userUuid', async (req, res) => {
 
         connection = await pool.getConnection();
         
-        // 사용자의 '입찰 중'인 예약 목록 조회 (TB_AUCTION_REQ 기반, REQ_STAT = 'BIDDING')
+        // 사용자의 '확정된' 예약 목록 조회 (TB_AUCTION_REQ 기반, REQ_STAT = 'CONFIRM')
         const masterQuery = `
             SELECT 
-                HEX(r.REQ_UUID) as REQ_UUID_STR, 
+                BIN_TO_UUID(r.REQ_UUID) as REQ_UUID_STR, 
                 r.TRIP_TITLE, r.START_ADDR, r.END_ADDR, 
                 r.START_DT, r.END_DT, r.PASSENGER_CNT, r.REQ_STAT, r.REQ_AMT
             FROM TB_AUCTION_REQ r
             WHERE r.TRAVELER_UUID = UUID_TO_BIN(?)
-              AND r.REQ_STAT = 'BIDDING'
+              AND r.REQ_STAT = 'CONFIRM'
+              AND r.START_DT > NOW()
             ORDER BY r.REG_DT DESC
         `;
         
@@ -1415,14 +1454,19 @@ app.get('/api/auction/confirmed/:userUuid', async (req, res) => {
         for (let master of masters) {
             const busQuery = `
                 SELECT 
-                    BIN_TO_UUID(REQ_BUS_UUID) as REQ_BUS_UUID_STR,
-                    BUS_TYPE_CD, 
-                    REQ_BUS_CNT,
-                    REQ_STAT  -- 'BIDDING', 'CLOSED', 'CANCELED' 등
-                FROM TB_AUCTION_REQ_BUS 
-                WHERE REQ_UUID = UUID_TO_BIN(?)
+                    BIN_TO_UUID(ab.REQ_BUS_UUID) as REQ_BUS_UUID_STR,
+                    v.SERVICE_CLASS as BUS_TYPE_CD, -- 실제 기사 차량 정보에서 차종 연동
+                    ab.REQ_BUS_CNT,                 -- 요청 차량 대수
+                    res.RES_STAT,
+                    res.DRIVER_BIDDING_PRICE as REQ_AMT -- 실제 확정된 입찰 금액 연동
+                FROM TB_AUCTION_REQ_BUS ab
+                INNER JOIN TB_BUS_RESERVATION res ON ab.REQ_UUID = res.REQ_UUID 
+                INNER JOIN TB_BUS_DRIVER_VEHICLE v ON res.BUS_UUID = v.BUS_ID
+                WHERE ab.REQ_UUID = UUID_TO_BIN(?)
+                  AND res.RES_STAT = 'CONFIRM'
+                GROUP BY ab.REQ_BUS_UUID, v.SERVICE_CLASS, ab.REQ_BUS_CNT, res.RES_STAT, res.DRIVER_BIDDING_PRICE
             `;
-            const [buses] = await pool.execute(busQuery, [master.REQ_UUID_STR]);
+            const [buses] = await connection.execute(busQuery, [master.REQ_UUID_STR]);
             master.vehicles = buses;
 
             // 경유지 정보도 함께 가져오기
@@ -1432,7 +1476,7 @@ app.get('/api/auction/confirmed/:userUuid', async (req, res) => {
                 WHERE REQ_UUID = UUID_TO_BIN(?) 
                 ORDER BY VIA_ORD ASC
             `;
-            const [vias] = await pool.execute(viaQuery, [master.REQ_UUID_STR]);
+            const [vias] = await connection.execute(viaQuery, [master.REQ_UUID_STR]);
             master.waypoints = vias;
         }
 
@@ -1454,18 +1498,22 @@ app.post('/api/auction/cancel-bus', async (req, res) => {
 
         connection = await pool.getConnection();
         
-        // TB_AUCTION_REQ_BUS 테이블의 REQ_STAT을 'CANCELED'로 변경
+        // 1. TB_BUS_RESERVATION 테이블의 상태만 'TRAVELER_CANCEL'로 변경
+        // REQ_BUS_UUID를 통해 해당 차량과 매칭되는 확정된 입찰 건을 찾아 업데이트합니다.
         const [result] = await connection.execute(`
-            UPDATE TB_AUCTION_REQ_BUS
-            SET REQ_STAT = 'CANCELED'
-            WHERE REQ_BUS_UUID = UUID_TO_BIN(?)
+            UPDATE TB_BUS_RESERVATION res
+            JOIN TB_AUCTION_REQ_BUS ab ON res.REQ_UUID = ab.REQ_UUID 
+            SET res.RES_STAT = 'TRAVELER_CANCEL',
+                res.MOD_DT = NOW()
+            WHERE ab.REQ_BUS_UUID = UUID_TO_BIN(?)
+              AND res.RES_STAT = 'CONFIRM' 
         `, [reqBusUuid]);
 
         if (result.affectedRows === 0) {
-            return res.status(404).json({ error: '해당 차량 예약 정보를 찾을 수 없습니다.' });
+            return res.status(404).json({ error: '해당 차량의 확정된 예약 정보를 찾을 수 없습니다.' });
         }
 
-        res.status(200).json({ message: '해당 차량 예약이 취소되었습니다.' });
+        res.status(200).json({ message: '해당 차량의 예약이 취소되었습니다.' });
 
     } catch (error) {
         console.error('Cancel Bus Error:', error);
@@ -1644,6 +1692,44 @@ app.get('/api/auction/bids/:reqUuid', async (req, res) => {
     } catch (error) {
         console.error('CRITICAL BIDS ERROR:', error);
         res.status(500).json({ error: 'Internal Server Error', detail: error.message });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// API: 내 여정 기록 조회 (완료 및 취소 내역 포함)
+// GET /api/auction/history/:userUuid
+app.get('/api/auction/history/:userUuid', async (req, res) => {
+    let connection;
+    try {
+        const { userUuid } = req.params;
+        if (!userUuid) return res.status(400).json({ error: 'userUuid is required' });
+
+        connection = await pool.getConnection();
+        
+        // 사용자의 모든 여정 기록 조회 (TB_AUCTION_REQ 기반)
+        const query = `
+            SELECT 
+                BIN_TO_UUID(r.REQ_UUID) as REQ_UUID_STR, 
+                r.TRIP_TITLE, r.START_ADDR, r.END_ADDR, 
+                r.START_DT, r.END_DT, r.PASSENGER_CNT, r.REQ_STAT, r.REG_DT,
+                (
+                    SELECT SUM(res.DRIVER_BIDDING_PRICE) 
+                    FROM TB_BUS_RESERVATION res 
+                    WHERE res.REQ_UUID = r.REQ_UUID 
+                      AND res.RES_STAT IN ('CONFIRM', 'COMPLETED')
+                ) as TOTAL_AMT
+            FROM TB_AUCTION_REQ r
+            WHERE r.TRAVELER_UUID = UUID_TO_BIN(?)
+            ORDER BY r.REG_DT DESC
+        `;
+
+        const [rows] = await connection.execute(query, [userUuid]);
+        res.status(200).json(rows);
+
+    } catch (error) {
+        console.error('Fetch Trip History Error:', error);
+        res.status(500).json({ error: '여정 기록 조회 중 오류가 발생했습니다.' });
     } finally {
         if (connection) connection.release();
     }
@@ -1888,7 +1974,7 @@ app.get('/api/common-codes', async (req, res) => {
         await ensureTbCommonCodeTable(connection);
         await seedBusTypeCodesIfEmpty(connection);
         const [rows] = await connection.execute(
-            `SELECT DTL_CD AS dtlCd, CD_NM_KO AS cdNmKo, CD_DESC AS cdDescKo, CD_FNUM AS cdFnum
+            `SELECT DTL_CD AS dtlCd, CD_NM_KO AS cdNmKo, CD_FNUM AS cdFnum
              FROM TB_COMMON_CODE WHERE GRP_CD = ? AND USE_YN = 'Y' ORDER BY DISP_ORD ASC, DTL_CD ASC`,
             [grpCd]
         );
@@ -3507,3 +3593,50 @@ app.use('/api/user/device-token', createUserDeviceTokenRouter(pool));
         console.log(`🚀 busTaams REST API Server is running beautifully on http://localhost:${PORT}`);
     });
 })();
+
+/**
+ * [공통] SMS 발송 및 이력 저장 유틸리티
+ * @param {string} reqUuid 여정 요청 UUID (바이너리 변환 전 문자열)
+ * @param {string} receiverUuid 수신자(기사) UUID (바이너리 변환 전 문자열)
+ * @param {string} receiverPhone 수신 휴대폰 번호
+ * @param {string} content 메시지 내용
+ * @param {string} category 발송 상황 구분 (REQ_REG, CONFIRM 등)
+ */
+async function sendSmsAndLog({ reqUuid, receiverUuid, receiverPhone, content, category }) {
+    let connection;
+    try {
+        console.log(`[SMS SENDING] To: ${receiverPhone}, Category: ${category}`);
+        console.log(`[CONTENT] ${content}`);
+
+        // TODO: 실제 SMS 발송 업체 API 호출 로직 (CoolSMS, Aligo 등)
+        // 현재는 로그만 출력하고 성공으로 처리
+        const sendStat = 'SUCCESS'; 
+
+        connection = await pool.getConnection();
+        const logUuid = randomUUID();
+
+        const query = `
+            INSERT INTO TB_SMS_LOG (
+                LOG_UUID, REQ_UUID, RECEIVER_UUID, RECEIVER_PHONE, 
+                MSG_CONTENT, MSG_TYPE, SEND_STAT, SEND_CATEGORY, REG_DT
+            ) VALUES (
+                UUID_TO_BIN(?), 
+                ${reqUuid ? 'UUID_TO_BIN(?)' : 'NULL'}, 
+                UUID_TO_BIN(?), 
+                ?, ?, 'SMS', ?, ?, NOW()
+            )
+        `;
+
+        const params = [logUuid];
+        if (reqUuid) params.push(reqUuid);
+        params.push(receiverUuid, receiverPhone, content, sendStat, category);
+
+        await connection.execute(query, params);
+        console.log(`[SMS LOG SAVED] LogUUID: ${logUuid}`);
+
+    } catch (err) {
+        console.error('SMS Send or Log Error:', err);
+    } finally {
+        if (connection) connection.release();
+    }
+}

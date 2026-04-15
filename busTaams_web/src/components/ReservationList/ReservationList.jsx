@@ -75,16 +75,6 @@ const ReservationList = ({ user, onBack }) => {
     return map[type] || type;
   };
 
-  if (showQuotationList && selectedReqUuid) {
-    return (
-      <QuotationList 
-        user={user} 
-        reqUuid={selectedReqUuid} 
-        onBack={handleCloseQuotations}
-        onViewDetail={handleViewDetail}
-      />
-    );
-  }
 
   return (
     <div className="flex bg-background font-body text-on-surface min-h-[calc(100vh-96px)]">
@@ -230,6 +220,53 @@ const ReservationList = ({ user, onBack }) => {
           </div>
         </main>
       </div>
+
+      {/* Quotation List Modal */}
+      {showQuotationList && selectedReqUuid && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-6xl max-h-[90vh] bg-surface-lowest rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-white/20">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-10 py-6 border-b border-slate-100 bg-white/80 sticky top-0 z-10 backdrop-blur-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                  <span className="material-symbols-outlined font-bold">request_quote</span>
+                </div>
+                <h2 className="text-2xl font-black tracking-tight text-on-surface-variant">견적 현황 리스트</h2>
+              </div>
+              <button 
+                onClick={handleCloseQuotations}
+                className="w-11 h-11 flex items-center justify-center rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all active:scale-90"
+              >
+                <span className="material-symbols-outlined font-bold">close</span>
+              </button>
+            </div>
+            
+            {/* Modal Body - Scrollable */}
+            <div className="flex-1 overflow-y-auto bg-slate-50/50">
+              <QuotationList 
+                user={user} 
+                reqUuid={selectedReqUuid} 
+                onBack={handleCloseQuotations}
+                onViewDetail={handleViewDetail}
+                isModal={true}
+                onConfirmSuccess={() => {
+                   handleCloseQuotations();
+                   // Refresh reservations if needed
+                   if (user && user.userUuid) {
+                      setLoading(true);
+                      fetch(`http://localhost:8080/api/auction/user/${user.userUuid}`)
+                        .then(res => res.json())
+                        .then(data => {
+                          if (Array.isArray(data)) setReservations(data);
+                          setLoading(false);
+                        });
+                   }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

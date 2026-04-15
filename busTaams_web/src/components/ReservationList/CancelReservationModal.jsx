@@ -21,8 +21,32 @@ const CancelReservationModal = ({ reqData, onClose, onRefresh }) => {
     }
   };
 
+  const handleFullCancel = async () => {
+    if (!window.confirm('여정 전체를 취소하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
+
+    try {
+      const response = await fetch('http://localhost:8080/api/auction/cancel-reservation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reqUuid: reqData.REQ_UUID_STR, cancelRole: 'CUSTOMER' })
+      });
+
+      if (response.ok) {
+        alert('전체 예약이 취소되었습니다.');
+        if (onRefresh) onRefresh();
+        onClose(); // 성공 시 모달 닫기
+      } else {
+        const errorData = await response.json();
+        alert(errorData.error || '전체 취소 도중 오류가 발생했습니다.');
+      }
+    } catch (err) {
+      console.error('Full cancel error:', err);
+      alert('서버와 통신 중 오류가 발생했습니다.');
+    }
+  };
+
   const handleCancelIndividualBus = async (reqBusUuid) => {
-    if (!window.confirm('이 차량만 취약하시겠습니까?')) return;
+    if (!window.confirm('이 차량만 취소하시겠습니까?')) return;
 
     try {
       const response = await fetch('http://localhost:8080/api/auction/cancel-bus', {
@@ -96,8 +120,8 @@ const CancelReservationModal = ({ reqData, onClose, onRefresh }) => {
                 <h4 className="font-headline font-bold text-xl mb-6">예약 요약</h4>
                 <div className="space-y-4 text-sm">
                   <div className="flex justify-between border-b border-slate-200 pb-2">
-                    <span className="text-slate-400">예약 번호</span>
-                    <span className="font-bold">{reqData.REQ_UUID_STR ? reqData.REQ_UUID_STR.substring(0, 13).toUpperCase() : 'N/A'}</span>
+                    <span className="text-slate-400">여정명</span>
+                    <span className="font-bold line-clamp-1">{reqData.TRIP_TITLE || '일반 여정'}</span>
                   </div>
                   <div className="flex justify-between border-b border-slate-200 pb-2">
                     <span className="text-slate-400">총 예약 차량</span>
@@ -191,7 +215,7 @@ const CancelReservationModal = ({ reqData, onClose, onRefresh }) => {
                 <p className="text-sm text-slate-400 mb-6 text-center leading-relaxed font-medium">전체 예약을 취소하시려면 하단 버튼을 눌러주세요.<br/>이 작업은 마스터 여정 전체에 영향을 줄 수 있습니다.</p>
                 <button 
                    className="w-full max-w-md bg-gradient-to-r from-rose-700 to-rose-900 text-white py-5 rounded-full font-headline font-extrabold text-xl shadow-xl shadow-rose-900/10 hover:scale-[1.02] active:scale-95 transition-all"
-                   onClick={() => alert("전체 취소 기능은 준비 중입니다.")}
+                   onClick={handleFullCancel}
                 >
                   전체 예약 취소하기
                 </button>
