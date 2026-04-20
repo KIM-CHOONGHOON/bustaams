@@ -1395,11 +1395,13 @@ app.get('/api/auction/user/:userUuid', async (req, res) => {
                 BIN_TO_UUID(r.REQ_UUID) as REQ_UUID_STR, 
                 r.TRIP_TITLE, r.START_ADDR, r.END_ADDR, 
                 r.START_DT, r.END_DT, r.PASSENGER_CNT, r.REQ_STAT, r.REQ_AMT,
-                b.BUS_TYPE_CD, b.REQ_BUS_CNT
+                b.BUS_TYPE_CD, b.REQ_BUS_CNT,
+                (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_UUID = r.REQ_UUID AND VIA_TYPE = 'START_WAY' ORDER BY VIA_ORD ASC LIMIT 1) as VIA_START_ADDR,
+                (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_UUID = r.REQ_UUID AND VIA_TYPE = 'ROUND_TRIP' ORDER BY VIA_ORD ASC LIMIT 1) as VIA_END_ADDR
             FROM TB_AUCTION_REQ r
             LEFT JOIN TB_AUCTION_REQ_BUS b ON r.REQ_UUID = b.REQ_UUID
             WHERE r.TRAVELER_UUID = UUID_TO_BIN(?) 
-              AND r.REQ_STAT = 'BIDDING'
+              AND r.REQ_STAT IN ('BIDDING', 'TRAVELER_CANCEL')
               AND r.START_DT > CURDATE()
             ORDER BY r.REG_DT DESC
         `;
@@ -1656,7 +1658,7 @@ app.get('/api/auction/bids/:reqUuid', async (req, res) => {
             LEFT JOIN TB_DRIVER_INFO di ON res.DRIVER_UUID = di.USER_UUID
             LEFT JOIN TB_BUS_DRIVER_VEHICLE v ON res.BUS_UUID = v.BUS_ID
             WHERE HEX(res.REQ_UUID) = REPLACE(?, '-', '')
-            ORDER BY res.DRIVER_BIDDING_PRICE ASC
+            ORDER BY res.REG_DT DESC
         `;
 
         console.log('[DEBUG] Executing Query for ReqUUID:', reqUuid);

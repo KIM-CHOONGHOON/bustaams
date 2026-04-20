@@ -813,6 +813,7 @@ function App() {
   const [customerView, setCustomerView] = React.useState('dashboard');
   const [showBusRegisterModal, setShowBusRegisterModal] = useState(false);
   const [showLiveChatTraveler, setShowLiveChatTraveler] = useState(false);
+  const [showReservationListModal, setShowReservationListModal] = useState(false);
 
   // Load user from localStorage on mount
   useEffect(() => {
@@ -875,16 +876,14 @@ function App() {
         {currentView === 'home' ? (
           user ? (
             user.userType === 'CONSUMER' || user.userType === 'TRAVELER' || user.userType === 'CUSTOMER' ? (
-              customerView === 'reservationList' ? (
-                <ReservationList user={user} onBack={() => setCustomerView('dashboard')} />
-              ) : customerView === 'confirmedList' ? (
+              customerView === 'confirmedList' ? (
                 <ReservationCompletedList user={user} onBack={() => setCustomerView('dashboard')} />
               ) : (
                 <CustomerDashboard 
                   user={user} 
                   setShowAccountSettings={setShowAccountSettings} 
                   onBusRegister={() => setShowBusRegisterModal(true)}
-                  onViewReservationList={() => setCustomerView('reservationList')}
+                  onViewReservationList={() => setShowReservationListModal(true)}
                   onViewConfirmedList={() => setCustomerView('confirmedList')}
                   onOpenLiveChat={() => setShowLiveChatTraveler(true)}
                 />
@@ -960,13 +959,30 @@ function App() {
         onClose={() => setShowLiveChatTraveler(false)}
         travelerUuid={user?.userUuid || user?.uuid}
       />
+      {showReservationListModal && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="w-full max-w-[1240px] h-[95vh] bg-white rounded-[40px] shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-300">
+            <button
+              onClick={() => setShowReservationListModal(false)}
+              className="absolute top-5 right-5 z-50 w-11 h-11 flex items-center justify-center bg-white/90 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-full shadow-md transition-all active:scale-90"
+              title="닫기"
+            >
+              <span className="material-symbols-outlined font-bold">close</span>
+            </button>
+            <ReservationList
+              user={user}
+              onBack={() => setShowReservationListModal(false)}
+            />
+          </div>
+        </div>
+      )}
       {showBusRegisterModal && (
         <CreateBusRequest 
           user={user} 
           onBack={() => setShowBusRegisterModal(false)}
           onSuccess={() => {
             setShowBusRegisterModal(false);
-            setCustomerView('reservationList');
+            setShowReservationListModal(true);
           }}
         />
       )}

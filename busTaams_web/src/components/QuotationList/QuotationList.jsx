@@ -4,7 +4,6 @@ const QuotationList = ({ user, reqUuid, onBack, onViewDetail, isModal = false, o
   const [bids, setBids] = useState([]);
   const [reqInfo, setReqInfo] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState('price'); // 'price' | 'rating'
 
   // 견적 데이터 및 요청 정보 조회
   useEffect(() => {
@@ -72,12 +71,7 @@ const QuotationList = ({ user, reqUuid, onBack, onViewDetail, isModal = false, o
     }
   };
 
-  const sortedBids = [...bids].sort((a, b) => {
-    if (sortBy === 'price') return a.bidPrice - b.bidPrice;
-    // 평점 로직은 di 테이블 연동 필요 (현재는 0으로 처리하거나 백엔드 수정 필요)
-    if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0);
-    return 0;
-  });
+  const sortedBids = bids; // 서버에서 정렬된 순서대로 표시
 
   const getServiceLabel = (cls) => {
     const map = {
@@ -94,6 +88,13 @@ const QuotationList = ({ user, reqUuid, onBack, onViewDetail, isModal = false, o
 
   const formatPrice = (amt) =>
     amt != null ? `₩${Number(amt).toLocaleString()}` : '견적 대기중';
+
+  // 주소에서 시/도 + 시군구만 추출
+  const trimAddress = (addr) => {
+    if (!addr || typeof addr !== 'string') return '';
+    const parts = addr.trim().split(/\s+/);
+    return parts.slice(0, 2).join(' ');
+  };
 
   const renderStars = (rating) => {
     const r = rating || 0;
@@ -164,45 +165,27 @@ const QuotationList = ({ user, reqUuid, onBack, onViewDetail, isModal = false, o
           <div className="max-w-2xl text-left">
             {!isModal && <span className="text-secondary font-bold tracking-[0.2em] uppercase text-xs mb-3 block">플릿 관리</span>}
             <h1 className={`font-headline ${isModal ? 'text-3xl' : 'text-5xl'} font-extrabold tracking-tighter text-on-surface leading-tight`}>
-              {isModal ? '입찰 참여 기사님 현황' : '견적 현황 리스트'}
+              {isModal ? '참여 기사님 현황' : '견적 현황 리스트'}
             </h1>
             <p className={`mt-4 text-on-surface-variant ${isModal ? 'text-base' : 'text-lg'} leading-relaxed`}>
-              {isModal ? '기사님들이 제안한 실시간 견적 가격을 한눈에 비교하고 최고의 파트너를 선택하세요.' : '신청하신 차량별 실시간 견적 제안을 확인하고 관리하세요. 최적의 파트너를 선택하여 품격 있는 여정을 시작하십시오.'}
+              {isModal ? '참여한 기사님의 정보를 확인하세요' : '신청하신 차량별 실시간 견적 제안을 확인하고 관리하세요. 최적의 파트너를 선택하여 품격 있는 여정을 시작하십시오.'}
             </p>
 
             {reqInfo && (
               <div className="mt-6 flex flex-wrap gap-3">
                 <span className="px-4 py-2 bg-primary/10 text-primary rounded-full text-sm font-bold">
-                  {reqInfo.START_ADDR} → {reqInfo.END_ADDR}
+                  {trimAddress(reqInfo.VIA_START_ADDR || reqInfo.START_ADDR)} → {trimAddress(reqInfo.VIA_END_ADDR || reqInfo.END_ADDR)}
                 </span>
                 {reqInfo.START_DT && (
                   <span className="px-4 py-2 bg-surface-container-high text-on-surface-variant rounded-full text-sm font-semibold">
                     {new Date(reqInfo.START_DT).toLocaleDateString('ko-KR')} 출발
                   </span>
                 )}
-                <span className="px-4 py-2 bg-surface-container-high text-on-surface-variant rounded-full text-sm font-semibold">
-                  {reqInfo.PASSENGER_CNT}명
-                </span>
               </div>
             )}
           </div>
 
-          <div className="flex items-center gap-3 self-start mt-2">
-            <div className="flex items-center gap-2 bg-white rounded-full px-2 py-1 shadow-sm border border-slate-200">
-              <button
-                onClick={() => setSortBy('price')}
-                className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${sortBy === 'price' ? 'bg-primary text-white' : 'text-slate-500 hover:text-primary'}`}
-              >
-                금액순
-              </button>
-              <button
-                onClick={() => setSortBy('rating')}
-                className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${sortBy === 'rating' ? 'bg-primary text-white' : 'text-slate-500 hover:text-primary'}`}
-              >
-                평점순
-              </button>
-            </div>
-          </div>
+
         </header>
 
         {loading ? (
@@ -231,7 +214,6 @@ const QuotationList = ({ user, reqUuid, onBack, onViewDetail, isModal = false, o
 
             <div className="grid grid-cols-1 gap-8">
               {sortedBids.map((bid, idx) => {
-                const isLowest = idx === 0 && sortBy === 'price';
                 return (
                   <div
                     key={bid.bidUuid}
@@ -239,8 +221,7 @@ const QuotationList = ({ user, reqUuid, onBack, onViewDetail, isModal = false, o
                     style={{ boxShadow: '0 40px 60px -15px rgba(0, 104, 95, 0.06)' }}
                   >
                     <div
-                      className="absolute left-0 top-0 bottom-0 w-1 rounded-r-sm"
-                      style={{ background: isLowest ? '#004e47' : 'rgba(157,67,0,0.3)' }}
+                      className="absolute left-0 top-0 bottom-0 w-1 rounded-r-sm bg-secondary/30"
                     />
 
                     <div className="flex justify-between items-start mb-6">
@@ -288,24 +269,45 @@ const QuotationList = ({ user, reqUuid, onBack, onViewDetail, isModal = false, o
                       </div>
                     </div>
 
-                    <div className="flex gap-4">
+                    <div className="grid grid-cols-3 gap-3">
                       <button 
                         onClick={() => onViewDetail(bid.bidUuid)}
-                        className="flex-1 border border-slate-200 text-slate-600 py-4 rounded-xl font-bold hover:bg-slate-50 transition-all active:scale-95 text-sm"
+                        className="border border-slate-200 text-slate-600 py-3.5 rounded-xl font-bold hover:bg-slate-50 transition-all active:scale-95 text-xs flex items-center justify-center gap-1.5"
                       >
-                        상세보기
+                        <span className="material-symbols-outlined text-[18px]">person_check</span>
+                        기사정보
                       </button>
                       <button 
-                        onClick={() => handleConfirm(bid)}
-                        className="flex-[2] bg-gradient-to-br from-primary to-[#00685f] text-white py-4 rounded-xl font-black shadow-lg shadow-primary/20 hover:shadow-xl hover:brightness-110 transition-all active:scale-95 text-base flex items-center justify-center gap-2"
+                        className="border border-slate-200 text-slate-600 py-3.5 rounded-xl font-bold hover:bg-slate-50 transition-all active:scale-95 text-xs flex items-center justify-center gap-1.5"
                       >
-                        <span className="material-symbols-outlined text-xl">how_to_reg</span>
-                        본 예약 확정하기
+                        <span className="material-symbols-outlined text-[18px]">reviews</span>
+                        기사평가정보
+                      </button>
+                      <button 
+                        className="border border-red-100 text-red-500 py-3.5 rounded-xl font-bold hover:bg-red-50 transition-all active:scale-95 text-xs flex items-center justify-center gap-1.5"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">cancel</span>
+                        버스취소
                       </button>
                     </div>
                   </div>
                 );
               })}
+            </div>
+
+            <div className="mt-16 flex justify-center gap-4 bg-white/50 backdrop-blur-md p-8 rounded-[32px] border border-slate-200/60 sticky bottom-0 z-20 shadow-xl shadow-slate-900/5">
+              <button 
+                className="px-10 py-5 border-2 border-slate-200 text-slate-600 rounded-2xl font-black text-lg hover:bg-slate-50 transition-all active:scale-95 flex items-center gap-3"
+              >
+                <span className="material-symbols-outlined text-2xl font-bold">delete_forever</span>
+                예약취소
+              </button>
+              <button 
+                className="px-16 py-5 bg-gradient-to-br from-secondary to-secondary-container text-white rounded-2xl font-black text-xl shadow-xl shadow-secondary/20 hover:shadow-2xl hover:brightness-110 transition-all active:scale-95 flex items-center gap-3"
+              >
+                <span className="material-symbols-outlined text-2xl">payments</span>
+                결제하기
+              </button>
             </div>
           </section>
         )}

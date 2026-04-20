@@ -520,19 +520,6 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
                      placeholder="예: 2024년 하계 정기 워크숍"
                    />
                 </div>
-                <div>
-                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">동승 인원</label>
-                   <div className="flex items-center gap-3">
-                      <input 
-                        type="number" 
-                        name="boardingCount"
-                        value={formData.boardingCount}
-                        onChange={handleChange}
-                        className="w-32 bg-white border border-slate-200 rounded-xl p-4 text-center font-black text-xl text-primary" 
-                      />
-                      <span className="font-bold text-slate-400">명</span>
-                   </div>
-                </div>
               </div>
             </section>
             <section>
@@ -589,20 +576,19 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
                               </div>
                            ))}
                         </div>
-
-                        <div className="flex items-start gap-4 pt-4 border-t border-slate-200/40 mt-4">
-                           <span className="material-symbols-outlined text-primary mt-1">location_on</span>
-                           <div className="flex-1">
-                              <div className="flex gap-2">
-                                 <input value={formData.finalArrival.address} onKeyDown={(e) => handleKeyDown(e, 'finalArrival')} onChange={(e) => handleAddressChange('finalArrival', e.target.value, null, 'address')} placeholder="최종 도착지를 검색하세요" className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all" />
-                                 <button onClick={() => openPostcode('finalArrival')} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold">검색</button>
-                              </div>
-                              <input placeholder="상세 위치" value={formData.finalArrival.detail} onChange={(e) => handleAddressChange('finalArrival', e.target.value, null, 'detail')} className="w-full mt-2 bg-white/50 border border-slate-200 rounded-lg p-2 text-xs" />
-                           </div>
-                        </div>
                      </div>
                   </div>
-                </div>
+                  <div className="flex items-start gap-4 pt-4 border-t border-slate-200/40">
+                     <span className="material-symbols-outlined text-primary mt-1">location_on</span>
+                     <div className="flex-1">
+                        <div className="flex gap-2">
+                           <input value={formData.finalArrival.address} onKeyDown={(e) => handleKeyDown(e, 'finalArrival')} onChange={(e) => handleAddressChange('finalArrival', e.target.value, null, 'address')} placeholder="최종 도착지를 검색하세요" className="flex-1 bg-white border border-slate-200 rounded-lg p-3 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all" />
+                           <button onClick={() => openPostcode('finalArrival')} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold">검색</button>
+                        </div>
+                        <input placeholder="상세 위치" value={formData.finalArrival.detail} onChange={(e) => handleAddressChange('finalArrival', e.target.value, null, 'detail')} className="w-full mt-2 bg-white/50 border border-slate-200 rounded-lg p-2 text-xs" />
+                     </div>
+                  </div>
+                 </div>
               </div>
             </section>
             <section>

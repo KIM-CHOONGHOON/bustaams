@@ -22,6 +22,13 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
     }
   }, [user]);
 
+  // 주소에서 시/도 + 시군구만 추출 (앞 두 단어)
+  const trimAddress = (addr) => {
+    if (!addr || typeof addr !== 'string') return '';
+    const parts = addr.trim().split(/\s+/); // 연속 공백도 처리
+    return parts.slice(0, 2).join(' ');
+  };
+
   // 날짜 포맷 함수
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -84,8 +91,8 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
              </div>
           ) : (
             recentRequests.map((req, idx) => {
-              const startAddrDisplay = req.START_ADDR || '서울 서초구';
-              const endAddrDisplay = req.END_ADDR || '부산 해운대구';
+              const startAddrDisplay = trimAddress(req.VIA_START_ADDR || req.START_ADDR) || '출발지 미정';
+              const endAddrDisplay = trimAddress(req.VIA_END_ADDR || req.END_ADDR) || '도착지 미정';
               const tripTitleDisplay = req.TRIP_TITLE || '대형 전세버스 패키지';
               const startDtDisplay = formatDate(req.START_DT) || '2024년 10월 24일 09:00';
               const passengerCntDisplay = getVehicleDisplay(req);

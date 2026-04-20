@@ -7,6 +7,14 @@ const ReservationList = ({ user, onBack }) => {
   const [selectedReqUuid, setSelectedReqUuid] = useState(null);
   const [showQuotationList, setShowQuotationList] = useState(false);
 
+  // 모달 열림 시 배경 스크롤 잠금
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
   useEffect(() => {
     if (user && user.userUuid) {
       fetch(`http://localhost:8080/api/auction/user/${user.userUuid}`)
@@ -40,6 +48,13 @@ const ReservationList = ({ user, onBack }) => {
   const handleViewDetail = (bidUuid) => {
     console.log('Viewing Bid Detail:', bidUuid);
     alert(`견적 상세보기 기능 준비중입니다. (Bid UUID: ${bidUuid})`);
+  };
+
+  // 주소에서 시/도 + 시군구만 추출
+  const trimAddress = (addr) => {
+    if (!addr || typeof addr !== 'string') return '';
+    const parts = addr.trim().split(/\s+/);
+    return parts.slice(0, 2).join(' ');
   };
 
   const formatDate = (dateStr) => {
@@ -77,10 +92,10 @@ const ReservationList = ({ user, onBack }) => {
 
 
   return (
-    <div className="flex bg-background font-body text-on-surface min-h-[calc(100vh-96px)]">
+    <div className="flex bg-background font-body text-on-surface h-full overflow-hidden">
       {/* SideNavBar */}
       <aside className="w-72 bg-slate-50 flex flex-col py-12 gap-2 shrink-0 border-r border-slate-200/50">
-        <div className="px-8 mb-8">
+        <div className="px-8 mb-6">
           <h2 className="font-headline text-xl font-extrabold text-primary tracking-tight">고객 포털</h2>
           <p className="text-xs text-slate-500 font-medium uppercase tracking-widest mt-1">스마트한 버스 여정 관리</p>
         </div>
@@ -116,7 +131,7 @@ const ReservationList = ({ user, onBack }) => {
         </nav>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         {/* Main Content */}
         <main className="pt-12 pb-20 px-12 max-w-7xl">
           {/* Header Section */}
@@ -175,17 +190,15 @@ const ReservationList = ({ user, onBack }) => {
                           </div>
                           <p className="text-xs text-slate-400 font-medium">참조번호: {item.REQ_UUID_STR ? item.REQ_UUID_STR.substring(0,8).toUpperCase() : 'N/A'}</p>
                         </div>
-                        <h3 className="font-headline text-3xl font-extrabold text-primary mb-2 line-clamp-1">{item.START_ADDR} → {item.END_ADDR}</h3>
+                        <h3 className="font-headline text-3xl font-extrabold text-primary mb-2 line-clamp-1">
+                          {trimAddress(item.VIA_START_ADDR || item.START_ADDR) || '출발지 미정'} → {trimAddress(item.VIA_END_ADDR || item.END_ADDR) || '도착지 미정'}
+                        </h3>
                         <p className="text-xl font-bold text-on-surface mb-8">{dateStr}</p>
                         
-                        <div className="grid grid-cols-3 gap-8 p-6 bg-surface-container-low rounded-xl">
+                        <div className="grid grid-cols-2 gap-8 p-6 bg-surface-container-low rounded-xl">
                           <div>
                             <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-1">여행 테마</p>
                             <p className="font-bold text-on-surface line-clamp-1">{item.TRIP_TITLE || '일반 투어'}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-1">인원</p>
-                            <p className="font-bold text-on-surface">{item.PASSENGER_CNT}명</p>
                           </div>
                           <div>
                             <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-1">희망/최대 금액</p>
