@@ -109,10 +109,6 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
                         <p className="text-primary-fixed/60 text-xs uppercase font-bold tracking-widest mb-1">출발 일시</p>
                         <p className="text-xl font-semibold">{startDtDisplay}</p>
                       </div>
-                      <div>
-                        <p className="text-primary-fixed/60 text-xs uppercase font-bold tracking-widest mb-1">인원 및 차량</p>
-                        <p className="text-xl font-semibold">{passengerCntDisplay}</p>
-                      </div>
                     </div>
                   </div>
                   <button 

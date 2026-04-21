@@ -17,7 +17,7 @@ const ReservationList = ({ user, onBack }) => {
 
   useEffect(() => {
     if (user && user.userUuid) {
-      fetch(`http://localhost:8080/api/auction/user/${user.userUuid}`)
+      fetch(`http://localhost:8080/api/auction/history/${user.userUuid}`)
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) {
@@ -157,16 +157,16 @@ const ReservationList = ({ user, onBack }) => {
           ) : (
             <div className="grid grid-cols-1 gap-12">
               {reservations.map((item, idx) => {
-                const statusInfo = getStatusLabel(item.REQ_STAT);
+                const statusInfo = getStatusLabel(item.DATA_STAT);
                 const vehicleLabel = getVehicleLabel(item.BUS_TYPE_CD);
-                const vehicleStr = item.BUS_TYPE_CD ? `${vehicleLabel} ${item.REQ_BUS_CNT || 1}대` : `${item.PASSENGER_CNT}명`;
+                const vehicleStr = vehicleLabel || `${item.PASSENGER_CNT}명`;
                 const dateStr = formatDate(item.START_DT);
                 const imageSrc = idx % 2 === 0 
                   ? "https://lh3.googleusercontent.com/aida-public/AB6AXuBg9J8iJdgo8HEhMiaVDvFzsYgyrdwtu7TSwoAIHqz2XQ-Vq9iGUvcL_rPwFT5qW86-wIU2ySC3AuSDyuYYD_5FVRyhuMP5Ey3U5qs5CZtZ-QCHstmbXFzb-Hgw0ow2vZ5zINObREN5oYY1Bn9oDECyHaRPDHmT8oXXVnWz426pyihThXiiL8kejXMgdmQK5geAh3WA7A3pBE5Xd-0-gZ88xi9bfvTGmgARcl1HwiOWYpON4-d9QHEr5ur7Nc7sKgCECTF8DbHOfIY"
                   : "https://lh3.googleusercontent.com/aida-public/AB6AXuD1A-gP1H5XqL3rv3CYdw9jJtEPpIeRuQkZpT9r-9MxBPZPTcHZXH5iddUvv_4M-j9nQr5dthrcTl50VB7qbfT_U03lWPpqVW4CcBqJqLXA97Gdq5t7lg82hAKFEL1vjvDt5iTOuw24PCYX-O32c2InmJvzXBAItblQriopcPN4zPMAqk6ra6n_FzjBXbb3YTyCLTPh-E_e8gs1pBu-QNIxL85sQQDsSnBLUnFG-V1sq7IGkbIbAt3GXXfPuNATRFpEY9kabf7fzDQ";
 
                 return (
-                  <div key={item.REQ_UUID_STR || idx} className="group relative flex flex-col lg:flex-row bg-surface-container-lowest rounded-2xl overflow-hidden shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)] transition-all hover:-translate-y-1 border border-surface-variant/20 text-left">
+                  <div key={item.REQ_BUS_UUID_STR || idx} className="group relative flex flex-col lg:flex-row bg-surface-container-lowest rounded-2xl overflow-hidden shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)] transition-all hover:-translate-y-1 border border-surface-variant/20 text-left">
                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-secondary z-10"></div>
                     
                     <div className="lg:w-1/3 h-64 lg:h-auto overflow-hidden">
@@ -202,7 +202,9 @@ const ReservationList = ({ user, onBack }) => {
                           </div>
                           <div>
                             <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-1">희망/최대 금액</p>
-                            <p className="font-bold text-on-surface text-primary">{item.REQ_AMT ? Number(item.REQ_AMT).toLocaleString() + '원' : '입찰 진행중'}</p>
+                            <p className="font-bold text-on-surface text-primary">
+                              {item.UNIT_REQ_AMT ? Number(item.UNIT_REQ_AMT).toLocaleString() + '원' : '견적 진행중'}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -212,7 +214,7 @@ const ReservationList = ({ user, onBack }) => {
                           onClick={() => handleOpenQuotations(item.REQ_UUID_STR)}
                           className="flex-1 bg-gradient-to-r from-primary to-primary-container text-white py-4 rounded-full font-bold text-sm tracking-tight shadow-lg shadow-primary/20 hover:brightness-110 active:scale-[0.98] transition-all"
                         >
-                          {item.REQ_STAT === 'BIDDING' ? '견적리스트 확인' : '티켓 확인'}
+                          {item.DATA_STAT === 'BIDDING' ? '견적리스트 확인' : '티켓 확인'}
                         </button>
                         <button className="px-8 py-4 border border-outline-variant text-on-surface-variant rounded-full font-bold text-sm hover:bg-surface-container-high transition-all">
                           상세 변경
@@ -267,7 +269,7 @@ const ReservationList = ({ user, onBack }) => {
                    // Refresh reservations if needed
                    if (user && user.userUuid) {
                       setLoading(true);
-                      fetch(`http://localhost:8080/api/auction/user/${user.userUuid}`)
+                      fetch(`http://localhost:8080/api/auction/history/${user.userUuid}`)
                         .then(res => res.json())
                         .then(data => {
                           if (Array.isArray(data)) setReservations(data);

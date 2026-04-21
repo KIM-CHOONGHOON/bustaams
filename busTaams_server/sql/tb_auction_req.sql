@@ -1,6 +1,6 @@
 -- TB_AUCTION_REQ — 역경매 견적 요청 마스터
--- 앱(server.js POST /api/auction/request 등)은 REQ_STAT, EXPIRE_DT, REQ_AMT 컬럼명을 사용합니다.
--- TB_BUS_RESERVATION.RES_STAT 은 예약(입찰) 행 단위 상태이며, TB_AUCTION_REQ.REQ_STAT 은 동일 요청의 상위(마스터) 상태입니다.
+-- 앱(server.js POST /api/auction/request 등)은 DATA_STAT, EXPIRE_DT, REQ_AMT 컬럼명을 사용합니다.
+-- TB_BUS_RESERVATION.RES_STAT 은 예약(입찰) 행 단위 상태이며, TB_AUCTION_REQ.DATA_STAT 은 동일 요청의 상위(마스터) 상태입니다.
 
 SET NAMES utf8mb4;
 
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS `TB_AUCTION_REQ` (
   `START_DT`       DATETIME       NOT NULL COMMENT '출발 일시',
   `END_DT`         DATETIME       NOT NULL COMMENT '도착 일시',
   `PASSENGER_CNT`  INT            NOT NULL COMMENT '인원',
-  `REQ_STAT`       ENUM('AUCTION','BIDDING','CONFIRM','DONE','TRAVELER_CANCEL','DRIVER_CANCEL') NOT NULL DEFAULT 'AUCTION' COMMENT '여행자 경매 요청 상태 (1. AUCTION : 여행자 경매등록, 2. BIDDING : 버스기사 입찰등록, 3. CONFIRM : 예약금액 결제완료, 4. DONE : 버스 운행 정상 종료, 5. TRAVELER_CANCEL : 여행자 경매취소, 6. DRIVER_CANCEL : 버스기사 입찰취소)',
+  `DATA_STAT`       ENUM('AUCTION','BIDDING','CONFIRM','DONE','TRAVELER_CANCEL','DRIVER_CANCEL') NOT NULL DEFAULT 'AUCTION' COMMENT '여행자 경매 요청 상태 (1. AUCTION : 여행자 경매등록, 2. BIDDING : 버스기사 입찰등록, 3. CONFIRM : 예약금액 결제완료, 4. DONE : 버스 운행 정상 종료, 5. TRAVELER_CANCEL : 여행자 경매취소, 6. DRIVER_CANCEL : 버스기사 입찰취소)',
   `EXPIRE_DT`      DATETIME       NOT NULL COMMENT '입찰 마감 예정 일시',
   `REQ_AMT`        DECIMAL(18,3)  NOT NULL DEFAULT 0.000 COMMENT '요청 금액(원)',
   `REG_DT`         DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '등록 일시',
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS `TB_AUCTION_REQ` (
   `MOD_ID`         VARCHAR(30)    DEFAULT NULL COMMENT '수정자 ID',
   PRIMARY KEY (`REQ_UUID`),
   KEY `IDX_AUCTION_TRAVELER` (`TRAVELER_UUID`),
-  KEY `IDX_AUCTION_REQ_STAT` (`REQ_STAT`),
+  KEY `IDX_AUCTION_DATA_STAT` (`DATA_STAT`),
   CONSTRAINT `FK_REQ_USER` FOREIGN KEY (`TRAVELER_UUID`) REFERENCES `TB_USER` (`USER_UUID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 COMMENT='견적 요청 기본 정보 (Master)';

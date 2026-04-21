@@ -8,7 +8,8 @@ async function testFlow() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            userId: 'final@example.com',
+            userId: 'final_user_01', // 사용자가 입력한 아이디 (255자 규격)
+            email: 'final@example.com', // 별도로 입력한 이메일
             password: 'Password1!',
             userName: 'FinalTestUser',
             phoneNo: '01011119999',
@@ -32,7 +33,7 @@ async function testFlow() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            userId: 'final@example.com',
+            userId: 'final_user_01', // 회원가입 시 사용한 아이디로 로그인
             password: 'Password1!'
         })
     });
