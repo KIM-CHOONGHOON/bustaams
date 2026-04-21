@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Swal from 'sweetalert2';
 import { 
     checkIdDuplicate, 
     checkEmailDuplicate, 
@@ -125,6 +126,27 @@ const Signup = () => {
     const validatePassword = (pw) => {
         const regex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/;
         return regex.test(pw);
+    };
+
+    const handleShowTerms = (title, content) => {
+        Swal.fire({
+            title: `<div class="text-left"><p class="text-[10px] text-teal-600 font-bold uppercase tracking-widest mb-1">BusTaams 정책</p><h2 class="text-xl font-black text-teal-900">${title}</h2></div>`,
+            html: `
+                <div class="text-left mt-6 font-body">
+                    <div class="bg-slate-50 p-6 rounded-2xl border border-slate-100 max-h-[400px] overflow-y-auto">
+                        <p class="text-[13px] text-on-surface-variant leading-relaxed whitespace-pre-wrap font-medium">${content}</p>
+                    </div>
+                </div>
+            `,
+            showConfirmButton: true,
+            confirmButtonText: '확인',
+            confirmButtonColor: '#004e47',
+            customClass: {
+                popup: 'rounded-[2.5rem] p-8 border-none shadow-2xl',
+                confirmButton: 'w-full py-4 rounded-2xl font-bold bg-teal-700 text-white mt-4'
+            },
+            buttonsStyling: false
+        });
     };
 
     const handleCheckEmail = async () => {
@@ -357,7 +379,13 @@ const Signup = () => {
                                                 <span className="text-primary">[필수]</span> {item.label}
                                             </span>
                                         </label>
-                                        <button type="button" className="text-[10px] text-outline underline font-bold uppercase tracking-tighter">상세보기</button>
+                                         <button 
+                                            type="button" 
+                                            onClick={() => handleShowTerms(item.label, '1. 목적\n본 서비스는 럭셔리 버스 경매 및 예약 서비스를 제공하는 것을 목적으로 합니다...\n\n2. 이용자의 의무\n이용자는 본 서비스를 상업적 목적으로 재판매하거나 부당한 행위를 해서는 안 됩니다...')}
+                                            className="text-[10px] text-outline underline font-bold uppercase tracking-tighter"
+                                        >
+                                            상세보기
+                                        </button>
                                     </div>
                                 ))}
 
@@ -373,7 +401,13 @@ const Signup = () => {
                                                 <span className="text-outline">[선택]</span> 마케팅 정보 수신 및 푸시 알림 동의
                                             </span>
                                         </label>
-                                        <button type="button" className="text-[10px] text-outline underline font-bold uppercase tracking-tighter">상세보기</button>
+                                         <button 
+                                            type="button" 
+                                            onClick={() => handleShowTerms('마케팅 동의 상세', 'BusTaams에서 제공하는 다양한 프로모션, 신규 서비스 출시 정보, 맞춤형 혜택 등을 가장 먼저 받아보실 수 있습니다. 수신 동의 여부는 설정에서 언제든 변경 가능합니다.')}
+                                            className="text-[10px] text-outline underline font-bold uppercase tracking-tighter"
+                                        >
+                                            상세보기
+                                        </button>
                                     </div>
                                     
                                     {/* 마케팅 채널 4종 (동의 시에만 부드럽게 노출) */}

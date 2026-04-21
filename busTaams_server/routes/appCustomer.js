@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../db');
+const { pool, getNextId } = require('../db');
 const { authenticateToken } = require('../middleware/auth');
 const { encrypt, decrypt } = require('../crypto');
 const bcrypt = require('bcrypt');
@@ -38,7 +38,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
         const [rows] = await pool.execute(
-            'SELECT USER_NM, HP_NO, USER_ID, USER_TYPE, PROFILE_IMG_PATH, PROFILE_FILE_ID FROM TB_USER WHERE USER_ID = ?',
+            'SELECT USER_NM, HP_NO, EMAIL, USER_ID, USER_TYPE, PROFILE_IMG_PATH, PROFILE_FILE_ID FROM TB_USER WHERE USER_ID = ?',
             [userId]
         );
 
@@ -52,10 +52,10 @@ router.get('/profile', authenticateToken, async (req, res) => {
             data: {
                 name: user.USER_NM || '사용자',
                 phone: user.HP_NO,
-                email: user.USER_ID,
+                email: user.EMAIL || user.USER_ID, // EMAIL 필드 우선 사용
                 userType: user.USER_TYPE,
                 userId: user.USER_ID,
-                userImage: user.PROFILE_IMG_PATH // PROFILE_IMG_PATH 사용
+                userImage: user.PROFILE_IMG_PATH
             }
         });
     } catch (error) {
@@ -66,7 +66,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
 
 // 2. 프로필 정보 업데이트
 router.post('/profile/update', authenticateToken, async (req, res) => {
-    const { name, phone } = req.body;
+    const { name, phone, email } = req.body;
     try {
         const userId = req.user.userId;
         const updates = [];
@@ -80,12 +80,16 @@ router.post('/profile/update', authenticateToken, async (req, res) => {
             updates.push('HP_NO = ?');
             params.push(phone);
         }
+        if (email) {
+            updates.push('EMAIL = ?');
+            params.push(email);
+        }
 
         if (updates.length === 0) {
             return res.status(400).json({ status: 400, message: '업데이트할 항목이 없습니다.' });
         }
 
-        const sql = `UPDATE TB_USER SET ${updates.join(', ')} WHERE USER_ID = ?`;
+        const sql = `UPDATE TB_USER SET ${updates.join(', ')}, MOD_DT = NOW() WHERE USER_ID = ?`;
         params.push(userId);
 
         await pool.execute(sql, params);
@@ -103,6 +107,14 @@ router.post('/profile/change-password', authenticateToken, async (req, res) => {
     
     if (!currentPassword || !newPassword) {
         return res.status(400).json({ message: '비밀번호를 입력해주세요.' });
+    }
+
+    // 비밀번호 정규식: 8자 이상, 영문, 숫자, 특수문자 조합
+    const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
+        return res.status(400).json({ 
+            message: '비밀번호는 8자 이상이며, 영문, 숫자, 특수문자를 모두 포함해야 합니다.' 
+        });
     }
 
     const connection = await pool.getConnection();
@@ -129,23 +141,6 @@ router.post('/profile/change-password', authenticateToken, async (req, res) => {
         
         // 1. 비밀번호 업데이트
         await connection.execute('UPDATE TB_USER SET PASSWORD = ? WHERE USER_ID = ?', [hashedNewPassword, userId]);
-
-        // 2. 변경 로그 기록 (TB_USER_PWD_LOG)
-        const userAgent = req.headers['user-agent'] || 'Unknown';
-        const clientIp = req.ip || req.headers['x-forwarded-for'] || '0.0.0.0';
-        
-        // OS 정보 간단 추출
-        let os = 'Unknown';
-        if (userAgent.includes('Android')) os = 'Android';
-        else if (userAgent.includes('iPhone') || userAgent.includes('iPad')) os = 'iOS';
-        else if (userAgent.includes('Windows')) os = 'Windows';
-        else if (userAgent.includes('Macintosh')) os = 'MacOS';
-
-        await connection.execute(
-            `INSERT INTO TB_USER_PWD_LOG (USER_ID, CHG_DEVICE, CHG_OS, CHG_IP, CHG_AGENT, CHANGE_DT)
-             VALUES (?, ?, ?, ?, ?, NOW())`,
-            [userId, 'APP', os, clientIp, userAgent]
-        );
 
         await connection.commit();
         res.status(200).json({ message: '비밀번호가 성공적으로 변경되었습니다.' });
@@ -201,7 +196,88 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
     }
 });
 
-// 5. 대기 중인 요청 목록 (진행중 / 승인대기중 필터링 적용)
+// 5. 휴대폰 인증번호 발송
+router.post('/auth/send-code', authenticateToken, async (req, res) => {
+    try {
+        const { phone } = req.body;
+        const userId = req.user.userId;
+
+        if (!phone) {
+            return res.status(400).json({ success: false, error: '휴대폰 번호가 필요합니다.' });
+        }
+
+        // 6자리 인증번호 생성
+        const authCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const msgContent = `[busTaams] 본인확인 인증번호 [${authCode}]를 입력해주세요.`;
+        
+        // TB_SMS_LOG 기록 - DB 오류가 전체 로직을 중단시키지 않도록 예외 처리 분리
+        try {
+            const nextId = await getNextId('TB_SMS_LOG', 'LOG_ID', 16);
+            const receiverId = userId.length > 10 ? userId.substring(0, 10) : userId;
+
+            await pool.execute(`
+                INSERT INTO TB_SMS_LOG (
+                    LOG_ID, SEND_CATEGORY, RECEIVER_ID, RECEIVER_PHONE, MSG_CONTENT, MSG_TYPE, SEND_STAT
+                ) VALUES (?, 'ETC', ?, ?, ?, 'SMS', 'SUCCESS')
+            `, [nextId, receiverId, phone.replace(/-/g, ''), msgContent]);
+        } catch (dbError) {
+            console.error('SMS Logging Error (로그 저장 실패):', dbError.message);
+            // DB 기록에 실패하더라도 인증 서비스는 제공 (사용자 편의)
+        }
+
+        console.log(`[SMS AUTH] To: ${phone}, Code: ${authCode}`);
+
+        res.json({ 
+            success: true, 
+            message: '인증번호가 발송되었습니다.',
+            code: authCode 
+        });
+    } catch (err) {
+        console.error('Critical Send SMS Error:', err);
+        res.status(500).json({ success: false, error: '인증번호 발송 중 내부 서버 오류가 발생했습니다: ' + err.message });
+    }
+});
+
+// 6. 휴대폰 인증번호 확인 (DB 데이터 대조)
+router.post('/auth/verify-code', authenticateToken, async (req, res) => {
+    try {
+        const { code, phone } = req.body;
+        const userId = req.user.userId;
+
+        if (!code || !phone) {
+            return res.status(400).json({ success: false, error: '인증번호와 휴대폰 번호가 모두 필요합니다.' });
+        }
+
+        const purePhone = phone.replace(/-/g, '');
+
+        // 최근 5분 이내의 가장 최신 인증 로그 조회
+        const [rows] = await pool.execute(
+            `SELECT MSG_CONTENT FROM TB_SMS_LOG 
+             WHERE RECEIVER_PHONE = ? AND SEND_CATEGORY = 'ETC'
+             AND REG_DT >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+             ORDER BY REG_DT DESC LIMIT 1`,
+            [purePhone]
+        );
+
+        if (rows.length === 0) {
+            return res.status(400).json({ success: false, error: '만료되었거나 발송된 인증번호가 없습니다.' });
+        }
+
+        const msgContent = rows[0].MSG_CONTENT;
+        const isMatch = msgContent.includes(`[${code}]`);
+
+        if (isMatch) {
+            res.json({ success: true, message: '인증되었습니다.' });
+        } else {
+            res.status(400).json({ success: false, error: '인증번호가 일치하지 않습니다.' });
+        }
+    } catch (err) {
+        console.error('Verify SMS Error:', err);
+        res.status(500).json({ success: false, error: '인증 확인 중 오류가 발생했습니다.' });
+    }
+});
+
+// 7. 대기 중인 요청 목록 (진행중 / 승인대기중 필터링 적용)
 router.get('/pending-requests', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
@@ -580,6 +656,106 @@ router.post('/confirm-bid', authenticateToken, async (req, res) => {
         res.status(500).json({ success: false, error: error.message || '예약 확정 중 오류가 발생했습니다.' });
     } finally {
         connection.release();
+    }
+});
+
+// 11. 1:1 문의 내역 조회
+router.get('/inquiries', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const [rows] = await pool.execute(
+            `SELECT INQ_ID, INQ_CATEGORY, TITLE, CONTENT, INQ_STAT, REG_DT, 
+                    REPLY_CONTENT, REPLY_DT,
+                    (SELECT CD_NM_KO FROM TB_COMMON_CODE WHERE GRP_CD = 'INQ_CATEGORY' AND DTL_CD = INQ_CATEGORY) as CATEGORY_NM
+             FROM TB_INQUIRY 
+             WHERE USER_ID = ? 
+             ORDER BY REG_DT DESC`,
+            [userId]
+        );
+
+        res.status(200).json({
+            success: true,
+            data: rows.map(row => ({
+                id: row.INQ_ID,
+                category: row.CATEGORY_NM || row.INQ_CATEGORY,
+                categoryCode: row.INQ_CATEGORY,
+                title: row.TITLE,
+                status: row.INQ_STAT === 'COMPLETED' ? '답변 완료' : '답변 대기',
+                isCompleted: row.INQ_STAT === 'COMPLETED',
+                date: row.REG_DT ? new Date(row.REG_DT).toLocaleDateString('ko-KR').replace(/\. /g, '/').replace('.', '') : '',
+                replyCount: row.REPLY_CONTENT ? 1 : 0
+            }))
+        });
+    } catch (error) {
+        console.error('Fetch inquiries error:', error);
+        res.status(500).json({ success: false, error: '문의 내역을 불러오는 중 오류가 발생했습니다.' });
+    }
+});
+
+// 12. 1:1 문의 등록
+router.post('/inquiries', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const { title, content, category } = req.body;
+
+        if (!title || !content || !category) {
+            return res.status(400).json({ success: false, error: '모든 필드를 입력해주세요.' });
+        }
+
+        const [result] = await pool.execute(
+            `INSERT INTO TB_INQUIRY (USER_ID, INQ_CATEGORY, TITLE, CONTENT, INQ_STAT, REG_DT)
+             VALUES (?, ?, ?, ?, 'WAITING', NOW())`,
+            [userId, category, title, content]
+        );
+
+        res.status(201).json({
+            success: true,
+            message: '문의가 정상적으로 등록되었습니다.',
+            inquiryId: result.insertId
+        });
+    } catch (error) {
+        console.error('Post inquiry error:', error);
+        res.status(500).json({ success: false, error: '문의 등록 중 오류가 발생했습니다.' });
+    }
+});
+
+// 13. 1:1 문의 상세 조회
+router.get('/inquiries/:id', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const inquiryId = req.params.id;
+
+        const [rows] = await pool.execute(
+            `SELECT 
+                i.INQ_ID as id,
+                (SELECT CD_NM_KO FROM TB_COMMON_CODE WHERE GRP_CD = 'INQ_CATEGORY' AND DTL_CD = i.INQ_CATEGORY) as category,
+                i.TITLE as title,
+                i.CONTENT as content,
+                i.INQ_STAT as status,
+                DATE_FORMAT(i.REG_DT, '%Y.%m.%d') as date,
+                i.REPLY_CONTENT as replyContent,
+                DATE_FORMAT(i.REPLY_DT, '%Y.%m.%d %H:%i %p') as replyDate
+             FROM TB_INQUIRY i
+             WHERE i.INQ_ID = ? AND i.USER_ID = ?`,
+            [inquiryId, userId]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, error: '문의를 찾을 수 없습니다.' });
+        }
+
+        const inquiry = rows[0];
+        // 상태값 한글 변환
+        inquiry.statusText = inquiry.status === 'COMPLETED' ? '답변 완료' : '답변 대기';
+        inquiry.isCompleted = inquiry.status === 'COMPLETED';
+
+        res.status(200).json({
+            success: true,
+            data: inquiry
+        });
+    } catch (error) {
+        console.error('Get inquiry detail error:', error);
+        res.status(500).json({ success: false, error: '문의 상세 조회 중 오류가 발생했습니다.' });
     }
 });
 

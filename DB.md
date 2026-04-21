@@ -356,7 +356,6 @@ CREATE TABLE `TB_USER` (
   `USER_NM` varchar(255) DEFAULT NULL,
   `RESIDENT_NO_ENC` varchar(255) DEFAULT NULL COMMENT '주민등록번호 (양방향 암호화) - 기사 등록용 추가',
   `HP_NO` varchar(255) DEFAULT NULL,
-  `USER_IMAGE` longtext,
   `PROFILE_IMG_PATH` varchar(512) DEFAULT NULL,
   `PROFILE_FILE_ID` varchar(20) DEFAULT NULL COMMENT '프로필 사진 파일 식별자 (TB_FILE_MASTER 참조)',
   `SMS_AUTH_YN` enum('Y','N') DEFAULT 'N' COMMENT 'SMS 문자 인증 여부',

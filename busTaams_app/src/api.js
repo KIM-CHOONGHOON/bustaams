@@ -129,7 +129,7 @@ export const sendVerificationCode = async (phone) => {
     return await response.json();
 };
 
-export const verifyCode = async (code) => {
+export const verifyCode = async (phone, code) => {
     const token = localStorage.getItem('accessToken');
     const response = await fetch(`${API_BASE_URL}/app/customer/auth/verify-code`, {
         method: 'POST',
@@ -137,7 +137,7 @@ export const verifyCode = async (code) => {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ code })
+        body: JSON.stringify({ phone, code })
     });
     return await response.json();
 };
