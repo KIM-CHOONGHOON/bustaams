@@ -53,6 +53,23 @@ router.get('/check-email', async (req, res) => {
 });
 
 /**
+ * [App 전용] 휴대폰 번호 중복 확인
+ */
+router.get('/check-phone', async (req, res) => {
+    try {
+        let { phoneNo } = req.query;
+        if (!phoneNo) return res.json({ isAvailable: false });
+        
+        phoneNo = phoneNo.replace(/[^0-9]/g, '');
+        
+        const [rows] = await pool.execute('SELECT 1 FROM TB_USER WHERE HP_NO = ?', [phoneNo]);
+        res.json({ isAvailable: rows.length === 0 });
+    } catch (err) {
+        res.status(500).json({ error: '서버 오류' });
+    }
+});
+
+/**
  * [App 전용] 회원가입 (약관 동의 이력 및 서명 파일 처리 포함)
  */
 router.post('/register', async (req, res) => {
@@ -110,7 +127,7 @@ router.post('/register', async (req, res) => {
         const userQuery = `
             INSERT INTO TB_USER (
                 USER_ID, EMAIL, PASSWORD, USER_NM, HP_NO, SNS_TYPE, 
-                SMS_AUTH_YN, USER_TYPE, JOIN_DT, USER_STAT, USER_IMAGE
+                SMS_AUTH_YN, USER_TYPE, JOIN_DT, USER_STAT, PROFILE_FILE_ID
             ) VALUES (?, ?, ?, ?, ?, 'NONE', ?, ?, NOW(), 'ACTIVE', ?)
         `;
         
@@ -124,13 +141,13 @@ router.post('/register', async (req, res) => {
             phoneNo, 
             smsAuthYn || 'Y', 
             finalUserType,
-            signFileId // [수정] 서명 이미지의 FILE_ID를 USER_IMAGE 컬럼에 저장
+            signFileId // 서명 이미지의 FILE_ID를 PROFILE_FILE_ID 컬럼에 저장
         ]);
 
         // 3. 약관 동의 이력 처리 (TB_USER_TERMS_HIST)
         if (termsData && Array.isArray(termsData)) {
             let seq = 1;
-            const validTypes = ['SERVICE', 'TRAVELER_SERVICE', 'DRIVER_SERVICE', 'PRIVACY', 'MARKETING', 'PARTNER_CONTRACT'];
+            const validTypes = ['SERVICE', 'TRAVELER_SERVICE', 'DRIVER_SERVICE', 'PRIVACY', 'MARKETING', 'PARTNER_CONTRACT', 'LOCATION'];
             
             for (const term of termsData) {
                 const agreeYn = term.agreed ? 'Y' : 'N';
@@ -143,6 +160,7 @@ router.post('/register', async (req, res) => {
                 if (normalizedType === 'DRIVER' || normalizedType === 'DRIVER_SERVICE') normalizedType = 'DRIVER_SERVICE';
                 if (normalizedType === 'ADVERTISING' || normalizedType === 'AD' || normalizedType === 'PROMOTION' || normalizedType === 'EVENT' || normalizedType === '마케팅') normalizedType = 'MARKETING';
                 if (normalizedType === 'PARTNER' || normalizedType === 'PARTNER_AGREEMENT' || normalizedType === 'CONTRACT') normalizedType = 'PARTNER_CONTRACT';
+                if (normalizedType === 'LOCATION' || normalizedType === 'LOCATION_SERVICE' || normalizedType === 'ETC_AGREEMENT') normalizedType = 'LOCATION';
                 
                 if (validTypes.includes(normalizedType)) {
                     // 마케팅 세부 동의 항목 처리 (절대 놓치지 않는 초강력 딥스캔 로직)
@@ -303,12 +321,8 @@ router.post('/find-id', async (req, res) => {
             return res.status(404).json({ error: '사용자 아이디 정보가 유효하지 않습니다.' });
         }
 
-        // 보안상 마스킹 (예: bus****ler)
-        const maskedId = userId.length > 5
-            ? userId.substring(0, 3) + '*'.repeat(userId.length - 6) + userId.substring(userId.length - 3)
-            : userId.substring(0, 1) + '*'.repeat(userId.length - 2) + userId.substring(userId.length - 1);
-
-        res.json({ success: true, userId: userId, maskedId: maskedId });
+        // [변경] 보안 마스킹 제거 - 요청에 따라 전체 아이디 반환
+        res.json({ success: true, userId: userId });
     } catch (err) {
         console.error('Find ID Critical Error:', err);
         res.status(500).json({ error: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' });
@@ -326,15 +340,16 @@ router.post('/find-password', async (req, res) => {
         // 휴대폰 번호 정규화
         phoneNo = phoneNo.replace(/[^0-9]/g, '');
 
-        // 1. 아이디와 휴대폰 번호로 직접 조회
+        // 1. 아이디와 휴대폰 번호로 사용자 조회 (성함 포함)
         const [rows] = await pool.execute(
-            'SELECT 1 FROM TB_USER WHERE USER_ID = ? AND HP_NO = ? AND USER_STAT = "ACTIVE"', 
+            'SELECT USER_NM FROM TB_USER WHERE USER_ID = ? AND HP_NO = ? AND USER_STAT = "ACTIVE"', 
             [userId, phoneNo]
         );
         
         if (rows.length === 0) {
             return res.status(404).json({ error: '일치하는 사용자 정보를 찾을 수 없습니다.' });
         }
+        const userName = rows[0].USER_NM;
 
         // 2. 임시 비밀번호 생성 (8자리 랜덤 영문+숫자)
         const tempPassword = Math.random().toString(36).slice(-8);
@@ -343,8 +358,19 @@ router.post('/find-password', async (req, res) => {
         // 3. DB 업데이트
         await pool.execute('UPDATE TB_USER SET PASSWORD = ? WHERE USER_ID = ?', [hashedPassword, userId]);
 
-        // 4. SNS(SMS) 발송 시뮬레이션
-        console.log(`[SNS 발송] To: ${phoneNo}, Message: [busTaams] 임시 비밀번호는 [${tempPassword}] 입니다. 로그인 후 즉시 변경해주세요.`);
+        // 4. TB_SMS_LOG에 발송 이력 저장 (요청 규격 준수)
+        const logId = await getNextId('TB_SMS_LOG', 'LOG_ID', 16);
+        const msgContent = `[busTaams] ${userName}님, 임시 비밀번호는 [${tempPassword}] 입니다. 로그인 후 변경해주세요.`;
+        
+        await pool.execute(
+            `INSERT INTO TB_SMS_LOG (
+                LOG_ID, SEND_CATEGORY, SENDER_ID, RECEIVER_ID, RECEIVER_PHONE, MSG_CONTENT, MSG_TYPE, SEND_STAT
+            ) VALUES (?, 'NEWPW', 'SYSTEM', ?, ?, ?, 'SMS', 'SUCCESS')`,
+            [logId, userId, phoneNo, msgContent]
+        );
+
+        // 5. 서버 로그 확인용
+        console.log(`[SNS 발송 시뮬레이션] To: ${phoneNo}, Message: ${msgContent}`);
 
         res.json({ 
             success: true, 
@@ -356,4 +382,80 @@ router.post('/find-password', async (req, res) => {
     }
 });
 
+/**
+ * [App 전용] 휴대폰 인증번호 발송
+ */
+router.post('/send-code', async (req, res) => {
+    try {
+        let { phoneNo } = req.body;
+        if (!phoneNo) return res.status(400).json({ error: '휴대폰 번호를 입력해주세요.' });
+
+        phoneNo = phoneNo.replace(/[^0-9]/g, '');
+
+        // 기가입 여부 확인
+        const [existing] = await pool.execute('SELECT 1 FROM TB_USER WHERE HP_NO = ?', [phoneNo]);
+        if (existing.length > 0) {
+            return res.status(400).json({ success: false, error: '이미 가입된 휴대폰 번호입니다.' });
+        }
+
+        // 6자리 인증번호 생성
+        const authCode = Math.floor(100000 + Math.random() * 900000).toString();
+        
+        // TB_SMS_LOG에 발송 이력 저장
+        const logId = await getNextId('TB_SMS_LOG', 'LOG_ID', 16);
+        const msgContent = `[busTaams] 본인확인 인증번호 [${authCode}]를 입력해주세요.`;
+        
+        await pool.execute(
+            `INSERT INTO TB_SMS_LOG (
+                LOG_ID, SEND_CATEGORY, RECEIVER_PHONE, RECEIVER_ID, MSG_CONTENT, MSG_TYPE, SEND_STAT
+            ) VALUES (?, 'JOIN', ?, '0000000000', ?, 'SMS', 'SUCCESS')`,
+            [logId, phoneNo, msgContent]
+        );
+
+        // 시뮬레이션을 위해 실제 발송은 생략하고 로그 확인
+        console.log(`[SMS 발송 시뮬레이션] To: ${phoneNo}, Code: ${authCode}`);
+
+        // 데모 목적으로 클라이언트에 인증번호를 돌려줌 (실제 운영 환경에서는 절대 금지)
+        res.json({ success: true, message: '인증번호가 발송되었습니다.', debugCode: authCode });
+    } catch (err) {
+        console.error('Send code error:', err);
+        res.status(500).json({ error: '인증번호 발송 중 오류가 발생했습니다.' });
+    }
+});
+
+/**
+ * [App 전용] 휴대폰 인증번호 확인
+ */
+router.post('/verify-code', async (req, res) => {
+    try {
+        const { phoneNo, code } = req.body;
+        if (!phoneNo || !code) return res.status(400).json({ error: '번호와 인증코드를 모두 입력해주세요.' });
+
+        // TB_SMS_LOG에서 해당 번호의 가장 최신 인증번호 조회
+        const [rows] = await pool.execute(
+            `SELECT MSG_CONTENT FROM TB_SMS_LOG 
+             WHERE RECEIVER_PHONE = ? AND SEND_CATEGORY = 'JOIN'
+             ORDER BY REG_DT DESC LIMIT 1`,
+            [phoneNo]
+        );
+
+        if (rows.length === 0) {
+            return res.status(400).json({ success: false, error: '발송된 인증번호가 없습니다.' });
+        }
+
+        const msgContent = rows[0].MSG_CONTENT;
+        const match = msgContent.includes(`[${code}]`);
+
+        if (match) {
+            res.json({ success: true, message: '인증되었습니다.' });
+        } else {
+            res.status(400).json({ success: false, error: '인증번호가 일치하지 않습니다.' });
+        }
+    } catch (err) {
+        console.error('Verify code error:', err);
+        res.status(500).json({ error: '인증 확인 중 오류가 발생했습니다.' });
+    }
+});
+
 module.exports = router;
+

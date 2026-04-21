@@ -63,3 +63,18 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #00685f;
 }
+
+/* Premium Toast Styling */
+.bustaams-glass-toast {
+    background: rgba(255, 255, 255, 0.85) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.swal2-popup.bustaams-glass-toast .swal2-title {
+    color: #004e47 !important;
+}
+
+.swal2-timer-progress-bar {
+    background: linear-gradient(to right, #004e47, #00685f) !important;
+}

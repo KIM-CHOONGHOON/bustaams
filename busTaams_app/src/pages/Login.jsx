@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Swal from 'sweetalert2';
+import { notify } from '../utils/toast';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -8,8 +8,11 @@ const Login = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    // 로그인 로직...
-    navigate('/customer-dashboard');
+    // 로그인 로직 시뮬레이션
+    notify.success('로그인 성공', '오늘도 탁월한 선택을 환영합니다.');
+    setTimeout(() => {
+        navigate('/customer-dashboard');
+    }, 1000);
   };
 
   return (
@@ -46,7 +49,7 @@ const Login = () => {
               </div>
               <form onSubmit={handleLogin} className="space-y-6">
                 <div className="space-y-2">
-                  <label className="block text-sm font-bold text-on-surface-variant ml-1" htmlFor="user-id">아이디 / 이메일</label>
+                  <label className="block text-sm font-bold text-on-surface-variant ml-1" htmlFor="user-id">아이디</label>
                   <div className="relative">
                     <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline">badge</span>
                     <input 

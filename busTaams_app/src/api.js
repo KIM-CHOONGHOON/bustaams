@@ -139,3 +139,47 @@ export const findPassword = async (userId, phoneNo) => {
     });
     return await response.json();
 };
+
+// --- 회원가입 인증 관련 ---
+
+export const checkIdDuplicate = async (userId) => {
+    const response = await fetch(`${API_BASE_URL}/app/auth/check-id?userId=${userId}`);
+    return await response.json();
+};
+
+export const checkEmailDuplicate = async (email) => {
+    const response = await fetch(`${API_BASE_URL}/app/auth/check-email?email=${email}`);
+    return await response.json();
+};
+
+export const checkPhoneDuplicate = async (phoneNo) => {
+    const response = await fetch(`${API_BASE_URL}/app/auth/check-phone?phoneNo=${phoneNo}`);
+    return await response.json();
+};
+
+export const sendAuthCode = async (phoneNo) => {
+    const response = await fetch(`${API_BASE_URL}/app/auth/send-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNo })
+    });
+    return await response.json();
+};
+
+export const verifyAuthCode = async (phoneNo, code) => {
+    const response = await fetch(`${API_BASE_URL}/app/auth/verify-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNo, code })
+    });
+    return await response.json();
+};
+
+export const registerUser = async (data) => {
+    const response = await fetch(`${API_BASE_URL}/app/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
+    return await response.json();
+};
