@@ -101,7 +101,12 @@ const authenticateToken = (req, res, next) => {
 
     jwt.verify(token, JWT_SECRET_KEY, (err, user) => {
         if (err) return res.status(403).json({ error: '유효하지 않거나 만료된 토큰입니다.' });
-        req.user = user; // { userUuid, userId, userType }
+        // user 객체에 userId가 있는지 확인하고, 이전 코드와의 호환성을 위해 userUuid도 userId로 매핑
+        req.user = {
+            ...user,
+            userId: user.userId,
+            userUuid: user.userId // 하위 호환성 유지
+        };
         next();
     });
 };
@@ -144,42 +149,36 @@ app.post('/api/upload', authenticateToken, upload.single('file'), (req, res) => 
 // [App 호환성] 앱 예약 상세 정보 조회 (TB_AUCTION_REQ 연동)
 app.get('/api/app/customer/reservation/:id', authenticateToken, async (req, res) => {
     try {
-        const reqUuid = req.params.id;
-        const travelerUuid = req.user?.userUuid;
-        const reqUuidBuf = uuidToBuffer(reqUuid);
+        const reqId = req.params.id;
+        const userId = req.user?.userId;
 
-        console.log(`[Debug] Detail Request (Priority) - ID: ${reqUuid}, User: ${travelerUuid}`);
+        console.log(`[Debug] Detail Request (Priority) - ID: ${reqId}, User: ${userId}`);
 
-        if (!reqUuid || !travelerUuid) {
+        if (!reqId || !userId) {
             throw new Error('필수 정보(ID 또는 사용자 정보)가 누락되었습니다.');
         }
 
         const [rows] = await pool.execute(`
             SELECT 
-                BIN_TO_UUID(REQ_UUID) as reqUuid, TRIP_TITLE as tripName, START_ADDR as from_addr, END_ADDR as to_addr,
+                REQ_ID as reqId, TRIP_TITLE as tripName, START_ADDR as from_addr, END_ADDR as to_addr,
                 DATE_FORMAT(START_DT, '%Y-%m-%d %H:%i') as start_date, DATE_FORMAT(END_DT, '%Y-%m-%d %H:%i') as end_date,
-                REQ_AMT as total_price, REQ_STAT as status, REQ_COMMENT as specialRequest, PASSENGER_CNT as passengerCount,
-                BIN_TO_UUID(TRAVELER_UUID) as ownerUuid,
+                REQ_AMT as total_price, DATA_STAT as status, REQ_COMMENT as specialRequest, PASSENGER_CNT as passengerCount,
+                TRAVELER_ID as ownerId,
                 CASE 
-                    WHEN REQ_STAT = 'BIDDING' THEN '입찰중' WHEN REQ_STAT = 'CONFIRM' THEN '예약확정'
-                    WHEN REQ_STAT = 'DONE' THEN '운행완료' WHEN REQ_STAT = 'CANCEL' THEN '취소됨' ELSE '대기중'
+                    WHEN DATA_STAT = 'AUCTION' THEN '입찰중' WHEN DATA_STAT = 'CONFIRM' THEN '예약확정'
+                    WHEN DATA_STAT = 'DONE' THEN '운행완료' WHEN DATA_STAT = 'CANCEL' THEN '취소됨' ELSE '대기중'
                 END as statusText
-            FROM TB_AUCTION_REQ WHERE REQ_UUID = ?
-        `, [reqUuidBuf]);
+            FROM TB_AUCTION_REQ WHERE REQ_ID = ?
+        `, [reqId]);
 
         if (rows.length === 0) return res.status(404).json({ success: false, error: '해당 예약을 찾을 수 없습니다.' });
 
         const reservation = rows[0];
-        // 안전한 비교 (toLowerCase() 에러 방지)
-        const ownerClean = reservation.ownerUuid?.toLowerCase().replace(/-/g, '') || '';
-        const travelerClean = travelerUuid?.toLowerCase().replace(/-/g, '') || '';
-
-        if (ownerClean !== travelerClean) {
-            console.warn(`[Forbidden] Match failed. Owner: ${ownerClean}, Accessor: ${travelerClean}`);
+        if (reservation.ownerId !== userId) {
             return res.status(403).json({ success: false, error: '본인의 예약 내역만 조회 가능합니다.' });
         }
 
-        const [viaRows] = await pool.execute(`SELECT VIA_ADDR as addr, VIA_TYPE as type FROM TB_AUCTION_REQ_VIA WHERE REQ_UUID = ? ORDER BY VIA_ORD ASC`, [reqUuidBuf]);
+        const [viaRows] = await pool.execute(`SELECT VIA_ADDR as addr, VIA_TYPE as type FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = ? ORDER BY VIA_ORD ASC`, [reqId]);
         const fullRoute = [{ type: 'START', addr: reservation.from_addr, title: '출발지', time: reservation.start_date }];
         
         let hasRoundTrip = false;
@@ -208,12 +207,9 @@ app.get('/api/app/customer/reservation/:id', authenticateToken, async (req, res)
         reservation.route = fullRoute;
 
         const [busRows] = await pool.execute(`
-            SELECT BIN_TO_UUID(REQ_BUS_UUID) as reqBusUuid, BUS_TYPE_CD as busType, REQ_BUS_CNT as count, REQ_AMT as price,
-                (SELECT COUNT(*) FROM TB_BID b 
-                 JOIN TB_DRIVER_BUS db ON b.BUS_UUID = db.BUS_UUID
-                 WHERE b.REQ_UUID = rb.REQ_UUID AND db.BUS_TYPE_CD = rb.BUS_TYPE_CD) as bidCount
-            FROM TB_AUCTION_REQ_BUS rb WHERE REQ_UUID = ?
-        `, [reqUuidBuf]);
+            SELECT REQ_BUS_ID as reqBusId, BUS_TYPE_CD as busType, REQ_BUS_CNT as count, TOLLS_AMT as price
+            FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ?
+        `, [reqId]);
         reservation.requestedBuses = busRows;
 
         res.json({ success: true, data: reservation });
@@ -240,30 +236,29 @@ app.get('/api/my-pending-requests', (req, res, next) => {
 app.get('/api/my-reservations', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
-        const userUuidBuf = uuidToBuffer(req.user.userUuid);
         
         const [rows] = await pool.execute(`
             SELECT 
-                BIN_TO_UUID(REQ_UUID) as reqUuid,
+                REQ_ID as reqId,
                 TRIP_TITLE as tripName,
                 START_ADDR as from_addr,
                 END_ADDR as to_addr,
                 DATE_FORMAT(START_DT, '%Y.%m.%d') as startDate,
                 DATE_FORMAT(END_DT, '%Y.%m.%d') as endDate,
-                REQ_STAT as status,
+                DATA_STAT as status,
                 CASE 
-                    WHEN REQ_STAT = 'BIDDING' THEN '입찰중'
-                    WHEN REQ_STAT = 'CONFIRM' THEN '예약확정'
-                    WHEN REQ_STAT = 'DONE' THEN '운행완료'
-                    WHEN REQ_STAT = 'CANCEL' THEN '취소됨'
+                    WHEN DATA_STAT = 'AUCTION' THEN '입찰중'
+                    WHEN DATA_STAT = 'CONFIRM' THEN '예약확정'
+                    WHEN DATA_STAT = 'DONE' THEN '운행완료'
+                    WHEN DATA_STAT = 'CANCEL' THEN '취소됨'
                     ELSE '대기중'
                 END as statusText
             FROM TB_AUCTION_REQ 
-            WHERE TRAVELER_UUID = ? 
+            WHERE TRAVELER_ID = ? 
             ORDER BY REG_DT DESC
-        `, [userUuidBuf]);
+        `, [userId]);
 
-        const ongoing = rows.filter(r => ['BIDDING', 'CONFIRM'].includes(r.status));
+        const ongoing = rows.filter(r => ['AUCTION', 'CONFIRM'].includes(r.status));
         const completed = rows.filter(r => ['DONE', 'CANCEL'].includes(r.status));
 
         // 프론트엔드 기대 형식에 맞게 날짜 문자열 조합

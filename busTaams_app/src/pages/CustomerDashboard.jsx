@@ -1,8 +1,44 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import api from '../api';
 
 const CustomerDashboard = () => {
     const navigate = useNavigate();
+    const [stats, setStats] = useState({ progressing: 0, waiting: 0 });
+    const [userName, setUserName] = useState('');
+    const [profileImage, setProfileImage] = useState(null);
+
+    useEffect(() => {
+        // 대시보드 통계 및 프로필 정보 로드
+        const fetchDashboardData = async () => {
+            try {
+                const [statsRes, profileRes] = await Promise.all([
+                    api.get('/app/customer/dashboard'),
+                    api.get('/app/customer/profile')
+                ]);
+                
+                if (statsRes.success) {
+                    setStats({
+                        progressing: statsRes.data.countProgressing,
+                        waiting: statsRes.data.countWaitingApproval
+                    });
+                    // 대시보드 API에서 이름과 이미지를 함께 받아올 수 있으므로 여기서도 설정 가능
+                    if (statsRes.data.userName) setUserName(statsRes.data.userName);
+                    if (statsRes.data.profileImage) setProfileImage(statsRes.data.profileImage);
+                }
+                
+                if (profileRes.success) {
+                    // 필드명이 name이면 그대로 사용, 아니면 userName 사용
+                    setUserName(profileRes.data.name || profileRes.data.userName || '사용자');
+                    if (profileRes.data.profileImage) setProfileImage(profileRes.data.profileImage);
+                }
+            } catch (err) {
+                console.error('Fetch dashboard error:', err);
+            }
+        };
+
+        fetchDashboardData();
+    }, []);
 
     return (
         <div className="bg-background text-on-background min-h-screen pb-32 font-body">
@@ -16,8 +52,12 @@ const CustomerDashboard = () => {
                     <button className="p-2 rounded-full hover:bg-slate-100/50 transition-colors">
                         <span className="material-symbols-outlined text-slate-500">notifications</span>
                     </button>
-                    <div className="w-8 h-8 rounded-full bg-surface-container-high overflow-hidden">
-                        <img alt="Profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBKsBuT0YnY_XuZeAdo3ySw3EoiCwK1zkqDI-vax9GIt5ySoePMlCRm2WJ3b8lwk-r1dPM2hthSnRWvYHGeHf7A9NHtAz_ppNB1CAfmsw5obu8aqwEQEtHXMLMR8c2jzssAxdp1BazBygsvlXmJ0303juZqR-X5Lcwsh81WDVHISPC_-CFIo5GzK_Crd8A1AQdTKeTGXiNemNQfVPEwRGkCh9zQiNLzyYphW4Bc3BcBSS3-u2w9fcfZxe2JzbjbOow6lqe2TVnfT60" />
+                    <div className="w-8 h-8 rounded-full bg-slate-200 overflow-hidden flex items-center justify-center">
+                        {profileImage ? (
+                            <img alt="Profile" src={profileImage.startsWith('http') ? profileImage : `${import.meta.env.VITE_API_BASE_URL || ''}${profileImage}`} className="w-full h-full object-cover" />
+                        ) : (
+                            <span className="material-symbols-outlined text-slate-400">person</span>
+                        )}
                     </div>
                 </div>
             </header>
@@ -27,7 +67,7 @@ const CustomerDashboard = () => {
                     <div className="space-y-2">
                         <p className="text-secondary font-semibold tracking-wider text-sm uppercase">반가워요!</p>
                         <h2 className="text-4xl md:text-5xl font-extrabold text-on-surface tracking-tight leading-tight text-[36px]">
-                            안녕하세요, <span className="text-primary">김지훈</span>님!<br/>
+                            안녕하세요, <span className="text-primary">{userName || '사용자'}</span>님!<br/>
                             오늘의 새로운 여정을 시작해볼까요?
                         </h2>
                     </div>
@@ -37,18 +77,38 @@ const CustomerDashboard = () => {
                     <div className="absolute top-0 right-0 w-1/2 h-full opacity-20 pointer-events-none">
                         <img alt="Bus" className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDGum5KlJoZ1QYpw5IUtpBjkmHm85WskANrUTCg5K2pp6oBoHGfm904xF0Sha_OV2yNjGAHuI_C5we-RplZzy8FNTllgSB3jrLud6xKDIt-Yn1sUdijX3D970Qn4JoiC3v5tfqVRs4VFH5cP0XqOp47pfFy5EjuwG7xK79EZy2twkr6P2kJi5Pb6AtubxOcGzAlSiIl5ew5i1lqDMgmBcs_lw4egfP7RyHxYkREFQYcVBJXOIo4hSks6H2AOFsHQmbzkLX3Ckbqzmg" />
                     </div>
-                    <div className="relative z-10 grid md:grid-cols-2 gap-8 items-center">
-                        <div className="space-y-6">
-                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 border border-white/20 uppercase tracking-widest text-[10px] font-bold">
-                                <span className="w-2 h-2 rounded-full bg-secondary-container animate-pulse"></span>
-                                진행 중인 요청
+                    <div className="relative z-10 space-y-8">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/20">
+                                <p className="text-white/70 text-[12px] font-bold uppercase tracking-wider mb-1">진행 중</p>
+                                <div className="flex items-end gap-2">
+                                    <span className="text-3xl font-black">{stats.progressing}</span>
+                                    <span className="text-sm font-medium mb-1 opacity-80">건</span>
+                                </div>
                             </div>
-                            <div>
-                                <h3 className="text-3xl font-bold mb-2 text-[24px]">서울 ↔ 부산 워크샵 단체 버스</h3>
-                                <p className="text-on-primary-container font-medium opacity-90 text-[14px]">견적 대기 중 • 12개의 새로운 제안이 도착했습니다</p>
+                            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/20">
+                                <p className="text-white/70 text-[12px] font-bold uppercase tracking-wider mb-1">승인 대기 중</p>
+                                <div className="flex items-end gap-2">
+                                    <span className="text-3xl font-black">{stats.waiting}</span>
+                                    <span className="text-sm font-medium mb-1 opacity-80">건</span>
+                                </div>
                             </div>
-                            <button onClick={() => navigate('/estimate-list-customer')} className="bg-white text-primary px-8 py-3 rounded-full font-bold hover:bg-primary-fixed transition-all text-sm">
-                                견적 리스트 확인
+                        </div>
+
+                        <div className="flex flex-wrap gap-4">
+                            <button 
+                                onClick={() => navigate('/estimate-list-customer?type=progress')} 
+                                className="flex-1 bg-white text-primary px-6 py-3.5 rounded-2xl font-bold hover:bg-slate-50 transition-all text-[13px] shadow-lg flex items-center justify-center gap-2"
+                            >
+                                <span className="material-symbols-outlined text-[18px]">near_me</span>
+                                견적진행중 리스트
+                            </button>
+                            <button 
+                                onClick={() => navigate('/estimate-list-customer?type=waiting')} 
+                                className="flex-1 bg-secondary text-white px-6 py-3.5 rounded-2xl font-bold hover:opacity-90 transition-all text-[13px] shadow-lg flex items-center justify-center gap-2"
+                            >
+                                <span className="material-symbols-outlined text-[18px]">pending_actions</span>
+                                승인대기중 리스트
                             </button>
                         </div>
                     </div>

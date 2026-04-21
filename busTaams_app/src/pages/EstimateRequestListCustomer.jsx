@@ -1,33 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getPendingRequests } from '../api';
+import api from '../api';
 
 const EstimateRequestListCustomer = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const queryParams = new URLSearchParams(location.search);
-    const statusParam = queryParams.get('status') || 'AUCTION_WAIT';
+    const typeParam = queryParams.get('type') || 'progress';
 
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    const getStatusInfo = (status) => {
-        switch(status) {
-            case 'AUCTION_WAIT':
+    const getStatusInfo = (type) => {
+        switch(type) {
+            case 'progress':
                 return { 
-                    title: '견적대기 리스트', 
+                    title: '견적진행중 리스트', 
                     subtitle: '기사님의 견적 제안을 기다리는 중입니다',
-                    icon: 'pending_actions',
+                    icon: 'near_me',
                     color: 'text-teal-600',
-                    bgColor: 'bg-teal-50'
+                    bgColor: 'bg-teal-50',
+                    chip: 'Estimating'
                 };
-            case 'BIDDING_WAIT':
+            case 'waiting':
                 return { 
-                    title: '승인대기 리스트', 
+                    title: '승인대기중 리스트', 
                     subtitle: '도착한 견적 중 마음에 드는 차량을 선택해주세요',
-                    icon: 'how_to_reg',
+                    icon: 'pending_actions',
                     color: 'text-orange-600',
-                    bgColor: 'bg-orange-50'
+                    bgColor: 'bg-orange-50',
+                    chip: 'Waiting'
                 };
             default:
                 return { 
@@ -35,20 +37,21 @@ const EstimateRequestListCustomer = () => {
                     subtitle: '전체 요청 내역입니다',
                     icon: 'list_alt',
                     color: 'text-slate-600',
-                    bgColor: 'bg-slate-50'
+                    bgColor: 'bg-slate-50',
+                    chip: 'All'
                 };
         }
     };
 
-    const info = getStatusInfo(statusParam);
+    const info = getStatusInfo(typeParam);
 
     useEffect(() => {
         const fetchRequests = async () => {
             setLoading(true);
             try {
-                const res = await getPendingRequests(statusParam);
-                if (res.success) {
-                    setRequests(res.data);
+                const res = await api.get(`/app/customer/pending-requests?type=${typeParam}`);
+                if (res.data.success) {
+                    setRequests(res.data.data);
                 }
             } catch (err) {
                 console.error('Failed to fetch requests:', err);
@@ -57,7 +60,7 @@ const EstimateRequestListCustomer = () => {
             }
         };
         fetchRequests();
-    }, [statusParam]);
+    }, [typeParam]);
 
     return (
         <div className="bg-[#F8FAFC] text-slate-800 min-h-screen pb-32 font-body">
@@ -73,8 +76,8 @@ const EstimateRequestListCustomer = () => {
                 {/* Header Section */}
                 <section className="mb-8 space-y-2">
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white shadow-sm border border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                        <span className={`w-2 h-2 rounded-full ${statusParam === 'AUCTION_WAIT' ? 'bg-teal-500' : 'bg-orange-500'}`}></span>
-                        {statusParam === 'AUCTION_WAIT' ? 'Estimating' : 'Bidding'}
+                        <span className={`w-2 h-2 rounded-full ${typeParam === 'progress' ? 'bg-teal-500' : 'bg-orange-500'}`}></span>
+                        {info.chip}
                     </div>
                     <h2 className="text-3xl font-black tracking-tight text-slate-900">{info.title}</h2>
                     <p className="text-slate-500 font-medium">{info.subtitle}</p>

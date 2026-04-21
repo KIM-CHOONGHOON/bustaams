@@ -1,5 +1,26 @@
 const API_BASE_URL = '/api';
 
+// 공통 fetch 래퍼 (내부용)
+const request = async (url, options = {}) => {
+    const token = localStorage.getItem('accessToken');
+    const headers = {
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+        ...options.headers
+    };
+
+    const response = await fetch(`${API_BASE_URL}${url}`, { ...options, headers });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || '요청 처리에 실패했습니다.');
+    }
+    return data;
+};
+
+export const getDashboardStats = () => request('/app/customer/dashboard');
+export const getPendingRequestsFiltered = (type) => request(`/app/customer/pending-requests?type=${type}`);
+
+// 기존 명명된 내보내기 유지...
 export const login = async (userId, password) => {
   const response = await fetch(`${API_BASE_URL}/app/auth/login`, {
     method: 'POST',
@@ -82,7 +103,6 @@ export const uploadProfileImage = async (file) => {
 
 export const changePassword = async (currentPassword, newPassword) => {
     const token = localStorage.getItem('accessToken');
-    // [교정] 실제 서버 라우터(appCustomer.js)의 경로와 일치시킵니다.
     const response = await fetch(`${API_BASE_URL}/app/customer/profile/change-password`, {
         method: 'POST',
         headers: {
@@ -140,8 +160,6 @@ export const findPassword = async (userId, phoneNo) => {
     return await response.json();
 };
 
-// --- 회원가입 인증 관련 ---
-
 export const checkIdDuplicate = async (userId) => {
     const response = await fetch(`${API_BASE_URL}/app/auth/check-id?userId=${userId}`);
     return await response.json();
@@ -183,3 +201,11 @@ export const registerUser = async (data) => {
     });
     return await response.json();
 };
+
+// api.get() 같은 형식을 지원하기 위한 기본 내보내기
+const api = {
+    get: (url) => request(url, { method: 'GET' }),
+    post: (url, data) => request(url, { method: 'POST', body: JSON.stringify(data) })
+};
+
+export default api;

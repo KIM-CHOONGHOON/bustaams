@@ -268,7 +268,6 @@ router.post('/login', async (req, res) => {
         const token = jwt.sign(
             { 
                 userId: userId, 
-                userUuid: user.USER_UUID ? user.USER_UUID.toString('hex') : null,
                 userType: user.USER_TYPE 
             }, 
             JWT_SECRET_KEY, 
