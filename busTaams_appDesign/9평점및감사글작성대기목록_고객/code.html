@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+
+<html lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary-fixed-dim": "#ffb59a",
+              "primary": "#004e47",
+              "primary-fixed-dim": "#85d5c9",
+              "outline": "#6e7977",
+              "secondary-fixed-dim": "#ffb690",
+              "on-tertiary-container": "#ffc9b7",
+              "surface-bright": "#f7f9fb",
+              "on-secondary-fixed": "#341100",
+              "tertiary-fixed": "#ffdbcf",
+              "on-primary-container": "#93e4d8",
+              "on-background": "#191c1e",
+              "secondary-fixed": "#ffdbca",
+              "inverse-on-surface": "#eff1f3",
+              "tertiary": "#6e341d",
+              "surface-container-low": "#f2f4f6",
+              "on-tertiary-fixed": "#380d00",
+              "on-secondary-container": "#6c2c00",
+              "surface-dim": "#d8dadc",
+              "on-primary-fixed-variant": "#005049",
+              "inverse-surface": "#2d3133",
+              "surface-tint": "#066a61",
+              "on-surface-variant": "#3e4947",
+              "surface-container": "#eceef0",
+              "on-secondary": "#ffffff",
+              "tertiary-container": "#8b4b32",
+              "surface-container-highest": "#e0e3e5",
+              "outline-variant": "#bec9c6",
+              "background": "#f7f9fb",
+              "secondary": "#9d4300",
+              "on-primary": "#ffffff",
+              "primary-container": "#00685f",
+              "primary-fixed": "#a1f1e5",
+              "on-primary-fixed": "#00201d",
+              "surface-variant": "#e0e3e5",
+              "on-secondary-fixed-variant": "#783200",
+              "surface-container-lowest": "#ffffff",
+              "error": "#ba1a1a",
+              "on-error": "#ffffff",
+              "on-surface": "#191c1e",
+              "error-container": "#ffdad6",
+              "surface-container-high": "#e6e8ea",
+              "on-tertiary": "#ffffff",
+              "on-error-container": "#93000a",
+              "secondary-container": "#ff8d4b",
+              "inverse-primary": "#85d5c9",
+              "on-tertiary-fixed-variant": "#71361f",
+              "surface": "#f7f9fb"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      body {
+        font-family: 'Manrope', sans-serif;
+      }
+      h1, h2, h3 {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+      }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)]">
+<div class="flex items-center justify-between px-6 py-4 w-full">
+<div class="flex items-center gap-4">
+<button class="text-teal-700 dark:text-teal-400 active:scale-95 duration-200">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="font-['Plus_Jakarta_Sans'] font-bold text-lg tracking-tight text-teal-800 dark:text-teal-200">평점 및 감사글 작성 대기</h1>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-slate-500" data-icon="notifications">notifications</span>
+</div>
+</div>
+</header>
+<main class="pt-24 px-6 max-w-2xl mx-auto">
+<!-- Editorial Header Section -->
+<section class="mb-12">
+<h2 class="text-3xl font-extrabold text-on-surface tracking-tight leading-tight mb-2">당신의 여정은<br/><span class="text-primary">어떠셨나요?</span></h2>
+<p class="text-on-surface-variant font-medium">소중한 후기는 버스 파트너들에게 큰 힘이 됩니다.</p>
+</section>
+<!-- Trip Cards List -->
+<div class="space-y-6">
+<!-- Trip Card 1 -->
+<div class="bg-surface-container-lowest rounded-2xl p-6 shadow-[0_20px_40px_rgba(0,104,95,0.04)] relative overflow-hidden group">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-secondary"></div>
+<div class="flex justify-between items-start mb-4">
+<span class="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full tracking-wide">운행 완료</span>
+<span class="text-on-surface-variant text-sm font-semibold">2024/02/15</span>
+</div>
+<div class="mb-6">
+<div class="flex items-center gap-3 mb-2">
+<span class="text-xl font-extrabold text-on-surface">서울역</span>
+<span class="material-symbols-outlined text-primary-container" data-icon="trending_flat">trending_flat</span>
+<span class="text-xl font-extrabold text-on-surface">부산역</span>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]" data-icon="directions_bus">directions_bus</span>
+<span class="text-sm font-medium">45인승 일반 2대</span>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="h-16 w-16 rounded-xl overflow-hidden bg-surface-container-high">
+<img class="w-full h-full object-cover" data-alt="luxury modern charter bus parked on a clean highway under bright sunny skies with reflections on the windshield" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDG9HYfhlFif6KC19r6OCPUp9QJMrL56hnLR1ZsETwyL4c5g4A4fSe6JoS9M0GLNZqIrvpmYf8apB7MbUHidcuEs-xvWR9pybhbJ_M_BW64cZyeqA3eR69Dv0b956_PxKAIgYjuCiuBn46sOuET6wrVJ145aywbnM87KbroQkqZuFoaeI0CLThr8EyBxuzN6bcBE64Y-gaXT4aNY8AQ4w3CGol1nDNLXguMndGLQFgf61s-HRPGmNSk0t65umy_AmvJ3avUtSWECEY"/>
+</div>
+<div class="flex-1">
+<p class="text-xs text-on-surface-variant font-bold mb-1 uppercase tracking-wider">주식회사 태양관광</p>
+<p class="text-sm font-medium text-on-surface italic">"안전하고 편안한 이동을 약속드립니다."</p>
+</div>
+</div>
+<button class="w-full mt-6 bg-gradient-to-r from-primary to-primary-container text-white font-bold py-4 rounded-full flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-transform duration-200">
+                    평점 작성하기
+                    <span class="material-symbols-outlined text-sm" data-icon="edit">edit</span>
+</button>
+</div>
+<!-- Trip Card 2 -->
+<div class="bg-surface-container-lowest rounded-2xl p-6 shadow-[0_20px_40px_rgba(0,104,95,0.04)] relative overflow-hidden group">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-secondary"></div>
+<div class="flex justify-between items-start mb-4">
+<span class="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full tracking-wide">운행 완료</span>
+<span class="text-on-surface-variant text-sm font-semibold">2024/02/12</span>
+</div>
+<div class="mb-6">
+<div class="flex items-center gap-3 mb-2">
+<span class="text-xl font-extrabold text-on-surface">인천공항</span>
+<span class="material-symbols-outlined text-primary-container" data-icon="trending_flat">trending_flat</span>
+<span class="text-xl font-extrabold text-on-surface">대전복합</span>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]" data-icon="directions_bus">directions_bus</span>
+<span class="text-sm font-medium">28인승 우등 1대</span>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="h-16 w-16 rounded-xl overflow-hidden bg-surface-container-high">
+<img class="w-full h-full object-cover" data-alt="white premium tour bus at a modern airport terminal with soft morning light and glass reflections" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC--QxIesqZhWoele-_nOuFez1tsrncIgsqVg25oRKA6RUEEhpEfS4U-ZP2xAtzLMOU_xyesKIMJgIzUQwTtwo-sIC2uU7HbSlFIKBsSpYVeb1kxdTq9whAjkJbS7go5BsESE8JYjlpvLF6ecPR4MvGSWFz3lNwwKvkX8epbaSx5bRfs2W0uP1X9j7CciuwDgHWfRwDVRzqpsjCWjirUYXbCyEwYoht8H6zrfKmQ-gs3YUJVKdOL1xsCGeiIU6xGBbshFS8HswWh2w"/>
+</div>
+<div class="flex-1">
+<p class="text-xs text-on-surface-variant font-bold mb-1 uppercase tracking-wider">글로벌 리무진</p>
+<p class="text-sm font-medium text-on-surface italic">"VIP급 우등 버스로 모셨습니다."</p>
+</div>
+</div>
+<button class="w-full mt-6 bg-gradient-to-r from-primary to-primary-container text-white font-bold py-4 rounded-full flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-transform duration-200">
+                    평점 작성하기
+                    <span class="material-symbols-outlined text-sm" data-icon="edit">edit</span>
+</button>
+</div>
+<!-- Trip Card 3 -->
+<div class="bg-surface-container-lowest rounded-2xl p-6 shadow-[0_20px_40px_rgba(0,104,95,0.04)] relative overflow-hidden group">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-secondary"></div>
+<div class="flex justify-between items-start mb-4">
+<span class="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full tracking-wide">운행 완료</span>
+<span class="text-on-surface-variant text-sm font-semibold">2024/02/08</span>
+</div>
+<div class="mb-6">
+<div class="flex items-center gap-3 mb-2">
+<span class="text-xl font-extrabold text-on-surface">광주종합</span>
+<span class="material-symbols-outlined text-primary-container" data-icon="trending_flat">trending_flat</span>
+<span class="text-xl font-extrabold text-on-surface">강남터미널</span>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]" data-icon="directions_bus">directions_bus</span>
+<span class="text-sm font-medium">45인승 일반 3대</span>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="h-16 w-16 rounded-xl overflow-hidden bg-surface-container-high">
+<img class="w-full h-full object-cover" data-alt="sleek commercial bus fleet lined up in a clean paved parking area with blue sky background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAqGy1N67olce7Ys8-nDLwjnA3i5MbKkPmliIsi7GgCRyJHyxefuzmICaWIIVgwDmBk4hml6TVRPVQc3bLWiZCVpGo50B8bb9GT2BwvUZHoI0D8B7VPiQS6vuK98MVBscv47nfQwRgTsFSXC44u4AnwyP0oXLMJ1MWT7bs8r42qpG6yHRLG22XzALN1WdI33L-O_hxwLwEByNub_TNmqIIgBGbIOEZ886xvoOeLw_Ipk3iUjBltajFZO74dlZy1nFRaXxkl7pTRwlo"/>
+</div>
+<div class="flex-1">
+<p class="text-xs text-on-surface-variant font-bold mb-1 uppercase tracking-wider">남도고속관광</p>
+<p class="text-sm font-medium text-on-surface italic">"단체 여행의 파트너, 남도고속입니다."</p>
+</div>
+</div>
+<button class="w-full mt-6 bg-gradient-to-r from-primary to-primary-container text-white font-bold py-4 rounded-full flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-transform duration-200">
+                    평점 작성하기
+                    <span class="material-symbols-outlined text-sm" data-icon="edit">edit</span>
+</button>
+</div>
+</div>
+<!-- Decorative Quote / Subtle Branding -->
+<div class="mt-16 text-center opacity-30">
+<span class="material-symbols-outlined text-4xl text-primary" data-icon="format_quote">format_quote</span>
+<p class="text-sm font-medium text-on-surface mt-2 italic px-12">"우리는 단순한 이동이 아닌, 당신의 소중한 시간을 연결합니다."</p>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] rounded-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-[0_20px_40px_rgba(0,0,0,0.08)]">
+<div class="flex justify-around items-center p-2">
+<!-- Trips Tab -->
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-5 py-2 hover:text-teal-600 transition-colors active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="directions_bus">directions_bus</span>
+<span class="font-['Plus_Jakarta_Sans'] font-semibold text-[11px]">Trips</span>
+</a>
+<!-- Reviews Tab (Active) -->
+<a class="flex flex-col items-center justify-center bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded-full px-5 py-2 active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="rate_review" style="font-variation-settings: 'FILL' 1;">rate_review</span>
+<span class="font-['Plus_Jakarta_Sans'] font-semibold text-[11px]">Reviews</span>
+</a>
+<!-- Wallet Tab -->
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-5 py-2 hover:text-teal-600 transition-colors active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="font-['Plus_Jakarta_Sans'] font-semibold text-[11px]">Wallet</span>
+</a>
+<!-- Profile Tab -->
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-5 py-2 hover:text-teal-600 transition-colors active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-['Plus_Jakarta_Sans'] font-semibold text-[11px]">Profile</span>
+</a>
+</div>
+</nav>
+</body></html>

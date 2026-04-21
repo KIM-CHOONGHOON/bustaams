@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+
+<html lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>과거 운행 상세 | Editorial Velocity</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&amp;family=Manrope:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "secondary-fixed-dim": "#ffb690",
+                        "tertiary": "#6e341d",
+                        "tertiary-fixed": "#ffdbcf",
+                        "secondary": "#9d4300",
+                        "outline-variant": "#bec9c6",
+                        "on-tertiary-fixed-variant": "#71361f",
+                        "on-secondary-fixed": "#341100",
+                        "on-background": "#191c1e",
+                        "on-tertiary-fixed": "#380d00",
+                        "inverse-primary": "#85d5c9",
+                        "outline": "#6e7977",
+                        "surface-container": "#eceef0",
+                        "error-container": "#ffdad6",
+                        "surface-bright": "#f7f9fb",
+                        "on-surface-variant": "#3e4947",
+                        "on-primary-fixed-variant": "#005049",
+                        "secondary-fixed": "#ffdbca",
+                        "on-surface": "#191c1e",
+                        "on-secondary-container": "#6c2c00",
+                        "surface-container-low": "#f2f4f6",
+                        "surface": "#f7f9fb",
+                        "on-secondary-fixed-variant": "#783200",
+                        "secondary-container": "#ff8d4b",
+                        "surface-container-highest": "#e0e3e5",
+                        "surface-variant": "#e0e3e5",
+                        "surface-container-high": "#e6e8ea",
+                        "primary": "#004e47",
+                        "inverse-surface": "#2d3133",
+                        "primary-container": "#00685f",
+                        "on-primary-container": "#93e4d8",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-fixed-dim": "#85d5c9",
+                        "on-error": "#ffffff",
+                        "tertiary-fixed-dim": "#ffb59a",
+                        "surface-tint": "#066a61",
+                        "on-tertiary-container": "#ffc9b7",
+                        "surface-dim": "#d8dadc",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-container": "#8b4b32",
+                        "on-primary-fixed": "#00201d",
+                        "on-error-container": "#93000a",
+                        "background": "#f7f9fb",
+                        "on-secondary": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "primary-fixed": "#a1f1e5",
+                        "inverse-on-surface": "#eff1f3",
+                        "error": "#ba1a1a"
+                    },
+                    fontFamily: {
+                        "headline": ["Plus Jakarta Sans"],
+                        "body": ["Manrope"],
+                        "label": ["Manrope"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            font-family: 'Manrope', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .headline-font {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .tonal-stacking {
+            box-shadow: 0 20px 40px rgba(0, 104, 95, 0.04);
+        }
+        .kinetic-gradient-primary {
+            background: linear-gradient(135deg, #004e47 0%, #00685f 100%);
+        }
+        .kinetic-gradient-secondary {
+            background: linear-gradient(135deg, #9d4300 0%, #ff8d4b 100%);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="sticky top-0 w-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-[0_20px_40px_rgba(0,104,95,0.06)] flex items-center justify-between px-6 py-4">
+<div class="flex items-center gap-4">
+<button class="hover:bg-slate-50/50 transition-colors p-2 rounded-full active:scale-95 duration-200">
+<span class="material-symbols-outlined text-teal-700">arrow_back</span>
+</button>
+<h1 class="font-['Plus_Jakarta_Sans'] font-bold text-lg tracking-tight text-teal-900">Trip Details</h1>
+</div>
+<div class="flex items-center">
+<span class="text-teal-800 font-extrabold text-sm opacity-50">#TRP-8829</span>
+</div>
+</header>
+<main class="max-w-4xl mx-auto px-6 pt-8 space-y-12">
+<!-- Section 1: Trip Summary (요청 정보 요약) -->
+<section class="space-y-6">
+<div class="flex justify-between items-end">
+<h2 class="headline-font text-3xl font-extrabold tracking-tighter text-on-surface-variant">요청 정보 요약</h2>
+<span class="font-bold px-3 py-1 rounded-full bg-primary/10 text-primary text-xs tracking-wide">운행 완료</span>
+</div>
+<div class="bg-surface-container-lowest p-8 rounded-[2rem] shadow-[0_40px_60px_rgba(0,104,95,0.04)] relative overflow-hidden">
+<div class="absolute top-0 left-0 w-1 h-full bg-primary-container"></div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+<div class="space-y-8">
+<div class="space-y-1">
+<p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Route Schedule</p>
+<div class="flex items-start gap-4 pt-2"><div class="flex flex-col items-center gap-1 mt-1">
+<div class="w-3 h-3 rounded-full bg-primary"></div>
+<div class="w-0.5 h-12 bg-slate-100"></div>
+<div class="w-3 h-3 rounded-full border-2 border-slate-300 bg-white"></div>
+<div class="w-0.5 h-12 bg-slate-100"></div>
+<div class="w-3 h-3 rounded-full border-2 border-primary bg-white"></div>
+</div>
+<div class="space-y-6">
+<div>
+<p class="text-sm text-slate-500">출발지</p>
+<p class="text-lg font-bold">서울역 공항철도 입구</p>
+<p class="text-xs text-slate-400 mt-1"><span class="font-semibold text-slate-500 mr-1">출발일시</span> 2023/11/15 08:00</p>
+</div>
+<div>
+<p class="text-sm text-slate-500">경유지</p>
+<p class="text-lg font-bold">덕평자연휴게소</p>
+</div>
+<div>
+<p class="text-sm text-slate-500">도착지</p>
+<p class="text-lg font-bold">강릉 오죽헌 대형주차장</p>
+<p class="text-xs text-slate-400 mt-1"><span class="font-semibold text-slate-500 mr-1">도착일시</span> 2023/11/15 11:30</p>
+</div>
+</div></div>
+</div>
+</div>
+<div class="space-y-8">
+<div class="grid grid-cols-2 gap-4">
+<div class="bg-surface-container-high p-4 rounded-2xl">
+<p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Passengers</p>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-xl">group</span>
+<p class="text-xl font-extrabold headline-font">42명</p>
+</div>
+</div>
+<div class="bg-surface-container-high p-4 rounded-2xl">
+<p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Total Distance</p>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-xl">route</span>
+<p class="text-xl font-extrabold headline-font">214km</p>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-high p-6 rounded-2xl flex items-center justify-between">
+<div>
+<p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Request ID</p>
+<p class="font-mono text-sm font-bold text-on-surface">RQ-20231115-A882</p>
+</div>
+<span class="material-symbols-outlined text-slate-300">content_copy</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 2: Vehicle & Driver Info (배차 및 운전자 정보) -->
+<section class="space-y-6">
+<h2 class="headline-font text-3xl font-extrabold tracking-tighter text-on-surface-variant">배차 및 운전자 정보</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<!-- Vehicle Card 1 -->
+<div class="bg-surface-container-lowest rounded-[2rem] p-6 shadow-[0_40px_60px_rgba(0,104,95,0.06)] relative group">
+<div class="absolute top-6 right-6 px-3 py-1 bg-primary/5 text-primary text-[10px] font-bold rounded-full">Vehicle 01</div>
+<div class="flex items-center gap-4 mb-8">
+<div class="relative">
+<img alt="Driver Profile" class="w-16 h-16 rounded-2xl object-cover" data-alt="close-up portrait of a professional middle-aged driver in a clean white shirt smiling warmly with natural outdoor lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBFayeoNs9olmehX13_cgGOiEVKecCBJVEeSMkR-Fc6Q4KpAROCa8JqpAIdGaGFrTU9gARcaJ-Ba8NIBnFNd1qaVPd2VuvlLzLZCfLRWHQvL4B7XCzgxA1dEhN9lhWu22TkzgpN5V6hnHUZIIJx0b-yEjdsY7XjDCxKGM3wJFHeAllbnrfb1qcNHtf9YE5MBVNAHZj5pRSycR_E9PG9XV5h8tK8VSgLZK6tz7TYEuUJRzGN5HMRQ1vlZp8XYXccxC_cnbvg83jxw8o"/>
+<div class="absolute -bottom-1 -right-1 bg-white p-1 rounded-lg shadow-sm">
+<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">verified</span>
+</div>
+</div>
+<div>
+<p class="text-xs font-bold text-primary tracking-wide">45인승 일반버스</p>
+<h3 class="text-xl font-bold headline-font">김영호 기사님</h3>
+<p class="text-sm text-slate-400">경기 70 바 1234</p>
+</div>
+</div>
+<div class="space-y-3">
+<button class="w-full py-4 rounded-full bg-surface-container-high text-on-surface-variant font-bold text-sm flex items-center justify-center gap-2 hover:bg-surface-container-highest transition-colors active:scale-95 duration-200">
+<span class="material-symbols-outlined text-lg">chat_bubble</span>
+                            실시간 채팅 조회
+                        </button>
+<!-- Review Button: If written -->
+<button class="w-full py-4 rounded-full border border-outline-variant/20 text-on-surface-variant font-bold text-sm flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors active:scale-95 duration-200">
+<span class="material-symbols-outlined text-lg text-secondary">star</span>
+                            평점 조회 (4.9)
+                        </button>
+</div>
+</div>
+<!-- Vehicle Card 2 -->
+<div class="bg-surface-container-lowest rounded-[2rem] p-6 shadow-[0_40px_60px_rgba(0,104,95,0.06)] relative group">
+<div class="absolute top-6 right-6 px-3 py-1 bg-primary/5 text-primary text-[10px] font-bold rounded-full">Vehicle 02</div>
+<div class="flex items-center gap-4 mb-8">
+<div class="relative">
+<img alt="Driver Profile" class="w-16 h-16 rounded-2xl object-cover" data-alt="professional female shuttle driver with short hair wearing a navy uniform vest, bright clean morning light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAlhvhGjbS4xk6pzM4XiSMmk435vrLfJ_sFky6iqmRrPNBY6Ug3EiyOCKku9w7tlotLzNvhhM5-Q_tr0JzRrvIOmqiUlwie56mc7coJOmHNx1-y-fJuFullt9AE7EoMb1zSDvWIXWFiYGBvOFpfs2sHO-kw5VAIjgFbzS9eyN4f8YRHWYWft5CKLXekWsYoaFNZqwaOC1mhxcQPg3mQT-Zlp3y24pIDG6FyOeswZlKrfo4QOWynKndWq_Pa4Myy3VtCQNRLEfu1DIU"/>
+<div class="absolute -bottom-1 -right-1 bg-white p-1 rounded-lg shadow-sm">
+<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">verified</span>
+</div>
+</div>
+<div>
+<p class="text-xs font-bold text-primary tracking-wide">45인승 일반버스</p>
+<h3 class="text-xl font-bold headline-font">이수진 기사님</h3>
+<p class="text-sm text-slate-400">서울 72 하 5678</p>
+</div>
+</div>
+<div class="space-y-3">
+<button class="w-full py-4 rounded-full bg-surface-container-high text-on-surface-variant font-bold text-sm flex items-center justify-center gap-2 hover:bg-surface-container-highest transition-colors active:scale-95 duration-200">
+<span class="material-symbols-outlined text-lg">chat_bubble</span>
+                            실시간 채팅 조회
+                        </button>
+<!-- Review Button: Write Review (Secondary Orange Accent) -->
+<button class="w-full py-4 rounded-full kinetic-gradient-secondary text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-secondary/20 active:scale-95 duration-200">
+<span class="material-symbols-outlined text-lg">edit_note</span>
+                            평점/감사글 작성
+                        </button>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 3: Cost Breakdown (결제 내역 상세) -->
+<section class="space-y-6">
+<h2 class="headline-font text-3xl font-extrabold tracking-tighter text-on-surface-variant">결제 내역 상세</h2>
+<div class="bg-surface-container-low rounded-[2rem] p-8 space-y-6">
+<div class="space-y-4">
+<div class="flex justify-between items-center">
+<span class="text-on-surface-variant font-medium">기본 대여료 (2대)</span>
+<span class="font-bold headline-font">₩ 1,200,000</span>
+</div>
+<div class="flex justify-between items-center text-sm">
+<span class="text-slate-500">통행료/봉사료 (Taxes &amp; Fees)</span>
+<span class="font-semibold text-on-surface-variant">+ ₩ 154,000</span>
+</div>
+<div class="flex justify-between items-center text-sm">
+<span class="text-slate-500">유류비 및 기타 부대비용</span>
+<span class="font-semibold text-on-surface-variant">+ ₩ 86,000</span>
+</div>
+</div>
+<div class="h-px bg-outline-variant/20"></div>
+<div class="flex justify-between items-center">
+<span class="text-on-surface-variant font-bold">견적 요청 금액</span>
+<span class="font-bold headline-font text-lg text-on-surface">₩ 1,440,000</span>
+</div>
+<div class="bg-primary-container p-6 rounded-2xl flex justify-between items-center shadow-xl shadow-primary/10">
+<div class="text-on-primary-container">
+<p class="text-xs font-bold uppercase tracking-wider opacity-80">Final Total Payment</p>
+<p class="text-sm font-medium">결제 완료 (KB국민 4492***)</p>
+</div>
+<span class="text-white text-3xl font-extrabold headline-font tracking-tight">₩ 1,440,000</span>
+</div>
+</div>
+</section>
+<!-- Receipt Download Button -->
+<div class="flex justify-center py-8">
+<button class="flex items-center gap-2 text-primary font-bold hover:underline">
+<span class="material-symbols-outlined">receipt_long</span>
+                매출전표/영수증 다운로드
+            </button>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-8 left-0 right-0 z-50 flex justify-around items-center bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-[0_40px_60px_rgba(0,104,95,0.08)] w-[90%] max-w-md mx-auto rounded-full px-6 py-3">
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 opacity-70 hover:opacity-100 transition-all active:scale-90" href="#">
+<span class="material-symbols-outlined">explore</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[11px] font-semibold uppercase tracking-wider">Explore</span>
+</a>
+<a class="flex flex-col items-center justify-center text-teal-700 dark:text-teal-400 scale-110 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">directions_bus</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[11px] font-semibold uppercase tracking-wider">Trips</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 opacity-70 hover:opacity-100 transition-all active:scale-90" href="#">
+<span class="material-symbols-outlined">chat_bubble</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[11px] font-semibold uppercase tracking-wider">Inbox</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 opacity-70 hover:opacity-100 transition-all active:scale-90" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[11px] font-semibold uppercase tracking-wider">Profile</span>
+</a>
+</nav>
+</body></html>

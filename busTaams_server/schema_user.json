@@ -1,0 +1,90 @@
+[
+  {
+    "Field": "USER_UUID",
+    "Type": "binary(16)",
+    "Null": "NO",
+    "Key": "PRI",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "USER_ID_ENC",
+    "Type": "varchar(255)",
+    "Null": "NO",
+    "Key": "UNI",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "SNS_TYPE",
+    "Type": "enum('NONE','KAKAO','NAVER')",
+    "Null": "YES",
+    "Key": "",
+    "Default": "NONE",
+    "Extra": ""
+  },
+  {
+    "Field": "USER_TYPE",
+    "Type": "enum('TRAVELER','DRIVER','PARTNER')",
+    "Null": "NO",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "PASSWORD",
+    "Type": "varchar(255)",
+    "Null": "NO",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "USER_NM",
+    "Type": "varchar(255)",
+    "Null": "NO",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "HP_NO",
+    "Type": "varchar(255)",
+    "Null": "NO",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "SMS_AUTH_YN",
+    "Type": "enum('Y','N')",
+    "Null": "YES",
+    "Key": "",
+    "Default": "N",
+    "Extra": ""
+  },
+  {
+    "Field": "RECOM_CODE",
+    "Type": "binary(16)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "JOIN_DT",
+    "Type": "datetime",
+    "Null": "YES",
+    "Key": "",
+    "Default": "CURRENT_TIMESTAMP",
+    "Extra": "DEFAULT_GENERATED"
+  },
+  {
+    "Field": "USER_STAT",
+    "Type": "enum('ACTIVE','LEAVE','BANNED')",
+    "Null": "YES",
+    "Key": "",
+    "Default": "ACTIVE",
+    "Extra": ""
+  }
+]

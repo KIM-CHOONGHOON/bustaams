@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+
+<html lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>busTaams 가입하기 | Kinetic Gallery</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-surface-variant": "#3e4947",
+              "on-primary-fixed": "#00201d",
+              "tertiary-fixed": "#ffdbcf",
+              "on-background": "#191c1e",
+              "on-surface": "#191c1e",
+              "secondary-fixed-dim": "#ffb690",
+              "surface-tint": "#066a61",
+              "surface-container-highest": "#e0e3e5",
+              "surface-container-low": "#f2f4f6",
+              "inverse-surface": "#2d3133",
+              "surface-container-lowest": "#ffffff",
+              "on-tertiary-container": "#ffc9b7",
+              "secondary": "#9d4300",
+              "surface-container-high": "#e6e8ea",
+              "outline": "#6e7977",
+              "on-secondary-fixed": "#341100",
+              "surface": "#f7f9fb",
+              "surface-container": "#eceef0",
+              "primary": "#004e47",
+              "on-primary-container": "#93e4d8",
+              "inverse-primary": "#85d5c9",
+              "secondary-fixed": "#ffdbca",
+              "background": "#f7f9fb",
+              "on-tertiary": "#ffffff",
+              "inverse-on-surface": "#eff1f3",
+              "surface-bright": "#f7f9fb",
+              "tertiary-container": "#8b4b32",
+              "tertiary": "#6e341d",
+              "primary-fixed-dim": "#85d5c9",
+              "on-primary-fixed-variant": "#005049",
+              "surface-variant": "#e0e3e5",
+              "on-error": "#ffffff",
+              "on-secondary-fixed-variant": "#783200",
+              "primary-fixed": "#a1f1e5",
+              "on-tertiary-fixed-variant": "#71361f",
+              "surface-dim": "#d8dadc",
+              "outline-variant": "#bec9c6",
+              "on-error-container": "#93000a",
+              "secondary-container": "#ff8d4b",
+              "on-secondary-container": "#6c2c00",
+              "on-secondary": "#ffffff",
+              "primary-container": "#00685f",
+              "error-container": "#ffdad6",
+              "error": "#ba1a1a",
+              "on-tertiary-fixed": "#380d00",
+              "tertiary-fixed-dim": "#ffb59a",
+              "on-primary": "#ffffff"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans", "Noto Sans KR"],
+              "body": ["Manrope", "Noto Sans KR"],
+              "label": ["Manrope", "Noto Sans KR"]
+            },
+            borderRadius: {"DEFAULT": "0.5rem", "lg": "0.5rem", "xl": "0.75rem", "2xl": "1rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .editorial-shadow {
+        box-shadow: 0 40px 60px -15px rgba(25, 28, 30, 0.06);
+      }
+      body {
+        font-family: 'Manrope', 'Noto Sans KR', sans-serif;
+        background-color: #f7f9fb;
+        min-height: 100dvh;
+      }
+      .kinetic-gradient {
+        background: linear-gradient(135deg, #004e47 0%, #00685f 100%);
+      }
+      .signature-pad {
+        background-image: radial-gradient(circle at 1px 1px, #e0e3e5 1px, transparent 0);
+        background-size: 20px 20px;
+      }
+    </style>
+</head>
+<body class="bg-background text-on-background flex flex-col">
+<!-- Top Navigation -->
+<header class="flex justify-between items-center w-full px-6 pt-8 pb-4 max-w-7xl mx-auto">
+<div class="flex items-center">
+<h1 class="text-teal-900 font-['Plus_Jakarta_Sans'] font-black tracking-tighter text-3xl">busTaams</h1>
+</div>
+<button class="text-slate-500 font-label font-bold uppercase tracking-widest text-[10px] hover:opacity-80 transition-opacity">
+            고객지원
+        </button>
+</header>
+<main class="flex-grow flex flex-col items-center justify-center px-6 py-12">
+<div class="w-full max-w-4xl mx-auto mb-12 flex justify-center">
+<div class="bg-surface-container-high p-1 rounded-full flex w-full max-w-xs shadow-inner">
+<button class="flex-1 py-3 px-6 rounded-full bg-primary-container text-white font-headline font-bold text-sm transition-all shadow-md" type="button">고객</button>
+<button class="flex-1 py-3 px-6 rounded-full text-on-surface-variant font-headline font-bold text-sm hover:bg-surface-container transition-all" type="button">기사</button>
+</div>
+</div><div class="w-full max-w-4xl grid grid-cols-1 md:grid-cols-12 gap-12 items-start">
+<!-- Left Editorial Column -->
+<div class="md:col-span-5 flex flex-col space-y-8">
+<div class="space-y-4">
+<span class="text-secondary font-label font-bold uppercase tracking-[0.2em] text-xs">최고의 기회</span>
+<h2 class="font-headline font-extrabold text-5xl lg:text-6xl text-on-surface leading-[1.1] tracking-tight">
+                        새로운 <br/><span class="text-primary-container">여정의 시작.</span>
+</h2>
+</div>
+<p class="font-body text-on-surface-variant text-lg leading-relaxed max-w-sm">
+                    엄선된 프리미엄 버스 경매를 만나보세요. 정교하게 큐레이션된 플릿 자산을 제공합니다.
+                </p>
+<div class="relative w-full aspect-[4/5] rounded-lg overflow-hidden editorial-shadow bg-surface-container-low hidden md:block">
+<img alt="럭셔리 투어 버스 그릴 디테일" class="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD2fWUX7XcWFDn0Y9JCFUpfCNxyz4PbfBAh6E2aBRAby4GxStSG1kWSSHsMXPlyiIGa08W3YNAkN1msm2tagmXjLujlynojhDukW256FWbtN0zlAnt7Y0xpycil1Z6LEFc0wbKMBWLOBjrK0GdQNLPHxDO62EOIwXxMwgrFFcUEK344ysHW-xNENvpddCNc96UXa9508sKGup1vmpR0Hu4l0aVInCmD_kAj9ic97XLOjJafXMmjsmJOR5Hcc_lDBoql9XTGWSKUs6Q"/>
+<div class="absolute inset-0 bg-gradient-to-t from-primary/40 to-transparent"></div>
+</div>
+</div>
+<!-- Right Form Column -->
+<div class="md:col-span-7 w-full bg-surface-container-lowest p-8 md:p-12 rounded-2xl editorial-shadow">
+<form class="space-y-8">
+<!-- Basic Info Section -->
+<div class="space-y-6">
+<div class="space-y-2">
+<label class="font-headline font-bold text-sm tracking-tight text-on-surface px-1">이메일</label>
+<input class="w-full bg-surface-container-high border-none rounded-lg py-4 px-6 focus:ring-2 focus:ring-primary-fixed-dim transition-all outline-none text-on-surface font-body" placeholder="example@email.com" type="email"/>
+</div>
+<div class="space-y-2">
+<label class="font-headline font-bold text-sm tracking-tight text-on-surface px-1">고객명</label>
+<input class="w-full bg-surface-container-high border-none rounded-lg py-4 px-6 focus:ring-2 focus:ring-primary-fixed-dim transition-all outline-none text-on-surface font-body" placeholder="실명을 입력하세요" type="text"/>
+</div>
+<div class="space-y-2">
+<label class="font-headline font-bold text-sm tracking-tight text-on-surface px-1">아이디</label>
+<div class="flex gap-3">
+<div class="flex-grow bg-surface-container-high rounded-lg flex items-center px-6">
+<input class="bg-transparent border-none focus:ring-0 w-full py-4 text-on-surface font-body px-0" placeholder="고유한 아이디를 입력하세요" type="text"/>
+</div>
+<button class="whitespace-nowrap px-6 rounded-lg font-label font-bold text-xs uppercase tracking-widest text-primary border border-primary-fixed hover:bg-primary-fixed transition-colors" type="button">
+                                    중복 확인
+                                </button>
+</div>
+</div>
+<div class="space-y-2">
+<label class="font-headline font-bold text-sm tracking-tight text-on-surface px-1">비밀번호</label>
+<div class="space-y-3">
+<input class="w-full bg-surface-container-high border-none rounded-lg py-4 px-6 focus:ring-2 focus:ring-primary-fixed-dim transition-all outline-none text-on-surface font-body" placeholder="비밀번호를 입력하세요" type="password"/>
+<input class="w-full bg-surface-container-high border-none rounded-lg py-4 px-6 focus:ring-2 focus:ring-primary-fixed-dim transition-all outline-none text-on-surface font-body" placeholder="비밀번호를 다시 한번 입력하세요" type="password"/>
+</div>
+</div>
+<div class="space-y-2">
+<label class="font-headline font-bold text-sm tracking-tight text-on-surface px-1">휴대폰 번호</label>
+<div class="space-y-3">
+<div class="flex gap-3">
+<div class="flex-grow bg-surface-container-high rounded-lg flex items-center px-6">
+<span class="material-symbols-outlined text-outline mr-3">smartphone</span>
+<input class="bg-transparent border-none focus:ring-0 w-full py-4 text-on-surface font-body px-0" placeholder="휴대폰 번호 (- 제외)" type="tel"/>
+</div>
+<button class="whitespace-nowrap px-6 rounded-lg font-label font-bold text-xs uppercase tracking-widest text-primary border border-primary-fixed hover:bg-primary-fixed transition-colors" type="button">
+                인증요청
+            </button>
+</div>
+<div class="flex gap-3">
+<div class="flex-grow bg-surface-container-high rounded-lg flex items-center px-6">
+<span class="material-symbols-outlined text-outline mr-3">verified_user</span>
+<input class="bg-transparent border-none focus:ring-0 w-full py-4 text-on-surface font-body px-0" maxlength="6" placeholder="6자리 인증번호" type="text"/>
+</div>
+<button class="whitespace-nowrap px-6 rounded-lg font-label font-bold text-xs uppercase tracking-widest text-primary border border-primary-fixed hover:bg-primary-fixed transition-colors" type="button">
+                인증확인
+            </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Terms and Policies Section -->
+<div class="space-y-4 pt-4 border-t border-surface-container-highest">
+<label class="font-headline font-bold text-sm tracking-tight text-on-surface px-1">약관 및 정책 동의</label>
+<div class="bg-surface-container-low rounded-xl p-6 space-y-4">
+<div class="flex items-start gap-3">
+<input class="mt-1 w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary" id="terms-service" type="checkbox"/>
+<label class="text-sm font-body text-on-surface-variant flex-grow" for="terms-service">
+<span class="text-primary font-bold">[필수]</span> 서비스 이용약관 동의
+                                </label>
+<button class="text-[10px] text-outline underline font-label" type="button">상세보기</button>
+</div>
+<div class="flex items-start gap-3">
+<input class="mt-1 w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary" id="terms-privacy" type="checkbox"/>
+<label class="text-sm font-body text-on-surface-variant flex-grow" for="terms-privacy">
+<span class="text-primary font-bold">[필수]</span> 개인정보 수집 및 이용 동의
+                                </label>
+<button class="text-[10px] text-outline underline font-label" type="button">상세보기</button>
+</div>
+<div class="flex items-start gap-3">
+<input class="mt-1 w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary" id="marketing" type="checkbox"/>
+<label class="text-sm font-body text-on-surface-variant flex-grow" for="marketing">
+<span class="text-outline font-bold">[선택]</span> 마케팅 정보 수신 및 푸시 알림 동의
+                                </label>
+</div>
+</div>
+</div>
+<!-- Digital Signature Section -->
+<div class="space-y-3 pt-2">
+<div class="flex justify-between items-end px-1">
+<label class="font-headline font-bold text-sm tracking-tight text-on-surface">전자 서명</label>
+<button class="text-[10px] font-label font-bold uppercase tracking-widest text-error hover:opacity-70 transition-opacity" type="button">초기화</button>
+</div>
+<div class="w-full h-40 bg-surface-container-high rounded-xl border-2 border-dashed border-outline-variant relative overflow-hidden signature-pad group cursor-crosshair">
+<div class="absolute inset-0 flex items-center justify-center pointer-events-none group-active:opacity-0 transition-opacity">
+<span class="text-outline-variant font-label text-[10px] uppercase tracking-[0.2em]">여기에 서명해 주세요</span>
+</div>
+<!-- Simple canvas placeholder for design -->
+<canvas class="absolute inset-0 w-full h-full"></canvas>
+</div>
+<p class="text-[10px] text-outline-variant px-1 font-body">위 서명은 본인 확인 및 약관 동의의 효력을 가집니다. (2024/05/22 기준)</p>
+</div>
+<!-- CTA Section -->
+<div class="pt-6">
+<button class="kinetic-gradient w-full py-5 rounded-full text-white font-headline font-bold text-lg shadow-lg shadow-primary-container/20 active:scale-95 transition-transform duration-200" type="submit">
+                            계정 생성
+                        </button>
+</div>
+<!-- Social Login -->
+<div class="relative py-4 flex items-center justify-center">
+<div class="w-full h-[1px] bg-surface-container-highest"></div>
+<span class="absolute bg-surface-container-lowest px-4 text-[10px] font-label font-bold uppercase tracking-[0.3em] text-outline-variant">또는 소셜 계정으로 시작하기</span>
+</div>
+<div class="grid gap-4 grid-cols-2 max-w-xs mx-auto">
+<button class="flex flex-col items-center justify-center p-4 bg-[#FEE500] rounded-2xl hover:opacity-90 transition-opacity active:scale-95 duration-200" type="button">
+<span class="material-symbols-outlined text-on-surface text-2xl" style="font-variation-settings: 'FILL' 1;">chat_bubble</span>
+<span class="text-[9px] font-bold mt-1 text-[#3C1E1E]">카카오</span>
+</button>
+<button class="flex flex-col items-center justify-center p-4 bg-[#03C75A] rounded-2xl hover:opacity-90 transition-opacity active:scale-95 duration-200" type="button">
+<svg class="w-6 h-6" fill="none" viewbox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+<path d="M68.5 67.5L31.5 15.5H12V84.5H31.5V32.5L68.5 84.5H88V15.5H68.5V67.5Z" fill="white"></path>
+</svg>
+<span class="text-[9px] font-bold mt-1 text-white">네이버</span>
+</button>
+</div>
+<div class="text-center pt-4">
+<p class="text-xs font-body text-outline">
+                            이미 계정이 있으신가요? <a class="text-primary-container font-bold underline underline-offset-4 decoration-primary-fixed" href="#">로그인하기</a>
+</p>
+</div>
+</form>
+</div>
+</div>
+</main>
+<footer class="p-8 text-center text-outline-variant font-label text-[10px] tracking-[0.5em] uppercase" id="footer-branding">
+        Editorial Transit Experience © busTaams 2024
+    </footer>
+</body></html>

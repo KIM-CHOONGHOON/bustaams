@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+
+<html lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-variant": "#e0e3e5",
+              "primary": "#004e47",
+              "on-surface-variant": "#3e4947",
+              "on-primary-container": "#93e4d8",
+              "background": "#f7f9fb",
+              "surface": "#f7f9fb",
+              "secondary-container": "#ff8d4b",
+              "on-primary": "#ffffff",
+              "surface-container-highest": "#e0e3e5",
+              "secondary-fixed-dim": "#ffb690",
+              "outline-variant": "#bec9c6",
+              "on-secondary-fixed-variant": "#783200",
+              "surface-container-low": "#f2f4f6",
+              "secondary": "#9d4300",
+              "surface-container-lowest": "#ffffff",
+              "on-background": "#191c1e",
+              "surface-bright": "#f7f9fb",
+              "error": "#ba1a1a",
+              "outline": "#6e7977",
+              "tertiary-container": "#8b4b32",
+              "on-secondary-fixed": "#341100",
+              "secondary-fixed": "#ffdbca",
+              "primary-fixed": "#a1f1e5",
+              "on-secondary-container": "#6c2c00",
+              "on-tertiary-fixed-variant": "#71361f",
+              "on-primary-fixed": "#00201d",
+              "inverse-on-surface": "#eff1f3",
+              "surface-tint": "#066a61",
+              "surface-container": "#eceef0",
+              "on-tertiary": "#ffffff",
+              "on-primary-fixed-variant": "#005049",
+              "on-secondary": "#ffffff",
+              "inverse-surface": "#2d3133",
+              "on-error": "#ffffff",
+              "surface-container-high": "#e6e8ea",
+              "on-surface": "#191c1e",
+              "primary-container": "#00685f",
+              "on-tertiary-container": "#ffc9b7",
+              "on-tertiary-fixed": "#380d00",
+              "error-container": "#ffdad6",
+              "tertiary-fixed-dim": "#ffb59a",
+              "surface-dim": "#d8dadc",
+              "primary-fixed-dim": "#85d5c9",
+              "inverse-primary": "#85d5c9",
+              "on-error-container": "#93000a",
+              "tertiary": "#6e341d",
+              "tertiary-fixed": "#ffdbcf"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Manrope', sans-serif; }
+        .headline-font { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl fixed top-0 w-full z-50 shadow-[0_20px_40px_rgba(0,104,95,0.04)]">
+<div class="flex items-center justify-between px-6 py-4 w-full">
+<div class="flex items-center gap-4">
+<button class="text-teal-700 dark:text-teal-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors active:scale-95 duration-200 rounded-full p-2">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="font-['Plus_Jakarta_Sans'] font-bold tracking-tight text-xl text-on-surface">후기 확인</h1>
+</div>
+<div class="w-10"></div> <!-- Spacer for balance -->
+</div>
+</header>
+<main class="pt-24 px-6 max-w-2xl mx-auto">
+<!-- Main Kinetic Review Card -->
+<section class="bg-surface-container-lowest rounded-[2rem] shadow-[0_40px_60px_rgba(0,104,95,0.06)] overflow-hidden relative">
+<!-- Asymmetric Live Status Accent (Visual Interest) -->
+<div class="absolute top-0 left-0 w-1.5 h-32 bg-secondary-container rounded-br-full"></div>
+<div class="p-8">
+<!-- Trip Meta Info -->
+<div class="flex justify-between items-start mb-10">
+<div class="space-y-1">
+<p class="text-xs font-bold text-secondary uppercase tracking-[0.2em] mb-2">Trip Journey</p>
+<h2 class="headline-font text-3xl font-extrabold text-on-background flex items-center gap-3">
+                            Seoul 
+                            <span class="material-symbols-outlined text-outline-variant" data-icon="east">east</span> 
+                            Busan
+                        </h2>
+<div class="flex items-center gap-2 text-on-surface-variant font-medium mt-1">
+<span class="material-symbols-outlined text-sm" data-icon="calendar_today">calendar_today</span>
+<span>2023/11/15</span>
+</div>
+</div>
+<div class="bg-surface-container-high px-4 py-2 rounded-2xl flex items-center gap-1">
+<span class="text-secondary font-bold text-lg">5.0</span>
+<span class="material-symbols-outlined text-secondary text-lg" data-weight="fill" style="font-variation-settings: 'FILL' 1;">star</span>
+</div>
+</div>
+<!-- Star Display Section -->
+<div class="flex gap-1.5 mb-6">
+<span class="material-symbols-outlined text-secondary-container text-3xl" data-icon="star" data-weight="fill" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-secondary-container text-3xl" data-icon="star" data-weight="fill" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-secondary-container text-3xl" data-icon="star" data-weight="fill" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-secondary-container text-3xl" data-icon="star" data-weight="fill" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-secondary-container text-3xl" data-icon="star" data-weight="fill" style="font-variation-settings: 'FILL' 1;">star</span>
+</div>
+<!-- User Review Text -->
+<div class="relative mb-12">
+<span class="material-symbols-outlined absolute -top-4 -left-2 text-surface-container-highest text-5xl opacity-50" data-icon="format_quote">format_quote</span>
+<p class="text-on-surface leading-relaxed text-lg font-medium relative z-10 px-4">
+                        기사님이 너무 친절하시고 차량 상태도 깨끗해서 편안하게 여행했습니다. 다음에도 꼭 이용하고 싶네요!
+                    </p>
+</div>
+<!-- Tonal Separator (No borders rule) -->
+<div class="h-px bg-surface-container-high w-full mb-10"></div>
+<!-- Driver's Response Section -->
+<div class="bg-surface-container-low rounded-[1.5rem] p-6 relative">
+<div class="flex items-center gap-4 mb-4">
+<div class="relative">
+<img alt="Driver Profile" class="w-14 h-14 rounded-full object-cover ring-4 ring-white" data-alt="middle-aged professional male driver with a warm smile, wearing a neat uniform, studio lighting, clean background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDBb-Cs5OxgwPCbvHvg-gdg_4H5Zhw_2tjFoeHycnOjmwI6OCv5zKpr4NYF687THu-ReBNM5xQnvGro1sArwoV2u_eiFRVvEYDm6VMm4B7ZRgx8jJJdg2Ci7nbouJE9c1MKIJ5_v5cDOBT0G1OqKtOhbIEQt2gsREYXT-rzZJHHeIRZHSEMY0S3AsPTancDb1yMMrEsq6qcZL6sbDqxeV0S4zbfyJOrc-SK5zVeH32mt1FXrDO1qjRC7n1VInTtxBfdN41M-08NNC8"/>
+<div class="absolute -bottom-1 -right-1 bg-primary p-1 rounded-full border-2 border-white">
+<span class="material-symbols-outlined text-white text-[10px]" data-icon="verified" data-weight="fill" style="font-variation-settings: 'FILL' 1;">verified</span>
+</div>
+</div>
+<div>
+<p class="text-xs font-bold text-primary-container uppercase tracking-wider">기사님 답변</p>
+<h3 class="font-bold text-on-surface text-lg">김영호 기사님</h3>
+</div>
+</div>
+<div class="bg-white rounded-2xl p-5 shadow-sm">
+<p class="text-on-surface-variant leading-relaxed">
+                            소중한 후기 감사합니다! 승객님들의 편안한 여행을 위해 항상 최선을 다하고 있습니다. 즐거운 여정 되셨다니 보람차네요. 다음에 또 뵙기를 기대하겠습니다.
+                        </p>
+</div>
+<!-- Subtle Decorative Element -->
+<div class="absolute bottom-4 right-6 opacity-10">
+<span class="material-symbols-outlined text-primary text-6xl" data-icon="directions_bus">directions_bus</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Related Action Section (Asymmetric Layout) -->
+</main>
+<!-- BottomNavBar (The "Floating Gallery" Navigation) -->
+<nav class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-md rounded-full px-6 py-3 z-50 shadow-[0_40px_60px_rgba(0,0,0,0.08)]">
+<div class="flex justify-around items-center w-full">
+<!-- Auctions -->
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 hover:text-teal-600 dark:hover:text-teal-300 transition-all active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="gavel">gavel</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[11px] font-semibold uppercase tracking-widest mt-1">경매</span>
+</a>
+<!-- Trips -->
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 hover:text-teal-600 dark:hover:text-teal-300 transition-all active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="directions_bus">directions_bus</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[11px] font-semibold uppercase tracking-widest mt-1">내 여정</span>
+</a>
+<!-- Ratings (ACTIVE) -->
+<a class="flex flex-col items-center justify-center text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 rounded-full px-4 py-1 active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="star" data-weight="fill" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[11px] font-semibold uppercase tracking-widest mt-1">후기</span>
+</a>
+<!-- Profile -->
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 hover:text-teal-600 dark:hover:text-teal-300 transition-all active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[11px] font-semibold uppercase tracking-widest mt-1">내 정보</span>
+</a>
+</div>
+</nav>
+</body></html>

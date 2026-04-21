@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+
+<html class="light" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&amp;family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-surface-variant": "#3e4947",
+              "on-primary-fixed": "#00201d",
+              "tertiary-fixed": "#ffdbcf",
+              "on-background": "#191c1e",
+              "on-surface": "#191c1e",
+              "secondary-fixed-dim": "#ffb690",
+              "surface-tint": "#066a61",
+              "surface-container-highest": "#e0e3e5",
+              "surface-container-low": "#f2f4f6",
+              "inverse-surface": "#2d3133",
+              "surface-container-lowest": "#ffffff",
+              "on-tertiary-container": "#ffc9b7",
+              "secondary": "#9d4300",
+              "surface-container-high": "#e6e8ea",
+              "outline": "#6e7977",
+              "on-secondary-fixed": "#341100",
+              "surface": "#f7f9fb",
+              "surface-container": "#eceef0",
+              "primary": "#004e47",
+              "on-primary-container": "#93e4d8",
+              "inverse-primary": "#85d5c9",
+              "secondary-fixed": "#ffdbca",
+              "background": "#f7f9fb",
+              "on-tertiary": "#ffffff",
+              "inverse-on-surface": "#eff1f3",
+              "surface-bright": "#f7f9fb",
+              "tertiary-container": "#8b4b32",
+              "tertiary": "#6e341d",
+              "primary-fixed-dim": "#85d5c9",
+              "on-primary-fixed-variant": "#005049",
+              "surface-variant": "#e0e3e5",
+              "on-error": "#ffffff",
+              "on-secondary-fixed-variant": "#783200",
+              "primary-fixed": "#a1f1e5",
+              "on-tertiary-fixed-variant": "#71361f",
+              "surface-dim": "#d8dadc",
+              "outline-variant": "#bec9c6",
+              "on-error-container": "#93000a",
+              "secondary-container": "#ff8d4b",
+              "on-secondary-container": "#6c2c00",
+              "on-secondary": "#ffffff",
+              "primary-container": "#00685f",
+              "error-container": "#ffdad6",
+              "error": "#ba1a1a",
+              "on-tertiary-fixed": "#380d00",
+              "tertiary-fixed-dim": "#ffb59a",
+              "on-primary": "#ffffff"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .active-field-shadow:focus-within {
+            box-shadow: 0 20px 40px -15px rgba(0, 104, 95, 0.15);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-background font-body min-h-screen">
+<!-- TopAppBar -->
+<header class="bg-transparent text-teal-800 flex justify-between items-center w-full px-6 pt-8 pb-4 max-w-7xl mx-auto">
+<div class="flex items-center gap-4">
+<button class="hover:opacity-80 transition-opacity active:scale-95 duration-200">
+<span class="material-symbols-outlined text-teal-800">menu</span>
+</button>
+<h1 class="font-headline font-extrabold tracking-tight text-3xl text-teal-900">busTaams</h1>
+</div>
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary-fixed shadow-sm">
+<img alt="사용자 프로필" class="w-full h-full object-cover" data-alt="Close-up portrait of a professional male driver wearing a clean uniform, smiling confidently with soft natural lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD4vN2iJhYT28dqF3bXn1UtFElHnQDFzWTM9CdNaAeMcn5Y85HNmY9B2z1Nknl7_0LRROWW6Kp6ePpluuaaJm60f9fheJfiNCV-IjIldyuNn0rqoOsilL34BrGPY00oGI6qIOd2cKXQSsudhdeVbyanrHnuCqiifKuAoRcDX2pk1oO0TDo7Izx1aFfEP7T9ggFWTGdVNwsWWLAAqtiCftrqWM46536UPanJUNNd6GPoEFB-bpkobjeORZueHC5FbV1a-Z71vgICFjo"/>
+</div>
+</header>
+<main class="max-w-7xl mx-auto px-6 py-12">
+<!-- Editorial Header Section -->
+<div class="mb-16 grid grid-cols-1 md:grid-cols-12 gap-8 items-end">
+<div class="md:col-span-8">
+<span class="font-headline text-secondary font-bold tracking-widest uppercase text-sm mb-4 block">경매 ID: #BT-88429</span>
+<h2 class="font-headline font-extrabold text-5xl md:text-7xl text-primary leading-tight">견적 제출하기</h2>
+</div>
+<div class="md:col-span-4 md:text-right hidden md:block">
+<p class="text-on-surface-variant font-medium max-w-xs ml-auto">
+                    경쟁력 있는 견적으로 노선을 확보하세요. 프리미엄 물류를 위한 정밀한 가격 책정.
+                </p>
+</div>
+</div>
+<!-- Content Canvas: Asymmetric Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
+<!-- Left Column: Trip Details (Static Info) -->
+<aside class="lg:col-span-4 space-y-8">
+<div class="bg-surface-container-low p-8 rounded-2xl space-y-6">
+<h3 class="font-headline font-bold text-xl text-primary border-l-4 border-secondary pl-4">운행 정보</h3>
+<div class="space-y-6">
+<div class="flex items-start gap-4">
+<span class="material-symbols-outlined text-secondary">location_on</span>
+<div>
+<p class="text-xs font-bold uppercase tracking-wider text-slate-500">출발지</p>
+<p class="font-headline font-bold text-on-surface">시애틀-타코마 국제공항 (SEA)</p>
+</div>
+</div><div class="flex items-start gap-4">
+<span class="material-symbols-outlined text-secondary">route</span>
+<div>
+<p class="text-xs font-bold uppercase tracking-wider text-slate-500">경유지</p>
+<p class="font-headline font-bold text-on-surface">1: 수원역</p>
+<p class="font-headline font-bold text-on-surface">2: 대전복합터미널</p>
+<p class="font-headline font-bold text-on-surface">3: 동대구역</p>
+</div>
+</div>
+<div class="flex items-start gap-4">
+<span class="material-symbols-outlined text-secondary">flag</span>
+<div>
+<p class="text-xs font-bold uppercase tracking-wider text-slate-500">목적지</p>
+<p class="font-headline font-bold text-on-surface">밴쿠버 워터프런트, BC</p>
+</div>
+</div>
+<div class="flex items-start gap-4">
+<span class="material-symbols-outlined text-secondary">calendar_month</span>
+<div>
+<p class="text-xs font-bold uppercase tracking-wider text-slate-500">출발 일시</p>
+<p class="font-headline font-bold text-on-surface">2024년 10월 24일 • 오전 09:00</p>
+</div>
+</div><div class="flex items-start gap-4">
+<span class="material-symbols-outlined text-secondary">calendar_today</span>
+<div>
+<p class="text-xs font-bold uppercase tracking-wider text-slate-500">도착 일시</p>
+<p class="font-headline font-bold text-on-surface">2024년 10월 26일 • 오후 18:00</p>
+</div>
+</div>
+<div class="flex items-start gap-4">
+<span class="material-symbols-outlined text-secondary">group</span>
+<div>
+<p class="text-xs font-bold uppercase tracking-wider text-slate-500">승객 수</p>
+<p class="font-headline font-bold text-on-surface">45-52명</p>
+</div>
+</div>
+</div>
+<div class="pt-6">
+<img alt="럭셔리 버스" class="w-full h-48 object-cover rounded-xl grayscale hover:grayscale-0 transition-all duration-500" data-alt="Modern luxury white charter bus parked in a clean paved area with soft sunset reflections on the windows" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCaOodsAP51m01nz1oLiqAzYyES4eOWvqqQrE8V6wqagIAx_H34AK3qc96yehTi5-5bcd51oZ7TjvUHKrpqwN65ENfPkkAqFoEVcefs4aYcaszvGEyus4-_At18i1DtlP75Jh9ogSmb0dcWqYMh_mnhEs2cYNKP1Nmjennfdxn6n6GnYpOm_1eyEzJVfKTld_vTOePJoot-UwpuUoDTMi_2NhqxOko2wQy-6P-EnANQTVdVSOU6Z74R79vTbcjX3EXN4xvXQ-gRPoE"/>
+</div>
+</div>
+</aside>
+<!-- Right Column: Form (Active Canvas) -->
+<section class="lg:col-span-8">
+<div class="bg-surface-container-lowest p-8 md:p-12 rounded-[2rem] shadow-[0_40px_60px_-15px_rgba(25,28,30,0.04)] relative overflow-hidden">
+<!-- Subtle Gradient Background Element -->
+<div class="absolute -top-24 -right-24 w-64 h-64 bg-primary-fixed-dim/10 rounded-full blur-3xl"></div>
+<form class="relative z-10 space-y-10">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<!-- Pricing Input -->
+<div class="space-y-2 group active-field-shadow transition-shadow duration-300">
+<label class="font-headline font-bold text-sm text-primary flex justify-between">
+<span>총 입찰 금액</span>
+<span class="text-secondary">KRW</span>
+</label>
+<div class="relative">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">₩</span>
+<input class="w-full bg-surface-container-high border-none rounded-xl py-5 pl-8 pr-4 font-headline text-2xl font-extrabold focus:ring-0 focus:bg-surface-container-highest text-on-surface transition-colors" placeholder="1,500,000" type="number"/>
+</div>
+<p class="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">추천 범위: ₩1,200,000 - ₩1,550,000</p>
+</div>
+<!-- Vehicle Selection -->
+<div class="space-y-2 group active-field-shadow transition-shadow duration-300">
+<label class="font-headline font-bold text-sm text-primary">차량 선택</label>
+<select class="w-full bg-surface-container-high border-none rounded-xl py-5 px-4 font-headline font-bold text-on-surface focus:ring-0 focus:bg-surface-container-highest transition-colors appearance-none">
+<option>차량 멤버를 선택하세요...</option>
+<option>코치 #402 (Setra S417)</option>
+<option>코치 #509 (MCI J4500)</option>
+<option>코치 #112 (Prevost H3-45)</option>
+</select>
+</div>
+</div>
+<!-- Trip Notes / Editorial Input -->
+<div class="space-y-2 group active-field-shadow transition-shadow duration-300">
+<label class="font-headline font-bold text-sm text-primary">서비스 보증 및 비고</label>
+<textarea class="w-full bg-surface-container-high border-none rounded-2xl p-6 font-body text-on-surface focus:ring-0 focus:bg-surface-container-highest transition-colors placeholder:text-slate-400" placeholder="Wi-Fi, 화장실 상태 또는 운전기사 경력과 같은 편의 시설을 언급해 주세요..." rows="4"></textarea>
+</div>
+<!-- Terms -->
+<div class="flex items-center gap-3 p-4 bg-surface-container-low rounded-xl">
+<input class="w-5 h-5 rounded border-none bg-surface-container-high text-primary focus:ring-primary-fixed-dim" type="checkbox"/>
+<label class="text-xs font-medium text-on-surface-variant">선택한 차량이 모든 안전 요구 사항을 충족하며 이 노선에 대한 보험이 최신 상태임을 확인합니다.</label>
+</div>
+<!-- Submit Button -->
+<div class="pt-4 flex flex-col md:flex-row items-center gap-6">
+<button class="w-full md:w-auto px-12 py-5 bg-gradient-to-br from-primary to-primary-container text-white font-headline font-extrabold rounded-full text-lg shadow-lg shadow-teal-900/20 hover:opacity-90 active:scale-95 transition-all duration-300" type="submit">
+                                견적 제출하기
+                            </button>
+<button class="text-slate-400 font-headline font-bold hover:text-error transition-colors text-sm uppercase tracking-widest" type="button">
+                                임시 저장
+                            </button>
+</div>
+</form>
+</div>
+</section>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-8 left-0 right-0 z-50 flex justify-around items-center px-4 py-3 bg-white/80 dark:bg-slate-900/80 backdrop-blur-[20px] fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] rounded-full max-w-md shadow-[0_20px_40px_-15px_rgba(0,104,95,0.15)]">
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 transition-colors active:scale-90 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined">gavel</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest mt-1">경매</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 transition-colors active:scale-90 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined">visibility</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest mt-1">관심 목록</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-gradient-to-br from-teal-600 to-teal-800 text-white rounded-full w-12 h-12 shadow-lg shadow-teal-900/20 active:scale-90 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined">payments</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 transition-colors active:scale-90 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest mt-1">프로필</span>
+</a>
+</nav>
+<!-- Spacer for floating nav -->
+<div class="h-32"></div>
+</body></html>

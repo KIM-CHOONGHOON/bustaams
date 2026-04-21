@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+
+<html lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            font-family: 'Manrope', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        h1, h2, h3, .headline {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .glass-panel {
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              colors: {
+                "on-surface": "#191c1e",
+                "on-error-container": "#93000a",
+                "tertiary": "#6e341d",
+                "surface-variant": "#e0e3e5",
+                "secondary-fixed": "#ffdbca",
+                "error": "#ba1a1a",
+                "tertiary-container": "#8b4b32",
+                "surface-tint": "#066a61",
+                "primary-fixed": "#a1f1e5",
+                "on-primary-container": "#93e4d8",
+                "secondary-fixed-dim": "#ffb690",
+                "on-secondary-fixed": "#341100",
+                "on-background": "#191c1e",
+                "surface-bright": "#f7f9fb",
+                "on-secondary-container": "#6c2c00",
+                "primary-container": "#00685f",
+                "surface-container": "#eceef0",
+                "on-primary-fixed-variant": "#005049",
+                "on-tertiary-container": "#ffc9b7",
+                "secondary-container": "#ff8d4b",
+                "background": "#f7f9fb",
+                "on-tertiary-fixed-variant": "#71361f",
+                "on-secondary-fixed-variant": "#783200",
+                "on-primary-fixed": "#00201d",
+                "tertiary-fixed": "#ffdbcf",
+                "on-error": "#ffffff",
+                "surface-container-low": "#f2f4f6",
+                "on-primary": "#ffffff",
+                "surface-container-highest": "#e0e3e5",
+                "on-tertiary": "#ffffff",
+                "surface-dim": "#d8dadc",
+                "inverse-surface": "#2d3133",
+                "inverse-on-surface": "#eff1f3",
+                "tertiary-fixed-dim": "#ffb59a",
+                "outline-variant": "#bec9c6",
+                "surface-container-high": "#e6e8ea",
+                "primary-fixed-dim": "#85d5c9",
+                "surface": "#f7f9fb",
+                "on-secondary": "#ffffff",
+                "primary": "#004e47",
+                "inverse-primary": "#85d5c9",
+                "surface-container-lowest": "#ffffff",
+                "outline": "#6e7977",
+                "error-container": "#ffdad6",
+                "on-tertiary-fixed": "#380d00",
+                "secondary": "#9d4300",
+                "on-surface-variant": "#3e4947"
+              },
+              fontFamily: {
+                "headline": ["Plus Jakarta Sans"],
+                "body": ["Manrope"],
+                "label": ["Manrope"]
+              },
+              borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+            },
+          },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface min-h-screen pb-32">
+<!-- Top App Bar -->
+<header class="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl flex items-center justify-between px-6 h-16 shadow-[0_20px_40px_rgba(0,104,95,0.05)]">
+<div class="flex items-center gap-4">
+<button class="hover:bg-teal-50/50 dark:hover:bg-teal-900/20 transition-colors p-2 rounded-full">
+<span class="material-symbols-outlined text-teal-700 dark:text-teal-400">arrow_back</span>
+</button>
+<h1 class="font-['Plus_Jakarta_Sans'] font-bold text-lg tracking-tight text-teal-700 dark:text-teal-400">운행 상세</h1>
+</div>
+<button class="hover:bg-teal-50/50 dark:hover:bg-teal-900/20 transition-colors p-2 rounded-full">
+<span class="material-symbols-outlined text-teal-700 dark:text-teal-400">more_vert</span>
+</button>
+</header>
+<main class="pt-20 px-6 max-w-2xl mx-auto space-y-8">
+<!-- Journey Summary Hero -->
+<section class="relative overflow-hidden bg-primary-container rounded-3xl p-8 text-white shadow-2xl">
+<div class="absolute top-0 right-0 w-64 h-64 bg-teal-500/20 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
+<div class="relative z-10 flex flex-col gap-2">
+<div class="flex items-center gap-2 mb-2">
+<span class="px-3 py-1 bg-white/20 rounded-full text-[10px] font-bold tracking-widest uppercase">Completed</span>
+</div>
+<h2 class="text-3xl font-extrabold headline tracking-tight leading-tight">서울역 <span class="text-primary-fixed">→</span> 부산</h2>
+<div class="mt-6 flex flex-col">
+<span class="text-primary-fixed/80 text-sm font-medium">총 정산 금액</span>
+<span class="text-4xl font-black headline">₩1,650,000</span>
+</div>
+</div>
+<div class="absolute bottom-4 right-8 opacity-20">
+<span class="material-symbols-outlined text-8xl" style="font-variation-settings: 'FILL' 1;">directions_bus</span>
+</div>
+</section>
+<!-- Timeline Section -->
+<section class="space-y-6">
+<h3 class="text-xl font-bold headline text-primary flex items-center gap-2">
+<span class="material-symbols-outlined">route</span> 운행 상세 정보
+            </h3>
+<div class="bg-surface-container-lowest p-8 rounded-[2rem] shadow-[0_40px_60px_rgba(0,104,95,0.04)] relative">
+<div class="absolute left-10 top-12 bottom-12 w-0.5 bg-surface-container-high"></div>
+<div class="space-y-10">
+<!-- Departure -->
+<div class="relative pl-12">
+<div class="absolute left-0 top-1.5 w-4 h-4 rounded-full bg-primary ring-4 ring-primary-fixed/30 z-10"></div>
+<div>
+<p class="text-xs font-bold text-outline uppercase tracking-tighter">Departure</p>
+<h4 class="text-lg font-bold">서울역 광장</h4>
+<p class="text-on-surface-variant text-sm font-medium">2024/05/20 08:00</p>
+</div>
+</div>
+<!-- Stopover -->
+<div class="relative pl-12">
+<div class="absolute left-0 top-1.5 w-4 h-4 rounded-full bg-secondary ring-4 ring-secondary-fixed/30 z-10"></div>
+<div>
+<p class="text-xs font-bold text-outline uppercase tracking-tighter">Wayback</p>
+<h4 class="text-lg font-bold">천안삼거리 휴게소</h4>
+<p class="text-on-surface-variant text-sm font-medium">2024/05/20 10:30</p>
+</div>
+</div>
+<!-- Arrival -->
+<div class="relative pl-12">
+<div class="absolute left-0 top-1.5 w-4 h-4 rounded-full bg-primary ring-4 ring-primary-fixed/30 z-10"></div>
+<div>
+<p class="text-xs font-bold text-outline uppercase tracking-tighter">Arrival</p>
+<h4 class="text-lg font-bold">부산 해운대역</h4>
+<p class="text-on-surface-variant text-sm font-medium">2024/05/20 14:45</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Vehicle Info Bento Card -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="bg-surface-container-low p-6 rounded-3xl flex flex-col justify-between min-h-[160px]">
+<span class="material-symbols-outlined text-primary text-3xl">airport_shuttle</span>
+<div>
+<p class="text-xs font-bold text-outline uppercase tracking-tighter mb-1">Vehicle Model</p>
+<h4 class="text-lg font-bold">현대 유니버스 프레스티지</h4>
+</div>
+</div>
+<div class="bg-surface-container-low p-6 rounded-3xl flex flex-col justify-between min-h-[160px]">
+<span class="material-symbols-outlined text-secondary text-3xl">numbers</span>
+<div>
+<p class="text-xs font-bold text-outline uppercase tracking-tighter mb-1">License Plate</p>
+<h4 class="text-lg font-bold tracking-widest text-secondary">서울 70 바 1234</h4>
+</div>
+</div>
+</section>
+<!-- Settlement Details -->
+<section class="space-y-4">
+<h3 class="text-xl font-bold headline text-primary px-2">정산 상세 내역</h3>
+<div class="bg-surface-container-lowest rounded-[2rem] p-8 shadow-[0_40px_60px_rgba(0,104,95,0.04)]">
+<div class="space-y-4">
+<div class="flex justify-between items-center">
+<span class="text-on-surface-variant">기본 대여료</span>
+<span class="font-bold">₩1,400,000</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="text-on-surface-variant">기사 숙박/식대</span>
+<span class="font-bold">₩150,000</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="text-on-surface-variant">톨비/주차비</span>
+<span class="font-bold">₩65,000</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="text-on-surface-variant">유류비 정산</span>
+<span class="font-bold">₩35,000</span>
+</div>
+<div class="pt-6 mt-4 border-t-2 border-surface-container-high flex justify-between items-center">
+<span class="text-lg font-extrabold headline">최종 합계</span>
+<span class="text-2xl font-black headline text-primary">₩1,650,000</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Review Section -->
+<section class="space-y-4">
+<h3 class="text-xl font-bold headline text-primary px-2">고객 평점 및 후기</h3>
+<div class="bg-surface-container-lowest rounded-[2rem] p-8 shadow-[0_40px_60px_rgba(0,104,95,0.04)] relative">
+<div class="absolute top-0 right-0 p-8">
+<div class="flex text-secondary-container">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span>
+</div>
+</div>
+<div class="flex items-center gap-4 mb-6">
+<div class="w-12 h-12 rounded-full overflow-hidden bg-surface-container-high">
+<img class="w-full h-full object-cover" data-alt="portrait of a young smiling business woman in professional attire with a soft outdoor background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB4R2jh8VJc8ROSqRte6_1Y0juy2shoZucaOFvKNhcFEXVdnK7OUSpSeIZJNewDFaMjxxmfFrCcryi4-vMUPWkxg26cBBxF2bC03SOkb8-F009-yAJ4WsGdX_tfmxin0zyvVgpruM0uSxRJRzS7kVYk1rJvWCPYFJ_GjR__yl76jo5Rm0_VyzVO9cynBG3ZBBTaRLc2gMiZFf9fbUgwCZIrMHwFMFeggrWvJnZuvfKO4NwYZuyYYGfSgkhoOZou4Etaf7fkOcSLs8w"/>
+</div>
+<div>
+<p class="font-bold">김민준 고객님</p>
+<p class="text-xs text-outline">2024.05.21 작성</p>
+</div>
+</div>
+<p class="text-lg leading-relaxed font-medium text-on-surface-variant italic">
+                    "기사님이 너무 친절하셨어요! 운전도 정말 부드럽게 잘 해주셔서 부산까지 편안하게 잘 도착했습니다. 다음에도 꼭 이 기사님과 함께하고 싶네요."
+                </p>
+</div>
+</section>
+<!-- Action Buttons -->
+<section class="flex flex-col gap-4 py-8">
+<button class="w-full h-16 rounded-full bg-surface-container-highest text-primary font-bold flex items-center justify-center gap-2 hover:bg-surface-variant transition-all active:scale-[0.98]">
+<span class="material-symbols-outlined">chat_bubble</span>
+                busTaams Talk 채팅 내역 보기
+            </button>
+<button class="w-full h-16 rounded-full bg-gradient-to-r from-primary to-primary-container text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:opacity-90 transition-all active:scale-[0.98]">
+<span class="material-symbols-outlined">reviews</span>
+                평점 및 후기 관리하기
+            </button>
+</section>
+</main>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl rounded-full z-50 flex justify-around items-center px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.1)]">
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 w-12 h-12 hover:scale-110 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-semibold tracking-wide">홈</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 w-12 h-12 hover:scale-110 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined">gavel</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-semibold tracking-wide">경매</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-teal-600 dark:bg-teal-500 text-white rounded-full w-12 h-12 shadow-lg shadow-teal-200/50 hover:scale-110 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined">history</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-semibold tracking-wide">운행기록</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 w-12 h-12 hover:scale-110 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-semibold tracking-wide">내 정보</span>
+</a>
+</nav>
+</body></html>

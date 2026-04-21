@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+
+<html class="light" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>여정 요청하기 | busTaams</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600;700&amp;family=Pretendard:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-surface-variant": "#3e4947",
+              "on-primary-fixed": "#00201d",
+              "tertiary-fixed": "#ffdbcf",
+              "on-background": "#191c1e",
+              "on-surface": "#191c1e",
+              "secondary-fixed-dim": "#ffb690",
+              "surface-tint": "#066a61",
+              "surface-container-highest": "#e0e3e5",
+              "surface-container-low": "#f2f4f6",
+              "inverse-surface": "#2d3133",
+              "surface-container-lowest": "#ffffff",
+              "on-tertiary-container": "#ffc9b7",
+              "secondary": "#9d4300",
+              "surface-container-high": "#e6e8ea",
+              "outline": "#6e7977",
+              "on-secondary-fixed": "#341100",
+              "surface": "#f7f9fb",
+              "surface-container": "#eceef0",
+              "primary": "#004e47",
+              "on-primary-container": "#93e4d8",
+              "inverse-primary": "#85d5c9",
+              "secondary-fixed": "#ffdbca",
+              "background": "#f7f9fb",
+              "on-tertiary": "#ffffff",
+              "inverse-on-surface": "#eff1f3",
+              "surface-bright": "#f7f9fb",
+              "tertiary-container": "#8b4b32",
+              "tertiary": "#6e341d",
+              "primary-fixed-dim": "#85d5c9",
+              "on-primary-fixed-variant": "#005049",
+              "surface-variant": "#e0e3e5",
+              "on-error": "#ffffff",
+              "on-secondary-fixed-variant": "#783200",
+              "primary-fixed": "#a1f1e5",
+              "on-tertiary-fixed-variant": "#71361f",
+              "surface-dim": "#d8dadc",
+              "outline-variant": "#bec9c6",
+              "on-error-container": "#93000a",
+              "secondary-container": "#ff8d4b",
+              "on-secondary-container": "#6c2c00",
+              "on-secondary": "#ffffff",
+              "primary-container": "#00685f",
+              "error-container": "#ffdad6",
+              "error": "#ba1a1a",
+              "on-tertiary-fixed": "#380d00",
+              "tertiary-fixed-dim": "#ffb59a",
+              "on-primary": "#ffffff"
+            },
+            fontFamily: {
+              "headline": ["Pretendard", "Plus Jakarta Sans"],
+              "body": ["Pretendard", "Manrope"],
+              "label": ["Pretendard", "Manrope"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        vertical-align: middle;
+      }
+      .kinetic-shadow {
+        box-shadow: 0 40px 60px -15px rgba(25, 28, 30, 0.06);
+      }
+      .editorial-grid {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 2rem;
+      }
+      input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+        opacity: 0;
+        position: absolute;
+        right: 0;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+      }
+      body {
+        min-height: max(884px, 100dvh);
+        font-family: 'Pretendard', sans-serif;
+      }
+      input::-webkit-outer-spin-button,
+      input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+    </style>
+</head>
+<body class="bg-background font-body text-on-background min-h-screen">
+<header class="bg-transparent text-teal-800 dark:text-teal-200 docked full-width top-0 z-40">
+<div class="flex justify-between items-center w-full px-6 pt-8 pb-4 max-w-7xl mx-auto">
+<div class="flex items-center gap-4">
+<button class="hover:opacity-80 transition-opacity active:scale-95 duration-200">
+<span class="material-symbols-outlined text-3xl" data-icon="menu">menu</span>
+</button>
+<h1 class="font-['Plus_Jakarta_Sans'] font-extrabold tracking-tight text-3xl text-teal-900 dark:text-teal-50">busTaams</h1>
+</div>
+<div class="hidden md:flex items-center gap-8 font-label text-sm font-bold uppercase tracking-widest text-slate-500">
+<a class="hover:opacity-80 transition-opacity" href="#">차량 안내</a>
+<a class="hover:opacity-80 transition-opacity" href="#">노선 안내</a>
+<a class="hover:opacity-80 transition-opacity" href="#">문의하기</a>
+</div>
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center overflow-hidden border-2 border-white">
+<img alt="User profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAQzkQCigA0n-5mLu9zcJ6mZmYz_ng1J_W08Zvek9NPTIxEqZxRc4MLOvOihZe3kNm2W2-YfUaP-IHCuTpOkSiQsGdSsA98KFD_nkqktHAGbF9WMi9twaHCw5VdqJDuqMVKnFD1RRtDIDgHIbJP3VtpbVpL5XFtUxIt7gE9qO1eG3Mqh8N67d5URDgYA9P3tvuitIcUB3FXVKobbiG0aL8v7FByNw99puw_IMGpqZZMEYR5zEtHYNa2CiRJbWfDJC7eRAGgbR4NPA8"/>
+</div>
+</div>
+</header>
+<main class="max-w-7xl mx-auto px-6 pt-12 pb-32">
+<div class="editorial-grid">
+<!-- Left Side -->
+<div class="col-span-12 lg:col-span-5 flex flex-col justify-center mb-12 lg:mb-0">
+<span class="text-secondary font-headline font-bold uppercase tracking-[0.3em] mb-4 block">전세 서비스</span>
+<h2 class="font-headline font-extrabold text-5xl lg:text-7xl leading-[1.1] text-primary mb-8 tracking-tight">
+                    당신만을 위한<br/>전용 버스.
+                </h2>
+<p class="text-on-surface-variant text-lg lg:text-xl leading-relaxed max-w-md opacity-80">
+                    일생에 단 한 번뿐인 특별한 여정을 정의하세요. 럭셔리 비즈니스 코치부터 지속 가능한 운송 솔루션까지, 귀하의 단체에 꼭 필요한 사양을 요청하실 수 있습니다.
+                </p>
+<div class="mt-12 relative rounded-2xl overflow-hidden h-64 w-full kinetic-shadow">
+<img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCz878BnQd8uirQZS16lTczMSsapv5qs4qZPfOQxFRYi3OW0p-2zDSuiwWyAD_HIV9ilP6hEIC5JSbP3laJx9zkoMeQLMfC7G1UQxZD58i_ZpXCTUCTvamqt_-ap-545hcLovNaBPkNJGYRpfTyzltMPomzBwTuKptb_I1wquU_GdmO0CMeWjdgsmvlzyZisBNylO15Gztlwd1yoZWLIeWpv54WA3SO5V--fxRyp6Dt8dlmB3tE01oDz_XWHFW2onY5E9x8_ZpPr3o"/>
+<div class="absolute inset-0 bg-gradient-to-t from-primary/60 to-transparent"></div>
+<div class="absolute bottom-6 left-6 text-white">
+<p class="font-headline font-bold text-lg">VIP 경험</p>
+<p class="text-sm opacity-90">맞춤형 노선 계획 포함</p>
+</div>
+</div>
+</div>
+<!-- Right Side: The Form Canvas -->
+<div class="col-span-12 lg:col-span-7">
+<div class="bg-surface-container-low rounded-[2rem] p-8 lg:p-12 kinetic-shadow relative">
+<div class="absolute top-12 left-0 w-1 h-16 bg-secondary rounded-r-full"></div>
+<form class="space-y-10">
+<section>
+<h3 class="font-headline font-bold text-2xl text-primary mb-6">어디로 가시나요?</h3>
+<div class="space-y-6">
+<div class="space-y-2">
+<label class="font-label text-xs font-bold uppercase tracking-wider text-slate-500 ml-2">여행 명칭</label>
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant group-focus-within:text-primary transition-colors" data-icon="edit_note">edit_note</span>
+<input class="w-full pl-12 pr-4 py-4 bg-surface-container-lowest border-none rounded-xl focus:ring-2 focus:ring-primary/20 transition-all text-on-surface placeholder:text-outline-variant font-medium" placeholder="예: 2024년 추계 워크숍" type="text"/>
+</div>
+</div><div class="space-y-2">
+<label class="font-label text-xs font-bold uppercase tracking-wider text-slate-500 ml-2">출발지</label>
+<div class="relative group cursor-pointer" onclick="alert('주소 검색 API가 호출됩니다.')">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant group-focus-within:text-primary transition-colors" data-icon="search">search</span>
+<input class="w-full pl-12 pr-4 py-4 bg-surface-container-lowest border-none rounded-xl focus:ring-2 focus:ring-primary/20 transition-all text-on-surface placeholder:text-outline-variant font-medium cursor-pointer" placeholder="출발 주소 검색 (Kakao/Naver Map)" readonly="" type="text"/>
+<span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline-variant text-sm" data-icon="open_in_new">open_in_new</span>
+</div>
+</div>
+<div class="space-y-4" id="waypoint-container">
+<div class="flex items-center gap-3">
+<div class="relative flex-1 group">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant" data-icon="more_vert">more_vert</span>
+<input class="w-full pl-12 pr-12 py-3 bg-surface-container-lowest/50 border-none rounded-xl text-on-surface placeholder:text-outline-variant text-sm font-medium" placeholder="경유지 1 (선택)" readonly="" type="text"/>
+<button class="absolute right-4 top-1/2 -translate-y-1/2 text-outline-variant hover:text-error transition-colors" type="button">
+<span class="material-symbols-outlined text-sm" data-icon="close">close</span>
+</button>
+</div>
+</div>
+</div>
+<button class="flex items-center gap-2 text-secondary font-bold text-sm ml-2 hover:opacity-70 transition-opacity" type="button">
+<span class="material-symbols-outlined text-lg" data-icon="add_circle">add_circle</span>
+<span>경유지 추가 (최대 3개)</span>
+</button>
+<div class="space-y-2">
+<label class="font-label text-xs font-bold uppercase tracking-wider text-slate-500 ml-2">도착지</label>
+<div class="relative group cursor-pointer" onclick="alert('주소 검색 API가 호출됩니다.')">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant group-focus-within:text-primary transition-colors" data-icon="flag">flag</span>
+<input class="w-full pl-12 pr-4 py-4 bg-surface-container-lowest border-none rounded-xl focus:ring-2 focus:ring-primary/20 transition-all text-on-surface placeholder:text-outline-variant font-medium cursor-pointer" placeholder="도착 주소 검색" readonly="" type="text"/>
+</div>
+</div>
+</div>
+</section>
+<section>
+<h3 class="font-headline font-bold text-2xl text-primary mb-6">필수 정보</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+<div class="space-y-2">
+<label class="font-label text-xs font-bold uppercase tracking-wider text-slate-500 ml-2">출발일시 (START_DT)</label>
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant group-focus-within:text-primary transition-colors pointer-events-none" data-icon="calendar_month">calendar_month</span>
+<input class="w-full pl-12 pr-4 py-4 bg-surface-container-lowest border-none rounded-xl focus:ring-2 focus:ring-primary/20 transition-all text-on-surface font-medium" onclick="alert('날짜/시간 선택기가 호출됩니다.')" readonly="" type="text" value="2023/11/20, 09:00 AM"/>
+</div>
+</div>
+<div class="space-y-2">
+<label class="font-label text-xs font-bold uppercase tracking-wider text-slate-500 ml-2">도착일시 (END_DT)</label>
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant group-focus-within:text-primary transition-colors pointer-events-none" data-icon="event_available">event_available</span>
+<input class="w-full pl-12 pr-4 py-4 bg-surface-container-lowest border-none rounded-xl focus:ring-2 focus:ring-primary/20 transition-all text-on-surface font-medium" onclick="alert('날짜/시간 선택기가 호출됩니다.')" readonly="" type="text" value="2023/11/22, 06:00 PM"/>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+<div class="space-y-2">
+<label class="font-label text-xs font-bold uppercase tracking-wider text-slate-500 ml-2">총 탑승 인원</label>
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant group-focus-within:text-primary transition-colors" data-icon="group">group</span>
+<input class="w-full pl-12 pr-4 py-4 bg-surface-container-lowest border-none rounded-xl focus:ring-2 focus:ring-primary/20 transition-all text-on-surface placeholder:text-outline-variant font-medium" placeholder="인원 수 입력" type="number" value="45"/>
+</div>
+</div>
+</div>
+<div class="space-y-4">
+<label class="font-label text-xs font-bold uppercase tracking-wider text-slate-500 ml-2">버스 구분 표준화 (차종 선택)</label>
+<div class="grid grid-cols-1 gap-3">
+<!-- 45인승 일반 -->
+<div class="flex items-center justify-between p-4 bg-surface-container-lowest rounded-2xl border border-primary/5 hover:border-primary/20 transition-all">
+<div>
+<p class="font-headline font-bold text-primary">45인승 일반</p>
+<p class="text-[11px] text-on-surface-variant font-medium">대형 | 표준 좌석</p>
+</div>
+<div class="flex items-center gap-3 bg-surface-container-low rounded-xl p-1">
+<button class="w-8 h-8 flex items-center justify-center text-primary hover:bg-white rounded-lg transition-colors" type="button"><span class="material-symbols-outlined text-lg">remove</span></button>
+<span class="w-6 text-center font-bold text-primary">1</span>
+<button class="w-8 h-8 flex items-center justify-center text-primary hover:bg-white rounded-lg transition-colors" type="button"><span class="material-symbols-outlined text-lg">add</span></button>
+</div>
+</div>
+<!-- 28인승 우등 -->
+<div class="flex items-center justify-between p-4 bg-surface-container-lowest rounded-2xl border border-primary/5 hover:border-primary/20 transition-all">
+<div>
+<p class="font-headline font-bold text-primary">28인승 우등</p>
+<p class="text-[11px] text-on-surface-variant font-medium">대형 | 안락한 독립 좌석</p>
+</div>
+<div class="flex items-center gap-3 bg-surface-container-low rounded-xl p-1">
+<button class="w-8 h-8 flex items-center justify-center text-primary hover:bg-white rounded-lg transition-colors" type="button"><span class="material-symbols-outlined text-lg">remove</span></button>
+<span class="w-6 text-center font-bold text-primary">0</span>
+<button class="w-8 h-8 flex items-center justify-center text-primary hover:bg-white rounded-lg transition-colors" type="button"><span class="material-symbols-outlined text-lg">add</span></button>
+</div>
+</div>
+<!-- 35인승 중형 -->
+<div class="flex items-center justify-between p-4 bg-surface-container-lowest rounded-2xl border border-primary/5 hover:border-primary/20 transition-all">
+<div>
+<p class="font-headline font-bold text-primary">35인승 중형</p>
+<p class="text-[11px] text-on-surface-variant font-medium">중형 | 실속형 단체 이동</p>
+</div>
+<div class="flex items-center gap-3 bg-surface-container-low rounded-xl p-1">
+<button class="w-8 h-8 flex items-center justify-center text-primary hover:bg-white rounded-lg transition-colors" type="button"><span class="material-symbols-outlined text-lg">remove</span></button>
+<span class="w-6 text-center font-bold text-primary">0</span>
+<button class="w-8 h-8 flex items-center justify-center text-primary hover:bg-white rounded-lg transition-colors" type="button"><span class="material-symbols-outlined text-lg">add</span></button>
+</div>
+</div>
+<!-- 25인승 중형 -->
+<div class="flex items-center justify-between p-4 bg-surface-container-lowest rounded-2xl border border-primary/5 hover:border-primary/20 transition-all">
+<div>
+<p class="font-headline font-bold text-primary">25인승 중형</p>
+<p class="text-[11px] text-on-surface-variant font-medium">소규모 단체 | 콤팩트한 이동</p>
+</div>
+<div class="flex items-center gap-3 bg-surface-container-low rounded-xl p-1">
+<button class="w-8 h-8 flex items-center justify-center text-primary hover:bg-white rounded-lg transition-colors" type="button"><span class="material-symbols-outlined text-lg">remove</span></button>
+<span class="w-6 text-center font-bold text-primary">0</span>
+<button class="w-8 h-8 flex items-center justify-center text-primary hover:bg-white rounded-lg transition-colors" type="button"><span class="material-symbols-outlined text-lg">add</span></button>
+</div>
+</div>
+<!-- 15인승 소형 -->
+<div class="flex items-center justify-between p-4 bg-surface-container-lowest rounded-2xl border border-primary/5 hover:border-primary/20 transition-all">
+<div>
+<p class="font-headline font-bold text-primary">15인승 소형</p>
+<p class="text-[11px] text-on-surface-variant font-medium">승합 | 빠른 소수 이동</p>
+</div>
+<div class="flex items-center gap-3 bg-surface-container-low rounded-xl p-1">
+<button class="w-8 h-8 flex items-center justify-center text-primary hover:bg-white rounded-lg transition-colors" type="button"><span class="material-symbols-outlined text-lg">remove</span></button>
+<span class="w-6 text-center font-bold text-primary">0</span>
+<button class="w-8 h-8 flex items-center justify-center text-primary hover:bg-white rounded-lg transition-colors" type="button"><span class="material-symbols-outlined text-lg">add</span></button>
+</div>
+</div>
+<!-- 12인승 미니 -->
+<div class="flex items-center justify-between p-4 bg-surface-container-lowest rounded-2xl border border-primary/5 hover:border-primary/20 transition-all">
+<div>
+<p class="font-headline font-bold text-primary">12인승 미니</p>
+<p class="text-[11px] text-on-surface-variant font-medium">미니밴 | 프리미엄 승합</p>
+</div>
+<div class="flex items-center gap-3 bg-surface-container-low rounded-xl p-1">
+<button class="w-8 h-8 flex items-center justify-center text-primary hover:bg-white rounded-lg transition-colors" type="button"><span class="material-symbols-outlined text-lg">remove</span></button>
+<span class="w-6 text-center font-bold text-primary">0</span>
+<button class="w-8 h-8 flex items-center justify-center text-primary hover:bg-white rounded-lg transition-colors" type="button"><span class="material-symbols-outlined text-lg">add</span></button>
+</div>
+</div>
+<!-- 21인승 이하 프리미엄 -->
+<div class="flex items-center justify-between p-4 bg-surface-container-lowest rounded-2xl border border-primary/5 hover:border-primary/20 transition-all">
+<div>
+<p class="font-headline font-bold text-primary">21인승 이하 프리미엄</p>
+<p class="text-[11px] text-on-surface-variant font-medium">최고급 | 우등 이상의 편안함</p>
+</div>
+<div class="flex items-center gap-3 bg-surface-container-low rounded-xl p-1">
+<button class="w-8 h-8 flex items-center justify-center text-primary hover:bg-white rounded-lg transition-colors" type="button"><span class="material-symbols-outlined text-lg">remove</span></button>
+<span class="w-6 text-center font-bold text-primary">1</span>
+<button class="w-8 h-8 flex items-center justify-center text-primary hover:bg-white rounded-lg transition-colors" type="button"><span class="material-symbols-outlined text-lg">add</span></button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section>
+<h3 class="font-headline font-bold text-2xl text-primary mb-6">맞춤 상세 내용</h3>
+<div class="space-y-2">
+<label class="font-label text-xs font-bold uppercase tracking-wider text-slate-500 ml-2">특별 요청 사항 및 편의시설</label>
+<textarea class="w-full p-6 bg-surface-container-lowest border-none rounded-2xl focus:ring-2 focus:ring-primary/20 transition-all text-on-surface placeholder:text-outline-variant font-medium resize-none" placeholder="Wi-Fi, 휠체어 리프트, 수하물 요구 사항 또는 특정 버스 모델 선호 사항 등..." rows="3"></textarea>
+</div>
+</section>
+<!-- Calculated Quotation Details -->
+<section class="bg-primary/5 rounded-[2.5rem] p-8 lg:p-10 space-y-8 border border-primary/10">
+<div class="flex items-center justify-between">
+<div class="space-y-1">
+<h3 class="font-headline font-extrabold text-2xl text-primary">계산된 예상 견적 상세</h3>
+<p class="text-xs text-on-surface-variant font-medium">운행 기간: 3일 (2박)</p>
+</div>
+<span class="px-4 py-2 rounded-full bg-primary/10 text-primary text-[10px] font-extrabold uppercase tracking-widest border border-primary/10">실시간 자동 업데이트</span>
+</div>
+<!-- Vehicle Breakdown Cards -->
+<div class="space-y-6">
+<!-- Vehicle 1: 45인승 일반 -->
+<div class="bg-white rounded-3xl p-6 shadow-sm border border-primary/5 space-y-5">
+<div class="flex justify-between items-center border-b border-slate-50 pb-4">
+<div class="flex items-center gap-3">
+<span class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">01</span>
+<p class="font-headline font-bold text-lg text-primary">45인승 일반 <span class="text-sm font-medium text-slate-400 ml-1">x 1대</span></p>
+</div>
+</div>
+<div class="space-y-3">
+<div class="flex justify-between items-center text-sm">
+<span class="text-on-surface-variant font-medium opacity-70">기사 숙박/식대</span>
+<span class="font-bold text-on-surface tracking-tight">₩ 200,000</span>
+</div>
+<div class="flex justify-between items-center text-sm">
+<span class="text-on-surface-variant font-medium opacity-70">톨비 / 주차</span>
+<span class="font-bold text-on-surface tracking-tight">₩ 100,000</span>
+</div>
+<div class="flex justify-between items-center text-sm">
+<span class="text-on-surface-variant font-medium opacity-70">유류비</span>
+<span class="font-bold text-on-surface tracking-tight">₩ 150,000</span>
+</div>
+<div class="flex justify-between items-center pt-3 border-t border-dashed border-slate-100">
+<span class="text-sm font-bold text-primary">총 예상 경비</span>
+<span class="font-bold text-primary">₩ 450,000</span>
+</div>
+<div class="pt-2 space-y-2">
+<label class="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest ml-1">기본 대여료 입력</label>
+<div class="relative">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-bold">₩</span>
+<input class="w-full pl-9 pr-4 py-3 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 transition-all text-on-surface font-extrabold text-right placeholder:text-slate-300" placeholder="0" type="number" value="1200000"/>
+</div>
+</div>
+<div class="flex justify-between items-center pt-4 bg-primary/[0.03] p-4 rounded-2xl">
+<span class="text-sm font-extrabold text-primary">견적 요청 금액</span>
+<span class="font-headline font-extrabold text-xl text-primary">₩ 1,650,000</span>
+</div>
+</div>
+</div>
+<!-- Vehicle 2: 21인승 프리미엄 -->
+<div class="bg-white rounded-3xl p-6 shadow-sm border border-primary/5 space-y-5">
+<div class="flex justify-between items-center border-b border-slate-50 pb-4">
+<div class="flex items-center gap-3">
+<span class="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center text-secondary font-bold text-xs">02</span>
+<p class="font-headline font-bold text-lg text-primary">21인승 프리미엄 <span class="text-sm font-medium text-slate-400 ml-1">x 1대</span></p>
+</div>
+</div>
+<div class="space-y-3">
+<div class="flex justify-between items-center text-sm">
+<span class="text-on-surface-variant font-medium opacity-70">기사 숙박/식대</span>
+<span class="font-bold text-on-surface tracking-tight">₩ 200,000</span>
+</div>
+<div class="flex justify-between items-center text-sm">
+<span class="text-on-surface-variant font-medium opacity-70">톨비 / 주차</span>
+<span class="font-bold text-on-surface tracking-tight">₩ 150,000</span>
+</div>
+<div class="flex justify-between items-center text-sm">
+<span class="text-on-surface-variant font-medium opacity-70">유류비</span>
+<span class="font-bold text-on-surface tracking-tight">₩ 250,000</span>
+</div>
+<div class="flex justify-between items-center pt-3 border-t border-dashed border-slate-100">
+<span class="text-sm font-bold text-primary">총 예상 경비</span>
+<span class="font-bold text-primary">₩ 600,000</span>
+</div>
+<div class="pt-2 space-y-2">
+<label class="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest ml-1">기본 대여료 입력</label>
+<div class="relative">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-bold">₩</span>
+<input class="w-full pl-9 pr-4 py-3 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary/20 transition-all text-on-surface font-extrabold text-right placeholder:text-slate-300" placeholder="0" type="number" value="2500000"/>
+</div>
+</div>
+<div class="flex justify-between items-center pt-4 bg-primary/[0.03] p-4 rounded-2xl">
+<span class="text-sm font-extrabold text-primary">견적 요청 금액</span>
+<span class="font-headline font-extrabold text-xl text-primary">₩ 3,100,000</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Grand Total Section -->
+<div class="pt-8 border-t-2 border-primary/10">
+<div class="bg-gradient-to-br from-primary to-primary-container rounded-[2rem] p-8 text-white shadow-xl shadow-primary/20">
+<div class="flex justify-between items-end">
+<div class="space-y-1">
+<p class="font-label text-xs font-extrabold uppercase tracking-[0.2em] opacity-80">전체 견적 합계 (GRAND TOTAL)</p>
+<h4 class="font-headline font-black text-4xl">₩ 4,750,000</h4>
+</div>
+<div class="text-right pb-1">
+<p class="text-[10px] font-bold opacity-60 uppercase tracking-widest">부가가치세 포함</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<div class="pt-4">
+<button class="w-full py-5 px-8 rounded-full bg-gradient-to-r from-secondary to-secondary-container text-white font-headline font-extrabold text-xl shadow-lg shadow-secondary/20 hover:shadow-secondary/40 active:scale-95 transition-all duration-300 flex items-center justify-center gap-3" type="submit">
+<span>여정 요청하기</span>
+<span class="material-symbols-outlined" data-icon="arrow_forward">arrow_forward</span>
+</button>
+<p class="text-center text-[10px] text-on-surface-variant mt-4 font-medium opacity-60">
+                                예약 확정이 아닙니다. 담당 컨시어지가 요청 내용을 검토한 후 2시간 이내에 연락드리겠습니다.
+                            </p>
+</div>
+</form>
+</div>
+</div>
+</div>
+</main>
+<nav class="fixed bottom-8 left-0 right-0 z-50 flex justify-around items-center px-4 py-3 md:hidden">
+<div class="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] rounded-full max-w-md bg-white/80 dark:bg-slate-900/80 backdrop-blur-[20px] shadow-[0_20px_40px_-15px_rgba(0,104,95,0.15)] flex justify-around items-center py-3 px-4">
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 transition-colors active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="gavel">gavel</span>
+<span class="font-headline text-[10px] font-bold uppercase tracking-widest mt-1">경매</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 transition-colors active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="visibility">visibility</span>
+<span class="font-headline text-[10px] font-bold uppercase tracking-widest mt-1">관심 목록</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 transition-colors active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-headline text-[10px] font-bold uppercase tracking-widest mt-1">입찰</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-gradient-to-br from-teal-600 to-teal-800 text-white rounded-full w-12 h-12 shadow-lg shadow-teal-900/20 active:scale-90 transition-all duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+</a>
+</div>
+</nav>
+</body></html>

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+
+<html class="light" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-surface-variant": "#3e4947",
+              "on-primary-fixed": "#00201d",
+              "tertiary-fixed": "#ffdbcf",
+              "on-background": "#191c1e",
+              "on-surface": "#191c1e",
+              "secondary-fixed-dim": "#ffb690",
+              "surface-tint": "#066a61",
+              "surface-container-highest": "#e0e3e5",
+              "surface-container-low": "#f2f4f6",
+              "inverse-surface": "#2d3133",
+              "surface-container-lowest": "#ffffff",
+              "on-tertiary-container": "#ffc9b7",
+              "secondary": "#9d4300",
+              "surface-container-high": "#e6e8ea",
+              "outline": "#6e7977",
+              "on-secondary-fixed": "#341100",
+              "surface": "#f7f9fb",
+              "surface-container": "#eceef0",
+              "primary": "#004e47",
+              "on-primary-container": "#93e4d8",
+              "inverse-primary": "#85d5c9",
+              "secondary-fixed": "#ffdbca",
+              "background": "#f7f9fb",
+              "on-tertiary": "#ffffff",
+              "inverse-on-surface": "#eff1f3",
+              "surface-bright": "#f7f9fb",
+              "tertiary-container": "#8b4b32",
+              "tertiary": "#6e341d",
+              "primary-fixed-dim": "#85d5c9",
+              "on-primary-fixed-variant": "#005049",
+              "surface-variant": "#e0e3e5",
+              "on-error": "#ffffff",
+              "on-secondary-fixed-variant": "#783200",
+              "primary-fixed": "#a1f1e5",
+              "on-tertiary-fixed-variant": "#71361f",
+              "surface-dim": "#d8dadc",
+              "outline-variant": "#bec9c6",
+              "on-error-container": "#93000a",
+              "secondary-container": "#ff8d4b",
+              "on-secondary-container": "#6c2c00",
+              "on-secondary": "#ffffff",
+              "primary-container": "#00685f",
+              "error-container": "#ffdad6",
+              "error": "#ba1a1a",
+              "on-tertiary-fixed": "#380d00",
+              "tertiary-fixed-dim": "#ffb59a",
+              "on-primary": "#ffffff"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      body {
+        font-family: 'Manrope', sans-serif;
+      }
+      h1, h2, h3 {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+      }
+      .editorial-shadow {
+        box-shadow: 0 40px 60px -15px rgba(25, 28, 30, 0.06);
+      }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="bg-transparent docked full-width top-0 z-50">
+<div class="flex justify-between items-center w-full px-6 pt-8 pb-4 max-w-7xl mx-auto">
+<div class="flex items-center gap-4">
+<button class="text-teal-800 dark:text-teal-200 hover:opacity-80 transition-opacity active:scale-95 duration-200">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<span class="text-teal-900 dark:text-teal-50 font-black tracking-tighter font-['Plus_Jakarta_Sans'] font-extrabold tracking-tight text-3xl">busTaams</span>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container-high overflow-hidden border-2 border-surface-container-lowest">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="portrait of a professional driver in a clean uniform, warm natural lighting, minimalist high-end editorial style" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBkXnRby57bMmx-82a0JjIO8LPiCDeaQ0U_GCsku9ZS2PpZ5EyCVJDmarP2ZybvsC8AXal0-p0hSX5KjlFmsZQUIq3xpc9GFOvnsu28beTJKUWb_zbKq2Aaj2eYVimhMegEAlH3tiJM6V5VOYIzieqo6bNrX3Gykb4w3K4JS62E-FF1Y2Gc_EGaGP6tNe9dMVLwT1eEtLl-iLKFw3jLkaFckb-FQzEOufgWPvws2brzSwqCuBnEXVH_XVDA5Eyc3TobTDo6vojY0VU"/>
+</div>
+</div>
+</div>
+</header>
+<main class="flex-grow w-full max-w-4xl mx-auto px-6 pt-12 pb-32">
+<!-- Header Section -->
+<section class="mb-16">
+<div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-secondary-container/10 text-secondary font-bold text-xs tracking-widest uppercase mb-6">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">warning</span>
+                계약 관리
+            </div>
+<h1 class="text-5xl md:text-6xl font-extrabold tracking-tighter text-on-surface leading-[0.9] mb-4">
+                계약 <br/><span class="text-secondary">취소 검토.</span>
+</h1>
+<p class="text-on-surface-variant text-lg max-w-md font-medium leading-relaxed">
+                플릿에 대한 귀하의 헌신에 감사드립니다. 이번 경매 계약 철회에 따른 영향을 검토해 주시기 바랍니다.
+            </p>
+</section>
+<!-- Main Content Grid -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-8">
+<!-- Left Column: Details -->
+<div class="md:col-span-7 space-y-8">
+<!-- Auction Context Card -->
+<div class="bg-surface-container-lowest p-8 rounded-[2rem] editorial-shadow relative overflow-hidden">
+<div class="absolute top-0 left-0 w-1 h-full bg-primary"></div>
+<h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">진행 중인 경매</h3>
+<div class="flex items-start gap-6">
+<div class="w-24 h-24 rounded-2xl overflow-hidden bg-surface-container-high shrink-0">
+<img alt="Bus Item" class="w-full h-full object-cover" data-alt="luxurious modern electric tour bus with sleek metallic finish, bright studio lighting, professional automotive photography" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBNKj3N5hx9OndQicfEVhE4Ked2edaPMEFLI5afQoo20mhsqyYEeM32PHAKFHsAwH_tE0vqV4IAAf1CWvxyWTClUeE7WectMyClZ3SlzGfXJk15-yWVKl-LhTDEguNTzmMqxINJoRBsI1pu6iF4ASkVXp14mEuIWzppjEenJphzRlHb7p93cmdAybzFD6bSKnFqeBIrTFpvVzT3WdCXhhr19s8X6tqWxrO2hOD3Ki-JZKkmnoAHycX2L5E2bSUJTbaQO-FmuC_nbKo"/>
+</div>
+<div>
+<h2 class="text-2xl font-extrabold text-on-surface tracking-tight mb-1">볼보 9700 럭셔리 플릿</h2>
+<p class="text-on-surface-variant text-sm mb-4">계약 ID: #BT-882-QX</p>
+<div class="flex flex-col gap-3 mt-4">
+<div class="bg-surface-container-low px-4 py-2 rounded-lg w-full">
+<span class="block text-[10px] uppercase font-bold text-slate-400">현재 입찰가</span>
+<span class="text-primary font-bold text-sm italic">₩142,500,000</span>
+</div>
+<div class="bg-surface-container-low px-4 py-2 rounded-lg w-full">
+<span class="block text-[10px] uppercase font-bold text-slate-400">출발 일시</span>
+<span class="text-primary font-bold text-sm">2024/10/24 09:00</span>
+</div>
+<div class="bg-surface-container-low px-4 py-2 rounded-lg w-full">
+<span class="block text-[10px] uppercase font-bold text-slate-400">남은 시간</span>
+<span class="text-secondary font-bold text-sm">04일 12시간 남음</span>
+</div>
+</div></div>
+</div>
+</div>
+<!-- Consequences Bento Section -->
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+<div class="bg-surface-container-low p-6 rounded-[1.5rem] border border-white/40">
+<span class="material-symbols-outlined text-secondary mb-3 text-3xl">account_balance_wallet</span>
+<h4 class="font-bold text-on-surface mb-2">100% 환불 규정</h4>
+<p class="text-sm text-on-surface-variant leading-relaxed">계약 철회 시 입찰자가 지불한 계약금 전액이 즉시 반환됩니다.</p>
+</div>
+<div class="bg-surface-container-low p-6 rounded-[1.5rem] border border-white/40">
+<span class="material-symbols-outlined text-error mb-3 text-3xl">block</span>
+<h4 class="font-bold text-on-surface mb-2">삼진 아웃 제도 안내</h4>
+<p class="text-sm text-on-surface-variant leading-relaxed">30일 이내에 3회 취소 시, 10일간 계정 이용이 강제로 정지됩니다.</p>
+</div>
+</div>
+</div>
+<!-- Right Column: Action & Tonal Warning -->
+<div class="md:col-span-5 space-y-6">
+<!-- Warning Box with Tonal Layering -->
+<div class="bg-surface-container-high p-8 rounded-[2rem] relative">
+<div class="absolute top-6 right-8 opacity-10">
+<span class="material-symbols-outlined text-8xl" style="font-variation-settings: 'FILL' 1;">priority_high</span>
+</div>
+<h3 class="text-xl font-extrabold text-on-surface tracking-tight mb-4 leading-tight">최종 주의사항</h3>
+<p class="text-sm text-on-surface-variant leading-relaxed mb-6">
+                        지금 계약을 취소하면 낙찰자에게 알림이 전송되며, 귀하의 드라이버 프로필에 <span class="font-bold text-secondary">서비스 중단</span> 상태가 기록됩니다.
+                    </p>
+<ul class="space-y-4 mb-8">
+<li class="flex gap-3 items-start">
+<span class="material-symbols-outlined text-primary text-xl">check_circle</span>
+<span class="text-sm font-medium">계약금 전액 반환 예정</span>
+</li>
+<li class="flex gap-3 items-start">
+<span class="material-symbols-outlined text-secondary text-xl">history</span>
+<span class="text-sm font-medium">취소 기록 1회 추가 (총 3회 제한)</span>
+</li>
+</ul>
+<!-- Kinetic CTA Button -->
+<button class="w-full py-5 rounded-full bg-gradient-to-br from-secondary to-secondary-container text-white font-extrabold text-lg shadow-xl shadow-secondary/20 hover:scale-[1.02] active:scale-95 transition-all mb-4">
+                        취소 확정하기
+                    </button>
+<button class="w-full py-4 rounded-full bg-surface-container-lowest text-primary font-bold text-sm hover:bg-white transition-colors">
+                        계약 유지하기
+                    </button>
+</div>
+<!-- Editorial Note -->
+<div class="px-6">
+<p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-loose">
+                        *취소를 확정함으로써 귀하는 경매 무결성 및 플랫폼 신뢰성에 관한 busTaams 드라이버 서비스 약관 제4.2조를 숙지하고 이에 동의하는 것으로 간주됩니다.
+                    </p>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Visible on Mobile) -->
+<nav class="md:hidden fixed bottom-8 left-0 right-0 z-50 flex justify-around items-center px-4 py-3 bg-white/80 dark:bg-slate-900/80 backdrop-blur-[20px] fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] rounded-full max-w-md shadow-[0_20px_40px_-15px_rgba(0,104,95,0.15)] no-border tonal-stacking">
+<a class="flex flex-col items-center justify-center text-teal-700 dark:text-teal-300 font-bold bg-gradient-to-br from-teal-600 to-teal-800 text-white rounded-full w-12 h-12 shadow-lg shadow-teal-900/20 active:scale-90 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="gavel">gavel</span>
+<span class="hidden">경매</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 dark:hover:text-teal-300 transition-colors active:scale-90 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="visibility">visibility</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest mt-1">관심목록</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 dark:hover:text-teal-300 transition-colors active:scale-90 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest mt-1">입찰내역</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 dark:hover:text-teal-300 transition-colors active:scale-90 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest mt-1">프로필</span>
+</a>
+</nav>
+</body></html>

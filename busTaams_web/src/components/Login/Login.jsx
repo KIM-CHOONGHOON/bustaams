@@ -34,6 +34,9 @@ const Login = ({ onToggle, onLoginSuccess }) => {
 
       // Success
       if (onLoginSuccess) {
+        if (data.token) {
+          localStorage.setItem('token', data.token);
+        }
         onLoginSuccess(data.user);
       }
     } catch (err) {
@@ -116,7 +119,7 @@ const Login = ({ onToggle, onLoginSuccess }) => {
                     className="absolute -top-2.5 left-4 px-1 bg-surface-bright text-[10px] font-bold text-outline uppercase tracking-wider group-focus-within:text-primary transition-colors" 
                     htmlFor="user_id"
                   >
-                    ID / 이메일
+                    아이디
                   </label>
                   <input 
                     className="w-full h-12 px-5 bg-surface-container-high border-none rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-highest transition-all text-on-surface placeholder-transparent" 

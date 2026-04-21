@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+
+<html lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>문의 상세 내역 | Editorial Velocity</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-error-container": "#93000a",
+              "surface-dim": "#d8dadc",
+              "on-primary-container": "#93e4d8",
+              "on-primary": "#ffffff",
+              "on-secondary": "#ffffff",
+              "inverse-on-surface": "#eff1f3",
+              "on-tertiary-container": "#ffc9b7",
+              "error": "#ba1a1a",
+              "surface-container-lowest": "#ffffff",
+              "primary-fixed": "#a1f1e5",
+              "primary-fixed-dim": "#85d5c9",
+              "on-surface": "#191c1e",
+              "inverse-primary": "#85d5c9",
+              "surface-container-low": "#f2f4f6",
+              "surface-container": "#eceef0",
+              "tertiary-fixed": "#ffdbcf",
+              "secondary-fixed": "#ffdbca",
+              "surface-variant": "#e0e3e5",
+              "on-tertiary": "#ffffff",
+              "tertiary-container": "#8b4b32",
+              "on-secondary-fixed": "#341100",
+              "on-tertiary-fixed-variant": "#71361f",
+              "error-container": "#ffdad6",
+              "surface-tint": "#066a61",
+              "outline-variant": "#bec9c6",
+              "secondary-fixed-dim": "#ffb690",
+              "tertiary-fixed-dim": "#ffb59a",
+              "primary": "#004e47",
+              "surface-container-high": "#e6e8ea",
+              "secondary": "#9d4300",
+              "on-secondary-container": "#6c2c00",
+              "background": "#f7f9fb",
+              "on-primary-fixed-variant": "#005049",
+              "secondary-container": "#ff8d4b",
+              "on-error": "#ffffff",
+              "on-background": "#191c1e",
+              "outline": "#6e7977",
+              "surface-bright": "#f7f9fb",
+              "on-primary-fixed": "#00201d",
+              "tertiary": "#6e341d",
+              "surface-container-highest": "#e0e3e5",
+              "primary-container": "#00685f",
+              "on-tertiary-fixed": "#380d00",
+              "inverse-surface": "#2d3133",
+              "on-surface-variant": "#3e4947",
+              "on-secondary-fixed-variant": "#783200",
+              "surface": "#f7f9fb"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      body {
+        font-family: 'Manrope', sans-serif;
+      }
+      h1, h2, h3 {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+      }
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-sm shadow-teal-900/5 flex items-center justify-between px-6 py-4 w-full">
+<div class="flex items-center gap-4">
+<button class="flex items-center justify-center p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors scale-95 active:opacity-80 transition-all text-teal-800 dark:text-teal-400">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<h1 class="text-teal-900 dark:text-teal-100 font-extrabold tracking-tight font-headline text-lg">문의 상세</h1>
+</div>
+<div class="w-10"></div> <!-- Spacer for centering title if needed -->
+</header>
+<main class="pt-24 px-6 max-w-3xl mx-auto">
+<!-- Page Header & Status -->
+<div class="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
+<div class="space-y-1">
+<span class="inline-flex items-center px-4 py-1.5 rounded-full bg-primary-container text-white text-xs font-bold tracking-widest uppercase">
+                    답변 완료
+                </span>
+<h2 class="text-4xl font-extrabold text-primary mt-4 tracking-tight leading-tight">문의 상세 내역</h2>
+</div>
+<div class="text-on-surface-variant text-sm font-medium opacity-60">
+                문의 번호 #AU-882194
+            </div>
+</div>
+<div class="space-y-8">
+<!-- User's Question Card (Surface Container Lowest) -->
+<section class="bg-surface-container-lowest rounded-xl p-8 shadow-sm relative overflow-hidden">
+<div class="flex flex-col gap-6">
+<div class="flex justify-between items-start">
+<div class="space-y-1">
+<p class="text-secondary font-bold text-xs uppercase tracking-widest">결제 및 계약금 관련</p>
+<h3 class="text-2xl font-bold text-on-surface tracking-tight">터미널 도착 버스 경매 계약금 환불 관련 문의</h3>
+</div>
+<time class="text-on-surface-variant text-sm font-semibold">2023.11.24</time>
+</div>
+<div class="bg-surface-container-low/50 w-full h-[2px] rounded-full"></div>
+<div class="prose prose-slate max-w-none">
+<p class="text-on-surface-variant leading-relaxed font-medium">
+                            최근 서울-부산 노선 우등 버스 경매에 참여했습니다. 입찰 결과 낙찰되지 않았음을 확인했는데, 아직 제 계좌로 계약금이 환불되지 않았습니다.
+                            <br/><br/>
+                            경매 ID #B-772의 환불 상태를 확인해 주실 수 있나요? 주말 거래의 경우 별도의 처리 기간이 있는지 궁금합니다.
+                        </p>
+</div>
+</div>
+</section>
+<!-- Admin Response Card (Surface Container Low with Teal Accent) -->
+<section class="bg-surface-container-low rounded-xl p-8 relative">
+<!-- Kinetic Accent Line -->
+<div class="absolute left-0 top-8 bottom-8 w-1 bg-primary-container rounded-r-full"></div>
+<div class="pl-4">
+<div class="flex justify-between items-center mb-6">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-white">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">support_agent</span>
+</div>
+<div>
+<h4 class="font-bold text-on-surface tracking-tight">운영진 답변</h4>
+<p class="text-[10px] font-bold text-primary-container uppercase tracking-widest">우선 지원 서비스</p>
+</div>
+</div>
+<time class="text-on-surface-variant text-xs font-bold opacity-70">2023.11.25 10:42 AM</time>
+</div>
+<div class="text-on-surface leading-relaxed font-medium bg-surface-container-lowest/40 p-6 rounded-lg">
+<p>
+                            안녕하세요, 소중한 고객님. 버스탐(busTaams) 고객 센터를 찾아주셔서 감사합니다.
+                            <br/><br/>
+                            고객님의 경매 #B-772 참여 내역을 확인했습니다. 낙찰되지 않은 입찰의 경우, 계약금 환불은 경매 종료 후 24시간 이내에 자동으로 시작됩니다. 이번 건은 주말에 발생하여, 이용하시는 금융기관에 따라 잔액 반영까지 영업일 기준 1-2일이 추가로 소요될 수 있습니다.
+                            <br/><br/>
+                            환불 처리는 오늘 오전 09:00에 저희 측에서 완료되었습니다. "내 예약" 탭에서 공식 거래 영수증을 확인해 보시기 바랍니다. 수요일까지 입금이 확인되지 않을 경우, 거래 ID와 함께 다시 문의해 주시면 상세히 안내해 드리겠습니다.
+                        </p>
+</div>
+<div class="mt-8 flex justify-end">
+<button class="bg-gradient-to-br from-primary to-primary-container text-white px-8 py-3 rounded-full font-bold text-sm shadow-lg shadow-primary/20 scale-100 active:scale-95 transition-all">
+                            도움이 되었나요?
+                        </button>
+</div>
+</div>
+</section>
+</div>
+<!-- Additional Context / Related Actions -->
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] rounded-full bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-2xl shadow-teal-900/10 z-50 flex justify-around items-center p-2">
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-5 py-2 hover:text-teal-600 dark:hover:text-teal-200 transition-transform duration-300 ease-out" href="#">
+<span class="material-symbols-outlined" data-icon="gavel">gavel</span>
+<span class="font-plus-jakarta-sans text-[11px] font-semibold tracking-wide">경매</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded-full px-5 py-2 scale-105 transition-transform duration-300 ease-out" href="#">
+<span class="material-symbols-outlined" data-icon="chat_bubble" style="font-variation-settings: 'FILL' 1;">chat_bubble</span>
+<span class="font-plus-jakarta-sans text-[11px] font-semibold tracking-wide">문의</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-5 py-2 hover:text-teal-600 dark:hover:text-teal-200 transition-transform duration-300 ease-out" href="#">
+<span class="material-symbols-outlined" data-icon="directions_bus">directions_bus</span>
+<span class="font-plus-jakarta-sans text-[11px] font-semibold tracking-wide">예약</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-5 py-2 hover:text-teal-600 dark:hover:text-teal-200 transition-transform duration-300 ease-out" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-plus-jakarta-sans text-[11px] font-semibold tracking-wide">내 정보</span>
+</a>
+</nav>
+</body></html>

@@ -1,0 +1,202 @@
+﻿import Swal from 'sweetalert2';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import BottomNavCustomer from '../components/BottomNavCustomer';
+
+const InquiryForm = () => {
+  const navigate = useNavigate();
+  const [category, setCategory] = useState('?낆같 諛??덉빟 臾몄쓽');
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const categories = [
+    '?낆같 諛??덉빟 臾몄쓽',
+    '寃곗젣 諛?怨꾩빟湲?愿??,
+    '痍⑥냼 諛??섎텋 ?뺤콉',
+    '?댁슜 ?쒗븳 諛??섎꼸??,
+    '湲곗궗??諛??댄뻾 ?쒕퉬??,
+    '怨꾩젙 諛?蹂몄씤?몄쬆',
+    '?쒕퉬???쒖븞 諛?湲고?'
+  ];
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!title || !content) {
+      Swal.fire({
+        icon: 'error',
+        title: '?낅젰 ?붿껌',
+        text: '?쒕ぉ怨??댁슜??紐⑤몢 ?낅젰??二쇱꽭??',
+        confirmButtonColor: '#004e47'
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+
+      const response = await fetch('http://localhost:8080/api/app/customer/inquiry', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ category, title, content })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        Swal.fire({
+          icon: 'success',
+          title: '?묒닔 ?꾨즺',
+          text: '臾몄쓽媛 ?깃났?곸쑝濡??묒닔?섏뿀?듬땲??',
+          confirmButtonColor: '#004e47'
+        });
+        navigate('/inquiry-list');
+      } else {
+        throw new Error(result.error || '?묒닔 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.');
+      }
+    } catch (err) {
+      console.error('Submit Inquiry Error:', err);
+      Swal.fire({
+        icon: 'error',
+        title: '?ㅻ쪟 諛쒖깮',
+        text: err.message,
+        confirmButtonColor: '#004e47'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="bg-background text-on-surface font-body min-h-screen pb-32">
+      {/* TopAppBar */}
+      <header className="fixed top-0 w-full z-40 bg-white/80 backdrop-blur-xl border-b border-outline-variant/30">
+        <div className="flex justify-between items-center w-full px-6 py-4 max-w-7xl mx-auto">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => navigate(-1)} 
+              className="material-symbols-outlined text-primary hover:bg-surface-container p-2 rounded-full active:scale-95 transition-all"
+            >
+              arrow_back
+            </button>
+            <h1 className="font-headline font-extrabold tracking-tighter text-2xl text-primary">busTaams</h1>
+          </div>
+          <div className="w-10 h-10 rounded-full bg-surface-container-highest overflow-hidden border border-outline/10 shadow-sm">
+            <img 
+              alt="User profile" 
+              className="w-full h-full object-cover" 
+              src="https://lh3.googleusercontent.com/aida-public/AB6AXuBbilHKArzdJj_G25x4qOhx12eTJUqK9HAmOzYKOXaYub1md1NuGpzoBtAjFM2KN7KU2dmbLn4bHnfkPpAIl2JTO6wsiUBUvin55yaGYByvEEhZoBvtq2fhKxP5c_qz3lfBqfS4xWDbsbvh9GrPDeP2We229zm-L-cuMFLgP_jKd22-CbIf99ILsbvb3LP3A7ZA4iZCHr-1AEnCqXTgQ31A1L9ImT1MvND_8zeG_fqvzqIobGpt-BAVu7OoaLBcavNgNoahRsZHChU"
+            />
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-6 pt-24 pb-32">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
+          {/* Editorial Intro Section */}
+          <div className="lg:col-span-5 flex flex-col justify-start text-left">
+            <span className="text-secondary font-bold tracking-[0.2em] uppercase text-xs mb-6 px-1">而⑥떆?댁? ?쒕퉬??/span>
+            <h2 className="font-headline text-5xl lg:text-7xl font-extrabold text-primary leading-[1.1] mb-8 tracking-tighter">
+              ???섏? <br/> <span className="text-secondary italic">?쒕퉬?ㅻ? ?꾪빐.</span>
+            </h2>
+            <p className="text-on-surface-variant text-lg leading-relaxed max-w-md mb-12">
+              ?ъ슜?먮떂???쇰뱶諛깆? busTaams ?쒕퉬?ㅻ? 吏꾪솕?쒗궎???먮룞?μ엯?덈떎. 嫄댁쓽 ?ы빆?대굹 沅곴툑???먯쓣 吏곸젒 ?꾨떖??二쇱꽭??
+            </p>
+            {/* Info Card */}
+            <div className="bg-surface-container-low p-8 rounded-2xl relative overflow-hidden group border border-outline-variant/10 shadow-lg shadow-black/5">
+              <div className="absolute top-0 left-0 w-1.5 h-full bg-secondary"></div>
+              <h3 className="font-headline font-bold text-xl mb-4 text-primary">1:1 臾몄쓽?섍린</h3>
+              <p className="text-sm text-on-surface-variant mb-6 font-medium">臾몄쓽 ?ы빆? ?됯퇏 4?쒓컙 ?대궡???꾨떞 ?먮젅?댄꽣媛 吏곸젒 ?듬????쒕┰?덈떎.</p>
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-primary text-xl">verified_user</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-primary">?곗꽑 泥섎━ ?꾨줈?몄뒪 ?쒖꽦?붾맖</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Inquiry Form */}
+          <div className="lg:col-span-7">
+            <form onSubmit={handleSubmit} className="space-y-8 bg-white p-8 rounded-[2rem] shadow-2xl border border-outline-variant/20">
+              {/* Category Selection */}
+              <div className="space-y-4 text-left">
+                <label className="font-headline font-bold text-sm tracking-widest uppercase text-on-surface-variant px-1">臾몄쓽 移댄뀒怨좊━</label>
+                <div className="flex flex-wrap gap-3">
+                  {categories.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setCategory(cat)}
+                      className={`px-6 py-3 rounded-full font-bold text-sm transition-all duration-300 active:scale-95 ${
+                        category === cat 
+                        ? 'bg-primary text-white shadow-lg shadow-primary/20' 
+                        : 'bg-surface-container-high text-on-surface font-bold text-sm hover:bg-surface-container-highest transition-colors'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Title Input */}
+              <div className="space-y-4 text-left">
+                <label className="font-headline font-bold text-sm tracking-widest uppercase text-on-surface-variant px-1" htmlFor="inquiry-title">?쒕ぉ</label>
+                <input
+                  id="inquiry-title"
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="臾몄쓽 ?댁슜??媛꾨왂?섍쾶 ?붿빟??二쇱꽭??
+                  className="w-full bg-surface-container-high border-none rounded-2xl p-5 text-on-surface placeholder:text-on-surface-variant/50 focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all duration-300 font-bold"
+                />
+              </div>
+
+              {/* Content Area */}
+              <div className="space-y-4 text-left">
+                <label className="font-headline font-bold text-sm tracking-widest uppercase text-on-surface-variant px-1" htmlFor="inquiry-content">?곸꽭 ?댁슜</label>
+                <textarea
+                  id="inquiry-content"
+                  rows="8"
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="?쒖븞?대굹 沅곴툑???먯쓣 ?먯꽭???곸뼱二쇱꽭??.."
+                  className="w-full bg-surface-container-high border-none rounded-2xl p-5 text-on-surface placeholder:text-on-surface-variant/50 focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all duration-300 resize-none font-bold"
+                ></textarea>
+              </div>
+
+              {/* Attachments Placeholder */}
+              <div className="bg-surface-container-low border-2 border-dashed border-outline-variant/30 rounded-2xl p-8 flex flex-col items-center justify-center gap-4 group cursor-pointer hover:bg-surface-container-high transition-all">
+                <span className="material-symbols-outlined text-4xl text-outline-variant group-hover:text-primary transition-colors">cloud_upload</span>
+                <p className="text-sm font-bold text-on-surface-variant">吏??臾몄꽌瑜??쒕옒洹명븯嫄곕굹 <span className="text-primary underline">?뚯씪 李얠븘蹂닿린</span></p>
+              </div>
+
+              {/* Action Button */}
+              <div className="flex justify-end pt-6">
+                <button 
+                  type="submit" 
+                  disabled={isSubmitting}
+                  className="flex items-center gap-3 px-10 py-5 bg-gradient-to-br from-primary to-primary-container text-white rounded-full font-headline font-extrabold text-lg shadow-2xl shadow-primary/30 hover:shadow-primary/50 hover:scale-[1.02] transition-all duration-300 active:scale-95 disabled:opacity-50 disabled:scale-100"
+                >
+                  <span>{isSubmitting ? '?꾩넚 以?..' : '臾몄쓽 蹂대궡湲?}</span>
+                  <span className="material-symbols-outlined">send</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </main>
+
+      <BottomNavCustomer />
+    </div>
+  );
+};
+
+export default InquiryForm;
+

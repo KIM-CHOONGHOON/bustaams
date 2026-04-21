@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+
+<html lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-surface-variant": "#3e4947",
+              "on-primary-fixed": "#00201d",
+              "tertiary-fixed": "#ffdbcf",
+              "on-background": "#191c1e",
+              "on-surface": "#191c1e",
+              "secondary-fixed-dim": "#ffb690",
+              "surface-tint": "#066a61",
+              "surface-container-highest": "#e0e3e5",
+              "surface-container-low": "#f2f4f6",
+              "inverse-surface": "#2d3133",
+              "surface-container-lowest": "#ffffff",
+              "on-tertiary-container": "#ffc9b7",
+              "secondary": "#9d4300",
+              "surface-container-high": "#e6e8ea",
+              "outline": "#6e7977",
+              "on-secondary-fixed": "#341100",
+              "surface": "#f7f9fb",
+              "surface-container": "#eceef0",
+              "primary": "#004e47",
+              "on-primary-container": "#93e4d8",
+              "inverse-primary": "#85d5c9",
+              "secondary-fixed": "#ffdbca",
+              "background": "#f7f9fb",
+              "on-tertiary": "#ffffff",
+              "inverse-on-surface": "#eff1f3",
+              "surface-bright": "#f7f9fb",
+              "tertiary-container": "#8b4b32",
+              "tertiary": "#6e341d",
+              "primary-fixed-dim": "#85d5c9",
+              "on-primary-fixed-variant": "#005049",
+              "surface-variant": "#e0e3e5",
+              "on-error": "#ffffff",
+              "on-secondary-fixed-variant": "#783200",
+              "primary-fixed": "#a1f1e5",
+              "on-tertiary-fixed-variant": "#71361f",
+              "surface-dim": "#d8dadc",
+              "outline-variant": "#bec9c6",
+              "on-error-container": "#93000a",
+              "secondary-container": "#ff8d4b",
+              "on-secondary-container": "#6c2c00",
+              "on-secondary": "#ffffff",
+              "primary-container": "#00685f",
+              "error-container": "#ffdad6",
+              "error": "#ba1a1a",
+              "on-tertiary-fixed": "#380d00",
+              "tertiary-fixed-dim": "#ffb59a",
+              "on-primary": "#ffffff"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .editorial-shadow {
+        box-shadow: 0 40px 60px -15px rgba(25, 28, 30, 0.06);
+      }
+      .glass-effect {
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+      }
+      body {
+        min-height: max(884px, 100dvh);
+      }
+    </style>
+</head>
+<body class="bg-background font-body text-on-background selection:bg-primary-fixed selection:text-on-primary-fixed min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="bg-transparent text-teal-800 dark:text-teal-200 docked full-width top-0 z-50">
+<div class="flex justify-between items-center w-full px-6 pt-8 pb-4 max-w-7xl mx-auto">
+<div class="flex items-center gap-4">
+<button class="hover:opacity-80 transition-opacity active:scale-95 duration-200">
+<span class="material-symbols-outlined text-2xl">arrow_back</span>
+</button>
+<h1 class="font-['Plus_Jakarta_Sans'] font-extrabold tracking-tight text-3xl text-teal-900 dark:text-teal-50">예약 취소</h1>
+</div>
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary-fixed shadow-sm">
+<img alt="User profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA0Cm2UKpPvpwOnhp1fkrmpzLzlDY0J2Oc6DhidUQ0QOqXH7CPWJ6nP3NzHAJ05t7WQNBYF6uF3_2STA17XVAzLk4J4XiW7LzSEbXm6VZ05ad980tDWgfCxZsyb69PUCnC6HKZX0CPMJp3xSQJDpbxZvPWegLfxaHow9xsdJ2m47xzvEasn2iai1rRXcVNB-YIAl-9__jSFs5QyrJspqYlZ4jrpo7uRdSq-kQpvAOEjh0vMBvYOm8q07RWX98ale_l8kDv1NBsni4M"/>
+</div>
+</div>
+</header>
+<main class="max-w-7xl mx-auto px-6 mt-12 grid grid-cols-1 lg:grid-cols-12 gap-12">
+<!-- Left Column: Editorial Summary -->
+<div class="lg:col-span-5 space-y-12">
+<section class="space-y-6">
+<div class="inline-block px-4 py-1.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-headline font-bold text-xs uppercase tracking-[0.2em]">
+                활성 예약
+            </div>
+<h2 class="font-headline font-extrabold text-5xl leading-tight text-primary">
+                럭셔리 이그제큐티브 <br/>단체 이동 서비스
+            </h2>
+<p class="text-on-surface-variant text-lg max-w-md leading-relaxed">
+                확정된 버스 대절 예약 내역입니다. 예약 조정은 차량 수급 현황에 따라 제한될 수 있으며, 키네틱 갤러리의 프리미엄 운영 정책이 적용됩니다.
+            </p>
+</section>
+<!-- Status Card (Asymmetric) -->
+<div class="relative group ml-8 lg:ml-0">
+<div class="absolute -inset-4 bg-surface-container-low rounded-[2rem] -z-10 transition-all group-hover:bg-surface-container"></div>
+<div class="bg-surface-container-lowest editorial-shadow rounded-2xl p-8 border-l-4 border-primary">
+<div class="flex justify-between items-start mb-6">
+<div>
+<p class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">예약 번호</p>
+<p class="font-headline font-bold text-2xl text-on-surface">#BTS-9928-VX</p>
+</div>
+<span class="material-symbols-outlined text-primary text-3xl">verified</span>
+</div>
+<div class="space-y-6">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">calendar_today</span>
+</div>
+<div>
+<p class="text-sm font-semibold text-on-surface">이용 기간</p>
+<p class="text-on-surface-variant">2024년 10월 24일 ~ 10월 26일</p>
+</div>
+</div>
+<div class="space-y-4">
+<p class="text-xs font-bold uppercase tracking-widest text-slate-400">예약된 차량 리스트</p>
+<!-- Bus Item 1 -->
+<div class="flex items-center justify-between p-4 bg-surface-container rounded-xl">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">directions_bus</span>
+<span class="font-semibold text-on-surface">45인승 일반 1대</span>
+</div>
+<div class="flex gap-2">
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-lowest text-error text-xs font-bold border border-error/20 hover:bg-error/5 transition-colors text-red-600">취소</button>
+</div>
+</div>
+<!-- Bus Item 2 -->
+<div class="flex items-center justify-between p-4 bg-surface-container rounded-xl">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">airport_shuttle</span>
+<span class="font-semibold text-on-surface">21인승 프리미엄 1대</span>
+</div>
+<div class="flex gap-2">
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-lowest text-error text-xs font-bold border border-error/20 hover:bg-error/5 transition-colors text-red-600">취소</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column: Actions & Policy -->
+<div class="lg:col-span-7 space-y-8">
+<!-- Information Panel (Recessed) -->
+<div class="bg-surface-container-high rounded-3xl p-10 space-y-8">
+<div class="flex gap-6 items-start">
+<div class="w-12 h-12 shrink-0 rounded-2xl bg-gradient-to-br from-secondary to-secondary-container flex items-center justify-center shadow-lg shadow-secondary/20">
+<span class="material-symbols-outlined text-white" style="font-variation-settings: 'FILL' 1;">info</span>
+</div>
+<div class="space-y-4">
+<h3 class="font-headline font-bold text-xl text-on-surface">변경 및 취소 규정</h3>
+<p class="text-on-surface-variant leading-relaxed">
+                        경매 기반 운송 시스템의 독점성과 정밀성을 유지하기 위해, 예약 취소 시 <span class="text-secondary font-bold text-lg underline">결제 금액의 50% 위약금</span>이 발생합니다. 이 수수료는 시스템 운영 비용 및 라이브 갤러리 가용성 관리 비용을 포함합니다.
+                    </p>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-outline-variant/20">
+<div class="p-6 bg-surface-container-lowest/50 rounded-2xl">
+<p class="text-xs font-bold text-slate-500 uppercase tracking-tighter mb-2">기존 결제 금액</p>
+<p class="font-headline font-extrabold text-3xl text-on-surface">₩420,000</p>
+</div>
+<div class="p-6 bg-surface-container-lowest/50 rounded-2xl border border-secondary/20">
+<p class="text-xs font-bold text-secondary uppercase tracking-tighter mb-2">예상 환불 금액 (50%)</p>
+<p class="font-headline font-extrabold text-3xl text-secondary">₩210,000</p>
+</div>
+</div>
+</div>
+<!-- Action Cluster -->
+<div class="space-y-4">
+<div class="pt-4 mt-4 border-t border-outline-variant/20">
+<button class="w-full h-16 rounded-full bg-transparent border-2 border-secondary text-secondary font-headline font-bold text-lg flex items-center justify-center gap-3 hover:bg-secondary/5 transition-all active:scale-[0.98]">
+<span class="material-symbols-outlined">delete_forever</span>
+                    전체 예약 취소
+                </button>
+</div>
+<p class="text-center text-sm text-on-surface-variant/60 pt-4">
+                위 버튼을 클릭하면 당사의 <span class="underline decoration-secondary/30">이용 약관</span>에 동의하며 변경에 따른 위약금 발생을 인지한 것으로 간주됩니다.
+            </p>
+</div>
+<!-- Visual Context -->
+<div class="relative h-64 rounded-3xl overflow-hidden mt-12 editorial-shadow">
+<img alt="Bus interior" class="w-full h-full object-cover" data-alt="dramatic wide angle shot of a sleek modern luxury bus interior with minimalist leather seating and warm atmospheric ambient lighting at twilight" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBxHmZscCtXuIT5-8sfoHpIedD7Mb1F-50tBouk8CZH7t0bz9w21BQWNipXX0BD2eTvTrtEoisllcrAdsOFKaGxBtIcwKIhXpkp2HDQmRvHOLG4r4n53rO8ELuZoy9bpSM7SUjojmH17GrLVK4tgdwhGuTWr3fWR6IOS7sSxbM6SgcfTDExXKbU9T--K71CO0n8zN6Yw5CjrSfQlvXftivoL6TVDtShymEdapLQ3v-Pm5dkDNNoKVW6tBW9UIjyC2yRogFSsIJJdS4"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-8">
+<div class="flex items-center gap-3">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+<p class="text-white font-headline font-bold text-sm tracking-widest uppercase">실시간 차량 배차 현황 활성화됨</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

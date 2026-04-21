@@ -72,7 +72,11 @@ function Header({ setShowLoginModal, setShowDriverProfileModal, setShowSignUpMod
             <div className="flex items-center gap-4">
               <span className="text-sm font-bold text-gray-900">{currentUser.name} {currentUser.type === 'DRIVER' ? '기사님' : '님'}</span>
               <button 
-                onClick={() => setCurrentUser(null)}
+                onClick={() => {
+                  setCurrentUser(null);
+                  localStorage.removeItem('token');
+                  localStorage.removeItem('user');
+                }}
                 className="text-xs font-bold text-gray-400 hover:text-red-500 transition-colors"
               >
                 로그아웃
@@ -251,14 +255,14 @@ function LoginModal({ close, setCurrentUser }) {
       <div className="absolute inset-0 cursor-pointer" onClick={close}></div>
       <div className="relative w-full h-full md:h-auto md:max-w-[1000px] bg-surface-lowest rounded-none md:rounded-3xl shadow-ambient overflow-hidden animate-in zoom-in-95 duration-200">
         <Login onToggle={close} onLoginSuccess={(user) => {
-          // 백엔드 응답 필드명 → App 전역 상태 필드명 매핑
           setCurrentUser({
-            uuid:     user.userUuid,   // BIN_TO_UUID 변환된 사용자 고유 식별자
-            id:       user.userId,     // 이메일 (로그인 ID)
-            name:     user.userName,   // 복호화된 실명 (Header 표시용)
-            type:     user.userType,   // TRAVELER | DRIVER | PARTNER
-            hpNo:     user.hpNo,       // 복호화된 전화번호
+            uuid:     user.userUuid,
+            id:       user.userId,
+            name:     user.userName,
+            type:     user.userType,
+            hpNo:     user.hpNo,
           });
+          localStorage.setItem('user', JSON.stringify(user));
           close();
         }} />
       </div>
@@ -532,6 +536,15 @@ function SignUpModal({ close }) {
 
   const handleSendSms = async () => {
     if (!phoneNumber) return alert("휴대폰 번호를 입력해주세요.");
+
+    // 개발 환경 우회 로직 (Firebase 설정이 없거나 localhost인 경우)
+    if (!import.meta.env.VITE_FIREBASE_API_KEY || import.meta.env.VITE_FIREBASE_API_KEY.includes('Dummy') || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      alert("[개발 모드] 인증번호 발송 없이 바로 인증 완료 처리됩니다.");
+      setIsPhoneVerified(true);
+      setFirebaseIdToken("DEV_TOKEN_SKIP");
+      return;
+    }
+
     const formattedPhone = "+82" + phoneNumber.replace(/^0/, '');
     try {
       if (!window.recaptchaVerifier) {
@@ -576,6 +589,14 @@ function SignUpModal({ close }) {
        finalHasSignature = true;
        setSignature(finalSignature);
        setHasSignature(true);
+    }
+
+    // 개발 환경 서명 우회
+    if (!finalHasSignature && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      finalSignature = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+      finalHasSignature = true;
+      setSignature(finalSignature);
+      setHasSignature(true);
     }
 
     if (!userName || !email || !password || !finalHasSignature || !allRequiredChecked || !isPhoneVerified) {
@@ -777,6 +798,25 @@ function App() {
   const [showDriverProfileModal, setShowDriverProfileModal] = useState(false);
   const [showSignUpModal, setShowSignUpModal] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem('user');
+    const token = localStorage.getItem('token');
+    if (savedUser && token) {
+      try {
+        const user = JSON.parse(savedUser);
+        setCurrentUser({
+          uuid: user.userUuid,
+          id: user.userId,
+          name: user.userName,
+          type: user.userType,
+          hpNo: user.hpNo
+        });
+      } catch (e) {
+        console.error("Failed to restore session", e);
+      }
+    }
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col font-body selection:bg-primary/20 selection:text-primary">

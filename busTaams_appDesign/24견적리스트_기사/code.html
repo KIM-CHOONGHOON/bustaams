@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+
+<html lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-surface-variant": "#3e4947",
+              "on-primary-fixed": "#00201d",
+              "tertiary-fixed": "#ffdbcf",
+              "on-background": "#191c1e",
+              "on-surface": "#191c1e",
+              "secondary-fixed-dim": "#ffb690",
+              "surface-tint": "#066a61",
+              "surface-container-highest": "#e0e3e5",
+              "surface-container-low": "#f2f4f6",
+              "inverse-surface": "#2d3133",
+              "surface-container-lowest": "#ffffff",
+              "on-tertiary-container": "#ffc9b7",
+              "secondary": "#9d4300",
+              "surface-container-high": "#e6e8ea",
+              "outline": "#6e7977",
+              "on-secondary-fixed": "#341100",
+              "surface": "#f7f9fb",
+              "surface-container": "#eceef0",
+              "primary": "#004e47",
+              "on-primary-container": "#93e4d8",
+              "inverse-primary": "#85d5c9",
+              "secondary-fixed": "#ffdbca",
+              "background": "#f7f9fb",
+              "on-tertiary": "#ffffff",
+              "inverse-on-surface": "#eff1f3",
+              "surface-bright": "#f7f9fb",
+              "tertiary-container": "#8b4b32",
+              "tertiary": "#6e341d",
+              "primary-fixed-dim": "#85d5c9",
+              "on-primary-fixed-variant": "#005049",
+              "surface-variant": "#e0e3e5",
+              "on-error": "#ffffff",
+              "on-secondary-fixed-variant": "#783200",
+              "primary-fixed": "#a1f1e5",
+              "on-tertiary-fixed-variant": "#71361f",
+              "surface-dim": "#d8dadc",
+              "outline-variant": "#bec9c6",
+              "on-error-container": "#93000a",
+              "secondary-container": "#ff8d4b",
+              "on-secondary-container": "#6c2c00",
+              "on-secondary": "#ffffff",
+              "primary-container": "#00685f",
+              "error-container": "#ffdad6",
+              "error": "#ba1a1a",
+              "on-tertiary-fixed": "#380d00",
+              "tertiary-fixed-dim": "#ffb59a",
+              "on-primary": "#ffffff"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans", "sans-serif"],
+              "body": ["Manrope", "sans-serif"],
+              "label": ["Manrope", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      body {
+        font-family: 'Manrope', sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .kinetic-shadow {
+        box-shadow: 0 40px 60px -15px rgba(25, 28, 30, 0.06);
+      }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-background min-h-screen pb-32">
+<!-- Top Navigation Shell -->
+<header class="bg-transparent text-teal-800 dark:text-teal-200 docked full-width top-0 no-border-no-line-atmospheric-spacing flex justify-between items-center w-full px-6 pt-8 pb-4 max-w-7xl mx-auto z-40">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-teal-800" data-icon="menu">menu</span>
+<h1 class="font-['Plus_Jakarta_Sans'] font-extrabold tracking-tight text-3xl text-teal-900 dark:text-teal-50 tracking-tighter">busTaams</h1>
+</div>
+<div class="flex items-center gap-6">
+<nav class="hidden md:flex gap-8">
+<a class="text-teal-600 dark:text-teal-400 font-bold hover:opacity-80 transition-opacity" href="#">경매</a>
+<a class="text-slate-500 dark:text-slate-400 hover:opacity-80 transition-opacity" href="#">관심목록</a>
+<a class="text-slate-500 dark:text-slate-400 hover:opacity-80 transition-opacity" href="#">입찰내역</a>
+</nav>
+<div class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center overflow-hidden active:scale-95 duration-200 cursor-pointer">
+<img alt="사용자 프로필" data-alt="Close-up professional portrait of a smiling man with a clean beard in soft studio lighting against a neutral background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDKjXtv6KseLglTu2V7P3RqTc5ik2EMdOXNOAWZRPuDVPjG8D09MtQtYIl-OwVLlLGSlTxFWpyDFuB5EcuDQDPcdUx9k8VXwP_nwxpMBOsr0VI5seXFY0efXWb6gA6ow8qwkmuwhadZGrc5-3qkVidBjXF382qrknwxyCCWgMZSr1LwkeM_bXGNWHn9IKttM3ypSgQ1EjLjza03NHa165LLFb7ACDGzTowmSeWzNMVJ4GjOaGH3V3j4Rl2VJuy334qJZwx3KfHz0DU"/>
+</div>
+</div>
+</header>
+<main class="max-w-7xl mx-auto px-6 mt-12">
+<!-- Editorial Header -->
+<div class="grid grid-cols-12 gap-4 mb-16">
+<div class="col-span-12 md:col-span-8 lg:col-span-6">
+<h2 class="font-headline text-5xl md:text-7xl font-extrabold text-primary leading-none tracking-tighter mb-4">
+                    이용 가능한 견적 목록
+                </h2>
+<p class="font-body text-on-surface-variant text-lg max-w-md">
+                    엄선된 운송 기회. 즉시 투입 가능한 고성능 코치. 프리미엄 서비스와 역동적인 에너지를 경험하세요.
+                </p>
+</div>
+</div>
+<!-- Auction Cards Grid (Bento/Asymmetric Layout) -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+<!-- Card 1 -->
+<div class="group relative bg-surface-container-lowest rounded-[1rem] p-6 kinetic-shadow flex flex-col gap-6 overflow-hidden">
+<div class="absolute left-0 top-6 bottom-6 w-1 bg-secondary rounded-r-full"></div>
+<div class="flex justify-between items-start">
+<div>
+<span class="text-[10px] font-bold uppercase tracking-widest text-secondary mb-1 block">실시간 경매</span>
+<h3 class="font-headline text-2xl font-bold text-on-surface">럭셔리 코치 XC-90</h3>
+</div>
+<div class="text-right">
+<span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant block">현재 입찰가</span>
+<p class="font-headline text-2xl font-extrabold text-primary">₩1,250,000</p>
+</div>
+</div>
+<div class="aspect-[16/10] w-full rounded-xl overflow-hidden bg-surface-container-low">
+<img alt="버스 이미지" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Sleek modern white luxury tour bus driving on a coastal highway at sunrise with lens flare and soft ocean background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB2oUNV1xMc25dIn1KpPPmaMqXugr7OWCTVEBaAibWsbE_hRN_BmsSjQjfKMdMhb5F0GoU_P1AQRz7JmxUxfmdP42mftQdp4nxV26hHbJ6pSwzEB__tsLzt45m0gFzOccQSHa7a0oz9KIdX5r99Z-Ikz1SfE-_GxTSX3KOj5g8ENIgT83iTK2nqTKPATP_Kna6IeSAMHcF0CAxxDooIn8rwuXyIvX_wRTg0z5-oT1jOLcQzjFhdHxdDOY_mCNSKHOsjFT5hzx9LZdU"/>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden">
+<img alt="기사 프로필" data-alt="Professional bus driver in a crisp blue uniform shirt smiling warmly at the camera in soft natural daylight" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCLDcP8y75YYpBL3GuxTY48QTShKuFV81r3hnGpW7XQNSg9UjdXL7a3Wi1VcPW6mABZ92DufReTTcmdyqj9yUllaQA3xlQEy4StmyYXO_KVGG99r1DzCucEwmy2LltULeXoVmDWOdtt5B-0wjYxgBnZ7fsERz8iP5yLLzxFSIPip0t92nU6S56uesUYZ-TcPROMC8IT5hS_PQiO2pRVROZU6-CV6R5AKXRr0pgSJ47PBfKYlXHujMgBQVd66M1uxi6ETtpQgtsmTJQ"/>
+</div>
+<div>
+<p class="font-label text-sm font-bold text-on-surface">마커스 쏜 기사님</p>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="text-[12px] font-medium text-on-surface-variant">4.9 (124 후기)</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-lg" data-icon="schedule">schedule</span>
+<span class="text-sm font-bold">2시간 14분</span>
+</div>
+</div>
+<button class="w-full bg-gradient-to-br from-primary to-primary-container text-white py-4 rounded-full font-bold uppercase tracking-widest text-xs hover:opacity-90 active:scale-[0.98] transition-all">
+                    견적 선택
+                </button>
+</div>
+<!-- Card 2 -->
+<div class="group relative bg-surface-container-lowest rounded-[1rem] p-6 kinetic-shadow flex flex-col gap-6 overflow-hidden lg:mt-12">
+<div class="absolute left-0 top-6 bottom-6 w-1 bg-secondary rounded-r-full"></div>
+<div class="flex justify-between items-start">
+<div>
+<span class="text-[10px] font-bold uppercase tracking-widest text-secondary mb-1 block">실시간 경매</span>
+<h3 class="font-headline text-2xl font-bold text-on-surface">트랜짓 엘리트 V8</h3>
+</div>
+<div class="text-right">
+<span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant block">현재 입찰가</span>
+<p class="font-headline text-2xl font-extrabold text-primary">₩980,000</p>
+</div>
+</div>
+<div class="aspect-[16/10] w-full rounded-xl overflow-hidden bg-surface-container-low">
+<img alt="버스 이미지" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Close-up of a high-tech metallic grey passenger bus parked in a modern urban plaza with glass buildings reflecting in its surface" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBUzUuAnm7tAdjE8cP_0aWgMOrAOy2A1eV-kf0TVBLo6hOnVgN6GbDIfsKDV_yl0ZoTcRtXF-Ec07kR9N9Eq7wIZSF2CFZl4i_gemDfvmtxRPjB857pMXvVuCQ7Al-KPTxdK58oIOldhDBBxnIrw69j0yJ6eoBx2uSaP4xi6pslWx2zYJci3trkB9Np1gWnYYy122KyqFfDtgUT7KRxwjCVsN97uVjeSfsZ31A35812_TTLiBtKgXlW9YrbRM0VOC0z_f4GjCOFf-g"/>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden">
+<img alt="기사 프로필" data-alt="Young energetic transport manager with glasses smiling confidently in a modern bright office environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBe_Ok73tcanyn4qGUMhqBye7oDoE5X0C6405MqLDWwGWLM-LWTxoZeB6rUF_dq0zHXNMdk720bjUFHc-b-yemw492R8xsv8DVT0xLGTiB5nCQAyl-TWKTUfmfCNCJepC3AJKYPEFpxKn97MjTspqlWa3c0O2zCDCNOg8H5r6XBah8v6785wgQA0rfaFVQdWkV8OF8qXBCKtQkyfilm6vjg43xvmRUJgv0d-Y6hhlz42XuYUjhNfZuC5aIhIxRo_mtPsYDaK58j72A"/>
+</div>
+<div>
+<p class="font-label text-sm font-bold text-on-surface">엘레나 로드리게스 기사님</p>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="text-[12px] font-medium text-on-surface-variant">4.8 (89 후기)</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-lg" data-icon="schedule">schedule</span>
+<span class="text-sm font-bold">14분 02초</span>
+</div>
+</div>
+<button class="w-full bg-gradient-to-br from-primary to-primary-container text-white py-4 rounded-full font-bold uppercase tracking-widest text-xs hover:opacity-90 active:scale-[0.98] transition-all">
+                    견적 선택
+                </button>
+</div>
+<!-- Card 3 -->
+<div class="group relative bg-surface-container-lowest rounded-[1rem] p-6 kinetic-shadow flex flex-col gap-6 overflow-hidden">
+<div class="absolute left-0 top-6 bottom-6 w-1 bg-secondary rounded-r-full"></div>
+<div class="flex justify-between items-start">
+<div>
+<span class="text-[10px] font-bold uppercase tracking-widest text-secondary mb-1 block">실시간 경매</span>
+<h3 class="font-headline text-2xl font-bold text-on-surface">어반 보이저</h3>
+</div>
+<div class="text-right">
+<span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant block">현재 입찰가</span>
+<p class="font-headline text-2xl font-extrabold text-primary">₩1,550,000</p>
+</div>
+</div>
+<div class="aspect-[16/10] w-full rounded-xl overflow-hidden bg-surface-container-low">
+<img alt="버스 이미지" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="Spacious interior of a luxury coach bus featuring leather seats, ambient blue lighting, and large panoramic windows at night" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD6Rcl_8jRtDQUpVbdDSWNK-0TbvgcsIBuC6VMPF4e4CjOntradZooBIn4ES5r0Iu5wbdNTZHswsUosN23KVx1mUMJkAZV3qpSULcynDEdK4xFzzuYF7CZOQERb26WlTftC57Zj90c4MQfcSoyw6b-BsERyT_grAifAvC086ee7OFAsmfgnseEOiZk6W1bHrES14Weg-lMD1QkkGNrRi8oOIHRvJPk70aYkx6Sv9s3Qh7ZK2shVZW30bTLJr86gEzqu-Aca6GNnjXQ"/>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden">
+<img alt="기사 프로필" data-alt="Mature experienced fleet captain with a welcoming smile standing beside a bus in high-contrast afternoon light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBbOLCdBnSPl_OEJIyX9UZNTYJSsMfFH49KDtQ4TJAYt654o5zq98BTxcNUbhxIlL_hZAqFOOIw6wF1fizYhJXPbecITHWeo1lRiIiPRtb4xx4wHIB_-1n1enTDJMg39cyG8F_C3hiUwzZhCCpDLn0zh_dTJ0M-uOIQLaXA_YqLLM2w1545ToTV7xHSfV5fwF49m7Xa-gyVxQVifUIX3u4hqYyKrwJbeAStgwpFgwTEJLPm0BL7pyLu_DsN0SJ-GOV0W_UBoQsdQKY"/>
+</div>
+<div>
+<p class="font-label text-sm font-bold text-on-surface">제임슨 포드 기사님</p>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-secondary" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="text-[12px] font-medium text-on-surface-variant">5.0 (215 후기)</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-lg" data-icon="schedule">schedule</span>
+<span class="text-sm font-bold">5시간 45분</span>
+</div>
+</div>
+<button class="w-full bg-gradient-to-br from-primary to-primary-container text-white py-4 rounded-full font-bold uppercase tracking-widest text-xs hover:opacity-90 active:scale-[0.98] transition-all">
+                    견적 선택
+                </button>
+</div>
+</div>
+<!-- Section Spacer for Editorial Feel -->
+<div class="mt-24 mb-12">
+<div class="h-[2px] w-12 bg-secondary-container mb-8"></div>
+<p class="font-headline text-3xl font-bold text-on-surface-variant leading-tight max-w-2xl italic">
+                "단체 여행의 미래는 신속한 견적 제안과 고품질의 차량 확보에 달려 있습니다."
+            </p>
+</div>
+</main>
+<!-- Bottom Navigation Shell -->
+<div class="fixed bottom-8 left-0 right-0 z-50 flex justify-center items-center px-4 py-3 pointer-events-none">
+<nav class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-[20px] fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] rounded-full max-w-md shadow-[0_20px_40px_-15px_rgba(0,104,95,0.15)] flex justify-around items-center px-4 py-3 pointer-events-auto">
+<!-- Auctions (Active) -->
+<a class="flex flex-col items-center justify-center bg-gradient-to-br from-teal-600 to-teal-800 text-white rounded-full w-12 h-12 shadow-lg shadow-teal-900/20 active:scale-90 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="gavel">gavel</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[8px] font-bold uppercase tracking-widest mt-0.5 hidden">경매</span>
+</a>
+<!-- Watchlist -->
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 dark:hover:text-teal-300 transition-colors active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined text-[24px]" data-icon="visibility">visibility</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest mt-1">관심목록</span>
+</a>
+<!-- Bids -->
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 dark:hover:text-teal-300 transition-colors active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined text-[24px]" data-icon="payments">payments</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest mt-1">입찰내역</span>
+</a>
+<!-- Profile -->
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 dark:hover:text-teal-300 transition-colors active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined text-[24px]" data-icon="person">person</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest mt-1">프로필</span>
+</a>
+</nav>
+</div>
+</body></html>

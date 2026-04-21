@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+
+<html lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-highest": "#e0e3e5",
+              "surface": "#f7f9fb",
+              "on-primary-container": "#93e4d8",
+              "background": "#f7f9fb",
+              "secondary": "#9d4300",
+              "surface-container-low": "#f2f4f6",
+              "on-error": "#ffffff",
+              "outline": "#6e7977",
+              "tertiary-fixed": "#ffdbcf",
+              "primary-fixed-dim": "#85d5c9",
+              "secondary-container": "#ff8d4b",
+              "primary-container": "#00685f",
+              "primary": "#004e47",
+              "tertiary": "#6e341d",
+              "on-surface-variant": "#3e4947",
+              "on-tertiary-fixed": "#380d00",
+              "surface-container-lowest": "#ffffff",
+              "surface-bright": "#f7f9fb",
+              "outline-variant": "#bec9c6",
+              "inverse-on-surface": "#eff1f3",
+              "tertiary-container": "#8b4b32",
+              "on-primary-fixed": "#00201d",
+              "surface-container": "#eceef0",
+              "inverse-surface": "#2d3133",
+              "surface-dim": "#d8dadc",
+              "tertiary-fixed-dim": "#ffb59a",
+              "inverse-primary": "#85d5c9",
+              "surface-tint": "#066a61",
+              "on-secondary-fixed-variant": "#783200",
+              "on-background": "#191c1e",
+              "on-tertiary-fixed-variant": "#71361f",
+              "on-primary": "#ffffff",
+              "error": "#ba1a1a",
+              "secondary-fixed": "#ffdbca",
+              "error-container": "#ffdad6",
+              "secondary-fixed-dim": "#ffb690",
+              "on-secondary-container": "#6c2c00",
+              "on-secondary-fixed": "#341100",
+              "on-primary-fixed-variant": "#005049",
+              "on-tertiary-container": "#ffc9b7",
+              "on-surface": "#191c1e",
+              "primary-fixed": "#a1f1e5",
+              "surface-container-high": "#e6e8ea",
+              "on-tertiary": "#ffffff",
+              "on-secondary": "#ffffff",
+              "on-error-container": "#93000a",
+              "surface-variant": "#e0e3e5"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Manrope', sans-serif; }
+        h1, h2, h3 { font-family: 'Plus Jakarta Sans', sans-serif; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface min-h-screen pb-32">
+<!-- TopAppBar -->
+<nav class="bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl fixed top-0 w-full z-50 no-border shadow-sm shadow-teal-900/5">
+<div class="flex items-center justify-between px-6 h-16 w-full">
+<button class="active:scale-95 transition-transform duration-200 text-teal-800 dark:text-teal-400">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="font-['Plus_Jakarta_Sans'] font-bold tracking-tight text-teal-900 dark:text-teal-100 text-xl">Membership</h1>
+<div class="w-6"></div> <!-- Spacer for center alignment -->
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="pt-24 px-6 max-w-md mx-auto">
+<!-- Hero Section -->
+<header class="mb-12">
+<span class="text-secondary font-bold text-sm tracking-widest uppercase mb-2 block">Premium Membership</span>
+<h2 class="text-3xl font-extrabold text-primary tracking-tight leading-tight mb-4">버스탐스 멤버십으로<br/>수익을 극대화하세요.</h2>
+<p class="text-on-surface-variant text-sm leading-relaxed">회원님의 운행 스타일에 맞는 요금제를 선택하고 더 많은 낙찰 기회를 잡으세요.</p>
+</header>
+<!-- Subscription Plans Grid -->
+<div class="space-y-8">
+<!-- General Plan (일반) -->
+<section class="relative bg-surface-container-lowest rounded-2xl p-6 shadow-[0_40px_60px_-15px_rgba(0,104,95,0.08)] transition-all hover:translate-y-[-4px]">
+<div class="flex justify-between items-start mb-6">
+<div>
+<h3 class="text-xl font-bold text-on-surface mb-1">일반</h3>
+<p class="text-on-surface-variant text-xs">안정적인 시작을 위한 선택</p>
+</div>
+<div class="text-right">
+<span class="text-2xl font-extrabold text-primary">₩300,000</span>
+<span class="text-on-surface-variant text-xs block">/ 월</span>
+</div>
+</div>
+<div class="space-y-4 mb-8">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-container text-lg" data-icon="check_circle">check_circle</span>
+<span class="text-sm font-medium">월 10회 입찰 참여권</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-container text-lg" data-icon="history">history</span>
+<span class="text-sm font-medium">환불: 잔여일수 × ₩10,000</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-outline-variant text-lg" data-icon="support_agent">support_agent</span>
+<span class="text-sm text-on-surface-variant">표준 고객 지원</span>
+</div>
+</div>
+<button class="w-full py-4 bg-surface-container-high text-on-surface-variant font-bold rounded-full active:scale-95 transition-all">
+                    요금제 선택하기
+                </button>
+</section>
+<!-- Intermediate Plan (중급) - CURRENT ACTIVE -->
+<section class="relative bg-surface-container-lowest rounded-2xl p-6 shadow-[0_40px_60px_-15px_rgba(0,104,95,0.12)] border-l-4 border-secondary transition-all">
+<div class="absolute -top-3 right-6 bg-secondary text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-tighter">
+                    현재 이용 중
+                </div>
+<div class="flex justify-between items-start mb-6">
+<div>
+<h3 class="text-xl font-bold text-on-surface mb-1">중급</h3>
+<p class="text-on-surface-variant text-xs">본격적인 비즈니스 확장</p>
+</div>
+<div class="text-right">
+<span class="text-2xl font-extrabold text-primary">₩500,000</span>
+<span class="text-on-surface-variant text-xs block">/ 월</span>
+</div>
+</div>
+<div class="space-y-4 mb-8">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary text-lg" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="text-sm font-bold">월 20회 입찰 참여권</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-container text-lg" data-icon="history">history</span>
+<span class="text-sm font-medium">환불: 잔여일수 × ₩17,000</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-container text-lg" data-icon="bolt">bolt</span>
+<span class="text-sm font-medium">경매 알림 우선순위 배정</span>
+</div>
+</div>
+<button class="w-full py-4 bg-gradient-to-br from-primary to-primary-container text-white font-bold rounded-full active:scale-95 transition-all shadow-lg shadow-primary/20">
+                    현재 멤버십 유지
+                </button>
+</section>
+<!-- Premium Plan (고급) -->
+<section class="relative bg-surface-container-lowest rounded-2xl p-6 shadow-[0_40px_60px_-15px_rgba(0,104,95,0.08)] transition-all overflow-hidden">
+<div class="absolute top-0 right-0 w-32 h-32 bg-secondary/5 rounded-full -mr-16 -mt-16"></div>
+<div class="flex justify-between items-start mb-6">
+<div>
+<h3 class="text-xl font-bold text-on-surface mb-1">고급</h3>
+<p class="text-secondary font-semibold text-[10px] flex items-center gap-1">
+<span class="material-symbols-outlined text-xs" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+                            베스트 밸류
+                        </p>
+</div>
+<div class="text-right">
+<span class="text-2xl font-extrabold text-primary">₩800,000</span>
+<span class="text-on-surface-variant text-xs block">/ 월</span>
+</div>
+</div>
+<div class="space-y-4 mb-8">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-container text-lg" data-icon="check_circle">check_circle</span>
+<span class="text-sm font-medium">월 30회 입찰 참여권</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-container text-lg" data-icon="history">history</span>
+<span class="text-sm font-medium">환불: 잔여일수 × ₩27,000</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-container text-lg" data-icon="verified">verified</span>
+<span class="text-sm font-bold">VIP 전담 매니저 배정</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-container text-lg" data-icon="trending_up">trending_up</span>
+<span class="text-sm font-bold">수수료 5% 추가 할인</span>
+</div>
+</div>
+<button class="w-full py-4 bg-surface-container-high text-primary font-bold rounded-full active:scale-95 transition-all">
+                    고급 요금제로 업그레이드
+                </button>
+</section>
+</div>
+<!-- Cancellation & Info Section -->
+<footer class="mt-16 mb-24 text-center">
+<button class="text-on-surface-variant text-sm font-medium underline underline-offset-4 decoration-outline-variant hover:text-error transition-colors">
+                요금제 취소하기
+            </button>
+<p class="mt-6 text-[11px] text-outline leading-relaxed px-4">
+                멤버십 해지 시 다음 결제일부터 요금이 청구되지 않으며,<br/>
+                잔여 입찰권은 당월 말일까지 사용 가능합니다.
+            </p>
+</footer>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-8 left-4 right-4 rounded-full z-50 overflow-hidden bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl no-border shadow-[0_20px_40px_rgba(0,0,0,0.1)] max-w-lg mx-auto">
+<div class="flex justify-around items-center h-20 w-full px-4">
+<!-- Home -->
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-4 py-2 hover:text-teal-600 dark:hover:text-teal-300 transition-colors active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[11px] font-semibold uppercase tracking-wider">Home</span>
+</a>
+<!-- Auction -->
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-4 py-2 hover:text-teal-600 dark:hover:text-teal-300 transition-colors active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="gavel">gavel</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[11px] font-semibold uppercase tracking-wider">Auction</span>
+</a>
+<!-- Schedule -->
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-4 py-2 hover:text-teal-600 dark:hover:text-teal-300 transition-colors active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[11px] font-semibold uppercase tracking-wider">Schedule</span>
+</a>
+<!-- Profile (ACTIVE for Membership/Account actions) -->
+<a class="flex flex-col items-center justify-center bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 px-4 py-2 rounded-full active:scale-90 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="person" style="font-variation-settings: 'FILL' 1;">person</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[11px] font-semibold uppercase tracking-wider">Profile</span>
+</a>
+</div>
+</nav>
+</body></html>

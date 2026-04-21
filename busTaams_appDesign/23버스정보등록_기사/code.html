@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+
+<html class="light" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>busTaams - 버스 상세 등록</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-surface-variant": "#3e4947",
+              "on-primary-fixed": "#00201d",
+              "tertiary-fixed": "#ffdbcf",
+              "on-background": "#191c1e",
+              "on-surface": "#191c1e",
+              "secondary-fixed-dim": "#ffb690",
+              "surface-tint": "#066a61",
+              "surface-container-highest": "#e0e3e5",
+              "surface-container-low": "#f2f4f6",
+              "inverse-surface": "#2d3133",
+              "surface-container-lowest": "#ffffff",
+              "on-tertiary-container": "#ffc9b7",
+              "secondary": "#9d4300",
+              "surface-container-high": "#e6e8ea",
+              "outline": "#6e7977",
+              "on-secondary-fixed": "#341100",
+              "surface": "#f7f9fb",
+              "surface-container": "#eceef0",
+              "primary": "#004e47",
+              "on-primary-container": "#93e4d8",
+              "inverse-primary": "#85d5c9",
+              "secondary-fixed": "#ffdbca",
+              "background": "#f7f9fb",
+              "on-tertiary": "#ffffff",
+              "inverse-on-surface": "#eff1f3",
+              "surface-bright": "#f7f9fb",
+              "tertiary-container": "#8b4b32",
+              "tertiary": "#6e341d",
+              "primary-fixed-dim": "#85d5c9",
+              "on-primary-fixed-variant": "#005049",
+              "surface-variant": "#e0e3e5",
+              "on-error": "#ffffff",
+              "on-secondary-fixed-variant": "#783200",
+              "primary-fixed": "#a1f1e5",
+              "on-tertiary-fixed-variant": "#71361f",
+              "surface-dim": "#d8dadc",
+              "outline-variant": "#bec9c6",
+              "on-error-container": "#93000a",
+              "secondary-container": "#ff8d4b",
+              "on-secondary-container": "#6c2c00",
+              "on-secondary": "#ffffff",
+              "primary-container": "#00685f",
+              "error-container": "#ffdad6",
+              "error": "#ba1a1a",
+              "on-tertiary-fixed": "#380d00",
+              "tertiary-fixed-dim": "#ffb59a",
+              "on-primary": "#ffffff"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .tonal-stacking {
+            box-shadow: 0 40px 60px -15px rgba(0, 104, 95, 0.08);
+        }
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body min-h-screen">
+<!-- TopAppBar -->
+<header class="bg-transparent text-teal-800 dark:text-teal-200 flex justify-between items-center w-full px-6 pt-8 pb-4 max-w-7xl mx-auto">
+<div class="flex items-center gap-4">
+<button class="hover:opacity-80 transition-opacity active:scale-95 duration-200">
+<span class="material-symbols-outlined text-2xl">menu</span>
+</button>
+<h1 class="font-['Plus_Jakarta_Sans'] font-extrabold tracking-tight text-3xl text-teal-900 dark:text-teal-50 tracking-tighter">busTaams</h1>
+</div>
+<div class="flex items-center gap-6">
+<nav class="hidden md:flex gap-8 items-center">
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:opacity-80 transition-opacity" href="#">경매</a>
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:opacity-80 transition-opacity" href="#">관심목록</a>
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:opacity-80 transition-opacity" href="#">입찰</a>
+<a class="text-teal-600 dark:text-teal-400 font-bold" href="#">프로필</a>
+</nav>
+<div class="w-10 h-10 rounded-full bg-surface-container-highest overflow-hidden border-2 border-primary-container">
+<img alt="User Profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDLNdNQAbua3KeCHG1vsEPgBgwJdOFDE4TX3AGzHm2LvcI_vsinDKaWK-QIJOEo1Yp8n7xvf_-AV9uVqzHt9EIDBaEI0xRjShrShvRSA4zHGTsnTHwvBjBa5tJr4bfXa2BERNWhIolnByegmpLBkh-1SWvciN8vSSoI_q3c0M40vfOgQlQulPSoGj_ZYJcbu3_7W2UIy1lBOn9hHTZz-q2Q6hXHoCfhoKN3liBCS0akSIUvPBTyttaQFDWw7qONE2IUEXUZCBN_m6I"/>
+</div>
+</div>
+</header>
+<main class="max-w-7xl mx-auto px-6 pt-12 pb-32">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-16">
+<!-- Left Column: Editorial Header -->
+<div class="lg:col-span-4 flex flex-col gap-6">
+<span class="text-secondary font-bold tracking-[0.2em] uppercase text-sm">기사 전용</span>
+<h2 class="font-headline text-5xl font-extrabold text-primary leading-[1.1] tracking-tight">버스 정보 등록</h2>
+<p class="text-on-surface-variant text-lg leading-relaxed max-w-sm">
+                    승객에게 최고의 신뢰를 제공하기 위해 차량의 모든 제원과 서류를 꼼꼼히 등록해 주세요.
+                </p>
+<div class="mt-8 p-6 bg-surface-container-low rounded-xl border-l-4 border-secondary">
+<p class="text-sm font-semibold text-secondary mb-2">필독 안내</p>
+<p class="text-sm text-on-surface-variant leading-relaxed">모든 날짜 형식은 <span class="font-bold">YYYY/MM/DD</span> 형식을 지켜주세요. 허위 정보 기재 시 서비스 이용이 제한될 수 있습니다.</p>
+</div>
+</div>
+<!-- Right Column: Form Modules -->
+<div class="lg:col-span-8 space-y-12">
+<!-- Section 1: Basic Specifications & Registration (Essential) -->
+<section class="space-y-6">
+<div class="flex items-baseline justify-between border-b border-outline-variant pb-4">
+<h3 class="font-headline text-2xl font-bold text-on-surface">01. 기본 정보 및 차량 등록</h3>
+<span class="text-outline text-xs font-bold uppercase tracking-widest">필수 입력</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="space-y-2">
+<label class="block text-xs font-extrabold text-primary uppercase tracking-wider ml-1">차량 번호</label>
+<input class="w-full bg-surface-container-high border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-primary-container text-on-surface font-medium placeholder:text-outline/50" placeholder="예: 서울 70 사 1234" type="text"/>
+</div>
+<div class="space-y-2">
+<label class="block text-xs font-extrabold text-primary uppercase tracking-wider ml-1">섀시 모델명</label>
+<input class="w-full bg-surface-container-high border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-primary-container text-on-surface font-medium placeholder:text-outline/50" placeholder="예: 현대 유니버스, 기아 그랜버드" type="text"/>
+</div>
+<div class="space-y-2">
+<label class="block text-xs font-extrabold text-primary uppercase tracking-wider ml-1">제작 연도 (Year)</label>
+<input class="w-full bg-surface-container-high border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-primary-container text-on-surface font-medium placeholder:text-outline/50" placeholder="예: 2023" type="number"/>
+</div>
+</div>
+</section>
+<!-- Section 2: Service Grade & Type -->
+<section class="space-y-8 bg-surface-container-lowest p-8 rounded-[2rem] tonal-stacking">
+<div class="flex items-baseline justify-between">
+<h3 class="font-headline text-2xl font-bold text-on-surface">02. 서비스 등급 및 유형</h3>
+<span class="text-outline text-xs font-bold uppercase tracking-widest">운행 정보</span>
+</div>
+<div class="space-y-4">
+<label class="block text-xs font-extrabold text-primary uppercase tracking-wider ml-1">버스 등급 및 인승</label>
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+<label class="relative flex flex-col items-center justify-center p-4 rounded-xl border-2 border-surface-container-high cursor-pointer has-[:checked]:border-secondary has-[:checked]:bg-secondary/5 transition-all group">
+<input class="hidden peer" name="bus_grade" type="radio" value="45"/>
+<span class="text-sm font-bold text-on-surface-variant group-peer-checked:text-secondary">45인승</span>
+</label>
+<label class="relative flex flex-col items-center justify-center p-4 rounded-xl border-2 border-surface-container-high cursor-pointer has-[:checked]:border-secondary has-[:checked]:bg-secondary/5 transition-all group">
+<input class="hidden peer" name="bus_grade" type="radio" value="28"/>
+<span class="text-sm font-bold text-on-surface-variant group-peer-checked:text-secondary">28인승 우등</span>
+</label>
+<label class="relative flex flex-col items-center justify-center p-4 rounded-xl border-2 border-surface-container-high cursor-pointer has-[:checked]:border-secondary has-[:checked]:bg-secondary/5 transition-all group">
+<input class="hidden peer" name="bus_grade" type="radio" value="35"/>
+<span class="text-sm font-bold text-on-surface-variant group-peer-checked:text-secondary">35인승</span>
+</label>
+<label class="relative flex flex-col items-center justify-center p-4 rounded-xl border-2 border-surface-container-high cursor-pointer has-[:checked]:border-secondary has-[:checked]:bg-secondary/5 transition-all group">
+<input class="hidden peer" name="bus_grade" type="radio" value="25"/>
+<span class="text-sm font-bold text-on-surface-variant group-peer-checked:text-secondary">25인승 미니</span>
+</label>
+<label class="relative flex flex-col items-center justify-center p-4 rounded-xl border-2 border-surface-container-high cursor-pointer has-[:checked]:border-secondary has-[:checked]:bg-secondary/5 transition-all group">
+<input class="hidden peer" name="bus_grade" type="radio" value="15"/>
+<span class="text-sm font-bold text-on-surface-variant group-peer-checked:text-secondary">15인승</span>
+</label>
+<label class="relative flex flex-col items-center justify-center p-4 rounded-xl border-2 border-surface-container-high cursor-pointer has-[:checked]:border-secondary has-[:checked]:bg-secondary/5 transition-all group">
+<input class="hidden peer" name="bus_grade" type="radio" value="12"/>
+<span class="text-sm font-bold text-on-surface-variant group-peer-checked:text-secondary">12인승</span>
+</label>
+<label class="relative flex flex-col items-center justify-center p-4 rounded-xl border-2 border-surface-container-high cursor-pointer has-[:checked]:border-secondary has-[:checked]:bg-secondary/5 transition-all group col-span-2">
+<input class="hidden peer" name="bus_grade" type="radio" value="21_premium"/>
+<span class="text-sm font-bold text-on-surface-variant group-peer-checked:text-secondary">21인승 프리미엄</span>
+</label>
+</div>
+</div>
+<div class="space-y-4">
+<label class="block text-xs font-extrabold text-primary uppercase tracking-wider ml-1">운행 유형</label>
+<select class="w-full bg-surface-container-high border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-primary-container text-on-surface font-medium">
+<option value="">운행 유형 선택</option>
+<option value="sightseeing">관광/전세</option>
+<option value="business">비즈니스</option>
+<option value="shuttle">셔틀/통근</option>
+</select>
+</div>
+<div class="space-y-4">
+<div class="flex items-center justify-between">
+<label class="block text-xs font-extrabold text-primary uppercase tracking-wider ml-1">차량 사진 (내/외부 포함 최대 9장)</label>
+<span class="text-[10px] text-outline font-bold">0 / 9</span>
+</div>
+<div class="grid grid-cols-3 md:grid-cols-5 gap-3">
+<div class="aspect-square bg-surface-container-high rounded-xl border-2 border-dashed border-outline-variant flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors">
+<span class="material-symbols-outlined text-2xl text-outline">add_a_photo</span>
+</div>
+<!-- Placeholders for multiple photos -->
+<div class="aspect-square bg-surface-container/30 rounded-xl border border-outline-variant/30 flex items-center justify-center">
+<span class="material-symbols-outlined text-outline/20">image</span>
+</div>
+<div class="aspect-square bg-surface-container/30 rounded-xl border border-outline-variant/30 flex items-center justify-center">
+<span class="material-symbols-outlined text-outline/20">image</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 3: Technical Specifications -->
+<section class="space-y-6">
+<div class="flex items-baseline justify-between border-b border-outline-variant pb-4">
+<h3 class="font-headline text-2xl font-bold text-on-surface">03. 기술 사양</h3>
+<span class="text-outline text-xs font-bold uppercase tracking-widest">기술 데이터</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<div class="space-y-2">
+<label class="block text-xs font-extrabold text-primary uppercase tracking-wider ml-1">연료 종류</label>
+<select class="w-full bg-surface-container-high border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-primary-container text-on-surface font-medium">
+<option value="diesel">디젤</option>
+<option value="cng">CNG</option>
+<option value="electric">전기</option>
+<option value="hydrogen">수소</option>
+</select>
+</div>
+<div class="space-y-2">
+<label class="block text-xs font-extrabold text-primary uppercase tracking-wider ml-1">평균 연비 (km/L)</label>
+<input class="w-full bg-surface-container-high border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-primary-container text-on-surface font-medium placeholder:text-outline/50" placeholder="예: 5.5" step="0.1" type="number"/>
+</div>
+<div class="space-y-2">
+<label class="block text-xs font-extrabold text-primary uppercase tracking-wider ml-1">차량 전고/전폭 (m)</label>
+<input class="w-full bg-surface-container-high border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-primary-container text-on-surface font-medium placeholder:text-outline/50" placeholder="예: 3.5 / 2.5" type="text"/>
+</div>
+</div>
+</section>
+<!-- Section 4: Amenities & Options -->
+<section class="space-y-8 bg-surface-container-lowest p-8 rounded-[2rem] tonal-stacking">
+<div class="flex items-baseline justify-between">
+<h3 class="font-headline text-2xl font-bold text-on-surface">04. 편의 시설 및 옵션</h3>
+<span class="text-outline text-xs font-bold uppercase tracking-widest">추가 옵션</span>
+</div>
+<!-- Multimedia -->
+<div class="space-y-4">
+<p class="text-[10px] font-extrabold text-outline uppercase tracking-[0.2em] ml-1">멀티미디어</p>
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+<label class="flex flex-col items-center justify-center p-4 rounded-2xl bg-surface-container-high cursor-pointer hover:bg-primary-fixed transition-colors group">
+<input class="hidden peer" type="checkbox"/>
+<span class="material-symbols-outlined text-outline group-hover:text-primary peer-checked:text-primary transition-colors">wifi</span>
+<span class="text-[10px] font-bold uppercase mt-2 text-outline group-hover:text-primary peer-checked:text-primary">와이파이</span>
+</label>
+<label class="flex flex-col items-center justify-center p-4 rounded-2xl bg-surface-container-high cursor-pointer hover:bg-primary-fixed transition-colors group">
+<input class="hidden peer" type="checkbox"/>
+<span class="material-symbols-outlined text-outline group-hover:text-primary peer-checked:text-primary transition-colors">usb</span>
+<span class="text-[10px] font-bold uppercase mt-2 text-outline group-hover:text-primary peer-checked:text-primary">USB 포트</span>
+</label>
+<label class="flex flex-col items-center justify-center p-4 rounded-2xl bg-surface-container-high cursor-pointer hover:bg-primary-fixed transition-colors group">
+<input class="hidden peer" type="checkbox"/>
+<span class="material-symbols-outlined text-outline group-hover:text-primary peer-checked:text-primary transition-colors">mic</span>
+<span class="text-[10px] font-bold uppercase mt-2 text-outline group-hover:text-primary peer-checked:text-primary">노래방</span>
+</label>
+<label class="flex flex-col items-center justify-center p-4 rounded-2xl bg-surface-container-high cursor-pointer hover:bg-primary-fixed transition-colors group">
+<input class="hidden peer" type="checkbox"/>
+<span class="material-symbols-outlined text-outline group-hover:text-primary peer-checked:text-primary transition-colors">tv</span>
+<span class="text-[10px] font-bold uppercase mt-2 text-outline group-hover:text-primary peer-checked:text-primary">TV/모니터</span>
+</label>
+</div>
+</div>
+<!-- Convenience -->
+<div class="space-y-4">
+<p class="text-[10px] font-extrabold text-outline uppercase tracking-[0.2em] ml-1">편의 장치</p>
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+<label class="flex flex-col items-center justify-center p-4 rounded-2xl bg-surface-container-high cursor-pointer hover:bg-primary-fixed transition-colors group">
+<input class="hidden peer" type="checkbox"/>
+<span class="material-symbols-outlined text-outline group-hover:text-primary peer-checked:text-primary transition-colors">kitchen</span>
+<span class="text-[10px] font-bold uppercase mt-2 text-outline group-hover:text-primary peer-checked:text-primary">냉장고</span>
+</label>
+<label class="flex flex-col items-center justify-center p-4 rounded-2xl bg-surface-container-high cursor-pointer hover:bg-primary-fixed transition-colors group">
+<input class="hidden peer" type="checkbox"/>
+<span class="material-symbols-outlined text-outline group-hover:text-primary peer-checked:text-primary transition-colors">water_drop</span>
+<span class="text-[10px] font-bold uppercase mt-2 text-outline group-hover:text-primary peer-checked:text-primary">정수기</span>
+</label>
+<label class="flex flex-col items-center justify-center p-4 rounded-2xl bg-surface-container-high cursor-pointer hover:bg-primary-fixed transition-colors group">
+<input class="hidden peer" type="checkbox"/>
+<span class="material-symbols-outlined text-outline group-hover:text-primary peer-checked:text-primary transition-colors">curtains</span>
+<span class="text-[10px] font-bold uppercase mt-2 text-outline group-hover:text-primary peer-checked:text-primary">커튼</span>
+</label>
+<label class="flex flex-col items-center justify-center p-4 rounded-2xl bg-surface-container-high cursor-pointer hover:bg-primary-fixed transition-colors group">
+<input class="hidden peer" type="checkbox"/>
+<span class="material-symbols-outlined text-outline group-hover:text-primary peer-checked:text-primary transition-colors">air_purifier_gen</span>
+<span class="text-[10px] font-bold uppercase mt-2 text-outline group-hover:text-primary peer-checked:text-primary">공기청정기</span>
+</label>
+</div>
+</div>
+<!-- Safety -->
+<div class="space-y-4">
+<p class="text-[10px] font-extrabold text-outline uppercase tracking-[0.2em] ml-1">안전 및 기타</p>
+<div class="grid grid-cols-2 gap-4">
+<label class="flex items-center gap-4 p-4 rounded-2xl bg-surface-container-high cursor-pointer hover:bg-primary-fixed transition-colors group">
+<input class="w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/>
+<span class="text-xs font-bold text-on-surface-variant group-hover:text-primary">카시트 장착 가능 여부</span>
+</label>
+<label class="flex items-center gap-4 p-4 rounded-2xl bg-surface-container-high cursor-pointer hover:bg-primary-fixed transition-colors group">
+<input class="w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/>
+<span class="text-xs font-bold text-on-surface-variant group-hover:text-primary">AEBS (자동 비상 제동) 장착</span>
+</label>
+</div>
+</div>
+</section>
+<!-- Section 5: Insurance & Qualification -->
+<section class="space-y-6">
+<div class="flex items-baseline justify-between border-b border-outline-variant pb-4">
+<h3 class="font-headline text-2xl font-bold text-on-surface">05. 보험 및 자격 검증</h3>
+<span class="text-outline text-xs font-bold uppercase tracking-widest">보험/검사</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="space-y-2">
+<label class="block text-xs font-extrabold text-primary uppercase tracking-wider ml-1">보험 가입 현황</label>
+<select class="w-full bg-surface-container-high border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-primary-container text-on-surface font-medium">
+<option value="comprehensive">종합보험 (유상운송 특약 포함)</option>
+<option value="liability">책임보험</option>
+</select>
+</div>
+<div class="space-y-2">
+<label class="block text-xs font-extrabold text-primary uppercase tracking-wider ml-1">보험 만료일 (YYYY/MM/DD)</label>
+<input class="w-full bg-surface-container-high border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-primary-container text-on-surface font-medium placeholder:text-outline/50" placeholder="예: 2025/12/31" type="text"/>
+</div>
+<div class="space-y-2">
+<label class="block text-xs font-extrabold text-primary uppercase tracking-wider ml-1">차량 정기검사 유효기간 (YYYY/MM/DD)</label>
+<input class="w-full bg-surface-container-high border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-primary-container text-on-surface font-medium placeholder:text-outline/50" placeholder="예: 2024/06/15" type="text"/>
+</div>
+</div>
+</section>
+<!-- Section 6: Legal Documentation -->
+<section class="space-y-6"><div class="flex items-baseline justify-between border-b border-outline-variant pb-4">
+<h3 class="font-headline text-2xl font-bold text-on-surface">06. 법적 증빙 서류 업로드</h3>
+<span class="text-outline text-xs font-bold uppercase tracking-widest">증빙 서류</span>
+</div>
+<div class="space-y-4">
+<!-- Card 1: Business Registration -->
+<div class="bg-surface-container-high rounded-3xl p-1">
+<div class="bg-surface-container-lowest rounded-[1.4rem] p-6 flex flex-col md:flex-row items-center gap-6">
+<div class="w-16 h-16 rounded-2xl bg-tertiary-fixed flex items-center justify-center text-tertiary shrink-0">
+<span class="material-symbols-outlined text-3xl">badge</span>
+</div>
+<div class="flex-1 text-center md:text-left">
+<h4 class="font-bold text-on-surface">사업자 등록증</h4>
+<p class="text-sm text-outline mt-1">유효한 사업자 등록증의 PDF 또는 고화질 사진을 업로드해 주세요.</p>
+</div>
+<button class="w-full md:w-auto px-6 py-3 rounded-full bg-surface-container-highest text-primary font-bold text-sm hover:bg-primary hover:text-white transition-colors">
+                                파일 추가
+                            </button>
+</div>
+</div>
+<!-- Card 2: Transport Permit -->
+<div class="bg-surface-container-high rounded-3xl p-1">
+<div class="bg-surface-container-lowest rounded-[1.4rem] p-6 flex flex-col md:flex-row items-center gap-6">
+<div class="w-16 h-16 rounded-2xl bg-secondary-fixed flex items-center justify-center text-secondary shrink-0">
+<span class="material-symbols-outlined text-3xl">local_shipping</span>
+</div>
+<div class="flex-1 text-center md:text-left">
+<h4 class="font-bold text-on-surface">운송 허가증</h4>
+<p class="text-sm text-outline mt-1">유효한 운송 허가증의 PDF 또는 고화질 사진을 업로드해 주세요.</p>
+</div>
+<button class="w-full md:w-auto px-6 py-3 rounded-full bg-surface-container-highest text-primary font-bold text-sm hover:bg-primary hover:text-white transition-colors">
+                                파일 추가
+                            </button>
+</div>
+</div>
+<!-- Card 3: Insurance -->
+<div class="bg-surface-container-high rounded-3xl p-1">
+<div class="bg-surface-container-lowest rounded-[1.4rem] p-6 flex flex-col md:flex-row items-center gap-6">
+<div class="w-16 h-16 rounded-2xl bg-primary-fixed flex items-center justify-center text-primary shrink-0">
+<span class="material-symbols-outlined text-3xl">verified_user</span>
+</div>
+<div class="flex-1 text-center md:text-left">
+<h4 class="font-bold text-on-surface">보험 증명서 (책임/종합보험)</h4>
+<p class="text-sm text-outline mt-1">유효한 보험 가입 증명서의 PDF 또는 고화질 사진을 업로드해 주세요.</p>
+</div>
+<button class="w-full md:w-auto px-6 py-3 rounded-full bg-surface-container-highest text-primary font-bold text-sm hover:bg-primary hover:text-white transition-colors">
+                                파일 추가
+                            </button>
+</div>
+</div>
+</div></section>
+<!-- Action Button -->
+<div class="pt-8 flex flex-col sm:flex-row justify-end gap-4">
+<button class="px-10 py-5 bg-surface-container-highest text-on-surface-variant rounded-full font-headline font-bold text-lg hover:bg-surface-container-high transition-all">
+                        임시 저장
+                    </button>
+<button class="px-10 py-5 bg-gradient-to-br from-primary to-primary-container text-white rounded-full font-headline font-bold text-lg shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all">
+                        등록 완료
+                    </button>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile) -->
+<nav class="fixed bottom-8 left-0 right-0 z-50 flex justify-around items-center px-4 py-3 md:hidden">
+<div class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-[20px] fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] rounded-full max-w-md shadow-[0_20px_40px_-15px_rgba(0,104,95,0.15)] flex justify-around items-center py-3">
+<div class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 dark:hover:text-teal-300 transition-colors active:scale-90 duration-300">
+<span class="material-symbols-outlined">gavel</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest">경매</span>
+</div>
+<div class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 dark:hover:text-teal-300 transition-colors active:scale-90 duration-300">
+<span class="material-symbols-outlined">visibility</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest">관심목록</span>
+</div>
+<div class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 dark:hover:text-teal-300 transition-colors active:scale-90 duration-300">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest">입찰</span>
+</div>
+<div class="flex flex-col items-center justify-center bg-gradient-to-br from-teal-600 to-teal-800 text-white rounded-full w-12 h-12 shadow-lg shadow-teal-900/20 active:scale-90 transition-transform duration-300">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">person</span>
+<span class="sr-only">프로필</span>
+</div>
+</div>
+</nav>
+</body></html>

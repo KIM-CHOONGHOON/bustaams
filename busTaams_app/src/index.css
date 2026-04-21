@@ -1,0 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Manrope:wght@200..800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #004e47;
+  --secondary: #9d4300;
+  --bg-main: #f7f9fb;
+  --surface: #ffffff;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-on-background min-h-screen flex flex-col overflow-x-hidden;
+    font-family: 'Manrope', 'Plus Jakarta Sans', sans-serif;
+  }
+}
+
+.font-headline {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.font-body {
+  font-family: 'Manrope', sans-serif;
+}
+
+.material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Kinetic Gradients */
+.kinetic-gradient-primary {
+    background: linear-gradient(135deg, #004e47 0%, #00685f 100%);
+}
+
+.kinetic-gradient-secondary {
+    background: linear-gradient(135deg, #9d4300 0%, #ff8d4b 100%);
+}
+
+.glass-panel {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px);
+}
+
+.text-shadow-subtle {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Custom Scrollbar for a premium look */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+  background: #004e47;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #00685f;
+}

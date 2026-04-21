@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+
+<html class="light" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>입찰 상세 및 수정</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary-fixed-dim": "#ffb59a",
+              "surface-tint": "#066a61",
+              "on-tertiary-container": "#ffc9b7",
+              "on-tertiary": "#ffffff",
+              "surface-dim": "#d8dadc",
+              "on-primary-fixed": "#00201d",
+              "tertiary-container": "#8b4b32",
+              "on-error-container": "#93000a",
+              "background": "#f7f9fb",
+              "on-secondary": "#ffffff",
+              "on-primary": "#ffffff",
+              "primary-fixed": "#a1f1e5",
+              "inverse-on-surface": "#eff1f3",
+              "error": "#ba1a1a",
+              "on-secondary-container": "#6c2c00",
+              "on-surface": "#191c1e",
+              "on-secondary-fixed-variant": "#783200",
+              "surface-container-low": "#f2f4f6",
+              "surface": "#f7f9fb",
+              "surface-container-highest": "#e0e3e5",
+              "secondary-container": "#ff8d4b",
+              "primary": "#004e47",
+              "inverse-surface": "#2d3133",
+              "surface-variant": "#e0e3e5",
+              "surface-container-high": "#e6e8ea",
+              "primary-container": "#00685f",
+              "on-primary-container": "#93e4d8",
+              "surface-container-lowest": "#ffffff",
+              "primary-fixed-dim": "#85d5c9",
+              "on-error": "#ffffff",
+              "on-tertiary-fixed": "#380d00",
+              "inverse-primary": "#85d5c9",
+              "outline": "#6e7977",
+              "surface-container": "#eceef0",
+              "error-container": "#ffdad6",
+              "surface-bright": "#f7f9fb",
+              "on-surface-variant": "#3e4947",
+              "secondary-fixed": "#ffdbca",
+              "on-primary-fixed-variant": "#005049",
+              "secondary-fixed-dim": "#ffb690",
+              "tertiary": "#6e341d",
+              "tertiary-fixed": "#ffdbcf",
+              "secondary": "#9d4300",
+              "outline-variant": "#bec9c6",
+              "on-tertiary-fixed-variant": "#71361f",
+              "on-secondary-fixed": "#341100",
+              "on-background": "#191c1e"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      body { font-family: 'Manrope', sans-serif; }
+      .font-headline { font-family: 'Plus Jakarta Sans', sans-serif; }
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-sm shadow-teal-900/5 flex items-center justify-between px-6 h-16">
+<button class="text-teal-700 dark:text-teal-400 active:scale-95 duration-200 flex items-center justify-center p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="font-['Plus_Jakarta_Sans'] font-bold text-lg tracking-tight text-teal-700 dark:text-teal-400">입찰 상세 및 수정</h1>
+<div class="w-10"></div> <!-- Spacer for centering -->
+</header>
+<main class="pt-20 px-4 md:px-8 max-w-2xl mx-auto space-y-8">
+<!-- Section: Customer Request Summary -->
+<section class="space-y-4">
+<div class="flex items-baseline justify-between">
+<h2 class="font-headline font-extrabold text-2xl tracking-tight text-on-surface">요청 정보 요약</h2>
+<span class="text-xs font-bold text-secondary-container bg-secondary/10 px-3 py-1 rounded-full uppercase tracking-wider">Active Request</span>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-6 shadow-sm shadow-on-surface/5 relative overflow-hidden">
+<!-- Kinetic Accent -->
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-secondary"></div>
+<div class="space-y-6">
+<div>
+<p class="text-xs font-bold text-on-surface-variant/60 uppercase tracking-widest mb-1">Trip Name</p>
+<h3 class="font-headline font-bold text-xl text-primary">2024년 추계 워크숍</h3>
+</div>
+<div class="grid grid-cols-1 gap-4">
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-teal-600 mt-0.5" data-icon="route">route</span>
+<div>
+<p class="text-xs font-bold text-on-surface-variant/60">노선 정보</p>
+<div class="flex flex-wrap items-center gap-2 mt-1">
+<span class="font-semibold text-on-surface">서울역</span>
+<span class="material-symbols-outlined text-sm text-outline-variant" data-icon="chevron_right">chevron_right</span>
+<span class="text-on-surface-variant">대전복합터미널</span>
+<span class="material-symbols-outlined text-sm text-outline-variant" data-icon="chevron_right">chevron_right</span>
+<span class="font-semibold text-on-surface">부산 터미널</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-teal-600" data-icon="calendar_today">calendar_today</span>
+<div>
+<p class="text-xs font-bold text-on-surface-variant/60">일정</p>
+<p class="font-semibold text-on-surface">2024/10/24 ~ 2024/10/26 (2박 3일)</p>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-teal-600" data-icon="directions_bus">directions_bus</span>
+<div>
+<p class="text-xs font-bold text-on-surface-variant/60">요청 차량</p>
+<p class="font-semibold text-on-surface">21인승 이하 프리미엄 1대</p>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-teal-600" data-icon="payments">payments</span>
+<div>
+<p class="text-xs font-bold text-on-surface-variant/60">고객 요청 금액</p>
+<p class="font-semibold text-on-surface">₩1,500,000</p>
+</div>
+</div></div>
+</div>
+</div>
+</section>
+<!-- Section: My Bid & Price Adjustment -->
+<section class="space-y-4">
+<h2 class="font-headline font-extrabold text-2xl tracking-tight text-on-surface">내 입찰 정보 수정</h2>
+<div class="bg-surface-container-lowest rounded-xl p-6 shadow-sm shadow-on-surface/5 space-y-6">
+<!-- Bid Input -->
+<div class="space-y-3">
+<label class="block text-sm font-bold text-on-surface-variant">현재 내 입찰가</label>
+<div class="relative group">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold text-primary">₩</span>
+<input class="w-full bg-surface-container-high border-none rounded-xl py-4 pl-10 pr-4 text-2xl font-bold text-on-surface focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-highest transition-all duration-300 outline-none" type="text" value="1,650,000"/>
+</div>
+</div>
+<!-- Price Guide Tip -->
+<div class="bg-primary/5 rounded-xl p-4 flex gap-4 items-start border-l-4 border-primary">
+<span class="material-symbols-outlined text-primary" data-icon="lightbulb">lightbulb</span>
+<div class="space-y-1">
+<p class="text-sm font-bold text-primary">입찰 수정 가이드</p>
+<p class="text-sm text-on-surface-variant leading-relaxed">
+                            주변 기사님들은 평균적으로 <span class="font-bold text-primary">₩1,580,000 ~ ₩1,720,000</span> 사이로 입찰하고 있습니다.
+                        </p>
+</div>
+</div>
+</div>
+</section>
+<!-- Section: Breakdown of Costs -->
+<section class="space-y-4">
+<h2 class="font-headline font-extrabold text-2xl tracking-tight text-on-surface">상세 부대비용</h2>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<!-- Driver Lodging -->
+<div class="bg-surface-container-low rounded-xl p-5 space-y-2 group hover:bg-surface-container-highest transition-colors">
+<p class="text-xs font-bold text-on-surface-variant/70 uppercase">기사 숙박/식대</p>
+<div class="flex items-baseline gap-1">
+<span class="text-sm font-bold text-on-surface">₩</span>
+<input class="bg-transparent border-none p-0 focus:ring-0 text-lg font-bold text-on-surface w-full" type="text" value="200,000"/>
+</div>
+</div>
+<!-- Tolls & Parking -->
+<div class="bg-surface-container-low rounded-xl p-5 space-y-2 group hover:bg-surface-container-highest transition-colors">
+<p class="text-xs font-bold text-on-surface-variant/70 uppercase">톨비/주차</p>
+<div class="flex items-baseline gap-1">
+<span class="text-sm font-bold text-on-surface">₩</span>
+<input class="bg-transparent border-none p-0 focus:ring-0 text-lg font-bold text-on-surface w-full" type="text" value="100,000"/>
+</div>
+</div>
+<!-- Fuel -->
+<div class="bg-surface-container-low rounded-xl p-5 space-y-2 group hover:bg-surface-container-highest transition-colors">
+<p class="text-xs font-bold text-on-surface-variant/70 uppercase">유류비</p>
+<div class="flex items-baseline gap-1">
+<span class="text-sm font-bold text-on-surface">₩</span>
+<input class="bg-transparent border-none p-0 focus:ring-0 text-lg font-bold text-on-surface w-full" type="text" value="150,000"/>
+</div>
+</div>
+</div>
+</section>
+<!-- CTA Button -->
+<div class="pt-4 space-y-4">
+<div class="flex flex-col sm:flex-row gap-3">
+<button class="flex-1 py-4 rounded-xl bg-primary text-white font-headline font-bold text-base shadow-lg shadow-primary/20 active:scale-95 transition-all duration-300 flex items-center justify-center gap-2">
+<span>입찰 정보 수정하기</span>
+<span class="material-symbols-outlined text-xl" data-icon="edit_square">edit_square</span>
+</button>
+<button class="flex-1 py-4 rounded-xl border-2 border-outline/30 text-outline font-headline font-bold text-base hover:bg-surface-container-high active:scale-95 transition-all duration-300 flex items-center justify-center gap-2">
+<span>입찰 취소하기</span>
+<span class="material-symbols-outlined text-xl" data-icon="cancel">cancel</span>
+</button>
+</div>
+<p class="text-center text-on-surface-variant/60 text-xs">수정된 입찰가는 승인 대기 목록에 즉시 반영됩니다.</p>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] rounded-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-2xl shadow-teal-900/10 flex justify-around items-center p-2">
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-5 py-2 hover:text-teal-600 dark:hover:text-teal-400 transition-all active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="gavel">gavel</span>
+<span class="font-['Plus_Jakarta_Sans'] font-medium text-[10px]">경매</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded-full px-5 py-2 active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="list_alt" style="font-variation-settings: 'FILL' 1;">list_alt</span>
+<span class="font-['Plus_Jakarta_Sans'] font-medium text-[10px]">입찰내역</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-5 py-2 hover:text-teal-600 dark:hover:text-teal-400 transition-all active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="forum">forum</span>
+<span class="font-['Plus_Jakarta_Sans'] font-medium text-[10px]">메시지</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-5 py-2 hover:text-teal-600 dark:hover:text-teal-400 transition-all active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-['Plus_Jakarta_Sans'] font-medium text-[10px]">내 정보</span>
+</a>
+</nav>
+</body></html>

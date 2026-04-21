@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+
+<html lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-surface-variant": "#3e4947",
+              "on-primary-fixed": "#00201d",
+              "tertiary-fixed": "#ffdbcf",
+              "on-background": "#191c1e",
+              "on-surface": "#191c1e",
+              "secondary-fixed-dim": "#ffb690",
+              "surface-tint": "#066a61",
+              "surface-container-highest": "#e0e3e5",
+              "surface-container-low": "#f2f4f6",
+              "inverse-surface": "#2d3133",
+              "surface-container-lowest": "#ffffff",
+              "on-tertiary-container": "#ffc9b7",
+              "secondary": "#9d4300",
+              "surface-container-high": "#e6e8ea",
+              "outline": "#6e7977",
+              "on-secondary-fixed": "#341100",
+              "surface": "#f7f9fb",
+              "surface-container": "#eceef0",
+              "primary": "#004e47",
+              "on-primary-container": "#93e4d8",
+              "inverse-primary": "#85d5c9",
+              "secondary-fixed": "#ffdbca",
+              "background": "#f7f9fb",
+              "on-tertiary": "#ffffff",
+              "inverse-on-surface": "#eff1f3",
+              "surface-bright": "#f7f9fb",
+              "tertiary-container": "#8b4b32",
+              "tertiary": "#6e341d",
+              "primary-fixed-dim": "#85d5c9",
+              "on-primary-fixed-variant": "#005049",
+              "surface-variant": "#e0e3e5",
+              "on-error": "#ffffff",
+              "on-secondary-fixed-variant": "#783200",
+              "primary-fixed": "#a1f1e5",
+              "on-tertiary-fixed-variant": "#71361f",
+              "surface-dim": "#d8dadc",
+              "outline-variant": "#bec9c6",
+              "on-error-container": "#93000a",
+              "secondary-container": "#ff8d4b",
+              "on-secondary-container": "#6c2c00",
+              "on-secondary": "#ffffff",
+              "primary-container": "#00685f",
+              "error-container": "#ffdad6",
+              "error": "#ba1a1a",
+              "on-tertiary-fixed": "#380d00",
+              "tertiary-fixed-dim": "#ffb59a",
+              "on-primary": "#ffffff"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .kinetic-shadow {
+        box-shadow: 0 40px 60px -15px rgba(0, 104, 95, 0.06);
+      }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background font-body text-on-background min-h-screen">
+<!-- TopAppBar -->
+<header class="bg-transparent docked full-width top-0 z-40">
+<div class="flex justify-between items-center w-full px-6 pt-8 pb-4 max-w-7xl mx-auto">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-teal-800 dark:text-teal-200 cursor-pointer hover:opacity-80 transition-opacity" data-icon="menu">menu</span>
+<h1 class="font-headline font-extrabold tracking-tight text-3xl text-teal-900 dark:text-teal-50 tracking-tighter">busTaams</h1>
+</div>
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary-fixed shadow-sm">
+<img alt="사용자 프로필" class="w-full h-full object-cover" data-alt="Professional headshot of a smiling man with clean background in soft studio lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuARu0AsQmz4MYxTlYnquGCZVxq1VkmIMvF15cnV6VZVgon2koJh3GakbN7MQFJaMHoPpacCZss1keCkymnaqsyn6v5Zzb-YLjQOFz8m5aueu1TNs-rQBtX3uGkHSQJdwvUVV-HwzCG2ZcrO0qC63qzVDWmlJPgEtBg0HeQ9hTHiD1rwztdD2VZXsVYv6REVOnaHIL11IO4-vqhR9xo6OI14ro0lfGAq7Wm3QRBguARS9gIR1VJ4S-Hi2HgW09czpaxJG_U9bN9Dito"/>
+</div>
+</div>
+</header>
+<main class="max-w-7xl mx-auto px-6 py-12 md:py-20">
+<!-- Editorial Header -->
+<div class="mb-16">
+<p class="font-headline font-bold text-secondary uppercase tracking-[0.3em] text-xs mb-4">계약 내역</p>
+<h2 class="font-headline font-extrabold text-5xl md:text-7xl text-primary leading-tight max-w-2xl">
+                나의 운행 이력
+            </h2>
+<div class="h-1 w-24 bg-gradient-to-r from-secondary to-secondary-container mt-8 rounded-full"></div>
+</div>
+<!-- Trips List Container -->
+<div class="flex flex-col gap-8">
+<!-- Trip Card 1 -->
+<div class="group grid grid-cols-1 lg:grid-cols-12 bg-surface-container-lowest rounded-xl kinetic-shadow overflow-hidden transition-all duration-300 hover:translate-y-[-4px]">
+<div class="lg:col-span-1 w-1 bg-secondary"></div>
+<div class="lg:col-span-11 p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+<div class="flex flex-col gap-1">
+<span class="text-xs font-bold text-slate-400 uppercase tracking-widest">2023년 10월 24일</span>
+<h3 class="font-headline font-bold text-2xl text-primary">시외 익스프레스 402</h3>
+<p class="text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-sm" data-icon="route">route</span>
+                            런던 빅토리아 → 맨체스터 센트럴
+                        </p>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4 border-l border-outline-variant/20 pl-6">
+<img alt="드라이버" class="w-12 h-12 rounded-full object-cover shadow-sm" data-alt="Close up portrait of a professional male bus driver in uniform with a friendly expression" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD7VSSkjSeXOWUlSicsIEZ2rudA_07pATCvBbB4ZzS0FeRhWTERJ93g5QDGHRtkQQap8M8Gq0naMNkfmGu61I7DLFw6jB-PGbuj-IpLIaXt1gXKFQIjflBSHxCqDyOzcodjGyjGt1JPj803-8O-DswJfvNi5x_MWYlVpvDYzRTeMYkRCYlv_AOAujT5pexHsMrVctyHWanvAhuidULjD_0lTCm4aiGV8hBhIRlkW4M91NxLUvGlVheOAMYHVt50nD5m1uEzvVlZfVk"/>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">캡틴</span>
+<span class="font-bold text-on-surface">마커스 쏜</span>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">최종 낙찰가</span>
+<span class="text-2xl font-black text-primary">₩420,000</span>
+</div>
+<button class="bg-surface-container-high p-3 rounded-full hover:bg-primary hover:text-white transition-all duration-300">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Trip Card 2 (Alternating Background Color) -->
+<div class="group grid grid-cols-1 lg:grid-cols-12 bg-surface-container-low rounded-xl overflow-hidden transition-all duration-300 hover:translate-y-[-4px]">
+<div class="lg:col-span-1 w-1 bg-primary"></div>
+<div class="lg:col-span-11 p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+<div class="flex flex-col gap-1">
+<span class="text-xs font-bold text-slate-400 uppercase tracking-widest">2023년 10월 12일</span>
+<h3 class="font-headline font-bold text-2xl text-primary">코스탈 크루저 XL</h3>
+<p class="text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-sm" data-icon="route">route</span>
+                            브라이튼 피어 → 사우샘프턴 항구
+                        </p>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4 border-l border-outline-variant/20 pl-6">
+<img alt="드라이버" class="w-12 h-12 rounded-full object-cover shadow-sm" data-alt="Headshot of a confident female transit professional in business attire with soft natural lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC0c4eKzz9BOXwPB7qsAWWbMG5wRDs9BxdBGrYLyKXqDpIak2iMJ8A1E5QtGzl1MlBSzjTMa92diMjK-pMcpH_t0bd4pao5VaeKgyHg1jD5LHz6vGQ-EBae-5wuErIfL9FX8mBbrJMAf0CHOBFyqeEDQzIjKmAiNTHP_6IIz7zr8lf6nfSbwbEyeCRpqDK2zHH4fbH54Z95LGhkTHaRWk5QX7l0An2_qMtznh4QJcGAIIjeWydrvHYBkLWUQGSMOpA-QokiGLMGnr4"/>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">캡틴</span>
+<span class="font-bold text-on-surface">사라 젠킨스</span>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">최종 낙찰가</span>
+<span class="text-2xl font-black text-primary">₩285,500</span>
+</div>
+<button class="bg-surface-container-lowest p-3 rounded-full hover:bg-primary hover:text-white transition-all duration-300">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Trip Card 3 -->
+<div class="group grid grid-cols-1 lg:grid-cols-12 bg-surface-container-lowest rounded-xl kinetic-shadow overflow-hidden transition-all duration-300 hover:translate-y-[-4px]">
+<div class="lg:col-span-1 w-1 bg-secondary"></div>
+<div class="lg:col-span-11 p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+<div class="flex flex-col gap-1">
+<span class="text-xs font-bold text-slate-400 uppercase tracking-widest">2023년 9월 30일</span>
+<h3 class="font-headline font-bold text-2xl text-primary">럭셔리 슬리퍼 10-A</h3>
+<p class="text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-sm" data-icon="route">route</span>
+                            에든버러 세인트 자일스 → 런던 킹스크로스
+                        </p>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4 border-l border-outline-variant/20 pl-6">
+<img alt="드라이버" class="w-12 h-12 rounded-full object-cover shadow-sm" data-alt="Portrait of an experienced male driver with silver hair and warm professional smile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuADunvZJcaeZmRTtKAA_tCUsU5GWuAyz6OUoz0Vd4kLEo0qSx9DzYE4wLPi_644gwvZI9fghZEyjs_eQXuYdUeOX30u_2VJl5eljHDmsOfI_qDTOf8uWL7bg7gBqlnSTDpW68FTh846fpXt1xQS015n46aUamZs9lFloi5rmtpZ7Wtcj6_-B0ZvyKs0nIKlDp0cGP_LKWyPYm5yeI2XeMf9n1SnicG92M7CkvjgaIaR7srOpoDHcd4nZU4yRgqJTaycMT-SjJYEb3c"/>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">캡틴</span>
+<span class="font-bold text-on-surface">데이비드 밀러</span>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">최종 낙찰가</span>
+<span class="text-2xl font-black text-primary">₩612,000</span>
+</div>
+<button class="bg-surface-container-high p-3 rounded-full hover:bg-primary hover:text-white transition-all duration-300">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Trip Card 4 (Alternating Background Color) -->
+<div class="group grid grid-cols-1 lg:grid-cols-12 bg-surface-container-low rounded-xl overflow-hidden transition-all duration-300 hover:translate-y-[-4px]">
+<div class="lg:col-span-1 w-1 bg-primary"></div>
+<div class="lg:col-span-11 p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+<div class="flex flex-col gap-1">
+<span class="text-xs font-bold text-slate-400 uppercase tracking-widest">2023년 9월 15일</span>
+<h3 class="font-headline font-bold text-2xl text-primary">메트로폴리탄 커넥트</h3>
+<p class="text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-sm" data-icon="route">route</span>
+                            옥스퍼드 시티 센터 → 캠브리지 테크 파크
+                        </p>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4 border-l border-outline-variant/20 pl-6">
+<img alt="드라이버" class="w-12 h-12 rounded-full object-cover shadow-sm" data-alt="Professional woman in corporate transit attire, calm expression, outdoor daylight setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAxDUlyVBqQsDCBhW5xOQAcv4iEiDS5folywX2-4MooCYzK3O239ichwbzG3tkvYN4uyIIWZ4VrCxCcJhUHAnBe2EYXu1GSnhuDd0eLnzYhY7tIcy-nEwex3eDp183eQEf9OoDOWmtrpe2HLhsrOQIgF573jaqPE4wZu-Fv-30JB8JsPaw7X2aEp7JFQB0tKIeK-D6SIQgd4hPsu6kfq2-Ei-kJ_p6UCVwiqp4HDV6TKaBqLVaihzh6hy4G2-a1985isrvwPWc9rZc"/>
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">캡틴</span>
+<span class="font-bold text-on-surface">엘레나 로드리게스</span>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">최종 낙찰가</span>
+<span class="text-2xl font-black text-primary">₩145,000</span>
+</div>
+<button class="bg-surface-container-lowest p-3 rounded-full hover:bg-primary hover:text-white transition-all duration-300">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Empty state spacer -->
+<div class="py-24 text-center">
+<p class="text-slate-400 font-medium italic">최근 내역의 끝입니다</p>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] z-50 flex justify-around items-center px-4 py-3 bg-white/80 dark:bg-slate-900/80 backdrop-blur-[20px] rounded-full max-w-md shadow-[0_20px_40px_-15px_rgba(0,104,95,0.15)] md:hidden">
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 dark:hover:text-teal-300 transition-colors active:scale-90 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="gavel">gavel</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest">경매</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 dark:hover:text-teal-300 transition-colors active:scale-90 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="visibility">visibility</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest">관심목록</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-gradient-to-br from-teal-600 to-teal-800 text-white rounded-full w-12 h-12 shadow-lg shadow-teal-900/20 active:scale-90 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 dark:hover:text-teal-300 transition-colors active:scale-90 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest">프로필</span>
+</a>
+</nav>
+<!-- Desktop Navigation (Integrated in Top Bar Rule) -->
+<div class="hidden md:flex fixed top-10 right-24 z-50 items-center gap-8">
+<a class="text-slate-500 hover:text-teal-600 font-bold uppercase tracking-widest text-xs transition-colors" href="#">경매</a>
+<a class="text-slate-500 hover:text-teal-600 font-bold uppercase tracking-widest text-xs transition-colors" href="#">관심목록</a>
+<a class="text-teal-600 font-bold uppercase tracking-widest text-xs border-b-2 border-teal-600" href="#">입찰</a>
+<a class="text-slate-500 hover:text-teal-600 font-bold uppercase tracking-widest text-xs transition-colors" href="#">프로필</a>
+</div>
+</body></html>

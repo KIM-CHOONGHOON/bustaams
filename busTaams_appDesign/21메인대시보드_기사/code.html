@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+
+<html lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Editorial Velocity | 기사용 대시보드</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "outline-variant": "#bec9c6",
+                        "primary": "#004e47",
+                        "error-container": "#ffdad6",
+                        "tertiary-container": "#8b4b32",
+                        "surface-bright": "#f7f9fb",
+                        "tertiary-fixed-dim": "#ffb59a",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-fixed-dim": "#85d5c9",
+                        "outline": "#6e7977",
+                        "inverse-primary": "#85d5c9",
+                        "surface": "#f7f9fb",
+                        "surface-variant": "#e0e3e5",
+                        "error": "#ba1a1a",
+                        "on-surface-variant": "#3e4947",
+                        "on-tertiary-container": "#ffc9b7",
+                        "on-error": "#ffffff",
+                        "surface-dim": "#d8dadc",
+                        "on-background": "#191c1e",
+                        "on-surface": "#191c1e",
+                        "background": "#f7f9fb",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "surface-container": "#eceef0",
+                        "on-primary-fixed-variant": "#005049",
+                        "inverse-on-surface": "#eff1f3",
+                        "on-error-container": "#93000a",
+                        "tertiary": "#6e341d",
+                        "inverse-surface": "#2d3133",
+                        "tertiary-fixed": "#ffdbcf",
+                        "on-secondary-container": "#6c2c00",
+                        "secondary-container": "#ff8d4b",
+                        "secondary": "#9d4300",
+                        "on-secondary-fixed-variant": "#783200",
+                        "secondary-fixed": "#ffdbca",
+                        "primary-container": "#00685f",
+                        "on-primary-container": "#93e4d8",
+                        "surface-tint": "#066a61",
+                        "surface-container-high": "#e6e8ea",
+                        "primary-fixed": "#a1f1e5",
+                        "secondary-fixed-dim": "#ffb690",
+                        "on-tertiary-fixed-variant": "#71361f",
+                        "surface-container-low": "#f2f4f6",
+                        "on-secondary-fixed": "#341100",
+                        "on-tertiary-fixed": "#380d00",
+                        "on-primary-fixed": "#00201d",
+                        "surface-container-highest": "#e0e3e5",
+                        "on-primary": "#ffffff"
+                    },
+                    fontFamily: {
+                        "headline": ["Plus Jakarta Sans"],
+                        "body": ["Manrope"],
+                        "label": ["Manrope"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .text-editorial-header { font-family: 'Plus Jakarta Sans', sans-serif; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-background min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-xl shadow-teal-900/5 flex items-center justify-between px-6 h-16 w-full">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest overflow-hidden">
+<img alt="Driver profile photo" class="w-full h-full object-cover" data-alt="Professional headshot of a mature smiling Korean bus driver wearing a clean uniform, warm natural studio lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA4Nmf6WYDrBGpPW1hDqpEgenqH04dYNaEU2BIt_wiS4SORIEBNyefV4B9DpABwpoebXKUdyfzOz6aO5XsHwP4oNfG5ToJa9ai3vPAXzWP3HAkA4xEvlwz_4dLPpmTfcUQyVap8EFhMdbvujApd5WnAD4LDO_LJA_htaIBWUaiL97E9MVXxwYSli7HNTDiAQB-SMhKrixHzZeLLnGetBFpzFretxha75lPBDcN8JMHSTRAqDNEZd3m6zX3E2Bdw6Y0aQRsBPh-OWYA"/>
+</div>
+<div class="flex flex-col">
+<span class="text-xs text-slate-500 font-medium">프리미엄 파트너</span>
+<span class="text-editorial-header font-bold text-teal-900 tracking-tight">김철수 기사님</span>
+</div>
+</div>
+<div class="text-xl font-extrabold text-teal-900 tracking-tighter font-headline">Editorial Velocity</div>
+<div class="flex items-center gap-4">
+<button class="relative text-teal-800 hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-secondary rounded-full"></span>
+</button>
+</div>
+</header>
+<main class="pt-24 px-6 max-w-7xl mx-auto space-y-12">
+<!-- Active Opportunities Hero (Asymmetric Grid) -->
+<section class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-end">
+<div class="lg:col-span-4 space-y-4">
+<h2 class="text-4xl font-extrabold font-headline tracking-tighter text-on-surface leading-none">실시간 견적 기회</h2>
+<p class="text-on-surface-variant text-sm max-w-xs">현재 12개의 새로운 운행 요청이 기사님의 제안을 기다리고 있습니다.</p>
+<div class="flex gap-2 items-center text-secondary font-bold text-sm">
+<span class="relative flex h-3 w-3">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-3 w-3 bg-secondary"></span>
+</span>
+                    LIVE Updates
+                </div>
+</div>
+<div class="lg:col-span-8">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Opportunity Card 1 -->
+<div class="bg-surface-container-lowest rounded-xl p-6 shadow-xl shadow-teal-900/5 border-l-4 border-secondary flex flex-col justify-between h-48 hover:translate-y-[-4px] transition-transform duration-300">
+<div>
+<div class="flex justify-between items-start">
+<span class="bg-secondary-fixed text-on-secondary-fixed text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">High Demand</span>
+<span class="text-xs text-slate-400">12분 전</span>
+</div>
+<h3 class="mt-4 font-bold text-lg text-on-surface">서울 → 강릉 (단체 관광)</h3>
+<p class="text-sm text-on-surface-variant">45인승 대형 · 24년 11월 15일</p>
+</div>
+<div class="flex justify-between items-center mt-4">
+<span class="text-primary font-extrabold text-xl">₩1,250,000 ~</span>
+<button class="bg-primary text-white rounded-full px-4 py-2 text-sm font-bold shadow-lg shadow-primary/20">견적하기</button>
+</div>
+</div>
+<!-- Opportunity Card 2 -->
+<div class="bg-surface-container-lowest rounded-xl p-6 shadow-xl shadow-teal-900/5 border-l-4 border-primary flex flex-col justify-between h-48 hover:translate-y-[-4px] transition-transform duration-300">
+<div>
+<div class="flex justify-between items-start">
+<span class="bg-primary-fixed text-on-primary-fixed text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">Regular</span>
+<span class="text-xs text-slate-400">35분 전</span>
+</div>
+<h3 class="mt-4 font-bold text-lg text-on-surface">인천공항 → 평택 (기업 연수)</h3>
+<p class="text-sm text-on-surface-variant">28인승 우등 · 24년 11월 18일</p>
+</div>
+<div class="flex justify-between items-center mt-4">
+<span class="text-primary font-extrabold text-xl">₩680,000 ~</span>
+<button class="bg-primary text-white rounded-full px-4 py-2 text-sm font-bold shadow-lg shadow-primary/20">견적하기</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Main Bento Grid -->
+<section class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+<!-- Quick Menu Grid (Editorial Style) -->
+<div class="lg:col-span-2 space-y-6">
+<h3 class="font-headline font-bold text-xl tracking-tight text-teal-900 flex items-center gap-2">
+<span class="w-8 h-[2px] bg-teal-800"></span> 빠른 메뉴
+                </h3>
+<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4"><!-- Quick Menu Items -->
+<a class="group bg-surface-container-low hover:bg-white p-4 rounded-xl transition-all duration-300 flex flex-col items-center text-center gap-3" href="#">
+<div class="w-12 h-12 rounded-full bg-white group-hover:bg-primary-fixed flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-primary" data-icon="badge">badge</span>
+</div>
+<span class="text-[11px] font-bold text-on-surface-variant group-hover:text-primary">기사 정보 등록</span>
+</a>
+<a class="group bg-surface-container-low hover:bg-white p-4 rounded-xl transition-all duration-300 flex flex-col items-center text-center gap-3" href="#">
+<div class="w-12 h-12 rounded-full bg-white group-hover:bg-primary-fixed flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-primary" data-icon="directions_bus">directions_bus</span>
+</div>
+<span class="text-[11px] font-bold text-on-surface-variant group-hover:text-primary">버스 정보 등록</span>
+</a>
+<a class="group bg-surface-container-low hover:bg-white p-4 rounded-xl transition-all duration-300 flex flex-col items-center text-center gap-3" href="#">
+<div class="w-12 h-12 rounded-full bg-white group-hover:bg-primary-fixed flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-primary" data-icon="format_list_bulleted">format_list_bulleted</span>
+</div>
+<span class="text-[11px] font-bold text-on-surface-variant group-hover:text-primary">견적 리스트</span>
+</a>
+<a class="group bg-surface-container-low hover:bg-white p-4 rounded-xl transition-all duration-300 flex flex-col items-center text-center gap-3" href="#">
+<div class="w-12 h-12 rounded-full bg-white group-hover:bg-primary-fixed flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-primary" data-icon="calendar_month">calendar_month</span>
+</div>
+<span class="text-[11px] font-bold text-on-surface-variant group-hover:text-primary">운행 예정 리스트</span>
+</a>
+<a class="group bg-surface-container-low hover:bg-white p-4 rounded-xl transition-all duration-300 flex flex-col items-center text-center gap-3" href="#">
+<div class="w-12 h-12 rounded-full bg-white group-hover:bg-primary-fixed flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-primary" data-icon="pending_actions">pending_actions</span>
+</div>
+<span class="text-[11px] font-bold text-on-surface-variant group-hover:text-primary">승인 진행 리스트</span>
+</a>
+<a class="group bg-surface-container-low hover:bg-white p-4 rounded-xl transition-all duration-300 flex flex-col items-center text-center gap-3" href="#">
+<div class="w-12 h-12 rounded-full bg-white group-hover:bg-primary-fixed flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-primary" data-icon="task_alt">task_alt</span>
+</div>
+<span class="text-[11px] font-bold text-on-surface-variant group-hover:text-primary">운행 완료 리스트</span>
+</a>
+<a class="group bg-surface-container-low hover:bg-white p-4 rounded-xl transition-all duration-300 flex flex-col items-center text-center gap-3" href="#">
+<div class="w-12 h-12 rounded-full bg-white group-hover:bg-primary-fixed flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-primary" data-icon="event_busy">event_busy</span>
+</div>
+<span class="text-[11px] font-bold text-on-surface-variant group-hover:text-primary">유찰 리스트</span>
+</a>
+<a class="group bg-surface-container-low hover:bg-white p-4 rounded-xl transition-all duration-300 flex flex-col items-center text-center gap-3" href="#">
+<div class="w-12 h-12 rounded-full bg-white group-hover:bg-primary-fixed flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-primary" data-icon="chat">chat</span>
+</div>
+<span class="text-[11px] font-bold text-on-surface-variant group-hover:text-primary">실시간 채팅</span>
+</a>
+<a class="group bg-surface-container-low hover:bg-white p-4 rounded-xl transition-all duration-300 flex flex-col items-center text-center gap-3" href="#">
+<div class="w-12 h-12 rounded-full bg-white group-hover:bg-primary-fixed flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-primary" data-icon="credit_card">credit_card</span>
+</div>
+<span class="text-[11px] font-bold text-on-surface-variant group-hover:text-primary">카드/회비 관리</span>
+</a>
+<a class="group bg-surface-container-low hover:bg-white p-4 rounded-xl transition-all duration-300 flex flex-col items-center text-center gap-3" href="#">
+<div class="w-12 h-12 rounded-full bg-white group-hover:bg-primary-fixed flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-primary" data-icon="settings_suggest">settings_suggest</span>
+</div>
+<span class="text-[11px] font-bold text-on-surface-variant group-hover:text-primary">요금제 선택</span>
+</a></div>
+</div>
+<!-- Side Column: Schedule & Earnings -->
+<div class="space-y-8">
+<!-- Today's Schedule Card -->
+<div class="bg-primary text-white rounded-2xl p-8 shadow-2xl shadow-primary/20 relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-8xl" data-icon="route">route</span>
+</div>
+<h4 class="text-xs font-bold uppercase tracking-widest opacity-80 mb-6">Today's Schedule</h4>
+<div class="space-y-4 relative z-10">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="schedule">schedule</span>
+</div>
+<div>
+<p class="text-[10px] opacity-70">Pick-up Time</p>
+<p class="text-lg font-bold">오후 02:30</p>
+</div>
+</div>
+<div class="pt-4 border-t border-white/10">
+<p class="text-[10px] opacity-70">Destination</p>
+<p class="text-xl font-bold font-headline leading-tight">경기 용인시 기흥구 → 전남 여수시</p>
+</div>
+<button class="w-full mt-4 bg-white text-primary py-3 rounded-full font-bold text-sm hover:bg-primary-fixed transition-colors">
+                            상세 정보 확인
+                        </button>
+</div>
+</div>
+<!-- Earnings Summary -->
+<div class="bg-surface-container-high rounded-2xl p-8 shadow-xl shadow-teal-900/5">
+<div class="flex justify-between items-center mb-6">
+<h4 class="text-xs font-bold uppercase tracking-widest text-teal-900">Earnings Summary</h4>
+<span class="text-[10px] font-bold text-primary px-2 py-1 bg-primary-fixed rounded">November</span>
+</div>
+<div class="space-y-1">
+<p class="text-sm text-on-surface-variant font-medium">이번 달 총 수익</p>
+<p class="text-3xl font-extrabold font-headline text-on-surface tracking-tighter">₩8,420,000</p>
+</div>
+<div class="mt-8 flex items-center justify-between text-xs">
+<div class="flex flex-col gap-1">
+<span class="text-slate-400">정산 예정</span>
+<span class="font-bold text-on-surface">₩1,240,000</span>
+</div>
+<div class="w-px h-8 bg-slate-300"></div>
+<div class="flex flex-col gap-1">
+<span class="text-slate-400">완료된 운행</span>
+<span class="font-bold text-on-surface">14건</span>
+</div>
+</div>
+<button class="w-full mt-6 flex items-center justify-center gap-2 text-primary font-bold text-sm hover:underline">
+                        수익 상세 보기 <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+</section>
+<!-- Bottom Banner / Visual Break -->
+<section class="relative h-48 rounded-3xl overflow-hidden bg-slate-900 flex items-center px-12 group">
+<div class="absolute inset-0 z-0 overflow-hidden">
+<img alt="Luxury bus interior" class="w-full h-full object-cover opacity-50 group-hover:scale-105 transition-transform duration-700" data-alt="Interior of a luxury premium tour bus with leather seats and ambient lighting at night, high-end travel aesthetic" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDd1cmwWadGqEVtV-xNJu4CT-nzdrjTfWs5mnHZWthPLlGqXJvDM6-zdHdIOEfxl-33alvQ51u0CWgtmCwN0I5ZHQu44L0FpRakK5R7wFj8quXWJUvAMas6cHKI5jbsD6lqeZxRbjoFfi38ifujiNRcITlXAxtpv8j5FIO9E2z_W0hPP0xxi7GBetNBEvvO5w6RnBmgNyTkxMEC74CkkLdNfnJqFjlQYAI7nkmLce_5YITHZZyErTimyYQuayN6dI6S6w8xBqchskI"/>
+<div class="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/60 to-transparent"></div>
+</div>
+<div class="relative z-10 max-w-md">
+<h3 class="text-white text-2xl font-extrabold font-headline mb-2 leading-tight">프리미엄 기사님들을 위한 전용 멤버십 혜택</h3>
+<p class="text-slate-300 text-sm mb-4">전국 정비소 할인 및 유류비 환급 서비스를 확인하세요.</p>
+<button class="bg-secondary text-white px-6 py-2 rounded-full font-bold text-sm shadow-lg shadow-secondary/30">자세히 보기</button>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-md rounded-full bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-2xl shadow-teal-900/10 flex justify-around items-center p-2 z-50">
+<!-- Home (Active) -->
+<a class="flex flex-col items-center justify-center bg-teal-50 dark:bg-teal-900/30 text-teal-800 dark:text-teal-200 rounded-full px-5 py-2 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="font-plus-jakarta-sans text-[11px] font-semibold uppercase tracking-widest mt-1">홈</span>
+</a>
+<!-- Auctions -->
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-5 py-2 active:scale-90 transition-transform hover:text-teal-600 dark:hover:text-teal-300" href="#">
+<span class="material-symbols-outlined" data-icon="gavel">gavel</span>
+<span class="font-plus-jakarta-sans text-[11px] font-semibold uppercase tracking-widest mt-1">경매</span>
+</a>
+<!-- Trips -->
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-5 py-2 active:scale-90 transition-transform hover:text-teal-600 dark:hover:text-teal-300" href="#">
+<span class="material-symbols-outlined" data-icon="route">route</span>
+<span class="font-plus-jakarta-sans text-[11px] font-semibold uppercase tracking-widest mt-1">운행</span>
+</a>
+<!-- My Info -->
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-5 py-2 active:scale-90 transition-transform hover:text-teal-600 dark:hover:text-teal-300" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-plus-jakarta-sans text-[11px] font-semibold uppercase tracking-widest mt-1">내 정보</span>
+</a>
+</nav>
+</body></html>

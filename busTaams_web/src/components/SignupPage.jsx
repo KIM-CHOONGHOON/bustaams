@@ -129,26 +129,28 @@ const SignupPage = ({ onBack }) => {
     const formattedPhone = "+82" + purePhone.replace(/^0/, '');
 
     try {
-      if (!window.recaptchaVerifier) {
-        window.recaptchaVerifier = new window.firebaseAuth.RecaptchaVerifier(window.auth, 'recaptcha-signup-wrapper', {
-          'size': 'invisible'
-        });
-      }
+      const res = await fetch(`${API_BASE}/api/auth/request-sms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNo: purePhone, category: 'ETC' })
+      });
+      const data = await res.json();
       
-      // [테스트] 인증번호 발송 생략 및 즉시 인증 완료 처리
-      // const confirmation = await window.firebaseAuth.signInWithPhoneNumber(window.auth, formattedPhone, window.recaptchaVerifier);
-      // setConfirmationResult(confirmation);
-      setIsPhoneVerified(true);
+      if (!res.ok) throw new Error(data.error);
+
+      // [테스트] 서버에서 내려준 코드로 인증 진행 (실제론 SMS 수신)
+      setConfirmationResult({ 
+        confirm: (code) => {
+            if (code === data.code) return { user: { getIdToken: () => Promise.resolve('mock-token') } };
+            throw new Error("Invalid code");
+        }
+      });
+      
       setTimer(180);
-      alert("[테스트 모드] 인증번호 발송을 생략하고 즉시 인증 처리되었습니다.");
+      alert(`[테스트] 인증번호 ${data.code}가 발송되었습니다. (TB_SMS_LOG에 기록됨)`);
     } catch (e) {
       console.error("SMS Error:", e);
       alert(`인증번호 전송 실패: ${e.message}`);
-      // reCAPTCHA 초기화 실패 시 재시도 가능하도록 초기화
-      if (window.recaptchaVerifier) {
-          window.recaptchaVerifier.clear();
-          window.recaptchaVerifier = null;
-      }
     }
   };
 

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+
+<html class="light" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>busTaams | 드라이버 채팅 관리</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-surface-variant": "#3e4947",
+              "on-primary-fixed": "#00201d",
+              "tertiary-fixed": "#ffdbcf",
+              "on-background": "#191c1e",
+              "on-surface": "#191c1e",
+              "secondary-fixed-dim": "#ffb690",
+              "surface-tint": "#066a61",
+              "surface-container-highest": "#e0e3e5",
+              "surface-container-low": "#f2f4f6",
+              "inverse-surface": "#2d3133",
+              "surface-container-lowest": "#ffffff",
+              "on-tertiary-container": "#ffc9b7",
+              "secondary": "#9d4300",
+              "surface-container-high": "#e6e8ea",
+              "outline": "#6e7977",
+              "on-secondary-fixed": "#341100",
+              "surface": "#f7f9fb",
+              "surface-container": "#eceef0",
+              "primary": "#004e47",
+              "on-primary-container": "#93e4d8",
+              "inverse-primary": "#85d5c9",
+              "secondary-fixed": "#ffdbca",
+              "background": "#f7f9fb",
+              "on-tertiary": "#ffffff",
+              "inverse-on-surface": "#eff1f3",
+              "surface-bright": "#f7f9fb",
+              "tertiary-container": "#8b4b32",
+              "tertiary": "#6e341d",
+              "primary-fixed-dim": "#85d5c9",
+              "on-primary-fixed-variant": "#005049",
+              "surface-variant": "#e0e3e5",
+              "on-error": "#ffffff",
+              "on-secondary-fixed-variant": "#783200",
+              "primary-fixed": "#a1f1e5",
+              "on-tertiary-fixed-variant": "#71361f",
+              "surface-dim": "#d8dadc",
+              "outline-variant": "#bec9c6",
+              "on-error-container": "#93000a",
+              "secondary-container": "#ff8d4b",
+              "on-secondary-container": "#6c2c00",
+              "on-secondary": "#ffffff",
+              "primary-container": "#00685f",
+              "error-container": "#ffdad6",
+              "error": "#ba1a1a",
+              "on-tertiary-fixed": "#380d00",
+              "tertiary-fixed-dim": "#ffb59a",
+              "on-primary": "#ffffff"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .glass-header {
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+      }
+      body {
+        font-family: 'Manrope', sans-serif;
+      }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-background min-h-screen">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 right-0 z-40 glass-header">
+<div class="flex justify-between items-center w-full px-6 pt-8 pb-4 max-w-7xl mx-auto">
+<div class="flex items-center gap-4">
+<button class="text-teal-800 dark:text-teal-200 hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<h1 class="text-teal-900 dark:text-teal-50 font-black tracking-tighter font-['Plus_Jakarta_Sans'] font-extrabold tracking-tight text-3xl">busTaams</h1>
+</div>
+<div class="flex items-center gap-4">
+<div class="h-10 w-10 rounded-full bg-surface-container-highest overflow-hidden ring-2 ring-primary-fixed">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="Professional portrait of a friendly male driver in a clean uniform, warm natural lighting, modern studio background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCQKXRoBCeLV07vgTChHmqvi_NRAZXUqrhpqN8AbLegLS8VjYTymtrKWXeyE0UgCnxmjd6Z9z_psP9elE65_2EmmAVEl7ghuLcqsd-cQE7r6oa6Gkiw_j2FTp9fNI_DVbgJN2jMYf5uSfckIxhOQMUSR3wFXvxUeGSlW22qeXfGvG7eXWJypKF0PVF_uiYVAXCxislNYYMqDcFsDB4S7OYRwC0Fp9Knhp9wnVItFORMfdeQFLvUz1TJfgR6NKSyggPQuF4Oytl2Q8Q"/>
+</div>
+</div>
+</div>
+</header>
+<main class="pt-32 pb-40 px-6 max-w-5xl mx-auto">
+<!-- Editorial Section Header -->
+<section class="mb-12">
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-6">
+<div class="max-w-xl">
+<h2 class="font-headline font-extrabold text-5xl md:text-6xl text-primary tracking-tight leading-[1.1] mb-4">
+                        메시지 목록
+                    </h2>
+<p class="font-body text-on-surface-variant text-lg max-w-sm">
+                        진행 중인 입찰 문의를 관리하고 실시간으로 운송 물류를 조율하세요.
+                    </p>
+</div>
+<div class="flex gap-2">
+<button class="bg-surface-container-low px-6 py-3 rounded-full font-label font-bold text-sm text-primary flex items-center gap-2 hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="archive">archive</span>
+                        보관함
+                    </button>
+<button class="bg-primary-container text-white px-6 py-3 rounded-full font-label font-bold text-sm flex items-center gap-2 shadow-lg shadow-primary/20 hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-lg" data-icon="chat_add_on">chat_add_on</span>
+                        새 브로드캐스트
+                    </button>
+</div>
+</div>
+</section>
+<!-- Chat List - Bento Style -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+<!-- Active Conversation Item (Selected/Featured) -->
+<div class="md:col-span-8 group cursor-pointer">
+<div class="bg-surface-container-lowest p-8 rounded-[2rem] shadow-[0_20px_40px_-15px_rgba(0,104,95,0.08)] relative overflow-hidden transition-all duration-300 hover:shadow-[0_30px_60px_-15px_rgba(0,104,95,0.12)] border-l-4 border-secondary">
+<div class="flex flex-col md:flex-row gap-6 items-start">
+<div class="relative">
+<div class="w-20 h-20 rounded-2xl overflow-hidden shadow-inner">
+<img alt="Sarah Jenkins" class="w-full h-full object-cover" data-alt="Portrait of a professional woman with a confident smile, editorial lighting, soft blurred office interior background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDvNAjScXl-pwiUo62uxjirVmHFOEUq3KuoWDTNIY7Zvj7BybrZ7JVzxCaV8xHJbV7X1LVvt51bUTSB8YXhZDp3N0VKEiLcanC5bYo2maZlGda1BjaiUQUaOgsL2YQRumMRj8LqzGXDgQlteLJcnabt6g6lRjcNH93PRrjX0fl__LUCMB8ZHxi6yAbl8Zj0h9MXbuprUvyd-RrOE0dqRIzzohHsdm7NPF6jv4iRjtinDolsgGffk882shFRhy0nXtfGO9ceumTBtDw"/>
+</div>
+<div class="absolute -bottom-2 -right-2 bg-secondary text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-tighter">
+                                진행 중인 고객
+                            </div>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-headline font-bold text-2xl text-on-surface">사라 젠킨스</h3>
+<span class="font-label text-xs font-bold text-secondary uppercase tracking-widest">2분 전</span>
+</div>
+<p class="font-body text-on-surface-variant text-lg leading-relaxed mb-4">
+                                "저희 차량단에 엔진 사양이 딱 맞는 것 같아요. 내일 오전에 내부 가상 투어를 예약할 수 있을까요?"
+                            </p>
+<div class="flex items-center gap-4">
+<span class="flex items-center gap-1 text-primary text-xs font-bold font-label uppercase tracking-widest">
+<span class="material-symbols-outlined text-sm" data-icon="directions_bus">directions_bus</span>
+                                    볼보 B11R 2022
+                                </span>
+<div class="h-1 w-1 bg-outline-variant rounded-full"></div>
+<span class="text-on-surface-variant text-xs font-medium">현재 입찰가 $142,000</span>
+</div>
+</div>
+</div>
+<!-- Urgent Indicator -->
+<div class="absolute top-8 right-8">
+<div class="flex h-3 w-3">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-3 w-3 bg-secondary"></span>
+</div>
+</div>
+</div>
+</div>
+<!-- Secondary Conversations Column -->
+<div class="md:col-span-4 flex flex-col gap-6">
+<!-- Conversation Card 2 -->
+<div class="bg-surface-container-lowest p-6 rounded-[1.5rem] shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)] hover:bg-surface-container-low transition-colors group cursor-pointer">
+<div class="flex items-center gap-4 mb-3">
+<div class="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0">
+<img alt="Marcus Thorne" class="w-full h-full object-cover" data-alt="Modern business portrait of a man with spectacles, clean minimalist background, professional look" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBB0k9cIXXhabEpKNBdaZAjI6UI9nV9tGyp0aE6dncdzDoZ1_umMaNyqDzIxV3azXiUYWge6UwE64A4kIw0VCtRkd4frkmerfegWg81N4lkqmiO9Pn7o0HpFtyoxj2yqumHqT5eCRTv_CSTd4fIDg7g4Aq6fFpx9j-1YXrWHwg1zf3yPJEDMaCvnR855Won3Zhv4-LAlsFcdFMOSt3ScdVZAqRfLexytAJKC36vXN_2fpG8ii_ez0l6ROSQStNDJawaMshKGbUAJQk"/>
+</div>
+<div class="flex-1 min-w-0">
+<h4 class="font-headline font-bold text-base truncate">마커스 쏜</h4>
+<p class="font-label text-[10px] text-on-surface-variant uppercase tracking-widest">메르세데스 트라베고</p>
+</div>
+<div class="bg-primary text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold">3</div>
+</div>
+<p class="font-body text-sm text-on-surface-variant line-clamp-2">
+                        운송 허가증 서류를 보냈습니다. 확인 부탁드려요...
+                    </p>
+</div>
+<!-- Conversation Card 3 -->
+<div class="bg-surface-container-lowest p-6 rounded-[1.5rem] shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)] hover:bg-surface-container-low transition-colors group cursor-pointer opacity-80">
+<div class="flex items-center gap-4 mb-3">
+<div class="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0">
+<img alt="Elena Rodriguez" class="w-full h-full object-cover" data-alt="Professional woman in business attire, smiling warmly, soft studio lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDN9xc5khPGZo4CahzUsDqZTTufHnmwbllxhsvPXOKSZBu717OEsLPfubNBIosRwxUooJA1zEvlcj1JoNUQG7wms9Sox1J7b4Ro5xWpBwreBhrOJovJRVdP8YFuRj6YgmgV5vQE60ZjHiDuVZHeC92u4XtnFEOg-uev-s-0c7WZTpTxESgNJmAxEN2LOjJDg9koAnard9FM3KI4pNPh34_26eymy0gXm9qgX1T3NofpS8yOBO0IIuThEgCTgLc7SAIZNsok8sPVxOg"/>
+</div>
+<div class="flex-1 min-w-0">
+<h4 class="font-headline font-bold text-base truncate">엘레나 로드리게스</h4>
+<p class="font-label text-[10px] text-on-surface-variant uppercase tracking-widest">스카니아 투어링</p>
+</div>
+</div>
+<p class="font-body text-sm text-on-surface-variant line-clamp-2">
+                        경매 낙찰자에게 알림이 전송되었습니다. 인계 마무리 준비가 되었습니다.
+                    </p>
+</div>
+</div>
+<!-- More Chats - Row Style -->
+<div class="md:col-span-12 space-y-4 mt-4">
+<div class="flex items-center justify-between px-2">
+<h5 class="font-headline font-bold text-xl text-primary-container">최근 활동</h5>
+<button class="text-primary font-label text-xs font-bold uppercase tracking-widest hover:underline">모두 보기</button>
+</div>
+<div class="bg-surface-container-low/50 rounded-[2rem] p-4 space-y-2">
+<!-- Flat List Item 1 -->
+<div class="bg-surface-container-lowest flex items-center gap-6 p-4 rounded-2xl hover:translate-x-2 transition-transform cursor-pointer">
+<div class="w-14 h-14 rounded-full overflow-hidden flex-shrink-0 grayscale hover:grayscale-0 transition-all">
+<img alt="David Kim" class="w-full h-full object-cover" data-alt="Portrait of a man in casual business wear, soft sunlight, outdoor city park background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCQ0TlKBZUYl4GuoJPhotW2WTMJFN45Ur535Z5hm_nayNtKrCUmsGb2JmwivhryBF8_miOywSWFoI32DRLej4KFpxBcPChP7NcDD8KHbLBO4uUEBAph0rOXMbqPnpdBuV0GDMBpETKAPeTen3xzYDaZwnO1hBd36bexPivfSNh74jUrjl9n7Xut0sVeTe_DI8jeDPacmwXK7N2ePdirzsaLPlebTGM3Tlj6T2MYQFUaTZPupbXaw95Bi-t34mqvbkSQbz5tZ4SB-9s"/>
+</div>
+<div class="flex-1">
+<h4 class="font-headline font-bold text-lg">김데이비드</h4>
+<p class="font-body text-sm text-on-surface-variant">유지보수 이력 로그를 확인 중입니다...</p>
+</div>
+<div class="text-right">
+<span class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">어제</span>
+<span class="material-symbols-outlined text-slate-300" data-icon="done_all">done_all</span>
+</div>
+</div>
+<!-- Flat List Item 2 -->
+<div class="bg-surface-container-lowest flex items-center gap-6 p-4 rounded-2xl hover:translate-x-2 transition-transform cursor-pointer">
+<div class="w-14 h-14 rounded-full overflow-hidden flex-shrink-0 grayscale hover:grayscale-0 transition-all">
+<img alt="Lisa Wu" class="w-full h-full object-cover" data-alt="Clean portrait of a young woman with a neutral expression, minimalist white background, soft editorial light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBw4y1umSyPAnVQBuS36rv9OdINEiEENEGxhWj5HVy_QFiuieGqvrDeNWTQcymmcR_52OegdwHLP753oviZPJ_vm0bszriouEYOuJ4PpSeT9WO1oHrzwxiyRwZCVodDJqumMUYRbg48rUGnfnZOj6jfYCF6-j1JKYPh9kV0L4t2QADUiv2lMl0P6jZxCCg8Pdbk1P_Ey4vhq3Qb097cRe0uXigEs6LxDJ0igHPdbUbddj6YmC5meM1YTaOdl_BcC877sfjql4glz20"/>
+</div>
+<div class="flex-1">
+<h4 class="font-headline font-bold text-lg">리사 우</h4>
+<p class="font-body text-sm text-on-surface-variant">배송에 보험 보장이 포함되어 있나요?</p>
+</div>
+<div class="text-right">
+<span class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">10월 24일</span>
+<span class="material-symbols-outlined text-slate-300" data-icon="done_all">done_all</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-8 left-0 right-0 z-50 flex justify-around items-center px-4 py-3">
+<div class="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] rounded-full max-w-md bg-white/80 dark:bg-slate-900/80 backdrop-blur-[20px] shadow-[0_20px_40px_-15px_rgba(0,104,95,0.15)] flex justify-around items-center py-3 px-2">
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 dark:hover:text-teal-300 transition-colors active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="gavel">gavel</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest">경매</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 dark:hover:text-teal-300 transition-colors active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="visibility">visibility</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest">관심목록</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-gradient-to-br from-teal-600 to-teal-800 text-white rounded-full w-12 h-12 shadow-lg shadow-teal-900/20 active:scale-90 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="payments" style="font-variation-settings: 'FILL' 1;">payments</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 px-4 hover:text-teal-600 dark:hover:text-teal-300 transition-colors active:scale-90 duration-300" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="person">person</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest">프로필</span>
+</a>
+</div>
+</nav>
+</body></html>

@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+
+<html class="light" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>기사 등록 | busTaams</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-surface-variant": "#3e4947",
+                        "on-primary-fixed": "#00201d",
+                        "tertiary-fixed": "#ffdbcf",
+                        "on-background": "#191c1e",
+                        "on-surface": "#191c1e",
+                        "secondary-fixed-dim": "#ffb690",
+                        "surface-tint": "#066a61",
+                        "surface-container-highest": "#e0e3e5",
+                        "surface-container-low": "#f2f4f6",
+                        "inverse-surface": "#2d3133",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-container": "#ffc9b7",
+                        "secondary": "#9d4300",
+                        "surface-container-high": "#e6e8ea",
+                        "outline": "#6e7977",
+                        "on-secondary-fixed": "#341100",
+                        "surface": "#f7f9fb",
+                        "surface-container": "#eceef0",
+                        "primary": "#004e47",
+                        "on-primary-container": "#93e4d8",
+                        "inverse-primary": "#85d5c9",
+                        "secondary-fixed": "#ffdbca",
+                        "background": "#f7f9fb",
+                        "on-tertiary": "#ffffff",
+                        "inverse-on-surface": "#eff1f3",
+                        "surface-bright": "#f7f9fb",
+                        "tertiary-container": "#8b4b32",
+                        "tertiary": "#6e341d",
+                        "primary-fixed-dim": "#85d5c9",
+                        "on-primary-fixed-variant": "#005049",
+                        "surface-variant": "#e0e3e5",
+                        "on-error": "#ffffff",
+                        "on-secondary-fixed-variant": "#783200",
+                        "primary-fixed": "#a1f1e5",
+                        "on-tertiary-fixed-variant": "#71361f",
+                        "surface-dim": "#d8dadc",
+                        "outline-variant": "#bec9c6",
+                        "on-error-container": "#93000a",
+                        "secondary-container": "#ff8d4b",
+                        "on-secondary-container": "#6c2c00",
+                        "on-secondary": "#ffffff",
+                        "primary-container": "#00685f",
+                        "error-container": "#ffdad6",
+                        "error": "#ba1a1a",
+                        "on-tertiary-fixed": "#380d00",
+                        "tertiary-fixed-dim": "#ffb59a",
+                        "on-primary": "#ffffff"
+                    },
+                    fontFamily: {
+                        "headline": ["Plus Jakarta Sans"],
+                        "body": ["Manrope"],
+                        "label": ["Manrope"]
+                    },
+                    borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            font-family: 'Manrope', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .editorial-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 2rem;
+        }
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- TopAppBar -->
+<header class="bg-transparent docked full-width top-0 z-50">
+<div class="flex justify-between items-center w-full px-6 pt-8 pb-4 max-w-7xl mx-auto">
+<div class="flex items-center gap-4">
+<button class="text-teal-800 transition-opacity hover:opacity-80 active:scale-95 duration-200">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<h1 class="font-['Plus_Jakarta_Sans'] font-extrabold tracking-tight text-3xl text-teal-900 font-black tracking-tighter">busTaams</h1>
+</div>
+<div class="flex items-center gap-3">
+<div class="h-10 w-10 rounded-full bg-surface-container-high overflow-hidden border-2 border-surface-container-lowest">
+<img alt="사용자 프로필" class="h-full w-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBMgxGWC9zA8wHaq8KCM2yeSxwR9zvH54fYWV58TZDIA1wEQpucK2crxw4gmjwgAUCHfuAgjYkL7eG_3tEPmfq_bwVQqD0eLtxVwo8g7as_1hz29rELaWLgkq4BR-qBL_2twqIvuQXB1xsPuoD5vwtfc6zLpC2nJH_yEFJSXjbLpXCUljQOuXnE3cdS_d8AM1uc1WJvBndzSPpZGpAd0YbFFUWguWSK0xJ9cWaZ1679m3s3CULfwz5WPFYMVLbp8LI1oxFA_QWDniY"/>
+</div>
+</div>
+</div>
+</header>
+<main class="max-w-7xl mx-auto px-6 pt-12 pb-32">
+<!-- Editorial Header Section -->
+<section class="editorial-grid mb-16">
+<div class="col-span-12 md:col-span-8">
+<p class="font-headline font-bold text-secondary uppercase tracking-[0.2em] mb-4 text-sm">온보딩</p>
+<h2 class="font-headline text-5xl md:text-7xl font-extrabold text-primary leading-tight tracking-tighter mb-6">
+                기사님 등록을 <br/>환영합니다.
+            </h2>
+<p class="text-on-surface-variant text-lg max-w-xl font-medium leading-relaxed">
+                자격 증명을 확인하여 독점 버스 경매 및 대규모 운송 계약에 참여하세요. 전문적인 파트너십이 여기서 시작됩니다.
+            </p>
+</div>
+</section>
+<!-- Main Form Canvas -->
+<div class="editorial-grid">
+<!-- Left Column: Profile Photo -->
+<aside class="col-span-12 md:col-span-4 lg:col-span-3 space-y-8">
+<!-- Profile Photo Card -->
+<div class="bg-surface-container-lowest p-8 rounded-[2rem] shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)]">
+<div class="flex flex-col items-center text-center">
+<div class="relative group">
+<div class="w-40 h-40 rounded-full bg-surface-container-low flex items-center justify-center overflow-hidden border-4 border-surface-container-lowest shadow-inner mb-6 transition-transform group-hover:scale-105 duration-500">
+<span class="material-symbols-outlined text-6xl text-outline-variant" data-icon="account_circle">account_circle</span>
+<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-3xl" data-icon="photo_camera">photo_camera</span>
+</div>
+</div>
+</div>
+<h3 class="font-headline font-bold text-xl text-on-surface mb-2">프로필 사진</h3>
+<p class="text-sm text-on-surface-variant mb-6 px-4 leading-relaxed">기사 ID 카드를 위한 선명하고 전문적인 정면 사진을 제공해 주세요.</p>
+<button class="w-full py-3 rounded-full border-2 border-outline-variant text-on-surface font-bold text-sm hover:bg-surface-container-low transition-colors active:scale-95 duration-200">
+                        이미지 업로드
+                    </button>
+</div>
+</div>
+</aside>
+<!-- Right Column: Registration Sections -->
+<div class="col-span-12 md:col-span-8 lg:col-span-9 space-y-8">
+<!-- Section 1: Personal Information -->
+<div class="bg-surface-container-lowest p-8 md:p-12 rounded-[2rem] shadow-[0_40px_60px_-15px_rgba(0,104,95,0.04)]">
+<h4 class="font-headline font-extrabold text-2xl text-on-surface mb-8 flex items-center gap-3">
+<span class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center text-base">01</span>
+                    신원 정보
+                </h4>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<div class="space-y-2">
+<label class="font-headline font-bold text-sm text-on-surface ml-1">성명 (실명)</label>
+<input class="w-full bg-surface-container-high border-none rounded-xl px-6 py-4 focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-highest transition-all text-on-surface placeholder:text-outline" placeholder="홍길동" type="text"/>
+</div>
+<div class="space-y-2">
+<label class="font-headline font-bold text-sm text-on-surface ml-1">주민등록번호</label>
+<input class="w-full bg-surface-container-high border-none rounded-xl px-6 py-4 focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-highest transition-all text-on-surface placeholder:text-outline" placeholder="YYMMDD-*******" type="text"/>
+</div>
+<div class="space-y-2 md:col-span-2">
+<label class="font-headline font-bold text-sm text-on-surface ml-1">휴대전화 번호</label>
+<div class="space-y-3">
+<div class="flex gap-3">
+<input class="flex-1 bg-surface-container-high border-none rounded-xl px-6 py-4 focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-highest transition-all text-on-surface placeholder:text-outline" placeholder="010-0000-0000" type="tel"/>
+<button class="w-1/3 bg-primary text-white font-bold rounded-xl px-4 py-4 hover:bg-primary-container transition-all active:scale-[0.98] text-sm whitespace-nowrap">인증요청</button>
+</div>
+<div class="flex gap-3">
+<input class="flex-1 bg-surface-container-high border-none rounded-xl px-6 py-4 focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-highest transition-all text-on-surface placeholder:text-outline" maxlength="6" placeholder="6자리 인증번호" type="text"/>
+<button class="w-1/3 border-2 border-primary text-primary font-bold rounded-xl px-4 py-4 hover:bg-primary/5 transition-all active:scale-[0.98] text-sm whitespace-nowrap">인증확인</button>
+</div>
+</div>
+</div>
+<div class="space-y-2 md:col-span-2">
+<label class="font-headline font-bold text-sm text-on-surface ml-1">주소</label>
+<div class="space-y-3">
+<div class="flex gap-3">
+<input class="w-1/3 bg-surface-container-high border-none rounded-xl px-6 py-4 text-on-surface" placeholder="우편번호" readonly="" type="text"/>
+<button class="flex-1 bg-primary text-white font-bold rounded-xl px-6 py-4 hover:bg-primary-container transition-all active:scale-[0.98]">주소 검색</button>
+</div>
+<input class="w-full bg-surface-container-high border-none rounded-xl px-6 py-4 focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-highest transition-all text-on-surface placeholder:text-outline" placeholder="주소" type="text"/>
+<input class="w-full bg-surface-container-high border-none rounded-xl px-6 py-4 focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-highest transition-all text-on-surface placeholder:text-outline" placeholder="상세 주소" type="text"/>
+</div>
+</div>
+</div>
+</div>
+<!-- Section 2: Driver's License Information -->
+<div class="bg-surface-container-lowest p-8 md:p-12 rounded-[2rem] shadow-[0_40px_60px_-15px_rgba(0,104,95,0.04)]">
+<h4 class="font-headline font-extrabold text-2xl text-on-surface mb-8 flex items-center gap-3">
+<span class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center text-base">02</span>
+                    운전면허 정보
+                </h4>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<div class="space-y-2">
+<label class="font-headline font-bold text-sm text-on-surface ml-1">면허 종류 <span class="text-error text-xs font-normal ml-2">*1종 대형 필수</span></label>
+<select class="w-full bg-surface-container-high border-none rounded-xl px-6 py-4 focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-highest transition-all text-on-surface appearance-none">
+<option value="">선택해주세요</option>
+<option value="1_large">1종 대형</option>
+<option value="1_normal">1종 보통</option>
+<option value="other">기타</option>
+</select>
+</div>
+<div class="space-y-2">
+<label class="font-headline font-bold text-sm text-on-surface ml-1">면허번호</label>
+<input class="w-full bg-surface-container-high border-none rounded-xl px-6 py-4 focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-highest transition-all text-on-surface placeholder:text-outline" placeholder="00-00-000000-00" type="text"/>
+</div>
+<div class="space-y-2">
+<label class="font-headline font-bold text-sm text-on-surface ml-1">면허 발급일</label>
+<div class="relative">
+<input class="w-full bg-surface-container-high border-none rounded-xl px-6 py-4 focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-highest transition-all text-on-surface" placeholder="YYYY/MM/DD" type="text"/>
+</div>
+</div>
+<div class="space-y-2">
+<label class="font-headline font-bold text-sm text-on-surface ml-1">면허 유효 여부</label>
+<div class="flex items-center gap-6 py-4">
+<label class="flex items-center gap-2 cursor-pointer">
+<input checked="" class="w-5 h-5 text-primary border-outline-variant focus:ring-primary" name="license_validity" type="radio"/>
+<span class="text-sm font-medium text-on-surface">유효</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer">
+<input class="w-5 h-5 text-primary border-outline-variant focus:ring-primary" name="license_validity" type="radio"/>
+<span class="text-sm font-medium text-on-surface">만료/정지</span>
+</label>
+</div>
+</div>
+</div>
+</div>
+<!-- Section 3: Transport Qualification -->
+<div class="bg-surface-container-lowest p-8 md:p-12 rounded-[2rem] shadow-[0_40px_60px_-15px_rgba(0,104,95,0.04)]">
+<h4 class="font-headline font-extrabold text-2xl text-on-surface mb-8 flex items-center gap-3">
+<span class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center text-base">03</span>
+                    운수종사자 자격 정보
+                </h4>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<div class="space-y-2">
+<label class="font-headline font-bold text-sm text-on-surface ml-1">버스운전자격증 번호</label>
+<input class="w-full bg-surface-container-high border-none rounded-xl px-6 py-4 focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-highest transition-all text-on-surface placeholder:text-outline" placeholder="12-34-567890" type="text"/>
+</div>
+<div class="space-y-2">
+<label class="font-headline font-bold text-sm text-on-surface ml-1">자격 취득일</label>
+<div class="relative">
+<input class="w-full bg-surface-container-high border-none rounded-xl px-6 py-4 focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-highest transition-all text-on-surface" placeholder="YYYY/MM/DD" type="text"/>
+</div>
+</div>
+<div class="col-span-1 md:col-span-2 space-y-2">
+<label class="font-headline font-bold text-sm text-on-surface ml-1">자격 유지 상태</label>
+<div class="flex flex-wrap items-center gap-6 py-4">
+<label class="flex items-center gap-2 cursor-pointer">
+<input checked="" class="w-5 h-5 text-primary border-outline-variant focus:ring-primary" name="qualification_status" type="radio"/>
+<span class="text-sm font-medium text-on-surface">정상 (Active)</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer">
+<input class="w-5 h-5 text-primary border-outline-variant focus:ring-primary" name="qualification_status" type="radio"/>
+<span class="text-sm font-medium text-on-surface">정지 (Suspension)</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer">
+<input class="w-5 h-5 text-primary border-outline-variant focus:ring-primary" name="qualification_status" type="radio"/>
+<span class="text-sm font-medium text-on-surface">취소 (Cancellation)</span>
+</label>
+</div>
+</div>
+</div>
+</div>
+<!-- Professional Credentials / 인증 서류 보관함 (Moved below Section 3) -->
+<div class="bg-surface-container-lowest p-8 md:p-12 rounded-[2rem] shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)]">
+<h3 class="font-headline font-extrabold text-2xl text-primary mb-8 flex items-center gap-3">
+<span class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center text-base">
+<span class="material-symbols-outlined text-lg" data-icon="inventory_2">inventory_2</span>
+</span>
+                    인증 서류 보관함
+                </h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<!-- License Card -->
+<div class="p-6 rounded-2xl bg-surface border border-outline-variant/30 hover:border-primary/30 transition-all cursor-pointer group">
+<div class="flex items-center justify-between mb-4">
+<span class="text-[10px] font-extrabold uppercase tracking-widest text-outline">운전면허증</span>
+<span class="flex items-center gap-1 text-[10px] font-bold text-error">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span> 미등록
+                            </span>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center text-outline group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-3xl" data-icon="badge">badge</span>
+</div>
+<div class="flex-1">
+<p class="text-sm font-bold text-on-surface">면허증 앞면</p>
+<p class="text-xs text-on-surface-variant">이미지를 업로드하세요</p>
+</div>
+</div>
+</div>
+<!-- Certificate Card -->
+<div class="p-6 rounded-2xl bg-surface border border-outline-variant/30 hover:border-primary/30 transition-all cursor-pointer group">
+<div class="flex items-center justify-between mb-4">
+<span class="text-[10px] font-extrabold uppercase tracking-widest text-outline">버스운전자격증</span>
+<span class="flex items-center gap-1 text-[10px] font-bold text-secondary">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span> 확인 중
+                            </span>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center text-outline group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-3xl" data-icon="description">description</span>
+</div>
+<div class="flex-1">
+<p class="text-sm font-bold text-on-surface">자격증 사본</p>
+<p class="text-xs text-on-surface-variant">파일 검토 중 (24h)</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Footer Action -->
+<div class="flex flex-col md:flex-row items-center justify-between gap-6 pt-4">
+<div class="flex items-center gap-3 text-on-surface-variant">
+<span class="material-symbols-outlined text-teal-600" data-icon="info" style="font-variation-settings: 'FILL' 1;">info</span>
+<p class="text-xs font-medium max-w-xs">운영팀은 일반적으로 24~48시간 이내에 검토를 완료합니다. 승인 시 알림을 보내드립니다.</p>
+</div>
+<button class="w-full md:w-auto px-12 py-5 rounded-full bg-gradient-to-br from-primary to-primary-container text-white font-headline font-extrabold text-lg shadow-[0_20px_40px_-10px_rgba(0,104,95,0.3)] hover:shadow-[0_25px_50px_-12px_rgba(0,104,95,0.4)] active:scale-95 transition-all duration-300">
+                    검토 요청하기
+                </button>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-md z-50 flex justify-around items-center px-4 py-3 bg-white/80 dark:bg-slate-900/80 backdrop-blur-[20px] rounded-full shadow-[0_20px_40px_-15px_rgba(0,104,95,0.15)]">
+<a class="flex flex-col items-center justify-center text-slate-500 hover:text-teal-600 transition-colors active:scale-90 transition-transform duration-300 px-4" href="#">
+<span class="material-symbols-outlined" data-icon="gavel">gavel</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest mt-1">경매</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 hover:text-teal-600 transition-colors active:scale-90 transition-transform duration-300 px-4" href="#">
+<span class="material-symbols-outlined" data-icon="visibility">visibility</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest mt-1">관심목록</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 hover:text-teal-600 transition-colors active:scale-90 transition-transform duration-300 px-4" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest mt-1">입찰</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-gradient-to-br from-teal-600 to-teal-800 text-white rounded-full w-12 h-12 shadow-lg shadow-teal-900/20 active:scale-90 transition-transform duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="sr-only">프로필</span>
+</a>
+</nav>
+</body></html>

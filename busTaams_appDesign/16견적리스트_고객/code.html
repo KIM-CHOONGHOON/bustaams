@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+
+<html lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>견적 리스트 - Editorial Velocity</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&amp;family=Manrope:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              colors: {
+                "on-secondary": "#ffffff",
+                "on-secondary-fixed": "#341100",
+                "secondary": "#9d4300",
+                "on-secondary-container": "#6c2c00",
+                "secondary-fixed-dim": "#ffb690",
+                "error-container": "#ffdad6",
+                "surface-container": "#eceef0",
+                "on-surface": "#191c1e",
+                "inverse-on-surface": "#eff1f3",
+                "tertiary-fixed": "#ffdbcf",
+                "primary-fixed-dim": "#85d5c9",
+                "outline-variant": "#bec9c6",
+                "on-error": "#ffffff",
+                "surface-bright": "#f7f9fb",
+                "on-tertiary-fixed": "#380d00",
+                "tertiary": "#6e341d",
+                "on-primary-fixed-variant": "#005049",
+                "on-error-container": "#93000a",
+                "on-primary": "#ffffff",
+                "surface-container-lowest": "#ffffff",
+                "inverse-surface": "#2d3133",
+                "on-primary-container": "#93e4d8",
+                "tertiary-fixed-dim": "#ffb59a",
+                "secondary-container": "#ff8d4b",
+                "on-surface-variant": "#3e4947",
+                "secondary-fixed": "#ffdbca",
+                "surface-container-low": "#f2f4f6",
+                "on-tertiary-container": "#ffc9b7",
+                "surface-container-highest": "#e0e3e5",
+                "surface-tint": "#066a61",
+                "tertiary-container": "#8b4b32",
+                "surface-dim": "#d8dadc",
+                "primary-fixed": "#a1f1e5",
+                "on-tertiary-fixed-variant": "#71361f",
+                "on-background": "#191c1e",
+                "surface-variant": "#e0e3e5",
+                "primary-container": "#00685f",
+                "on-primary-fixed": "#00201d",
+                "primary": "#004e47",
+                "surface": "#f7f9fb",
+                "on-secondary-fixed-variant": "#783200",
+                "error": "#ba1a1a",
+                "inverse-primary": "#85d5c9",
+                "background": "#f7f9fb",
+                "on-tertiary": "#ffffff",
+                "outline": "#6e7977",
+                "surface-container-high": "#e6e8ea"
+              },
+              fontFamily: {
+                "headline": ["Plus Jakarta Sans"],
+                "body": ["Manrope"],
+                "label": ["Manrope"]
+              },
+              borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+            },
+          },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        .kinetic-shadow {
+            box-shadow: 0 20px 40px -15px rgba(0, 104, 95, 0.06);
+        }
+        .editorial-accent {
+            border-left: 4px solid #9d4300;
+        }
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+</head>
+<body class="bg-background font-body text-on-background min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-[0_20px_40px_-15px_rgba(0,104,95,0.06)]">
+<div class="flex items-center justify-between px-6 h-16 w-full">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-teal-600 dark:text-teal-400 cursor-pointer hover:opacity-80 transition-opacity active:scale-95 duration-150">menu</span>
+<h1 class="font-headline text-lg font-bold tracking-tighter text-teal-700 dark:text-teal-300">Editorial Velocity</h1>
+</div>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-teal-100">
+<img alt="User Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDVTUcbVxKsRI6uQ5WdwK_mUbwGtjwhpRpbispZ-UmnJheo2tuk2LX-0XMbOMD5n8BO4PVIStttdaXiYab4tDQCQ7pUTIG00kFFwFPBN9T1q4rqSNU0_GFfY1KoF_pfyRLfvVNi4xlnxsc3uafdll8_zrC6YPnvk-5T9mRMtJXblNh0NBr3z_3HRk7HV8SbDA_9mOvl4FjQTs_adQlIAQO1cDSMTCoM2NR5eQtBHU4EpvmfgeYP2V6ruMYkIvoLhdGbjbthLlx-jFg"/>
+</div>
+</div>
+</header>
+<main class="pt-24 px-6 max-w-5xl mx-auto">
+<!-- Trip Summary Section -->
+<section class="mb-12">
+<div class="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
+<div class="md:col-span-8">
+<span class="text-secondary font-bold tracking-widest uppercase text-xs mb-2 block">요청하신 내용</span>
+<h2 class="font-headline text-4xl md:text-5xl font-extrabold text-primary tracking-tighter leading-tight">
+                        서울에서 부산까지,<br/>프리미엄 여정.
+                    </h2>
+</div>
+<div class="md:col-span-4 bg-surface-container-low p-6 rounded-xl kinetic-shadow">
+<div class="space-y-4">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-teal-600" style="font-variation-settings: 'FILL' 1;">calendar_today</span>
+<div>
+<p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">일정</p>
+<p class="text-sm font-semibold">2024/05/15 - 05/16</p>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-teal-600" style="font-variation-settings: 'FILL' 1;">group</span>
+<div>
+<p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">탑승 인원</p>
+<p class="text-sm font-semibold">성인 30명</p>
+</div>
+</div>
+<button class="w-full mt-4 py-3 px-4 border-2 border-secondary text-secondary font-headline font-bold text-sm rounded-lg hover:bg-secondary hover:text-white transition-colors duration-200 flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm">close</span>
+    전체 견적 취소
+</button></div>
+</div>
+</div>
+</section>
+<!-- Estimates List with Grouping -->
+<div class="space-y-12">
+<!-- Vehicle Group 1: Booked -->
+<div class="space-y-6">
+<div class="flex justify-between items-center border-b border-surface-container-high pb-4">
+<h3 class="font-headline text-xl font-bold text-on-surface">45인승 대형버스 (1호차)</h3>
+<button class="mr-2 px-3 py-1 border border-secondary/30 text-secondary text-xs font-bold rounded-lg hover:bg-secondary/5 transition-colors">견적 취소</button><span class="px-3 py-1 bg-teal-100 text-teal-800 text-xs font-bold rounded-full">예약 완료</span>
+</div>
+<div class="bg-surface-container-low rounded-2xl p-8 border-2 border-dashed border-surface-container-highest flex flex-col items-center justify-center text-center space-y-3 opacity-80">
+<span class="material-symbols-outlined text-teal-600 text-4xl" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<p class="font-bold text-on-surface">이 차량의 예약이 확정되었습니다.</p>
+<p class="text-sm text-on-surface-variant">다른 견적을 더 이상 받지 않습니다.</p>
+</div>
+</div>
+<!-- Vehicle Group 2: Active Bids -->
+<div class="space-y-6">
+<div class="flex justify-between items-center border-b border-surface-container-high pb-4">
+<h3 class="font-headline text-xl font-bold text-on-surface">45인승 대형버스 (2호차)</h3>
+<button class="mr-4 px-3 py-1 border border-secondary/30 text-secondary text-xs font-bold rounded-lg hover:bg-secondary/5 transition-colors">견적 취소</button><button class="text-sm font-semibold text-teal-600 flex items-center gap-1 hover:opacity-70">
+                        최신순 <span class="material-symbols-outlined text-base">expand_more</span>
+</button>
+</div>
+<!-- Estimate Card 1 -->
+<div class="bg-surface-container-lowest rounded-2xl p-6 md:p-8 kinetic-shadow editorial-accent group transition-all hover:translate-y-[-4px]">
+<div class="flex flex-col md:flex-row gap-8">
+<div class="flex-shrink-0 relative">
+<img alt="Driver Profile" class="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCTrnomtlcU6w73a9IrtLQAmeoeK0DXJ6NGyP0tb5htzXQanuoftrcHs4V-sLbH3yzbCHqfPwSHDtDg9OxW-6IX-5YMt5fnaVAgE8xgWCqmWgZ1FUaZaJl463fh2CQlAafodRR54b743nY9dtXM-Avp6hPu-pwFt-es-FM8CuuihI4UqJ_vmdoPvQyB3U_iu3X_aHftpjBJjK0nXJkcgzptgR94MDoBQmNdkvOtF6IOdnU1iSYoUPtW_rsgSpjHB7eJ3mVTuU0betg"/>
+<div class="absolute -bottom-2 -right-2 bg-secondary text-white px-2 py-1 rounded-lg text-[10px] font-bold">BEST</div>
+</div>
+<div class="flex-grow space-y-4">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<h4 class="text-xl font-bold tracking-tight">김진우 기사님</h4>
+<div class="flex items-center text-secondary">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="text-sm font-bold ml-1">4.9</span>
+</div>
+</div>
+<p class="text-on-surface-variant text-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-base">directions_bus</span>
+                                        2023년형 현대 유니버스 프레스티지 (45인승)
+                                    </p>
+</div>
+<div class="text-right">
+<p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">예상 견적가</p>
+<p class="text-2xl font-extrabold text-primary">₩1,250,000</p>
+</div>
+</div>
+<div class="flex flex-wrap gap-2">
+<span class="px-3 py-1 bg-surface-container-high rounded-full text-[11px] font-semibold text-on-surface-variant">무료 와이파이</span>
+<span class="px-3 py-1 bg-surface-container-high rounded-full text-[11px] font-semibold text-on-surface-variant">생수 제공</span>
+<span class="px-3 py-1 bg-surface-container-high rounded-full text-[11px] font-semibold text-on-surface-variant">USB 충전</span>
+</div>
+</div>
+<div class="flex items-center justify-end md:justify-center md:border-l md:border-surface-container-high md:pl-8">
+<button class="bg-gradient-to-br from-primary to-primary-container text-on-primary px-8 py-4 rounded-full font-bold text-sm tracking-tight transition-transform active:scale-95 shadow-lg shadow-primary/20">
+                                상세 보기
+                            </button>
+</div>
+</div>
+</div>
+<!-- Estimate Card 2 -->
+<div class="bg-surface-container-lowest rounded-2xl p-6 md:p-8 kinetic-shadow transition-all hover:translate-y-[-4px]">
+<div class="flex flex-col md:flex-row gap-8">
+<div class="flex-shrink-0">
+<img alt="Driver Profile" class="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJsWP926CFerdl-7mF5NP8rPnYqAHM66MrmkhQYEaEPdidZVtNOdaSRruV2W7rPrgCgRJeOifd2IumtCS19EYD4Op9xMq1eyrMxGiHxzj8wTqSKi8BLWDCk5iC5FxrILPjBJRWw7JUAM_t1h1zaaqiIxzC7XwwtKWCUxq5Bz6myKv1C4pPU1JzsWQkhLq96AHS4xulwh9pRwtw2t8m03JD7wYlDBUoL7bvWE8RSg6bEUOIhjuNUsOryAGT2sid7whrS64CxoB_RB8"/>
+</div>
+<div class="flex-grow space-y-4">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<h4 class="text-xl font-bold tracking-tight">이지연 기사님</h4>
+<div class="flex items-center text-secondary">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="text-sm font-bold ml-1">4.8</span>
+</div>
+</div>
+<p class="text-on-surface-variant text-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-base">directions_bus</span>
+                                        2022년형 기아 그랜버드 실크로드 (45인승)
+                                    </p>
+</div>
+<div class="text-right">
+<p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">예상 견적가</p>
+<p class="text-2xl font-extrabold text-primary">₩1,180,000</p>
+</div>
+</div>
+<div class="flex flex-wrap gap-2">
+<span class="px-3 py-1 bg-surface-container-high rounded-full text-[11px] font-semibold text-on-surface-variant">금연 차량</span>
+<span class="px-3 py-1 bg-surface-container-high rounded-full text-[11px] font-semibold text-on-surface-variant">베테랑 드라이버</span>
+</div>
+</div>
+<div class="flex items-center justify-end md:justify-center md:border-l md:border-surface-container-high md:pl-8">
+<button class="bg-gradient-to-br from-primary to-primary-container text-on-primary px-8 py-4 rounded-full font-bold text-sm tracking-tight transition-transform active:scale-95 shadow-lg shadow-primary/20">
+                                상세 보기
+                            </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-6 left-0 right-0 z-50 flex justify-around items-center px-4 py-3">
+<div class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl shadow-[0_40px_60px_-10px_rgba(0,104,95,0.12)] w-[90%] max-w-md rounded-full flex justify-around items-center py-2 px-2">
+<!-- Explore -->
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-5 py-2 hover:text-teal-500 transition-colors active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined mb-1">explore</span>
+<span class="font-headline text-[10px] font-semibold uppercase tracking-widest">탐색</span>
+</a>
+<!-- My Trips (Active) -->
+<a class="flex flex-col items-center justify-center bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-200 rounded-full px-5 py-2 active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">directions_bus</span>
+<span class="font-headline text-[10px] font-semibold uppercase tracking-widest">내 여정</span>
+</a>
+<!-- Bids -->
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-5 py-2 hover:text-teal-500 transition-colors active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined mb-1">local_activity</span>
+<span class="font-headline text-[10px] font-semibold uppercase tracking-widest">입찰</span>
+</a>
+<!-- Profile -->
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-5 py-2 hover:text-teal-500 transition-colors active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined mb-1">person</span>
+<span class="font-headline text-[10px] font-semibold uppercase tracking-widest">내 정보</span>
+</a>
+</div>
+</nav>
+</body></html>
