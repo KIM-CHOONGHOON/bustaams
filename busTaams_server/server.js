@@ -101,10 +101,11 @@ const authenticateToken = (req, res, next) => {
 
     jwt.verify(token, JWT_SECRET_KEY, (err, user) => {
         if (err) return res.status(403).json({ error: '유효하지 않거나 만료된 토큰입니다.' });
-        // user 객체에 userId가 있는지 확인하고, 이전 코드와의 호환성을 위해 userUuid도 userId로 매핑
+        // user 객체에 userId와 custId가 있는지 확인
         req.user = {
             ...user,
             userId: user.userId,
+            custId: user.custId,
             userUuid: user.userId // 하위 호환성 유지
         };
         next();
@@ -328,7 +329,7 @@ app.post('/api/auth/request-sms', async (req, res) => {
 
         const purePhone = phoneNo.replace(/[^0-9]/g, '');
         // 가입된 전화번호인지 체크 (회원가입 카테고리일 경우)
-        if (category === 'JOIN') {
+        if (category === 'SIGN_UP') {
             const [users] = await pool.execute('SELECT 1 FROM TB_USER WHERE HP_NO = ? AND USER_STAT = "ACTIVE"', [purePhone]);
             if (users.length > 0) {
                 return res.status(400).json({ error: '이미 가입된 전화번호입니다.' });
@@ -338,18 +339,20 @@ app.post('/api/auth/request-sms', async (req, res) => {
         const authCode = Math.floor(100000 + Math.random() * 900000).toString(); // 6자리
 
         // 1. 발송 이력 저장 (TB_SMS_LOG)
-        // 신규 로직: LOG_ID (16자리, MAX+1), RECEIVER_ID (10자리, 가입 전엔 '0000000000')
-        const logId = await getNextId('TB_SMS_LOG', 'LOG_ID', 16);
-        const sendCategory = category || 'ETC';
+        // 신규 로직: 가입된 사용자인 경우 CUST_ID를, 아니면 '0000000000'을 RECEIVER_ID로 사용
+        const [userRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE HP_NO = ? AND USER_STAT = "ACTIVE" LIMIT 1', [purePhone]);
+        const receiverId = userRows.length > 0 ? userRows[0].CUST_ID : '0000000000';
+
+        const sendCategory = category === 'JOIN' ? 'SIGN_UP' : (category === 'NEWPW' ? 'NEW_PASSWORD' : (category === 'ETC' ? 'OTHER' : (category || 'OTHER')));
         const msgContent = `[busTaams] 본인확인 인증번호 [${authCode}]를 입력해주세요.`;
 
         const logQuery = `
             INSERT INTO TB_SMS_LOG (
-                LOG_ID, SEND_CATEGORY, RECEIVER_ID, RECEIVER_PHONE, MSG_CONTENT, MSG_TYPE, SEND_STAT, REG_DT
-            ) VALUES (?, ?, '0000000000', ?, ?, 'SMS', 'SUCCESS', NOW())
+                SEND_CATEGORY, RECEIVER_ID, REG_ID, RECEIVER_PHONE, MSG_CONTENT, MSG_TYPE, SEND_STAT, REG_DT
+            ) VALUES (?, ?, ?, ?, ?, 'SMS', 'SUCCESS', NOW())
         `;
 
-        await pool.execute(logQuery, [logId, sendCategory, purePhone, msgContent]);
+        await pool.execute(logQuery, [sendCategory, receiverId, receiverId, purePhone, msgContent]);
 
         console.log(`[SMS AUTH] To: ${purePhone}, Code: ${authCode}`);
 
@@ -388,7 +391,10 @@ app.post('/api/auth/register', async (req, res) => {
         // [보안] 비밀번호 해싱
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // 1. 전자 서명 처리 (GCS 업로드 및 TB_FILE_MASTER 등록)
+        // 1. CUST_ID 채번 (10자리, 0 패딩)
+        const custId = await getNextId('TB_USER', 'CUST_ID', 10);
+
+        // 2. 전자 서명 처리 (GCS 업로드 및 TB_FILE_MASTER 등록)
         let signFileId = null;
         if (signatureBase64 && signatureBase64.startsWith('data:image')) {
             const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20);
@@ -404,21 +410,22 @@ app.post('/api/auth/register', async (req, res) => {
             signFileId = fileId;
 
             const fileQuery = `
-                INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_PATH, ORG_FILE_NM, FILE_EXT)
-                VALUES (?, 'SIGNATURE', ?, ?, 'png')
+                INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_PATH, ORG_FILE_NM, FILE_EXT, REG_ID, MOD_ID)
+                VALUES (?, 'SIGNATURE', ?, ?, 'png', ?, ?)
             `;
-            await connection.execute(fileQuery, [fileId, gcsPath, `${userId}_signature.png`]);
+            await connection.execute(fileQuery, [fileId, gcsPath, `${userId}_signature.png`, custId, custId]);
         }
 
-        // 2. TB_USER 삽입
+        // 3. TB_USER 삽입 (CUST_ID 추가)
         const userQuery = `
             INSERT INTO TB_USER (
-                USER_ID, EMAIL, PASSWORD, USER_NM, HP_NO, SNS_TYPE, 
+                CUST_ID, USER_ID, EMAIL, PASSWORD, USER_NM, HP_NO, SNS_TYPE, 
                 SMS_AUTH_YN, USER_TYPE, JOIN_DT, USER_STAT, USER_IMAGE
-            ) VALUES (?, ?, ?, ?, ?, 'NONE', 'Y', ?, NOW(), 'ACTIVE', ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, 'NONE', 'Y', ?, NOW(), 'ACTIVE', ?)
         `;
         
         await connection.execute(userQuery, [
+            custId,
             userId, 
             userId, // Web은 우선 ID와 동일
             hashedPassword, 
@@ -428,18 +435,18 @@ app.post('/api/auth/register', async (req, res) => {
             signFileId ? `https://storage.googleapis.com/${bucketName}/signatures/web_${signFileId}.png` : null
         ]);
 
-        // 3. 약관 동의 이력 (TB_USER_TERMS_HIST)
+        // 4. 약관 동의 이력 (TB_USER_TERMS_HIST - 키값을 CUST_ID로 변경)
         if (agreedTerms && Array.isArray(agreedTerms)) {
             const histQuery = `
                 INSERT INTO TB_USER_TERMS_HIST (
-                    USER_ID, TERMS_HIST_SEQ, TERMS_TYPE, TERMS_VER, AGREE_YN, 
+                    CUST_ID, TERMS_HIST_SEQ, TERMS_TYPE, TERMS_VER, AGREE_YN, 
                     SIGN_FILE_ID, AGREE_DT
                 ) VALUES (?, ?, ?, 'v1.0', 'Y', ?, NOW())
             `;
             let seq = 1;
             for (const termCode of agreedTerms) {
                 await connection.execute(histQuery, [
-                    userId, 
+                    custId, 
                     seq++,
                     termCode.toString(),
                     signFileId // null 가능
@@ -482,9 +489,10 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(401).json({ error: '아이디 또는 비밀번호가 일치하지 않습니다.' });
         }
 
-        // JWT 발행
+        // JWT 발행 (CUST_ID 포함)
         const token = jwt.sign(
             { 
+                custId: user.CUST_ID,
                 userId: userId, 
                 userUuid: user.USER_UUID ? user.USER_UUID.toString('hex') : null,
                 userType: user.USER_TYPE 
@@ -497,6 +505,7 @@ app.post('/api/auth/login', async (req, res) => {
             success: true, 
             token, 
             user: { 
+                custId: user.CUST_ID,
                 userId: userId, 
                 userName: user.USER_NM, 
                 userType: user.USER_TYPE,
@@ -563,13 +572,14 @@ app.post('/api/app/customer/request-bus', authenticateToken, async (req, res) =>
 app.get('/api/app/customer/pending-requests', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
-        const userUuidBuf = uuidToBuffer(req.user.userUuid);
         const [rows] = await pool.execute(
-            `SELECT BIN_TO_UUID(REQ_UUID) as reqUuid, TRIP_TITLE, START_ADDR, END_ADDR, 
-                    DATE_FORMAT(START_DT, '%Y-%m-%d') as startDt, REQ_STAT,
-                    (SELECT COUNT(*) FROM TB_BID WHERE REQ_UUID = TB_AUCTION_REQ.REQ_UUID) as bidCount
-             FROM TB_AUCTION_REQ WHERE TRAVELER_UUID = ? ORDER BY REG_DT DESC`,
-            [userUuidBuf]
+            `SELECT r.REQ_ID as reqUuid, r.TRIP_TITLE as tripTitle, r.START_ADDR as startAddr, r.END_ADDR as endAddr, 
+                    DATE_FORMAT(r.START_DT, '%Y-%m-%d') as startDt, r.DATA_STAT as reqStat,
+                    (SELECT COUNT(*) FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID) as bidCount
+             FROM TB_AUCTION_REQ r
+             JOIN TB_USER u ON r.TRAVELER_ID = u.CUST_ID
+             WHERE u.USER_ID = ? ORDER BY r.REG_DT DESC`,
+            [userId]
         );
         res.json({ success: true, data: rows });
     } catch (err) {
@@ -581,18 +591,18 @@ app.get('/api/app/customer/pending-requests', authenticateToken, async (req, res
 app.get('/api/driver/available-estimates', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
-        const userUuidBuf = uuidToBuffer(req.user.userUuid);
         
         const [driverInfo] = await pool.execute(
             `SELECT 
                 v.SERVICE_CLASS,
                 fm.GCS_PATH
              FROM TB_BUS_DRIVER_VEHICLE v
+             JOIN TB_USER u ON v.CUST_ID = u.CUST_ID
              LEFT JOIN TB_BUS_DRIVER_VEHICLE_FILE_HIST vh ON v.BUS_ID = vh.BUS_ID AND vh.FILE_CATEGORY = 'PHOTO'
              LEFT JOIN TB_FILE_MASTER fm ON vh.FILE_ID = fm.FILE_ID
-             WHERE v.USER_ID = ? 
+             WHERE u.USER_ID = ? 
              ORDER BY vh.REG_DT DESC LIMIT 1`,
-            [req.user.userId]
+            [userId]
         );
         
         let driverBusType = null;
@@ -612,32 +622,33 @@ app.get('/api/driver/available-estimates', authenticateToken, async (req, res) =
 
         let query = `
             SELECT 
-                HEX(r.REQ_UUID) as id, 
+                r.REQ_ID as id, 
                 r.TRIP_TITLE as title, 
                 r.START_ADDR as departure, 
                 r.END_ADDR as destination, 
                 DATE_FORMAT(r.START_DT, '%Y.%m.%d') as startDate,
                 COALESCE(r.PASSENGER_CNT, 0) as participants,
                 rb.BUS_TYPE_CD as busTypeNm,
-                COALESCE(rb.REQ_AMT, r.REQ_AMT, 0) as price,
+                COALESCE(rb.RES_BUS_AMT, r.REQ_AMT, 0) as price,
                 COALESCE(u.USER_NM, '익명 고객님') as customerName,
                 u.PROFILE_IMG_PATH as customerAvatar,
                 '입찰중' as timeLeft,
                 ? as image
             FROM TB_AUCTION_REQ r
-            JOIN TB_AUCTION_REQ_BUS rb ON r.REQ_UUID = rb.REQ_UUID
-            LEFT JOIN TB_USER u ON r.TRAVELER_UUID = u.USER_UUID
+            JOIN TB_AUCTION_REQ_BUS rb ON r.REQ_ID = rb.REQ_ID
+            LEFT JOIN TB_USER u ON r.TRAVELER_ID = u.CUST_ID
             WHERE rb.BUS_TYPE_CD = ? 
-            AND rb.RES_STAT = 'BIDDING'
+            AND rb.DATA_STAT = 'AUCTION'
             AND NOT EXISTS (
-                SELECT 1 FROM TB_BID b 
-                WHERE b.REQ_UUID = r.REQ_UUID 
-                  AND b.DRIVER_UUID = ?
+                SELECT 1 FROM TB_BUS_RESERVATION b 
+                JOIN TB_USER du ON b.DRIVER_ID = du.USER_ID
+                WHERE b.REQ_ID = r.REQ_ID 
+                  AND du.USER_ID = ?
             )
             ORDER BY r.REG_DT DESC
         `;
 
-        const [rows] = await pool.execute(query, [driverBusImg, driverBusType, userUuidBuf]);
+        const [rows] = await pool.execute(query, [driverBusImg, driverBusType, userId]);
         
         res.json({ 
             success: true, 
@@ -654,16 +665,16 @@ app.get('/api/driver/available-estimates', authenticateToken, async (req, res) =
 app.get('/api/driver/failed-estimates', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
-        const userUuidBuf = uuidToBuffer(req.user.userUuid);
         const [rows] = await pool.execute(
-            `SELECT HEX(b.REQ_UUID) as resUuid, r.TRIP_TITLE as tripTitle, 
+            `SELECT b.REQ_ID as resUuid, r.TRIP_TITLE as tripTitle, 
                     r.START_ADDR as startAddr, r.END_ADDR as endAddr, 
                     DATE_FORMAT(r.START_DT, '%Y.%m.%d') as startDate, '유찰' as status
-             FROM TB_BID b
-             JOIN TB_AUCTION_REQ r ON b.REQ_UUID = r.REQ_UUID
-             WHERE b.DRIVER_UUID = ? AND b.BID_STAT = 'FAILED'
+             FROM TB_BUS_RESERVATION b
+             JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID
+             JOIN TB_USER u ON b.DRIVER_ID = u.USER_ID
+             WHERE u.USER_ID = ? AND b.DATA_STAT = 'FAILED'
              ORDER BY b.REG_DT DESC`,
-            [userUuidBuf]
+            [userId]
         );
         res.json({ success: true, data: rows });
     } catch (err) {
@@ -676,26 +687,23 @@ app.get('/api/driver/failed-estimates', authenticateToken, async (req, res) => {
 const getApprovalList = async (req, res) => {
     try {
         const userId = req.user.userId;
-        const userUuidBuf = uuidToBuffer(req.user.userUuid);
-        console.log(`[Approval List Detail] User: ${req.user.userId}, UUID: ${req.user.userUuid}, Buf: ${userUuidBuf.toString('hex')}`);
         
         const [rows] = await pool.execute(
             `SELECT 
-                HEX(b.REQ_UUID) as id, 
+                r.REQ_ID as id, 
                 r.TRIP_TITLE as title, 
                 CONCAT(r.START_ADDR, ' → ', r.END_ADDR) as route,
                 DATE_FORMAT(r.START_DT, '%Y.%m.%d') as date,
-                b.TOTAL_BID_AMT as price,
-                COALESCE(db.BUS_TYPE_CD, '차종 미정') as busTypeNm,
+                b.DRIVER_BIDDING_PRICE as price,
+                COALESCE(db.SERVICE_CLASS, '차종 미정') as busTypeNm,
                 '승인대기' as status
-             FROM TB_BID b
-             JOIN TB_AUCTION_REQ r ON b.REQ_UUID = r.REQ_UUID
-             LEFT JOIN TB_DRIVER_BUS db ON b.BUS_UUID = db.BUS_UUID
-             WHERE b.DRIVER_UUID = ? AND b.BID_STAT = 'SUBMITTED'
+             FROM TB_BUS_RESERVATION b
+             JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID
+             LEFT JOIN TB_BUS_DRIVER_VEHICLE db ON b.BUS_ID = db.BUS_ID
+             WHERE b.DRIVER_ID = ? AND b.DATA_STAT = 'BIDDING'
              ORDER BY b.REG_DT DESC`,
-            [userUuidBuf]
+            [userId]
         );
-        console.log(`[Approval List Result] Found ${rows.length} rows`);
         res.json({ success: true, data: rows });
     } catch (err) {
         console.error('[Approval List Error]', err);
@@ -709,31 +717,31 @@ app.get('/api/driver/pending-approvals', authenticateToken, getApprovalList);
 // [추가] 기사: 입찰 상세 정보 조회 (입찰 수정 페이지용)
 app.get('/api/driver/bid-detail/:id', authenticateToken, async (req, res) => {
     try {
-        const reqUuidBuf = uuidToBuffer(req.params.id);
-        const driverUuidBuf = uuidToBuffer(req.user.userUuid);
+        const reqId = req.params.id;
+        const userId = req.user.userId;
         
         const [rows] = await pool.execute(
             `SELECT 
-                HEX(r.REQ_UUID) as id,
+                r.REQ_ID as id,
                 r.TRIP_TITLE as title,
                 r.START_ADDR as startAddr,
                 r.END_ADDR as endAddr,
                 DATE_FORMAT(r.START_DT, '%Y/%m/%d') as startDate,
                 DATE_FORMAT(r.END_DT, '%Y/%m/%d') as endDate,
                 DATEDIFF(r.END_DT, r.START_DT) + 1 as travelDays,
-                b.TOTAL_BID_AMT as price,
-                b.BASE_FARE as baseFare,
-                b.TOLL_FEE as tollFee,
-                b.FUEL_FEE as fuelFee,
-                b.ROOM_BOARD_FEE as roomBoardFee,
-                b.DRIVER_TIP as driverTip,
-                b.SERVICE_MEMO as serviceMemo,
-                db.BUS_TYPE_CD as busTypeNm
-             FROM TB_BID b
-             JOIN TB_AUCTION_REQ r ON b.REQ_UUID = r.REQ_UUID
-             LEFT JOIN TB_DRIVER_BUS db ON b.BUS_UUID = db.BUS_UUID
-             WHERE b.REQ_UUID = ? AND b.DRIVER_UUID = ?`,
-            [reqUuidBuf, driverUuidBuf]
+                b.DRIVER_BIDDING_PRICE as price,
+                b.DRIVER_BIDDING_PRICE as baseFare,
+                0 as tollFee,
+                0 as fuelFee,
+                0 as roomBoardFee,
+                0 as driverTip,
+                '' as serviceMemo,
+                db.SERVICE_CLASS as busTypeNm
+             FROM TB_BUS_RESERVATION b
+             JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID
+             LEFT JOIN TB_BUS_DRIVER_VEHICLE db ON b.BUS_ID = db.BUS_ID
+             WHERE b.REQ_ID = ? AND b.DRIVER_ID = ?`,
+            [reqId, userId]
         );
 
         if (rows.length === 0) {
@@ -746,9 +754,9 @@ app.get('/api/driver/bid-detail/:id', authenticateToken, async (req, res) => {
         const [viaRows] = await pool.execute(
             `SELECT VIA_ADDR, VIA_TYPE 
              FROM TB_AUCTION_REQ_VIA 
-             WHERE REQ_UUID = ? 
+             WHERE REQ_ID = ? 
              ORDER BY VIA_ORD ASC`,
-            [reqUuidBuf]
+            [reqId]
         );
 
         const routeStops = {
@@ -772,11 +780,10 @@ app.get('/api/driver/bid-detail/:id', authenticateToken, async (req, res) => {
 app.get('/api/driver/my-buses', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
-        const userUuidBuf = uuidToBuffer(req.user.userUuid);
         const [rows] = await pool.execute(
-            `SELECT HEX(BUS_UUID) as busUuid, BUS_NO as busNo, BUS_MODEL as busModel, BUS_TYPE_CD as busType 
-             FROM TB_DRIVER_BUS WHERE USER_UUID = ?`,
-            [userUuidBuf]
+            `SELECT BUS_ID as busUuid, VEHICLE_NO as busNo, MODEL_NM as busModel, SERVICE_CLASS as busType 
+             FROM TB_BUS_DRIVER_VEHICLE WHERE CUST_ID = (SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?)`,
+            [userId]
         );
         res.json({ success: true, data: rows });
     } catch (err) {
@@ -789,29 +796,28 @@ app.get('/api/app/driver/estimate/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user.userId;
-        const cleanId = id.replace(/-/g, '');
 
-        console.log(`[Estimate Detail Request] Looking for ID: ${cleanId}`);
+        console.log(`[Estimate Detail Request] Looking for ID: ${id}`);
 
         // 1. 견적 마스터 및 차량 타입 정보 조회
         const [rows] = await pool.execute(
             `SELECT 
-                HEX(r.REQ_UUID) as HEX_ID,
+                r.REQ_ID as HEX_ID,
                 COALESCE(r.TRIP_TITLE, '제목 없음') as title, 
                 COALESCE(r.START_ADDR, '정보 없음') as departure, 
                 COALESCE(r.END_ADDR, '정보 없음') as destination, 
                 DATE_FORMAT(r.START_DT, '%Y.%m.%d %H:%i') as startDtText,
                 DATE_FORMAT(r.END_DT, '%Y.%m.%d %H:%i') as endDtText,
                 COALESCE(r.PASSENGER_CNT, 0) as passengerCount,
-                r.REQ_COMMENT as specialRequest,
+                '' as specialRequest,
                 COALESCE(rb.BUS_TYPE_CD, '차종 미정') as busTypeNm,
-                COALESCE(rb.REQ_AMT, r.REQ_AMT, 0) as price,
-                r.REQ_STAT as status
+                COALESCE(rb.RES_BUS_AMT, r.REQ_AMT, 0) as price,
+                r.DATA_STAT as status
             FROM TB_AUCTION_REQ r
-            LEFT JOIN TB_AUCTION_REQ_BUS rb ON r.REQ_UUID = rb.REQ_UUID
-            WHERE r.REQ_UUID = UNHEX(?)
+            LEFT JOIN TB_AUCTION_REQ_BUS rb ON r.REQ_ID = rb.REQ_ID
+            WHERE r.REQ_ID = ?
             LIMIT 1`,
-            [cleanId]
+            [id]
         );
 
         if (rows.length === 0) {
@@ -824,9 +830,9 @@ app.get('/api/app/driver/estimate/:id', authenticateToken, async (req, res) => {
         const [viaRows] = await pool.execute(
             `SELECT VIA_ADDR as addr, VIA_TYPE as type, VIA_ORD as ord
              FROM TB_AUCTION_REQ_VIA
-             WHERE REQ_UUID = UNHEX(?)
+             WHERE REQ_ID = ?
              ORDER BY VIA_ORD ASC`,
-            [cleanId]
+            [id]
         );
         
         // 경로 구성
@@ -861,9 +867,10 @@ app.get('/api/app/driver/estimate/:id', authenticateToken, async (req, res) => {
         const [driverImg] = await pool.execute(
             `SELECT fm.GCS_PATH
              FROM TB_BUS_DRIVER_VEHICLE v
+             JOIN TB_USER u ON v.CUST_ID = u.CUST_ID
              LEFT JOIN TB_BUS_DRIVER_VEHICLE_FILE_HIST vh ON v.BUS_ID = vh.BUS_ID AND vh.FILE_CATEGORY = 'PHOTO'
              LEFT JOIN TB_FILE_MASTER fm ON vh.FILE_ID = fm.FILE_ID
-             WHERE v.USER_ID = ? 
+             WHERE u.USER_ID = ? 
              ORDER BY vh.REG_DT DESC LIMIT 1`,
             [req.user.userId]
         );
@@ -879,50 +886,29 @@ app.get('/api/app/driver/estimate/:id', authenticateToken, async (req, res) => {
     }
 });
 
-// [추가] 기사: 실시간 입찰 제안 제출 (TB_BID 사용)
+// [추가] 기사: 실시간 입찰 제안 제출 (TB_BUS_RESERVATION 사용)
 app.post('/api/driver/bid', authenticateToken, async (req, res) => {
     try {
-        let { reqUuid, busUuid, baseFare, tollFee, fuelFee, roomBoardFee, driverTip, serviceMemo } = req.body;
+        let { reqId, busId, baseFare, tollFee, fuelFee, roomBoardFee, driverTip, serviceMemo } = req.body;
         
-        if (!reqUuid || baseFare === undefined) {
+        if (!reqId || baseFare === undefined) {
             return res.status(400).json({ error: '필수 항목(기본요금 등)이 누락되었습니다.' });
         }
 
         const userId = req.user.userId;
-        const userUuidBuf = uuidToBuffer(req.user.userUuid);
 
-        // 만약 busUuid가 제공되지 않았다면, 기사의 첫 번째 등록된 차량을 사용
-        if (!busUuid) {
+        // 만약 busId가 제공되지 않았다면, 기사의 첫 번째 등록된 차량을 사용
+        if (!busId) {
             const [busRows] = await pool.execute(
-                `SELECT HEX(BUS_UUID) as busUuid FROM TB_DRIVER_BUS WHERE USER_UUID = ? LIMIT 1`,
-                [userUuidBuf]
+                `SELECT v.BUS_ID as busId FROM TB_BUS_DRIVER_VEHICLE v JOIN TB_USER u ON v.CUST_ID = u.CUST_ID WHERE u.USER_ID = ? LIMIT 1`,
+                [userId]
             );
-            if (busRows.length === 0) {
-                // 1순위: TB_BUS_DRIVER_VEHICLE (최신 앱 방식)
-                const [newBusRows] = await pool.execute(
-                    `SELECT HEX(BUS_ID) as busUuid FROM TB_BUS_DRIVER_VEHICLE WHERE USER_UUID = ? LIMIT 1`,
-                    [userUuidBuf]
-                );
-                if (newBusRows.length > 0) {
-                    busUuid = newBusRows[0].busUuid;
-                } else {
-                    return res.status(400).json({ error: '등록된 차량이 없습니다. 차량 정보를 먼저 등록해주세요.' });
-                }
+            if (busRows.length > 0) {
+                busId = busRows[0].busId;
             } else {
-                busUuid = busRows[0].busUuid;
+                return res.status(400).json({ error: '등록된 차량이 없습니다. 차량 정보를 먼저 등록해주세요.' });
             }
         }
-
-        const bidUuid = randomUUID();
-        const bidUuidBuf = uuidToBuffer(bidUuid);
-        const reqUuidBuf = uuidToBuffer(reqUuid);
-        const busUuidBuf = uuidToBuffer(busUuid);
-
-        // [중요] 외래키 제약 조건 충족을 위해 TB_DRIVER_BUS에 레코드가 있는지 확인하고 없다면 생성
-        const [vInfo] = await pool.execute(
-            `SELECT VEHICLE_NO, MODEL_NM, SERVICE_CLASS FROM TB_BUS_DRIVER_VEHICLE WHERE BUS_ID = ?`,
-            [busUuidBuf]
-        );
         
         // 총 입찰 금액 계산 (NaN 방지)
         const totalBidAmt = Number(baseFare || 0) + Number(tollFee || 0) + Number(fuelFee || 0) + Number(roomBoardFee || 0) + Number(driverTip || 0);
@@ -931,21 +917,20 @@ app.post('/api/driver/bid', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: '금액 형식이 올바르지 않습니다.' });
         }
 
+        // TB_BUS_RESERVATION 에 데이터 삽입
         const sql = `
-            INSERT INTO TB_BID (
-                BID_UUID, REQ_UUID, DRIVER_UUID, BUS_UUID, 
-                BASE_FARE, TOLL_FEE, FUEL_FEE, ROOM_BOARD_FEE, DRIVER_TIP, 
-                TOTAL_BID_AMT, SERVICE_MEMO, BID_STAT, REG_ID, MOD_ID
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'SUBMITTED', ?, ?)
+            INSERT INTO TB_BUS_RESERVATION (
+                REQ_ID, DRIVER_ID, BUS_ID, 
+                DRIVER_BIDDING_PRICE, DATA_STAT, REG_ID, MOD_ID
+            ) VALUES (?, ?, ?, ?, 'BIDDING', ?, ?)
         `;
 
         await pool.execute(sql, [
-            bidUuidBuf, reqUuidBuf, userUuidBuf, busUuidBuf,
-            Number(baseFare || 0), Number(tollFee || 0), Number(fuelFee || 0), Number(roomBoardFee || 0), Number(driverTip || 0),
-            totalBidAmt, serviceMemo || '', userId, userId
+            reqId, userId, busId,
+            totalBidAmt, userId, userId
         ]);
 
-        res.status(201).json({ success: true, message: '입찰 제안이 성공적으로 제출되었습니다.', bidUuid });
+        res.status(201).json({ success: true, message: '입찰 제안이 성공적으로 제출되었습니다.' });
     } catch (err) {
         console.error('Bid Submit Error:', err);
         res.status(500).json({ 

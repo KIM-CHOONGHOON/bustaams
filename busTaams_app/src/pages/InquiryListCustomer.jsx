@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import { notify } from '../utils/toast';
 import Swal from 'sweetalert2';
+import BottomNavCustomer from '../components/BottomNavCustomer';
 
 const InquiryListCustomer = () => {
     const navigate = useNavigate();
@@ -84,61 +85,8 @@ const InquiryListCustomer = () => {
         }
     };
 
-    const handleShowAddInquiry = async () => {
-        const { value: formValues } = await Swal.fire({
-            title: '<h2 class="text-2xl font-black text-teal-900 text-left">1:1 문의하기</h2>',
-            html: `
-                <div class="text-left mt-6 font-body space-y-6">
-                    <div class="space-y-3">
-                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">문의 카테고리</label>
-                        <select id="swal-category" class="w-full bg-slate-50 border-none rounded-xl p-4 text-sm font-bold text-teal-900 outline-none focus:ring-2 focus:ring-teal-700/10">
-                            ${categories.map(c => `<option value="${c.code}">${c.name}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div class="space-y-3">
-                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">문의 제목</label>
-                        <input id="swal-title" class="w-full bg-slate-50 border-none rounded-xl p-4 text-sm placeholder:text-slate-300 outline-none focus:ring-2 focus:ring-teal-700/10" placeholder="제목을 입력해 주세요">
-                    </div>
-                    <div class="space-y-3">
-                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">상세 내용</label>
-                        <textarea id="swal-content" class="w-full bg-slate-50 border-none rounded-xl p-4 text-sm placeholder:text-slate-300 outline-none focus:ring-2 focus:ring-teal-700/10 h-32 resize-none" placeholder="내용을 입력해 주세요"></textarea>
-                    </div>
-                </div>
-            `,
-            focusConfirm: false,
-            showCancelButton: true,
-            confirmButtonText: '문의 접수',
-            cancelButtonText: '취소',
-            buttonsStyling: false,
-            customClass: {
-                popup: 'rounded-[2.5rem] p-10 border-none shadow-2xl',
-                confirmButton: 'bg-teal-700 text-white px-8 py-4 rounded-2xl font-bold text-sm shadow-xl shadow-teal-900/20 hover:scale-105 transition-all mr-2',
-                cancelButton: 'bg-slate-100 text-slate-500 px-8 py-4 rounded-2xl font-bold text-sm hover:bg-slate-200 transition-all ml-2',
-                actions: 'mt-10'
-            },
-            preConfirm: () => {
-                const category = document.getElementById('swal-category').value;
-                const title = document.getElementById('swal-title').value;
-                const content = document.getElementById('swal-content').value;
-                if (!title || !content) {
-                    Swal.showValidationMessage('제목과 내용을 모두 입력해주세요.');
-                    return false;
-                }
-                return { category, title, content };
-            }
-        });
-
-        if (formValues) {
-            try {
-                const res = await api.post('/app/customer/inquiries', formValues);
-                if (res.success) {
-                    notify.success('접수 완료', '문의가 성공적으로 전달되었습니다.');
-                    fetchInquiries();
-                }
-            } catch (err) {
-                notify.error('오류', err.message || '접수 중 오류가 발생했습니다.');
-            }
-        }
+    const handleShowAddInquiry = () => {
+        navigate('/add-inquiry');
     };
 
     return (
@@ -232,32 +180,7 @@ const InquiryListCustomer = () => {
             </div>
 
             {/* BottomNavBar (Same as Dashboard) */}
-            <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[95%] md:w-[600px] rounded-full z-50 bg-white/80 backdrop-blur-xl shadow-2xl flex justify-around items-center p-2 h-16 border border-white/40">
-                <button onClick={() => navigate('/customer-dashboard')} className="flex flex-col items-center justify-center text-slate-500 px-4 py-2 hover:text-teal-700 transition-colors">
-                    <span className="material-symbols-outlined text-[20px]">home</span>
-                    <span className="font-bold text-[9px] uppercase tracking-widest mt-0.5">홈</span>
-                </button>
-                <button onClick={() => navigate('/estimate-list')} className="flex flex-col items-center justify-center text-slate-500 px-4 py-2 hover:text-teal-700 transition-colors">
-                    <span className="material-symbols-outlined text-[20px]">gavel</span>
-                    <span className="font-bold text-[9px] uppercase tracking-widest mt-0.5">경매</span>
-                </button>
-                <button onClick={() => navigate('/reservation-list')} className="flex flex-col items-center justify-center text-slate-500 px-4 py-2 hover:text-teal-700 transition-colors">
-                    <span className="material-symbols-outlined text-[20px]">confirmation_number</span>
-                    <span className="font-bold text-[9px] uppercase tracking-widest mt-0.5">예약</span>
-                </button>
-                <button onClick={() => navigate('/chat-list')} className="flex flex-col items-center justify-center text-slate-500 px-4 py-2 hover:text-teal-700 transition-colors">
-                    <span className="material-symbols-outlined text-[20px]">chat_bubble</span>
-                    <span className="font-bold text-[9px] uppercase tracking-widest mt-0.5">메시지</span>
-                </button>
-                <button className="flex flex-col items-center justify-center bg-teal-700 text-white rounded-full px-5 py-2">
-                    <span className="material-symbols-outlined text-[20px]" style={{fontVariationSettings: "'FILL' 1"}}>support_agent</span>
-                    <span className="font-bold text-[9px] uppercase tracking-widest mt-0.5">문의</span>
-                </button>
-                <button onClick={() => navigate('/user-profile')} className="flex flex-col items-center justify-center text-slate-500 px-4 py-2 hover:text-teal-700 transition-colors">
-                    <span className="material-symbols-outlined text-[20px]">person</span>
-                    <span className="font-bold text-[9px] uppercase tracking-widest mt-0.5">내 정보</span>
-                </button>
-            </nav>
+            <BottomNavCustomer />
         </div>
     );
 };

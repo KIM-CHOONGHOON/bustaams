@@ -104,6 +104,10 @@ router.post('/request', async (req, res) => {
         connection = await pool.getConnection();
         await connection.beginTransaction();
 
+        // 0. CUST_ID 조회
+        const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        const custId = uRows.length > 0 ? uRows[0].CUST_ID : userId;
+
         // 1. TB_BID_REQUEST 저장
         const requestQuery = `
             INSERT INTO TB_BID_REQUEST (
@@ -113,8 +117,8 @@ router.post('/request', async (req, res) => {
                 TOTAL_DISTANCE_KM, TOTAL_DURATION_MIN, REST_AREA_CNT,
                 FUEL_PRICE_PER_L, EST_FUEL_COST, TOTAL_TOLL_FEE,
                 MEAL_PRICE, LODGING_PRICE, TIP_PRICE, INCIDENTAL_SUBTOTAL,
-                COMMENT, EST_TOTAL_SERVICE_PRICE, STATUS, REG_ID
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)
+                COMMENT, EST_TOTAL_SERVICE_PRICE, STATUS, REG_ID, MOD_ID
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?)
         `;
 
         const [result] = await connection.execute(requestQuery, [
@@ -124,7 +128,7 @@ router.post('/request', async (req, res) => {
             totalDistanceKm, totalDurationMin, restAreaCnt,
             fuelPricePerL, estFuelCost, totalTollFee,
             mealPrice, lodgingPrice, tipPrice, incidentalSubtotal,
-            comment, estTotalServicePrice, userId
+            comment, estTotalServicePrice, custId, custId
         ]);
 
         const requestId = result.insertId;
@@ -134,12 +138,12 @@ router.post('/request', async (req, res) => {
             const waypointQuery = `
                 INSERT INTO TB_BID_WAYPOINT (
                     REQUEST_ID, WAYPOINT_ADDR, WAYPOINT_DETAIL_ADDR, LAT, LNG, SORT_ORDER,
-                    DIST_FROM_PREV, TOLL_FROM_PREV, DURATION_FROM_PREV, REG_ID
+                    DIST_FROM_PREV, TOLL_FROM_PREV, DURATION_FROM_PREV, REG_ID, MOD_ID
                 ) VALUES ?
             `;
             const waypointValues = waypoints.map((wp, index) => [
                 requestId, wp.addr, wp.detail, wp.lat, wp.lng, wp.order || (index + 1),
-                wp.distance || 0, wp.toll || 0, wp.duration || 0, userId
+                wp.distance || 0, wp.toll || 0, wp.duration || 0, custId, custId
             ]);
 
             await connection.query(waypointQuery, [waypointValues]);

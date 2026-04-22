@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCustomerProfile, updateCustomerProfile, changePassword, uploadProfileImage, sendVerificationCode, verifyCode } from '../api';
 import { notify } from '../utils/toast';
+import BottomNavCustomer from '../components/BottomNavCustomer';
 
 const ProfileCustomer = () => {
     const navigate = useNavigate();
@@ -442,32 +443,7 @@ const ProfileCustomer = () => {
             </main>
 
             {/* Bottom Nav Bar (Main Dashboard Style) */}
-            <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[95%] md:w-[600px] rounded-full z-50 bg-white/80 backdrop-blur-xl shadow-2xl flex justify-around items-center p-2 h-16 border border-white/40">
-                <button onClick={() => navigate('/customer-dashboard')} className="flex flex-col items-center justify-center text-slate-500 px-4 py-2 hover:text-teal-700 transition-colors">
-                    <span className="material-symbols-outlined text-[20px]">home</span>
-                    <span className="font-semibold text-[9px] uppercase tracking-widest mt-0.5">홈</span>
-                </button>
-                <button onClick={() => navigate('/estimate-list')} className="flex flex-col items-center justify-center text-slate-500 px-4 py-2 hover:text-teal-700 transition-colors">
-                    <span className="material-symbols-outlined text-[20px]">gavel</span>
-                    <span className="font-semibold text-[9px] uppercase tracking-widest mt-0.5">경매</span>
-                </button>
-                <button onClick={() => navigate('/reservation-list')} className="flex flex-col items-center justify-center text-slate-500 px-4 py-2 hover:text-teal-700 transition-colors">
-                    <span className="material-symbols-outlined text-[20px]">confirmation_number</span>
-                    <span className="font-semibold text-[9px] uppercase tracking-widest mt-0.5">예약</span>
-                </button>
-                <button onClick={() => alert('메시지 기능 준비중입니다.')} className="flex flex-col items-center justify-center text-slate-500 px-4 py-2 hover:text-teal-700 transition-colors">
-                    <span className="material-symbols-outlined text-[20px]">chat_bubble</span>
-                    <span className="font-semibold text-[9px] uppercase tracking-widest mt-0.5">메시지</span>
-                </button>
-                <button onClick={() => navigate('/inquiry-list')} className="flex flex-col items-center justify-center text-slate-500 px-4 py-2 hover:text-teal-700 transition-colors">
-                    <span className="material-symbols-outlined text-[20px]">support_agent</span>
-                    <span className="font-semibold text-[9px] uppercase tracking-widest mt-0.5">문의</span>
-                </button>
-                <button className="flex flex-col items-center justify-center bg-teal-700 text-white rounded-full px-5 py-2">
-                    <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1"}}>person</span>
-                    <span className="font-semibold text-[9px] uppercase tracking-widest mt-0.5">내 정보</span>
-                </button>
-            </nav>
+            <BottomNavCustomer />
         </div>
     );
 };

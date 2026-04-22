@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import BottomNavCustomer from '../components/BottomNavCustomer';
 
 const PastTripListCustomer = () => {
     const navigate = useNavigate();
@@ -122,24 +123,7 @@ const PastTripListCustomer = () => {
             </main>
 
             {/* Premium Bottom Nav */}
-            <nav className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 flex justify-around items-center px-4 py-2 bg-slate-900 text-white w-[90%] max-w-md mx-auto rounded-full shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] border border-white/10">
-                <button onClick={() => navigate('/customer-dashboard')} className="flex flex-col items-center justify-center text-slate-500 px-5 py-2 hover:text-white transition-all">
-                    <span className="material-symbols-outlined">gavel</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1">Auction</span>
-                </button>
-                <button onClick={() => navigate('/chat-room')} className="flex flex-col items-center justify-center text-slate-500 px-5 py-2 hover:text-white transition-all">
-                    <span className="material-symbols-outlined">chat_bubble</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1">Talk</span>
-                </button>
-                <button className="flex flex-col items-center justify-center px-5 py-2 text-white relative">
-                    <div className="absolute inset-0 bg-white/10 rounded-2xl blur-lg"></div>
-                    <span className="material-symbols-outlined relative z-10" style={{fontVariationSettings: "'FILL' 1"}}>payments</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1 relative z-10 underline decoration-2 underline-offset-4">History</span>
-                </button>
-                <button onClick={() => navigate('/profile-customer')} className="flex flex-col items-center justify-center bg-white/20 text-white rounded-full w-12 h-12 shadow-lg active:scale-90 transition-all">
-                    <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1"}}>person</span>
-                </button>
-            </nav>
+            <BottomNavCustomer />
         </div>
     );
 };

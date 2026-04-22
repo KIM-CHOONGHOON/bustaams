@@ -1,4 +1,5 @@
 const mysql = require('mysql2/promise');
+const { Storage } = require('@google-cloud/storage');
 require('dotenv').config();
 
 const pool = mysql.createPool({
@@ -17,6 +18,11 @@ const pool = mysql.createPool({
 pool.on('connection', (connection) => {
     connection.query('SET time_zone = "+09:00"');
 });
+
+// Google Cloud Storage 설정
+const storage = new Storage();
+const bucketName = process.env.GCS_BUCKET_NAME || 'bustaams-secure-data';
+const bucket = storage.bucket(bucketName);
 
 /**
  * [공통] 일련번호 기반 ID 생성 (MAX+1 및 '0' 패딩)
@@ -37,4 +43,4 @@ async function getNextId(tableName, idColumnName, length) {
     }
 }
 
-module.exports = { pool, getNextId };
+module.exports = { pool, getNextId, bucket, bucketName };

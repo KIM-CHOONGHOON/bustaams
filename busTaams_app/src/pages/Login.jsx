@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { notify } from '../utils/toast';
+import { login } from '../api';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -8,11 +9,19 @@ const Login = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    // 로그인 로직 시뮬레이션
-    notify.success('로그인 성공', '오늘도 탁월한 선택을 환영합니다.');
-    setTimeout(() => {
-        navigate('/customer-dashboard');
-    }, 1000);
+    try {
+        const response = await login(formData.userId, formData.password);
+        if (response.success) {
+            localStorage.setItem('accessToken', response.token);
+            localStorage.setItem('user', JSON.stringify(response.user));
+            notify.success('로그인 성공', '오늘도 탁월한 선택을 환영합니다.');
+            setTimeout(() => {
+                navigate('/customer-dashboard');
+            }, 500);
+        }
+    } catch (error) {
+        notify.error('로그인 실패', error.message || '인증 정보가 일치하지 않습니다.');
+    }
   };
 
   return (
@@ -57,6 +66,8 @@ const Login = () => {
                       id="user-id" 
                       placeholder="BT-000000" 
                       type="text"
+                      value={formData.userId}
+                      onChange={(e) => setFormData({...formData, userId: e.target.value})}
                     />
                   </div>
                 </div>
@@ -72,6 +83,8 @@ const Login = () => {
                       id="password" 
                       placeholder="••••••••••••" 
                       type="password"
+                      value={formData.password}
+                      onChange={(e) => setFormData({...formData, password: e.target.value})}
                     />
                     <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline cursor-pointer hover:text-primary">visibility</span>
                   </div>

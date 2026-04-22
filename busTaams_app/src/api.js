@@ -22,7 +22,7 @@ export const getPendingRequestsFiltered = (type) => request(`/app/customer/pendi
 
 // 기존 명명된 내보내기 유지...
 export const login = async (userId, password) => {
-  const response = await fetch(`${API_BASE_URL}/app/auth/login`, {
+  const response = await fetch(`${API_BASE_URL}/auth/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

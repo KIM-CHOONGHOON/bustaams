@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { pool, getNextId } = require('../db');
+const { pool, getNextId, bucket, bucketName } = require('../db');
 const { authenticateToken } = require('../middleware/auth');
 const { encrypt, decrypt } = require('../crypto');
 const bcrypt = require('bcrypt');
@@ -25,6 +25,10 @@ const storage = multer.diskStorage({
     }
 });
 const upload = multer({ storage: storage });
+
+// GCS 업로드를 위한 메모리 스토리지 설정
+const memoryStorage = multer.memoryStorage();
+const memoryUpload = multer({ storage: memoryStorage });
 
 /**
  * [App 전용 고객 서비스]
@@ -69,6 +73,11 @@ router.post('/profile/update', authenticateToken, async (req, res) => {
     const { name, phone, email } = req.body;
     try {
         const userId = req.user.userId;
+
+        // 0. CUST_ID 조회
+        const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        const custId = uRows.length > 0 ? uRows[0].CUST_ID : userId;
+
         const updates = [];
         const params = [];
 
@@ -85,11 +94,16 @@ router.post('/profile/update', authenticateToken, async (req, res) => {
             params.push(email);
         }
 
-        if (updates.length === 0) {
+        // 수정 시에는 MOD_ID만 업데이트
+        updates.push('MOD_ID = ?');
+        params.push(custId);
+        updates.push('MOD_DT = NOW()');
+
+        if (updates.length === 2) { // MOD_ID와 MOD_DT만 있는 경우
             return res.status(400).json({ status: 400, message: '업데이트할 항목이 없습니다.' });
         }
 
-        const sql = `UPDATE TB_USER SET ${updates.join(', ')}, MOD_DT = NOW() WHERE USER_ID = ?`;
+        const sql = `UPDATE TB_USER SET ${updates.join(', ')} WHERE USER_ID = ?`;
         params.push(userId);
 
         await pool.execute(sql, params);
@@ -137,10 +151,17 @@ router.post('/profile/change-password', authenticateToken, async (req, res) => {
             return res.status(401).json({ message: '현재 비밀번호가 일치하지 않습니다.' });
         }
 
+        // 0. CUST_ID 조회
+        const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        const custId = uRows.length > 0 ? uRows[0].CUST_ID : userId;
+
         const hashedNewPassword = await bcrypt.hash(newPassword, 10);
         
-        // 1. 비밀번호 업데이트
-        await connection.execute('UPDATE TB_USER SET PASSWORD = ? WHERE USER_ID = ?', [hashedNewPassword, userId]);
+        // 1. 비밀번호 업데이트 (MOD_ID, MOD_DT 포함)
+        await connection.execute(
+            'UPDATE TB_USER SET PASSWORD = ?, MOD_ID = ?, MOD_DT = NOW() WHERE USER_ID = ?', 
+            [hashedNewPassword, custId, userId]
+        );
 
         await connection.commit();
         res.status(200).json({ message: '비밀번호가 성공적으로 변경되었습니다.' });
@@ -165,8 +186,8 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
             `SELECT 
                 u.USER_NM as userName,
                 u.PROFILE_IMG_PATH as profileImage,
-                (SELECT COUNT(*) FROM TB_AUCTION_REQ WHERE TRAVELER_ID = u.USER_ID AND DATA_STAT IN ('AUCTION', 'BUS_CHANGE')) as countProgressing,
-                (SELECT COUNT(*) FROM TB_AUCTION_REQ WHERE TRAVELER_ID = u.USER_ID AND DATA_STAT = 'BIDDING') as countWaitingApproval
+                (SELECT COUNT(*) FROM TB_AUCTION_REQ WHERE TRAVELER_ID = u.CUST_ID AND DATA_STAT IN ('AUCTION', 'BUS_CHANGE')) as countProgressing,
+                (SELECT COUNT(*) FROM TB_AUCTION_REQ WHERE TRAVELER_ID = u.CUST_ID AND DATA_STAT = 'BIDDING') as countWaitingApproval
              FROM TB_USER u
              WHERE u.USER_ID = ?`,
             [userId]
@@ -212,14 +233,16 @@ router.post('/auth/send-code', authenticateToken, async (req, res) => {
         
         // TB_SMS_LOG 기록 - DB 오류가 전체 로직을 중단시키지 않도록 예외 처리 분리
         try {
-            const nextId = await getNextId('TB_SMS_LOG', 'LOG_ID', 16);
-            const receiverId = userId.length > 10 ? userId.substring(0, 10) : userId;
+            // userId로 CUST_ID 조회
+            const [userRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+            const receiverId = userRows.length > 0 ? userRows[0].CUST_ID : '0000000000';
+            const logSeq = await getNextId('TB_SMS_LOG', 'LOG_SEQ', 10);
 
             await pool.execute(`
                 INSERT INTO TB_SMS_LOG (
-                    LOG_ID, SEND_CATEGORY, RECEIVER_ID, RECEIVER_PHONE, MSG_CONTENT, MSG_TYPE, SEND_STAT
-                ) VALUES (?, 'ETC', ?, ?, ?, 'SMS', 'SUCCESS')
-            `, [nextId, receiverId, phone.replace(/-/g, ''), msgContent]);
+                    LOG_SEQ, SEND_CATEGORY, SENDER_ID, RECEIVER_ID, REG_ID, RECEIVER_PHONE, MSG_CONTENT, MSG_TYPE, SEND_STAT
+                ) VALUES (?, 'OTHER', 'SYSTEM', ?, ?, ?, ?, 'SMS', 'SUCCESS')
+            `, [logSeq, receiverId, receiverId, phone.replace(/-/g, ''), msgContent]);
         } catch (dbError) {
             console.error('SMS Logging Error (로그 저장 실패):', dbError.message);
             // DB 기록에 실패하더라도 인증 서비스는 제공 (사용자 편의)
@@ -253,7 +276,7 @@ router.post('/auth/verify-code', authenticateToken, async (req, res) => {
         // 최근 5분 이내의 가장 최신 인증 로그 조회
         const [rows] = await pool.execute(
             `SELECT MSG_CONTENT FROM TB_SMS_LOG 
-             WHERE RECEIVER_PHONE = ? AND SEND_CATEGORY = 'ETC'
+             WHERE RECEIVER_PHONE = ? AND SEND_CATEGORY = 'OTHER'
              AND REG_DT >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
              ORDER BY REG_DT DESC LIMIT 1`,
             [purePhone]
@@ -283,6 +306,10 @@ router.get('/pending-requests', authenticateToken, async (req, res) => {
         const userId = req.user.userId;
         const { type } = req.query; // 'progress' 또는 'waiting'
 
+        // 0. CUST_ID 조회
+        const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        const custId = uRows.length > 0 ? uRows[0].CUST_ID : userId;
+
         let statusFilter = "DATA_STAT IN ('AUCTION', 'BIDDING', 'BUS_CHANGE')"; // 기본값
         if (type === 'progress') {
             statusFilter = "DATA_STAT IN ('AUCTION', 'BUS_CHANGE')";
@@ -298,7 +325,7 @@ router.get('/pending-requests', authenticateToken, async (req, res) => {
             ORDER BY REG_DT DESC
         `;
 
-        const [rows] = await pool.execute(sql, [userId]);
+        const [rows] = await pool.execute(sql, [custId]);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('App pending-requests error:', error);
@@ -306,25 +333,63 @@ router.get('/pending-requests', authenticateToken, async (req, res) => {
     }
 });
 
-// 6. 프로필 이미지 업로드
-router.post('/profile/upload-image', authenticateToken, upload.single('profileImage'), async (req, res) => {
+// 6. 프로필 이미지 업로드 (GCS 연동 및 TB_FILE_MASTER 표준화)
+router.post('/profile/upload-image', authenticateToken, memoryUpload.single('profileImage'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ success: false, error: '파일이 업로드되지 않았습니다.' });
         }
 
         const userId = req.user.userId;
-        const imageUrl = `/uploads/profiles/${req.file.filename}`;
+        
+        // 1. CUST_ID 및 기존 PROFILE_FILE_ID 조회
+        const [userRows] = await pool.execute('SELECT CUST_ID, PROFILE_FILE_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        if (userRows.length === 0) {
+            return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
+        }
+        const { CUST_ID: custId, PROFILE_FILE_ID: existingFileId } = userRows[0];
+        
+        const ext = path.extname(req.file.originalname).replace('.', '') || 'png';
+        const fileId = existingFileId || await getNextId('TB_FILE_MASTER', 'FILE_ID', 20);
+        const gcsFileName = `profiles/${fileId}.${ext}`;
+        const file = bucket.file(gcsFileName);
 
+        // 2. GCS 업로드
+        await file.save(req.file.buffer, {
+            metadata: { contentType: req.file.mimetype }
+        });
+
+        const imageUrl = `https://storage.googleapis.com/${bucketName}/${gcsFileName}`;
+
+        // 3. TB_FILE_MASTER 처리
+        if (existingFileId) {
+            // 기존 파일 정보가 있으면 수정 (MOD_ID만 업데이트)
+            await pool.execute(
+                `UPDATE TB_FILE_MASTER 
+                 SET GCS_PATH = ?, ORG_FILE_NM = ?, FILE_EXT = ?, MOD_ID = ?, MOD_DT = NOW() 
+                 WHERE FILE_ID = ?`,
+                [imageUrl, req.file.originalname, ext, custId, existingFileId]
+            );
+        } else {
+            // 기존 파일 정보가 없으면 신규 등록 (REG_ID, MOD_ID 모두 CUST_ID 설정)
+            await pool.execute(
+                `INSERT INTO TB_FILE_MASTER (
+                    FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, REG_ID, MOD_ID
+                ) VALUES (?, 'PROFILE', ?, ?, ?, ?, ?, ?)`,
+                [fileId, bucketName, imageUrl, req.file.originalname, ext, custId, custId]
+            );
+        }
+
+        // 4. TB_USER 업데이트 (이미지 경로 및 파일 ID 반영, MOD_ID 설정)
         await pool.execute(
-            'UPDATE TB_USER SET PROFILE_IMG_PATH = ? WHERE USER_ID = ?',
-            [imageUrl, userId]
+            'UPDATE TB_USER SET PROFILE_IMG_PATH = ?, PROFILE_FILE_ID = ?, MOD_ID = ?, MOD_DT = NOW() WHERE USER_ID = ?',
+            [imageUrl, fileId, custId, userId]
         );
 
         res.status(200).json({
             success: true,
             imageUrl: imageUrl,
-            message: '프로필 이미지가 성공적으로 업로드되었습니다.'
+            message: '프로필 이미지가 GCS에 성공적으로 업로드되었습니다.'
         });
     } catch (error) {
         console.error('App profile image upload error:', error);
@@ -369,8 +434,11 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
 
         const reservation = rows[0];
 
-        // [보안 체크] 소유자 대조
-        if (reservation.ownerId !== travelerId) {
+        // [보안 체크] 소유자 대조 (CUST_ID 기반)
+        const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [travelerId]);
+        const custId = uRows.length > 0 ? uRows[0].CUST_ID : travelerId;
+
+        if (reservation.ownerId !== custId) {
             return res.status(403).json({ success: false, error: '본인의 예약 내역만 조회할 수 있습니다.' });
         }
 
@@ -597,12 +665,139 @@ router.get('/bid-detail/:id', authenticateToken, async (req, res) => {
     }
 });
 
+// 신규 추가: 견적 요청 저장 (앱 전용)
+router.post('/auction-req', authenticateToken, async (req, res) => {
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+        const userId = req.user.userId;
+        const { startAddr, endAddr, startDt, endDt, passengerCnt, buses, vias, tripTitle: clientTripTitle } = req.body;
+        
+        console.log('[Auction Request] Incoming Data:', { userId, startAddr, endAddr, startDt, endDt });
+
+        if (!startAddr || !endAddr || !startDt || !endDt) {
+            throw new Error('필수 정보(출발지, 도착지, 날짜)가 누락되었습니다.');
+        }
+
+        // 0. CUST_ID 조회
+        const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        const custId = uRows.length > 0 ? uRows[0].CUST_ID : userId;
+
+        // ID 생성
+        const reqId = await getNextId('TB_AUCTION_REQ', 'REQ_ID', 10);
+        
+        // 데이터 정제
+        const safeBuses = Array.isArray(buses) ? buses : [];
+        const totalReqAmt = safeBuses.reduce((acc, b) => acc + (parseInt(b.reqAmt, 10) || 0), 0);
+        const tripTitle = clientTripTitle || `${startAddr.split(' ')[0]} -> ${endAddr.split(' ')[0]} 여정`;
+        
+        // MySQL DATETIME 형식으로 변환 (ISO -> YYYY-MM-DD HH:mm:ss)
+        const formatDt = (dtStr) => dtStr.replace('T', ' ').replace('Z', '').substring(0, 19);
+
+        // 탑승 인원 수 정제 (프론트에서 받은 값, 없으면 1 기본)
+        const safePassengerCnt = parseInt(passengerCnt, 10) || 1;
+        // 요청 차량 수 = safeBuses 배열 길이
+        const busChangCnt = safeBuses.length;
+
+        console.log('[Auction Request] Inserting Master REQ:', reqId);
+        await connection.execute(`
+            INSERT INTO TB_AUCTION_REQ (
+                REQ_ID, TRAVELER_ID, TRIP_TITLE, START_ADDR, END_ADDR, 
+                START_DT, END_DT, BUS_CHANG_CNT, PASSENGER_CNT, REQ_AMT, DATA_STAT, EXPIRE_DT,
+                REG_ID, MOD_ID
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'AUCTION', DATE_ADD(NOW(), INTERVAL 7 DAY), ?, ?)
+        `, [
+            reqId,
+            custId,
+            tripTitle,
+            startAddr,
+            endAddr,
+            formatDt(startDt),
+            formatDt(endDt),
+            busChangCnt,
+            safePassengerCnt,
+            totalReqAmt,
+            custId,
+            custId
+        ]);
+
+        if (safeBuses.length > 0) {
+            const lastBusIdStr = await getNextId('TB_AUCTION_REQ_BUS', 'REQ_BUS_ID', 10);
+            let nextBusIdNum = parseInt(lastBusIdStr, 10);
+
+            for (const bus of safeBuses) {
+                const reqBusId = nextBusIdNum.toString().padStart(10, '0');
+                const busAmt = parseInt(bus.reqAmt, 10) || 0;
+                
+                // 수수료 계산 (6.6%, 5.5%, 1.1%)
+                const feeTotal = Math.floor(busAmt * 0.066);
+                const feeRefund = Math.floor(busAmt * 0.055);
+                const feeAttribution = busAmt * 0.011; // 1.1% (decimal 18,3)
+
+                console.log('[Auction Request] Inserting Bus:', reqBusId);
+                await connection.execute(`
+                    INSERT INTO TB_AUCTION_REQ_BUS (
+                        REQ_BUS_ID, REQ_ID, BUS_TYPE_CD, DATA_STAT, TOLLS_AMT, FUEL_COST, 
+                        RES_BUS_AMT, RES_FEE_TOTAL_AMT, RES_FEE_REFUND_AMT, RES_FEE_ATTRIBUTION_AMT,
+                        REG_ID, MOD_ID
+                    ) VALUES (?, ?, ?, 'AUCTION', ?, ?, ?, ?, ?, ?, ?, ?)
+                `, [
+                    reqBusId, reqId, bus.busTypeCd, parseInt(bus.tollsAmt, 10) || 0, parseInt(bus.fuelCost, 10) || 0, 
+                    busAmt, feeTotal, feeRefund, feeAttribution, custId, custId
+                ]);
+                nextBusIdNum++;
+            }
+        }
+
+        const safeVias = Array.isArray(vias) ? vias : [];
+        if (safeVias.length > 0) {
+             for (let i = 0; i < safeVias.length; i++) {
+                 const via = safeVias[i];
+                 const viaType = (via.viaType || 'START_WAY').toUpperCase();
+                 console.log('[Auction Request] Inserting Via:', i + 1);
+                 await connection.execute(`
+                     INSERT INTO TB_AUCTION_REQ_VIA (
+                         REQ_ID, VIA_SEQ, VIA_TYPE, VIA_ADDR, REG_ID, MOD_ID
+                     ) VALUES (?, ?, ?, ?, ?, ?)
+                 `, [reqId, i + 1, viaType, via.addr || via.viaAddr || '', custId, custId]);
+             }
+        } else {
+            console.log('[Auction Request] Inserting Default Vias (Start/Round/End)');
+            // 출발지
+            await connection.execute(`INSERT INTO TB_AUCTION_REQ_VIA (REQ_ID, VIA_SEQ, VIA_TYPE, VIA_ADDR, REG_ID, MOD_ID) VALUES (?, 1, 'START_NODE', ?, ?, ?)`, [reqId, startAddr, custId, custId]);
+            // 회차지 (도착지)
+            await connection.execute(`INSERT INTO TB_AUCTION_REQ_VIA (REQ_ID, VIA_SEQ, VIA_TYPE, VIA_ADDR, REG_ID, MOD_ID) VALUES (?, 2, 'ROUND_TRIP', ?, ?, ?)`, [reqId, endAddr, custId, custId]);
+            // 최종도착지 (복귀)
+            await connection.execute(`INSERT INTO TB_AUCTION_REQ_VIA (REQ_ID, VIA_SEQ, VIA_TYPE, VIA_ADDR, REG_ID, MOD_ID) VALUES (?, 3, 'END_NODE', ?, ?, ?)`, [reqId, startAddr, custId, custId]);
+        }
+
+        await connection.commit();
+        console.log('[Auction Request] Success:', reqId);
+        res.status(201).json({ success: true, message: '요청이 완료되었습니다.', reqId });
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('Auction Request Critical Error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message || '요청 저장 중 오류가 발생했습니다.',
+            detail: error.sqlMessage || null // SQL 에러 메시지가 있으면 전달
+        });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
 // 10. 입찰 선정 및 예약 확정 (앱 전용)
 router.post('/confirm-bid', authenticateToken, async (req, res) => {
     const { bidUuid: resId } = req.body;
     const connection = await pool.getConnection();
     try {
         await connection.beginTransaction();
+
+        const userId = req.user.userId;
+        // 0. CUST_ID 조회
+        const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        const custId = uRows.length > 0 ? uRows[0].CUST_ID : userId;
 
         // 1. 해당 입찰 정보 조회 (REQ_ID 확인용)
         const [bidRows] = await connection.execute(
@@ -618,13 +813,14 @@ router.post('/confirm-bid', authenticateToken, async (req, res) => {
 
         // 2. 선택된 입찰은 'CONFIRM' 처리
         await connection.execute(
-            "UPDATE TB_BUS_RESERVATION SET DATA_STAT = 'CONFIRM' WHERE RES_ID = ?",
-            [resId]
+            "UPDATE TB_BUS_RESERVATION SET DATA_STAT = 'CONFIRM', MOD_ID = ?, MOD_DT = NOW() WHERE RES_ID = ?",
+            [custId, resId]
         );
 
         // 3. 모든 요청 차량이 예약되었는지 확인하여 마스터 상태 변경
+        // TB_AUCTION_REQ_BUS 에서 요청된 차량 총 수 (row 개수)
         const [totalNeededRows] = await connection.execute(
-            "SELECT SUM(REQ_BUS_CNT) as totalNeeded FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ?",
+            "SELECT COUNT(*) as totalNeeded FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ?",
             [reqId]
         );
         const [totalConfirmedRows] = await connection.execute(
@@ -635,16 +831,17 @@ router.post('/confirm-bid', authenticateToken, async (req, res) => {
         const totalNeeded = totalNeededRows[0].totalNeeded || 0;
         const totalConfirmed = totalConfirmedRows[0].totalConfirmed || 0;
 
-        if (totalConfirmed >= totalNeeded) {
+        if (totalNeeded > 0 && totalConfirmed >= totalNeeded) {
+            // 모든 차량 예약 확정
             await connection.execute(
-                "UPDATE TB_AUCTION_REQ SET DATA_STAT = 'CONFIRM' WHERE REQ_ID = ?",
-                [reqId]
+                "UPDATE TB_AUCTION_REQ SET DATA_STAT = 'CONFIRM', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?",
+                [custId, reqId]
             );
         } else if (totalConfirmed > 0) {
-            // 일부 확정 상태
+            // 일부 차량만 예약 확정
             await connection.execute(
-                "UPDATE TB_AUCTION_REQ SET DATA_STAT = 'BIDDING' WHERE REQ_ID = ?",
-                [reqId]
+                "UPDATE TB_AUCTION_REQ SET DATA_STAT = 'BIDDING', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?",
+                [custId, reqId]
             );
         }
 
@@ -664,11 +861,11 @@ router.get('/inquiries', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
         const [rows] = await pool.execute(
-            `SELECT INQ_ID, INQ_CATEGORY, TITLE, CONTENT, INQ_STAT, REG_DT, 
+            `SELECT INQ_SEQ, INQ_CATEGORY, TITLE, CONTENT, INQ_STAT, REG_DT, 
                     REPLY_CONTENT, REPLY_DT,
                     (SELECT CD_NM_KO FROM TB_COMMON_CODE WHERE GRP_CD = 'INQ_CATEGORY' AND DTL_CD = INQ_CATEGORY) as CATEGORY_NM
              FROM TB_INQUIRY 
-             WHERE USER_ID = ? 
+             WHERE CUST_ID = (SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?) 
              ORDER BY REG_DT DESC`,
             [userId]
         );
@@ -676,7 +873,7 @@ router.get('/inquiries', authenticateToken, async (req, res) => {
         res.status(200).json({
             success: true,
             data: rows.map(row => ({
-                id: row.INQ_ID,
+                id: row.INQ_SEQ, // 앱 호환성을 위해 id 필드에 INQ_SEQ 매핑
                 category: row.CATEGORY_NM || row.INQ_CATEGORY,
                 categoryCode: row.INQ_CATEGORY,
                 title: row.TITLE,
@@ -698,20 +895,23 @@ router.post('/inquiries', authenticateToken, async (req, res) => {
         const userId = req.user.userId;
         const { title, content, category } = req.body;
 
-        if (!title || !content || !category) {
-            return res.status(400).json({ success: false, error: '모든 필드를 입력해주세요.' });
-        }
+        const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        const custId = uRows.length > 0 ? uRows[0].CUST_ID : userId;
+        
+        // INQ_SEQ 채번 (CUST_ID별 순번)
+        const [seqRows] = await pool.execute('SELECT IFNULL(MAX(INQ_SEQ), 0) + 1 as nextSeq FROM TB_INQUIRY WHERE CUST_ID = ?', [custId]);
+        const nextSeq = seqRows[0].nextSeq;
 
-        const [result] = await pool.execute(
-            `INSERT INTO TB_INQUIRY (USER_ID, INQ_CATEGORY, TITLE, CONTENT, INQ_STAT, REG_DT)
-             VALUES (?, ?, ?, ?, 'WAITING', NOW())`,
-            [userId, category, title, content]
+        await pool.execute(
+            `INSERT INTO TB_INQUIRY (CUST_ID, INQ_SEQ, INQ_CATEGORY, TITLE, CONTENT, INQ_STAT, REG_DT, REG_ID, MOD_ID)
+             VALUES (?, ?, ?, ?, ?, 'WAITING', NOW(), ?, ?)`,
+            [custId, nextSeq, category, title, content, custId, custId]
         );
 
         res.status(201).json({
             success: true,
             message: '문의가 정상적으로 등록되었습니다.',
-            inquiryId: result.insertId
+            inquiryId: nextSeq
         });
     } catch (error) {
         console.error('Post inquiry error:', error);
@@ -725,9 +925,13 @@ router.get('/inquiries/:id', authenticateToken, async (req, res) => {
         const userId = req.user.userId;
         const inquiryId = req.params.id;
 
+        const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        if (uRows.length === 0) return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
+        const custId = uRows[0].CUST_ID;
+
         const [rows] = await pool.execute(
             `SELECT 
-                i.INQ_ID as id,
+                i.INQ_SEQ as id,
                 (SELECT CD_NM_KO FROM TB_COMMON_CODE WHERE GRP_CD = 'INQ_CATEGORY' AND DTL_CD = i.INQ_CATEGORY) as category,
                 i.TITLE as title,
                 i.CONTENT as content,
@@ -736,8 +940,8 @@ router.get('/inquiries/:id', authenticateToken, async (req, res) => {
                 i.REPLY_CONTENT as replyContent,
                 DATE_FORMAT(i.REPLY_DT, '%Y.%m.%d %H:%i %p') as replyDate
              FROM TB_INQUIRY i
-             WHERE i.INQ_ID = ? AND i.USER_ID = ?`,
-            [inquiryId, userId]
+             WHERE i.INQ_SEQ = ? AND i.CUST_ID = ?`,
+            [inquiryId, custId]
         );
 
         if (rows.length === 0) {

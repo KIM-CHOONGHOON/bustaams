@@ -1,16 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { pool, getNextId } = require('../db');
+const { pool, getNextId, bucket, bucketName } = require('../db');
 const bcrypt = require('bcrypt');
 const { randomUUID } = require('crypto');
 const jwt = require('jsonwebtoken');
-const { Storage } = require('@google-cloud/storage');
 const { decrypt, encrypt } = require('../crypto');
-
-// Google Cloud Storage 설정
-const storage = new Storage(); 
-const bucketName = process.env.GCS_BUCKET_NAME || 'bustaams-secure-data';
-const bucket = storage.bucket(bucketName);
 
 // 환경 변수 설정
 const JWT_SECRET_KEY = process.env.JWT_SECRET || 'bustaams-dev-secret-key-2026';
@@ -99,11 +93,14 @@ router.post('/register', async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
         
-        // 1. 전자 서명 처리 (GCS 업로드 및 TB_FILE_MASTER 등록)
+        // 1. CUST_ID 채번 (10자리, 0 패딩)
+        const custId = await getNextId('TB_USER', 'CUST_ID', 10);
+
+        // 2. 전자 서명 처리 (GCS 업로드 및 TB_FILE_MASTER 등록)
         let signFileId = null;
         if (signatureBase64 && signatureBase64.startsWith('data:image')) {
             const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20);
-            const fileName = `signatures/app_${fileId}.png`;
+            const fileName = `signatures/${fileId}.png`;
             const file = bucket.file(fileName);
             const buffer = Buffer.from(signatureBase64.split(',')[1], 'base64');
             
@@ -115,25 +112,26 @@ router.post('/register', async (req, res) => {
             const gcsPath = `https://storage.googleapis.com/${bucketName}/${fileName}`;
             signFileId = fileId;
 
-            // TB_FILE_MASTER 삽입
+            // TB_FILE_MASTER 삽입 (REG_ID, MOD_ID를 CUST_ID로 설정)
             const fileQuery = `
-                INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_PATH, ORG_FILE_NM, FILE_EXT)
-                VALUES (?, 'SIGNATURE', ?, ?, 'png')
+                INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, REG_ID, MOD_ID)
+                VALUES (?, 'SIGNATURE', ?, ?, ?, 'png', ?, ?)
             `;
-            await connection.execute(fileQuery, [fileId, gcsPath, `${userId}_signature.png`]);
+            await connection.execute(fileQuery, [fileId, bucketName, gcsPath, `${userId}_signature.png`, custId, custId]);
         }
 
-        // 2. TB_USER 삽입 (개인정보 암호화 준수)
+        // 3. TB_USER 삽입 (개인정보 암호화 준수, CUST_ID 추가)
         const userQuery = `
             INSERT INTO TB_USER (
-                USER_ID, EMAIL, PASSWORD, USER_NM, HP_NO, SNS_TYPE, 
+                CUST_ID, USER_ID, EMAIL, PASSWORD, USER_NM, HP_NO, SNS_TYPE, 
                 SMS_AUTH_YN, USER_TYPE, JOIN_DT, USER_STAT, PROFILE_FILE_ID
-            ) VALUES (?, ?, ?, ?, ?, 'NONE', ?, ?, NOW(), 'ACTIVE', ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, 'NONE', ?, ?, NOW(), 'ACTIVE', ?)
         `;
         
         const finalUserType = userType || 'TRAVELER';
 
         await connection.execute(userQuery, [
+            custId,
             userId, 
             email || userId, 
             hashedPassword, 
@@ -144,7 +142,7 @@ router.post('/register', async (req, res) => {
             signFileId // 서명 이미지의 FILE_ID를 PROFILE_FILE_ID 컬럼에 저장
         ]);
 
-        // 3. 약관 동의 이력 처리 (TB_USER_TERMS_HIST)
+        // 4. 약관 동의 이력 처리 (TB_USER_TERMS_HIST - 키값을 CUST_ID로 변경)
         if (termsData && Array.isArray(termsData)) {
             let seq = 1;
             const validTypes = ['SERVICE', 'TRAVELER_SERVICE', 'DRIVER_SERVICE', 'PRIVACY', 'MARKETING', 'PARTNER_CONTRACT', 'LOCATION'];
@@ -211,14 +209,14 @@ router.post('/register', async (req, res) => {
 
                     const histQuery = `
                         INSERT INTO TB_USER_TERMS_HIST (
-                            USER_ID, TERMS_HIST_SEQ, TERMS_TYPE, TERMS_VER, AGREE_YN, 
+                            CUST_ID, TERMS_HIST_SEQ, TERMS_TYPE, TERMS_VER, AGREE_YN, 
                             MKT_SMS_YN, MKT_PUSH_YN, MKT_EMAIL_YN, MKT_TEL_YN,
                             SIGN_FILE_ID, AGREE_DT
                         ) VALUES (?, ?, ?, 'v1.0', ?, ?, ?, ?, ?, ?, NOW())
                     `;
 
                     await connection.execute(histQuery, [
-                        userId, 
+                        custId, 
                         seq++, 
                         normalizedType, 
                         agreeYn,
@@ -264,9 +262,10 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ error: '아이디 또는 비밀번호가 일치하지 않습니다.' });
         }
 
-        // JWT 발행
+        // JWT 발행 (CUST_ID 포함)
         const token = jwt.sign(
             { 
+                custId: user.CUST_ID,
                 userId: userId, 
                 userType: user.USER_TYPE 
             }, 
@@ -278,6 +277,7 @@ router.post('/login', async (req, res) => {
             success: true, 
             token, 
             user: { 
+                custId: user.CUST_ID,
                 userId: userId, 
                 userName: user.USER_NM, 
                 userType: user.USER_TYPE,
@@ -339,9 +339,9 @@ router.post('/find-password', async (req, res) => {
         // 휴대폰 번호 정규화
         phoneNo = phoneNo.replace(/[^0-9]/g, '');
 
-        // 1. 아이디와 휴대폰 번호로 사용자 조회 (성함 포함)
+        // 1. 아이디와 휴대폰 번호로 사용자 조회 (성함, CUST_ID 포함)
         const [rows] = await pool.execute(
-            'SELECT USER_NM FROM TB_USER WHERE USER_ID = ? AND HP_NO = ? AND USER_STAT = "ACTIVE"', 
+            'SELECT USER_NM, CUST_ID FROM TB_USER WHERE USER_ID = ? AND HP_NO = ? AND USER_STAT = "ACTIVE"', 
             [userId, phoneNo]
         );
         
@@ -349,23 +349,24 @@ router.post('/find-password', async (req, res) => {
             return res.status(404).json({ error: '일치하는 사용자 정보를 찾을 수 없습니다.' });
         }
         const userName = rows[0].USER_NM;
+        const custId = rows[0].CUST_ID;
 
         // 2. 임시 비밀번호 생성 (8자리 랜덤 영문+숫자)
         const tempPassword = Math.random().toString(36).slice(-8);
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-        // 3. DB 업데이트
-        await pool.execute('UPDATE TB_USER SET PASSWORD = ? WHERE USER_ID = ?', [hashedPassword, userId]);
+        // 3. DB 업데이트 (MOD_ID, MOD_DT 포함)
+        await pool.execute('UPDATE TB_USER SET PASSWORD = ?, MOD_ID = ?, MOD_DT = NOW() WHERE USER_ID = ?', [hashedPassword, custId, userId]);
 
-        // 4. TB_SMS_LOG에 발송 이력 저장 (요청 규격 준수)
-        const logId = await getNextId('TB_SMS_LOG', 'LOG_ID', 16);
+        // 4. TB_SMS_LOG에 발송 이력 저장 (요청 규격 준수, LOG_SEQ 채번)
         const msgContent = `[busTaams] ${userName}님, 임시 비밀번호는 [${tempPassword}] 입니다. 로그인 후 변경해주세요.`;
+        const logSeq = await getNextId('TB_SMS_LOG', 'LOG_SEQ', 10);
         
         await pool.execute(
             `INSERT INTO TB_SMS_LOG (
-                LOG_ID, SEND_CATEGORY, SENDER_ID, RECEIVER_ID, RECEIVER_PHONE, MSG_CONTENT, MSG_TYPE, SEND_STAT
-            ) VALUES (?, 'NEWPW', 'SYSTEM', ?, ?, ?, 'SMS', 'SUCCESS')`,
-            [logId, userId, phoneNo, msgContent]
+                LOG_SEQ, SEND_CATEGORY, SENDER_ID, RECEIVER_ID, REG_ID, RECEIVER_PHONE, MSG_CONTENT, MSG_TYPE, SEND_STAT, REG_DT
+            ) VALUES (?, 'NEW_PASSWORD', 'SYSTEM', ?, ?, ?, ?, 'SMS', 'SUCCESS', NOW())`,
+            [logSeq, custId, custId, phoneNo, msgContent]
         );
 
         // 5. 서버 로그 확인용
@@ -400,15 +401,28 @@ router.post('/send-code', async (req, res) => {
         // 6자리 인증번호 생성
         const authCode = Math.floor(100000 + Math.random() * 900000).toString();
         
-        // TB_SMS_LOG에 발송 이력 저장
-        const logId = await getNextId('TB_SMS_LOG', 'LOG_ID', 16);
+        // [수정] 로그인 상태일 경우 CUST_ID를 REG_ID/RECEIVER_ID로 사용
+        let currentCustId = '0000000000';
+        const authHeader = req.headers['authorization'];
+        if (authHeader) {
+            try {
+                const token = authHeader.split(' ')[1];
+                const decoded = jwt.verify(token, JWT_SECRET_KEY);
+                if (decoded && decoded.custId) currentCustId = decoded.custId;
+            } catch (e) {
+                // 토큰 무효 시 시스템 아이디 유지
+            }
+        }
+
+        // TB_SMS_LOG에 발송 이력 저장 (LOG_SEQ 채번)
         const msgContent = `[busTaams] 본인확인 인증번호 [${authCode}]를 입력해주세요.`;
+        const logSeq = await getNextId('TB_SMS_LOG', 'LOG_SEQ', 10);
         
         await pool.execute(
             `INSERT INTO TB_SMS_LOG (
-                LOG_ID, SEND_CATEGORY, RECEIVER_PHONE, RECEIVER_ID, MSG_CONTENT, MSG_TYPE, SEND_STAT
-            ) VALUES (?, 'JOIN', ?, '0000000000', ?, 'SMS', 'SUCCESS')`,
-            [logId, phoneNo, msgContent]
+                LOG_SEQ, SEND_CATEGORY, SENDER_ID, RECEIVER_PHONE, RECEIVER_ID, REG_ID, MSG_CONTENT, MSG_TYPE, SEND_STAT, REG_DT
+            ) VALUES (?, 'OTHER', 'SYSTEM', ?, ?, ?, ?, 'SMS', 'SUCCESS', NOW())`,
+            [logSeq, phoneNo, currentCustId, currentCustId, msgContent]
         );
 
         // 시뮬레이션을 위해 실제 발송은 생략하고 로그 확인
@@ -433,7 +447,7 @@ router.post('/verify-code', async (req, res) => {
         // TB_SMS_LOG에서 해당 번호의 가장 최신 인증번호 조회
         const [rows] = await pool.execute(
             `SELECT MSG_CONTENT FROM TB_SMS_LOG 
-             WHERE RECEIVER_PHONE = ? AND SEND_CATEGORY = 'JOIN'
+             WHERE RECEIVER_PHONE = ? AND SEND_CATEGORY = 'OTHER'
              ORDER BY REG_DT DESC LIMIT 1`,
             [phoneNo]
         );

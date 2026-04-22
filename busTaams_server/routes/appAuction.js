@@ -34,10 +34,14 @@ router.post('/request', authenticateToken, async (req, res) => {
         } = req.body;
 
         const userId = req.user.userId;
+        
+        // 0. CUST_ID 조회
+        const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        const custId = uRows.length > 0 ? uRows[0].CUST_ID : userId;
+
         const reqId = await getNextId('TB_AUCTION_REQ', 'REQ_ID', 10);
 
         // 1. 마스터 정보 저장 (TB_AUCTION_REQ)
-        // 스키마 컬럼명: REQ_ID, TRAVELER_ID, TRIP_TITLE, START_ADDR, END_ADDR, START_DT, END_DT, PASSENGER_CNT, REQ_AMT, DATA_STAT, EXPIRE_DT, REG_ID, MOD_ID
         const masterQuery = `
             INSERT INTO TB_AUCTION_REQ (
                 REQ_ID, TRAVELER_ID, TRIP_TITLE, START_ADDR, END_ADDR, 
@@ -45,25 +49,29 @@ router.post('/request', authenticateToken, async (req, res) => {
                 REG_ID, MOD_ID, REQ_COMMENT
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'AUCTION', DATE_ADD(NOW(), INTERVAL 1 DAY), ?, ?, ?)
         `;
-        // REQ_COMMENT 컬럼이 있는지 확실치 않지만, 이전 코드에 REQ_COMMENT가 있었으므로 포함 (없으면 DB 에러 날 것임)
         await connection.execute(masterQuery, [
-            reqId, userId, tripName, departure, destination,
+            reqId, custId, tripName, departure, destination,
             startDate, endDate, passengerCount, grandTotal || 0,
-            userId, userId, specialRequest || ''
+            custId, custId, specialRequest || ''
         ]);
 
         // 2. 차량 정보 저장 (TB_AUCTION_REQ_BUS)
         if (selectedBuses && selectedBuses.length > 0) {
             const busQuery = `
                 INSERT INTO TB_AUCTION_REQ_BUS (
-                    REQ_BUS_ID, REQ_ID, BUS_TYPE_CD, REQ_BUS_CNT, TOLLS_AMT, REG_ID
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                    REQ_BUS_ID, REQ_ID, BUS_TYPE_CD, DATA_STAT, RES_BUS_AMT, REG_ID, MOD_ID
+                ) VALUES (?, ?, ?, 'AUCTION', ?, ?, ?)
             `;
             for (const bus of selectedBuses) {
-                const reqBusId = await getNextId('TB_AUCTION_REQ_BUS', 'REQ_BUS_ID', 10);
-                await connection.execute(busQuery, [
-                    reqBusId, reqId, bus.name, bus.count, bus.price, userId
-                ]);
+                // 한 종류의 차량이 여러 대일 경우, 개별 레코드로 저장하거나 스키마에 CNT 필드를 추가해야 함.
+                // DB.md 기준으로는 CNT 필드가 없으므로, 일단 개별 레코드로 저장하는 방식 시도 (또는 유저 확인 필요)
+                // 여기서는 bus.count 만큼 루프를 돌려 저장합니다.
+                for (let i = 0; i < (bus.count || 1); i++) {
+                    const reqBusId = await getNextId('TB_AUCTION_REQ_BUS', 'REQ_BUS_ID', 10);
+                    await connection.execute(busQuery, [
+                        reqBusId, reqId, bus.name, bus.price, custId, custId
+                    ]);
+                }
             }
         }
 
@@ -76,7 +84,7 @@ router.post('/request', authenticateToken, async (req, res) => {
                     VIA_ID, REQ_ID, VIA_TYPE, VIA_ORD, VIA_ADDR, 
                     LAT, LNG, DIST_FROM_PREV, TIME_FROM_PREV, REG_ID
                 ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, ?)
-            `, [viaId, reqId, type, ord, addr, userId]);
+            `, [viaId, reqId, type, ord, addr, custId]);
         };
 
         // [A] 가는 길 경유지

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import Swal from 'sweetalert2';
 import { notify } from '../utils/toast';
+import BottomNavCustomer from '../components/BottomNavCustomer';
 
 const CustomerDashboard = () => {
     const navigate = useNavigate();
@@ -48,161 +49,7 @@ const CustomerDashboard = () => {
         fetchDashboardData();
     }, []);
 
-    const handleShowInquiryList = async () => {
-        try {
-            const res = await api.get('/app/customer/inquiries');
-            if (res.success) {
-                const inquiries = res.data;
-                const listHtml = inquiries.length > 0 
-                    ? inquiries.map(inq => `
-                        <div class="inquiry-item group bg-white border border-slate-100 rounded-2xl p-4 mb-3 cursor-pointer hover:shadow-md transition-all active:scale-[0.98]" data-id="${inq.id}">
-                            <div class="flex justify-between items-start mb-2">
-                                <span class="text-[10px] font-bold text-teal-600 uppercase tracking-widest">${inq.category}</span>
-                                <span class="bg-${inq.isCompleted ? 'teal-100 text-teal-700' : 'slate-100 text-slate-500'} text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter">
-                                    ${inq.isCompleted ? '답변완료' : '접수완료'}
-                                </span>
-                            </div>
-                            <h4 class="text-sm font-bold text-teal-900 truncate">${inq.title}</h4>
-                            <div class="flex justify-between items-center mt-3">
-                                <span class="text-[9px] text-slate-400 font-bold">${inq.date}</span>
-                                <span class="material-symbols-outlined text-slate-300 text-sm">arrow_forward_ios</span>
-                            </div>
-                        </div>
-                    `).join('')
-                    : '<div class="py-12 text-center text-slate-400 font-bold text-sm">문의 내역이 없습니다.</div>';
 
-                Swal.fire({
-                    title: '<h2 class="text-2xl font-black text-teal-900 text-left">1:1 문의 내역</h2>',
-                    html: `
-                        <div class="text-left mt-6 font-body">
-                            <div class="max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
-                                ${listHtml}
-                            </div>
-                            <button id="swal-add-inquiry" class="w-full mt-6 bg-teal-700 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-teal-800 transition-all">
-                                <span class="material-symbols-outlined text-sm">add</span>
-                                새로운 문의하기
-                            </button>
-                        </div>
-                    `,
-                    showConfirmButton: false,
-                    showCloseButton: true,
-                    customClass: {
-                        popup: 'rounded-[2.5rem] p-10 border-none shadow-2xl',
-                        closeButton: 'top-6 right-6'
-                    },
-                    didOpen: () => {
-                        const items = document.querySelectorAll('.inquiry-item');
-                        items.forEach(item => {
-                            item.addEventListener('click', () => {
-                                const id = item.getAttribute('data-id');
-                                handleShowInquiryDetail(id);
-                            });
-                        });
-                        
-                        document.getElementById('swal-add-inquiry').addEventListener('click', () => {
-                            Swal.close();
-                            handleShowAddInquiry();
-                        });
-                    }
-                });
-            }
-        } catch (err) {
-            notify.error('오류', '문의 내역을 불러오지 못했습니다.');
-        }
-    };
-
-    const handleShowInquiryDetail = async (id) => {
-        try {
-            const res = await api.get(`/app/customer/inquiries/${id}`);
-            if (res.success) {
-                const data = res.data;
-                Swal.fire({
-                    title: `<div class="text-left"><p class="text-[10px] text-teal-600 font-bold uppercase tracking-widest mb-1">${data.category}</p><h2 class="text-xl font-black text-teal-900">${data.title}</h2></div>`,
-                    html: `
-                        <div class="text-left mt-6 space-y-6 font-body">
-                            <div class="bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                                <p class="text-xs text-on-surface-variant leading-relaxed whitespace-pre-wrap">${data.content}</p>
-                            </div>
-                            ${data.replyContent ? `
-                                <div class="relative pl-6 py-2 border-l-2 border-teal-600">
-                                    <p class="font-bold text-xs text-teal-900 mb-2">운영진 답변</p>
-                                    <div class="bg-teal-50/50 p-4 rounded-xl border border-teal-100/50 text-xs text-teal-900 whitespace-pre-wrap">${data.replyContent}</div>
-                                </div>
-                            ` : ''}
-                        </div>
-                    `,
-                    showConfirmButton: true,
-                    confirmButtonText: '목록으로',
-                    confirmButtonColor: '#004e47',
-                    customClass: {
-                        popup: 'rounded-[2.5rem] p-8 border-none shadow-2xl',
-                        confirmButton: 'w-full py-4 rounded-2xl font-bold bg-teal-700 text-white mt-4'
-                    },
-                    buttonsStyling: false
-                }).then(() => {
-                    handleShowInquiryList(); // 다시 목록으로
-                });
-            }
-        } catch (err) {
-            notify.error('오류', '상세 내용을 불러오지 못했습니다.');
-        }
-    };
-
-    const handleShowAddInquiry = async () => {
-        const { value: formValues } = await Swal.fire({
-            title: '<h2 class="text-2xl font-black text-teal-900 text-left">1:1 문의하기</h2>',
-            html: `
-                <div class="text-left mt-6 font-body space-y-6">
-                    <div class="space-y-3">
-                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">문의 카테고리</label>
-                        <select id="swal-category" class="w-full bg-slate-50 border-none rounded-xl p-4 text-sm font-bold text-teal-900 outline-none focus:ring-2 focus:ring-teal-700/10">
-                            ${categories.map(c => `<option value="${c.code}">${c.name}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div class="space-y-3">
-                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">문의 제목</label>
-                        <input id="swal-title" class="w-full bg-slate-50 border-none rounded-xl p-4 text-sm placeholder:text-slate-300 outline-none focus:ring-2 focus:ring-teal-700/10" placeholder="제목을 입력해 주세요">
-                    </div>
-                    <div class="space-y-3">
-                        <label class="text-xs font-bold text-slate-400 uppercase tracking-widest">상세 내용</label>
-                        <textarea id="swal-content" class="w-full bg-slate-50 border-none rounded-xl p-4 text-sm placeholder:text-slate-300 outline-none focus:ring-2 focus:ring-teal-700/10 h-32 resize-none" placeholder="내용을 입력해 주세요"></textarea>
-                    </div>
-                </div>
-            `,
-            focusConfirm: false,
-            showCancelButton: true,
-            confirmButtonText: '문의 접수',
-            cancelButtonText: '취소',
-            buttonsStyling: false,
-            customClass: {
-                popup: 'rounded-[2.5rem] p-10 border-none shadow-2xl',
-                confirmButton: 'bg-teal-700 text-white px-8 py-4 rounded-2xl font-bold text-sm shadow-xl shadow-teal-900/20 hover:scale-105 transition-all mr-2',
-                cancelButton: 'bg-slate-100 text-slate-500 px-8 py-4 rounded-2xl font-bold text-sm hover:bg-slate-200 transition-all ml-2',
-                actions: 'mt-10'
-            },
-            preConfirm: () => {
-                const category = document.getElementById('swal-category').value;
-                const title = document.getElementById('swal-title').value;
-                const content = document.getElementById('swal-content').value;
-                if (!title || !content) {
-                    Swal.showValidationMessage('제목과 내용을 모두 입력해주세요.');
-                    return false;
-                }
-                return { category, title, content };
-            }
-        });
-
-        if (formValues) {
-            try {
-                const res = await api.post('/app/customer/inquiries', formValues);
-                if (res.success) {
-                    notify.success('접수 완료', '문의가 성공적으로 전달되었습니다.');
-                }
-            } catch (err) {
-                notify.error('오류', err.message || '접수 중 오류가 발생했습니다.');
-            }
-        }
-    };
 
     return (
         <div className="bg-background text-on-background min-h-screen pb-32 font-body">
@@ -309,7 +156,7 @@ const CustomerDashboard = () => {
                             <h4 className="font-bold text-on-surface text-[14px]">평점 및 감사글</h4>
                             <p className="text-[10px] text-on-surface-variant mt-1">이용 후기 작성</p>
                         </div>
-                        <div onClick={handleShowInquiryList} className="cursor-pointer bg-white p-6 rounded-3xl shadow-sm hover:translate-y-[-4px] transition-all">
+                        <div onClick={() => navigate('/inquiry-list')} className="cursor-pointer bg-white p-6 rounded-3xl shadow-sm hover:translate-y-[-4px] transition-all">
                             <div className="w-12 h-12 rounded-2xl bg-teal-50 flex items-center justify-center mb-4 text-teal-600">
                                 <span className="material-symbols-outlined">contact_support</span>
                             </div>
@@ -327,32 +174,7 @@ const CustomerDashboard = () => {
                 </section>
             </main>
 
-            <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[95%] md:w-[600px] rounded-full z-50 bg-white/80 backdrop-blur-xl shadow-2xl flex justify-around items-center p-2 h-16 border border-white/40">
-                <button className="flex flex-col items-center justify-center bg-teal-700 text-white rounded-full px-5 py-2">
-                    <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1"}}>home</span>
-                    <span className="font-semibold text-[9px] uppercase tracking-widest mt-0.5">홈</span>
-                </button>
-                <button onClick={() => navigate('/estimate-list-customer')} className="flex flex-col items-center justify-center text-slate-500 px-4 py-2 hover:text-teal-700 transition-colors">
-                    <span className="material-symbols-outlined text-[20px]">gavel</span>
-                    <span className="font-semibold text-[9px] uppercase tracking-widest mt-0.5">경매</span>
-                </button>
-                <button onClick={() => navigate('/reservation-list')} className="flex flex-col items-center justify-center text-slate-500 px-4 py-2 hover:text-teal-700 transition-colors">
-                    <span className="material-symbols-outlined text-[20px]">confirmation_number</span>
-                    <span className="font-semibold text-[9px] uppercase tracking-widest mt-0.5">예약</span>
-                </button>
-                <button onClick={() => navigate('/estimate-list')} className="flex flex-col items-center justify-center text-slate-500 px-4 py-2 hover:text-teal-700 transition-colors">
-                    <span className="material-symbols-outlined text-[20px]">chat_bubble</span>
-                    <span className="font-semibold text-[9px] uppercase tracking-widest mt-0.5">메시지</span>
-                </button>
-                <button onClick={handleShowInquiryList} className="flex flex-col items-center justify-center text-slate-500 px-4 py-2 hover:text-teal-700 transition-colors">
-                    <span className="material-symbols-outlined text-[20px]">support_agent</span>
-                    <span className="font-semibold text-[9px] uppercase tracking-widest mt-0.5">문의</span>
-                </button>
-                <button onClick={() => navigate('/user-profile')} className="flex flex-col items-center justify-center text-slate-500 px-4 py-2 hover:text-teal-700 transition-colors">
-                    <span className="material-symbols-outlined text-[20px]">person</span>
-                    <span className="font-semibold text-[9px] uppercase tracking-widest mt-0.5">내 정보</span>
-                </button>
-            </nav>
+            <BottomNavCustomer />
 
             <button onClick={() => navigate('/request-bus')} className="fixed bottom-28 right-6 w-14 h-14 bg-secondary rounded-full shadow-lg flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all">
                 <span className="material-symbols-outlined">add</span>

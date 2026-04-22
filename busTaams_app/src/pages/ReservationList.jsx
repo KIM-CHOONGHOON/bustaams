@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import BottomNavCustomer from '../components/BottomNavCustomer';
 
 const ReservationList = () => {
     const navigate = useNavigate();
@@ -145,24 +146,7 @@ const ReservationList = () => {
             </main>
 
             {/* BottomNavBar */}
-            <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] rounded-full max-w-md z-50 bg-white/80 backdrop-blur-xl shadow-2xl flex justify-around items-center p-2 h-16 border border-slate-50">
-                <button onClick={() => navigate('/customer-dashboard')} className="flex flex-col items-center justify-center text-slate-400 px-5 py-2">
-                    <span className="material-symbols-outlined">home</span>
-                    <span className="text-[10px] font-semibold uppercase tracking-widest">홈</span>
-                </button>
-                <button className="flex flex-col items-center justify-center bg-teal-50 text-teal-700 rounded-full px-5 py-2">
-                    <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1"}}>confirmation_number</span>
-                    <span className="text-[10px] font-semibold uppercase tracking-widest">예약</span>
-                </button>
-                <button onClick={() => navigate('/estimate-list')} className="flex flex-col items-center justify-center text-slate-400 px-5 py-2">
-                    <span className="material-symbols-outlined">chat_bubble</span>
-                    <span className="text-[10px] font-semibold uppercase tracking-widest">메시지</span>
-                </button>
-                <button onClick={() => navigate('/user-profile')} className="flex flex-col items-center justify-center text-slate-400 px-5 py-2">
-                    <span className="material-symbols-outlined">person</span>
-                    <span className="text-[10px] font-semibold uppercase tracking-widest">내 정보</span>
-                </button>
-            </nav>
+            <BottomNavCustomer />
         </div>
     );
 };
