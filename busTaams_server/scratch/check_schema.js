@@ -1,22 +1,19 @@
-const mysql = require('mysql2/promise');
-async function check() {
-    const conn = await mysql.createConnection({
-        host: '127.0.0.1',
-        user: 'root',
-        password: '',
-        database: 'bustaams',
-        port: 3307
-    });
+const { pool } = require('../db');
+
+async function checkSchema() {
     try {
-        const [rows1] = await conn.execute('DESCRIBE TB_DRIVER_BUS');
-        console.log('TB_DRIVER_BUS:', rows1.map(r => r.Field));
+        const [rows] = await pool.execute('DESCRIBE TB_USER');
+        console.log('--- TB_USER Schema ---');
+        console.table(rows);
         
-        const [rows2] = await conn.execute('DESCRIBE TB_BUS_DRIVER_VEHICLE');
-        console.log('TB_BUS_DRIVER_VEHICLE:', rows2.map(r => r.Field));
-    } catch (e) {
-        console.error(e);
+        const [termsRows] = await pool.execute('DESCRIBE TB_USER_TERMS_HIST');
+        console.log('\n--- TB_USER_TERMS_HIST Schema ---');
+        console.table(termsRows);
+    } catch (err) {
+        console.error('Schema check failed:', err);
     } finally {
-        await conn.end();
+        process.exit();
     }
 }
-check();
+
+checkSchema();

@@ -37,6 +37,12 @@ const uploadToGCS = async (file, folder) => {
         metadata: { contentType: file.mimetype }
     });
 
+    try {
+        await gcsFile.makePublic();
+    } catch (e) {
+        console.log('GCS makePublic failed:', e.message);
+    }
+
     return {
         fileId,
         url: `https://storage.googleapis.com/${bucketName}/${gcsFileName}`,

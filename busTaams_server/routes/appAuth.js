@@ -124,8 +124,8 @@ router.post('/register', async (req, res) => {
         const userQuery = `
             INSERT INTO TB_USER (
                 CUST_ID, USER_ID, EMAIL, PASSWORD, USER_NM, HP_NO, SNS_TYPE, 
-                SMS_AUTH_YN, USER_TYPE, JOIN_DT, USER_STAT, PROFILE_FILE_ID
-            ) VALUES (?, ?, ?, ?, ?, ?, 'NONE', ?, ?, NOW(), 'ACTIVE', ?)
+                SMS_AUTH_YN, USER_TYPE, JOIN_DT, USER_STAT, PROFILE_FILE_ID, PROFILE_IMG_PATH
+            ) VALUES (?, ?, ?, ?, ?, ?, 'NONE', ?, ?, NOW(), 'ACTIVE', ?, ?)
         `;
         
         const finalUserType = userType || 'TRAVELER';
@@ -139,7 +139,8 @@ router.post('/register', async (req, res) => {
             phoneNo, 
             smsAuthYn || 'Y', 
             finalUserType,
-            signFileId // 서명 이미지의 FILE_ID를 PROFILE_FILE_ID 컬럼에 저장
+            signFileId, // 서명 이미지의 FILE_ID를 PROFILE_FILE_ID 컬럼에 저장
+            signFileId ? `https://storage.googleapis.com/${bucketName}/signatures/${signFileId}.png` : null // 서명 경로를 프로필 이미지 경로로도 활용
         ]);
 
         // 4. 약관 동의 이력 처리 (TB_USER_TERMS_HIST - 키값을 CUST_ID로 변경)
@@ -421,7 +422,7 @@ router.post('/send-code', async (req, res) => {
         await pool.execute(
             `INSERT INTO TB_SMS_LOG (
                 LOG_SEQ, SEND_CATEGORY, SENDER_ID, RECEIVER_PHONE, RECEIVER_ID, REG_ID, MSG_CONTENT, MSG_TYPE, SEND_STAT, REG_DT
-            ) VALUES (?, 'OTHER', 'SYSTEM', ?, ?, ?, ?, 'SMS', 'SUCCESS', NOW())`,
+            ) VALUES (?, 'SIGN_UP', 'SYSTEM', ?, ?, ?, ?, 'SMS', 'SUCCESS', NOW())`,
             [logSeq, phoneNo, currentCustId, currentCustId, msgContent]
         );
 
@@ -447,7 +448,7 @@ router.post('/verify-code', async (req, res) => {
         // TB_SMS_LOG에서 해당 번호의 가장 최신 인증번호 조회
         const [rows] = await pool.execute(
             `SELECT MSG_CONTENT FROM TB_SMS_LOG 
-             WHERE RECEIVER_PHONE = ? AND SEND_CATEGORY = 'OTHER'
+             WHERE RECEIVER_PHONE = ? AND SEND_CATEGORY = 'SIGN_UP'
              ORDER BY REG_DT DESC LIMIT 1`,
             [phoneNo]
         );

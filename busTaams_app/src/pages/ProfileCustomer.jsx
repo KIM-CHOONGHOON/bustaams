@@ -32,6 +32,7 @@ const ProfileCustomer = () => {
     const [sentCode, setSentCode] = useState(''); // 서버에서 받은 인증코드 (데모용)
     const [isVerified, setIsVerified] = useState(true); // 초기에는 인증된 상태로 간주
     const [originalPhone, setOriginalPhone] = useState('');
+    const [imageVersion, setImageVersion] = useState(Date.now()); // 이미지 캐시 버스팅용 상태
 
     const validatePassword = (pw) => {
         const regex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
@@ -54,10 +55,11 @@ const ProfileCustomer = () => {
                     phone: data.phone || '',
                     email: data.email || '',
                     userType: data.userType || '',
-                    profileImage: data.userImage || '',
+                    profileImage: data.profileImage || '',
                     userId: data.userId || '' // 아이디 정보 저장
                 });
                 setOriginalPhone(data.phone || '');
+                setImageVersion(Date.now()); // 데이터 로드 시 버전 초기화
             }
         } catch (error) {
             console.error('프로필 로드 실패:', error);
@@ -156,7 +158,6 @@ const ProfileCustomer = () => {
         }
     };
 
-    // 이미지 업로드 핸들러
     const handleImageChange = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -164,7 +165,13 @@ const ProfileCustomer = () => {
         try {
             const response = await uploadProfileImage(file);
             notify.success('이미지 변경', '프로필 이미지가 성공적으로 변경되었습니다.');
-            fetchProfile();
+            
+            // 이미지 버전 업데이트하여 화면 갱신 유도
+            setImageVersion(Date.now());
+            setUserData(prev => ({ ...prev, profileImage: response.imageUrl }));
+            
+            // 전체 데이터 동기화를 위해 fetchProfile도 호출 (선택 사항)
+            // fetchProfile(); 
         } catch (error) {
             notify.error('업로드 실패', error.message || '이미지 업로드 실패');
         }
@@ -202,7 +209,9 @@ const ProfileCustomer = () => {
                                 <img 
                                     alt="User Profile" 
                                     className="w-full h-full object-cover" 
-                                    src={userData.profileImage} 
+                                    src={userData.profileImage.startsWith('http') ? 
+                                        `${userData.profileImage}${userData.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                        `${import.meta.env.VITE_API_BASE_URL || ''}${userData.profileImage}${userData.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
                                 />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center text-slate-400">

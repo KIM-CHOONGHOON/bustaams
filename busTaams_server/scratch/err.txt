@@ -1,0 +1,4 @@
+Error: Duplicate entry '0000000013' for key 'TB_AUCTION_REQ_VIA.PRIMARY'
+    at PromisePoolConnection.execute (C:\Users\LG\AI자동화\project_bustaams\busTaams_server\node_modules\mysql2\lib\promise\connection.js:47:22)
+    at C:\Users\LG\AI자동화\project_bustaams\busTaams_server\routes\appCustomer.js:639:35
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)

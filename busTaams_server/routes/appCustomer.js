@@ -51,15 +51,23 @@ router.get('/profile', authenticateToken, async (req, res) => {
         }
 
         const user = rows[0];
+
+        // 이미지 경로 처리 (GCS URL인 경우 백엔드 프록시 경로로 변환)
+        let userImage = user.PROFILE_IMG_PATH;
+        if (userImage && userImage.startsWith('http')) {
+            userImage = `/api/common/display-image?path=${encodeURIComponent(userImage)}`;
+        }
+
         res.status(200).json({
             status: 200,
+            success: true,
             data: {
                 name: user.USER_NM || '사용자',
                 phone: user.HP_NO,
-                email: user.EMAIL || user.USER_ID, // EMAIL 필드 우선 사용
+                email: user.EMAIL || user.USER_ID,
                 userType: user.USER_TYPE,
                 userId: user.USER_ID,
-                userImage: user.PROFILE_IMG_PATH
+                profileImage: userImage || null
             }
         });
     } catch (error) {
@@ -199,13 +207,18 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
 
         const stats = rows[0];
         
+        // 이미지 경로 처리 (GCS URL인 경우 백엔드 프록시 경로로 변환)
+        let profileImage = stats.profileImage;
+        if (profileImage && profileImage.startsWith('http')) {
+            profileImage = `/api/common/display-image?path=${encodeURIComponent(profileImage)}`;
+        }
+
         res.status(200).json({
             success: true,
             status: 200,
             data: {
                 userName: stats.userName || '사용자',
-                // 만약 프로필 이미지가 상대 경로라면 절대 경로(또는 필요한 포맷)로 처리할 수 있도록 보완 가능
-                profileImage: stats.profileImage || null,
+                profileImage: profileImage || null,
                 countProgressing: stats.countProgressing || 0,
                 countWaitingApproval: stats.countWaitingApproval || 0,
                 status: 'CONNECTED'
@@ -347,10 +360,11 @@ router.post('/profile/upload-image', authenticateToken, memoryUpload.single('pro
         if (userRows.length === 0) {
             return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
         }
-        const { CUST_ID: custId, PROFILE_FILE_ID: existingFileId } = userRows[0];
+        const { CUST_ID: custId } = userRows[0];
         
         const ext = path.extname(req.file.originalname).replace('.', '') || 'png';
-        const fileId = existingFileId || await getNextId('TB_FILE_MASTER', 'FILE_ID', 20);
+        // 캐싱 문제를 피하기 위해 항상 새로운 fileId를 생성합니다.
+        const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20);
         const gcsFileName = `profiles/${fileId}.${ext}`;
         const file = bucket.file(gcsFileName);
 
@@ -359,26 +373,22 @@ router.post('/profile/upload-image', authenticateToken, memoryUpload.single('pro
             metadata: { contentType: req.file.mimetype }
         });
 
+        // 파일을 공개로 설정하여 앱에서 직접 접근 가능하게 함
+        try {
+            await file.makePublic();
+        } catch (e) {
+            console.log('GCS makePublic failed (likely uniform bucket-level access):', e.message);
+        }
+
         const imageUrl = `https://storage.googleapis.com/${bucketName}/${gcsFileName}`;
 
-        // 3. TB_FILE_MASTER 처리
-        if (existingFileId) {
-            // 기존 파일 정보가 있으면 수정 (MOD_ID만 업데이트)
-            await pool.execute(
-                `UPDATE TB_FILE_MASTER 
-                 SET GCS_PATH = ?, ORG_FILE_NM = ?, FILE_EXT = ?, MOD_ID = ?, MOD_DT = NOW() 
-                 WHERE FILE_ID = ?`,
-                [imageUrl, req.file.originalname, ext, custId, existingFileId]
-            );
-        } else {
-            // 기존 파일 정보가 없으면 신규 등록 (REG_ID, MOD_ID 모두 CUST_ID 설정)
-            await pool.execute(
-                `INSERT INTO TB_FILE_MASTER (
-                    FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, REG_ID, MOD_ID
-                ) VALUES (?, 'PROFILE', ?, ?, ?, ?, ?, ?)`,
-                [fileId, bucketName, imageUrl, req.file.originalname, ext, custId, custId]
-            );
-        }
+        // 3. TB_FILE_MASTER 신규 등록 (프로필은 이력을 남기거나 URL 변경을 위해 신규 등록 권장)
+        await pool.execute(
+            `INSERT INTO TB_FILE_MASTER (
+                FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, REG_ID, MOD_ID
+            ) VALUES (?, 'PROFILE', ?, ?, ?, ?, ?, ?)`,
+            [fileId, bucketName, imageUrl, req.file.originalname, ext, custId, custId]
+        );
 
         // 4. TB_USER 업데이트 (이미지 경로 및 파일 ID 반영, MOD_ID 설정)
         await pool.execute(
@@ -386,10 +396,13 @@ router.post('/profile/upload-image', authenticateToken, memoryUpload.single('pro
             [imageUrl, fileId, custId, userId]
         );
 
+        // 프론트엔드 즉시 반영을 위해 중계 경로로 변환하여 응답
+        const proxyImageUrl = `/api/common/display-image?path=${encodeURIComponent(imageUrl)}`;
+
         res.status(200).json({
             success: true,
-            imageUrl: imageUrl,
-            message: '프로필 이미지가 GCS에 성공적으로 업로드되었습니다.'
+            imageUrl: proxyImageUrl,
+            message: '프로필 이미지가 성공적으로 변경되었습니다.'
         });
     } catch (error) {
         console.error('App profile image upload error:', error);
@@ -554,13 +567,11 @@ router.get('/received-bids', authenticateToken, async (req, res) => {
             master.route = fullRoute;
         }
 
-        // 이미지 경로 처리
-        const host = req.get('host');
-        const protocol = req.protocol;
+        // 이미지 경로 처리 (GCS URL인 경우 백엔드 프록시 경로로 변환)
         const processedRows = rows.map(row => {
             let avatar = row.avatar;
-            if (avatar && avatar.startsWith('/uploads')) {
-                avatar = `${protocol}://${host}${avatar}`;
+            if (avatar && avatar.startsWith('http')) {
+                avatar = `/api/common/display-image?path=${encodeURIComponent(avatar)}`;
             }
             return {
                 ...row,
@@ -617,14 +628,12 @@ router.get('/bid-detail/:id', authenticateToken, async (req, res) => {
 
         const bid = rows[0];
 
-        // 이미지 경로 처리
-        const host = req.get('host');
-        const protocol = req.protocol;
         const processUrl = (path) => {
             if (!path) return null;
-            if (path.startsWith('http')) return path;
-            const cleanPath = path.startsWith('/uploads') ? path : '/' + path;
-            return `${protocol}://${host}${cleanPath}`;
+            if (path.startsWith('http')) {
+                return `/api/common/display-image?path=${encodeURIComponent(path)}`;
+            }
+            return path;
         };
 
         bid.avatar = processUrl(bid.avatar);

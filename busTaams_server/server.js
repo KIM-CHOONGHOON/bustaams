@@ -115,7 +115,7 @@ const authenticateToken = (req, res, next) => {
 // --- 3. 공통 미들웨어 ---
 
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5174', 'http://127.0.0.1:5174'],
+    origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5174', 'http://127.0.0.1:5174', 'http://localhost:5177', 'http://127.0.0.1:5177'],
     credentials: true
 }));
 app.use(express.json({ limit: '50mb' }));
@@ -124,6 +124,37 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // 헬스 체크
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', time: new Date().toISOString() });
+});
+
+// 이미지 중계 API (GCS -> Backend -> Browser)
+app.get('/api/common/display-image', async (req, res) => {
+    try {
+        const { path: imagePath } = req.query;
+        if (!imagePath) return res.status(400).send('Image path is required');
+
+        // GCS URL이 전체 경로로 들어온 경우 파일명만 추출
+        let fileName = imagePath;
+        if (imagePath.startsWith('http')) {
+            const urlParts = imagePath.split('/');
+            fileName = urlParts.slice(urlParts.indexOf(bucketName) + 1).join('/');
+        }
+
+        const file = bucket.file(fileName);
+        const [exists] = await file.exists();
+
+        if (!exists) {
+            return res.status(404).send('Image not found');
+        }
+
+        const [metadata] = await file.getMetadata();
+        res.setHeader('Content-Type', metadata.contentType || 'image/png');
+        res.setHeader('Cache-Control', 'public, max-age=3600'); // 1시간 캐싱
+
+        file.createReadStream().pipe(res);
+    } catch (error) {
+        console.error('Image proxy error:', error);
+        res.status(500).send('Internal server error');
+    }
 });
 
 // [App 호환성] 단일 파일 업로드 API (Multer 사용)

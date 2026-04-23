@@ -10,6 +10,7 @@ const CustomerDashboard = () => {
     const [stats, setStats] = useState({ progressing: 0, waiting: 0 });
     const [userName, setUserName] = useState('사용자');
     const [profileImage, setProfileImage] = useState(null);
+    const [imageVersion, setImageVersion] = useState(Date.now());
 
     const categories = [
         { name: '입찰 및 예약 문의', code: 'BID_RES' },
@@ -33,13 +34,18 @@ const CustomerDashboard = () => {
                         progressing: statsRes.data.countProgressing,
                         waiting: statsRes.data.countWaitingApproval
                     });
-                    if (statsRes.data.userName) setUserName(statsRes.data.userName);
-                    if (statsRes.data.profileImage) setProfileImage(statsRes.data.profileImage);
+                    if (statsRes.data.profileImage) {
+                        setProfileImage(statsRes.data.profileImage);
+                        setImageVersion(Date.now());
+                    }
                 }
                 
                 if (profileRes.success) {
                     setUserName(profileRes.data.name || profileRes.data.userName || '사용자');
-                    if (profileRes.data.profileImage) setProfileImage(profileRes.data.profileImage);
+                    if (profileRes.data.profileImage) {
+                        setProfileImage(profileRes.data.profileImage);
+                        setImageVersion(Date.now());
+                    }
                 }
             } catch (err) {
                 console.error('Fetch dashboard error:', err);
@@ -65,7 +71,13 @@ const CustomerDashboard = () => {
                     </button>
                     <div className="w-8 h-8 rounded-full bg-slate-200 overflow-hidden flex items-center justify-center">
                         {profileImage ? (
-                            <img alt="Profile" src={profileImage.startsWith('http') ? profileImage : `${import.meta.env.VITE_API_BASE_URL || ''}${profileImage}`} className="w-full h-full object-cover" />
+                            <img 
+                                alt="Profile" 
+                                src={profileImage.startsWith('http') ? 
+                                    `${profileImage}${profileImage.includes('?') ? '&' : '?'}v=${imageVersion}` : 
+                                    `${import.meta.env.VITE_API_BASE_URL || ''}${profileImage}`} 
+                                className="w-full h-full object-cover" 
+                            />
                         ) : (
                             <span className="material-symbols-outlined text-slate-400">person</span>
                         )}
