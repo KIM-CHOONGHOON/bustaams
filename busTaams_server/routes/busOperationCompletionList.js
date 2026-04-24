@@ -1,11 +1,12 @@
 /**
  * 버스 운행 완료 목록
  * GET /api/bus-operation-completion-list
- *   ?driverId=&from=&to=  (권장) | driverUuid (레거시)
+ *   ?driverId|userId|driverUuid=&from=&to=
  *
- * DB: (레거시) RES_UUID/REQ_UUID/DRIVER_UUID/RES_STAT + BIN_TO_UUID
- *     (ARCHITECTURE) RES_ID/REQ_ID/DRIVER_ID/DATA_STAT + 세션 UUID → TB_USER.USER_SEQ_ID|USER_ID
+ * `BusTaams 테이블.md`: TB_BUS_RESERVATION.DRIVER_ID = TB_USER.CUST_ID(varchar(10)) —
+ * 쿼리의 driverId/userId/userUuid 문자열을 CUST_ID로 해석해 매칭(해석 실패 시 원문으로 비교).
  */
+const { resolveCustIdByUserKey } = require('../lib/resolveCustIdByUserKey');
 const RANGE_ERROR_MSG = '조회 범위는 1년 이내만 가능합니다.';
 
 function daysBetweenYmdUtc(fromStr, toStr) {
@@ -18,11 +19,6 @@ function daysBetweenYmdUtc(fromStr, toStr) {
 
 function isSchemaMismatchError(e) {
     return e && (e.errno === 1054 || e.code === 'ER_BAD_FIELD_ERROR');
-}
-
-function looksLikeUuidString(s) {
-    if (!s || typeof s !== 'string') return false;
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.trim());
 }
 
 /** mysql2 Row 필드명 대소문자 차이 흡수 */
@@ -38,10 +34,9 @@ function rowCol(row, logical) {
 }
 
 function mapBusRow(b, idx) {
-    const busPk = b.reqBusId ?? b.req_bus_id ?? b.reqBusUuid ?? b.req_bus_uuid ?? null;
+    const busPk = b.reqBusId ?? b.req_bus_id ?? null;
     return {
         reqBusId: busPk,
-        reqBusUuid: busPk,
         busTypeCd: String(b.busTypeCd ?? b.bus_type_cd ?? '').trim() || null,
         reqBusCnt: Number(b.reqBusCnt ?? b.req_bus_cnt) || 0,
         reqAmtKrw: Number(b.reqAmt ?? b.req_amt) || 0,
@@ -49,30 +44,7 @@ function mapBusRow(b, idx) {
     };
 }
 
-const SQL_LIST_LEGACY = `
-SELECT
-    BIN_TO_UUID(res.RES_UUID)              AS resUuid,
-    BIN_TO_UUID(r.REQ_UUID)                AS reqUuid,
-    r.TRIP_TITLE                           AS tripTitle,
-    r.START_ADDR                           AS startAddr,
-    r.END_ADDR                             AS endAddr,
-    r.END_DT                               AS endDt,
-    DATE_FORMAT(r.END_DT, '%Y-%m-%d')      AS endDtDate,
-    r.START_DT                             AS startDt,
-    r.PASSENGER_CNT                        AS passengerCnt,
-    COALESCE(res.DRIVER_BIDDING_PRICE, 0) AS driverBiddingPrice,
-    res.RES_STAT                           AS resStat,
-    res.MOD_DT                             AS completedAt
- FROM TB_BUS_RESERVATION res
- INNER JOIN TB_AUCTION_REQ r ON r.REQ_UUID = res.REQ_UUID
- WHERE res.RES_STAT = 'DONE'
-   AND LOWER(BIN_TO_UUID(res.DRIVER_UUID)) = ?
-   AND r.END_DT IS NOT NULL
-   AND DATE(r.END_DT) >= ?
-   AND DATE(r.END_DT) <= ?
- ORDER BY r.END_DT DESC`;
-
-/** ARCH: TB_BUS_RESERVATION.DRIVER_ID = TB_USER.USER_ID(또는 DDL상 기사 키) 직접 비교 — 로그인 `driverId` */
+/** TB_BUS_RESERVATION.DRIVER_ID = 로그인 기사 문자열 ID */
 const SQL_LIST_ARCH_DIRECT = `
 SELECT
     res.RES_ID                             AS resId,
@@ -85,7 +57,7 @@ SELECT
     r.START_DT                             AS startDt,
     r.PASSENGER_CNT                        AS passengerCnt,
     COALESCE(res.DRIVER_BIDDING_PRICE, 0) AS driverBiddingPrice,
-    res.DATA_STAT                          AS resStat,
+    res.DATA_STAT                          AS dataStat,
     res.MOD_DT                             AS completedAt
  FROM TB_BUS_RESERVATION res
  INNER JOIN TB_AUCTION_REQ r ON r.REQ_ID = res.REQ_ID
@@ -95,73 +67,6 @@ SELECT
    AND DATE(r.END_DT) >= ?
    AND DATE(r.END_DT) <= ?
  ORDER BY r.END_DT DESC`;
-
-/** ARCH: 세션 UUID → TB_USER → DRIVER_ID (상세 API `archDetailSelectFragments` 와 동일 패턴) */
-const SQL_LIST_ARCH_UUID = `
-SELECT
-    res.RES_ID                             AS resId,
-    r.REQ_ID                               AS reqId,
-    r.TRIP_TITLE                           AS tripTitle,
-    r.START_ADDR                           AS startAddr,
-    r.END_ADDR                             AS endAddr,
-    r.END_DT                               AS endDt,
-    DATE_FORMAT(r.END_DT, '%Y-%m-%d')      AS endDtDate,
-    r.START_DT                             AS startDt,
-    r.PASSENGER_CNT                        AS passengerCnt,
-    COALESCE(res.DRIVER_BIDDING_PRICE, 0) AS driverBiddingPrice,
-    res.DATA_STAT                          AS resStat,
-    res.MOD_DT                             AS completedAt
- FROM TB_BUS_RESERVATION res
- INNER JOIN TB_AUCTION_REQ r ON r.REQ_ID = res.REQ_ID
- WHERE res.DATA_STAT = 'DONE'
-   AND res.DRIVER_ID = (
-        SELECT COALESCE(NULLIF(TRIM(USER_SEQ_ID), ''), USER_ID)
-          FROM TB_USER WHERE USER_UUID = UUID_TO_BIN(?) LIMIT 1)
-   AND r.END_DT IS NOT NULL
-   AND DATE(r.END_DT) >= ?
-   AND DATE(r.END_DT) <= ?
- ORDER BY r.END_DT DESC`;
-
-async function tryArchListRows(connection, driverIdQ, driverUuidQ, from, to) {
-    const seen = new Set();
-    const runDirect = async (val) => {
-        const key = `D:${val}`;
-        if (seen.has(key)) return [];
-        seen.add(key);
-        const [r] = await connection.execute(SQL_LIST_ARCH_DIRECT, [val, from, to]);
-        return r;
-    };
-    const runUuid = async (val) => {
-        const u = String(val).trim().toLowerCase();
-        const key = `U:${u}`;
-        if (seen.has(key)) return [];
-        seen.add(key);
-        const [r] = await connection.execute(SQL_LIST_ARCH_UUID, [u, from, to]);
-        return r;
-    };
-
-    const attempts = [];
-    if (driverIdQ && !looksLikeUuidString(driverIdQ)) attempts.push(() => runDirect(driverIdQ));
-    if (driverUuidQ && looksLikeUuidString(driverUuidQ)) attempts.push(() => runUuid(driverUuidQ));
-    if (driverIdQ && looksLikeUuidString(driverIdQ)) attempts.push(() => runUuid(driverIdQ));
-    if (driverUuidQ && !looksLikeUuidString(driverUuidQ)) attempts.push(() => runDirect(driverUuidQ));
-
-    for (const fn of attempts) {
-        const rows = await fn();
-        if (rows.length) return rows;
-    }
-    return [];
-}
-
-const SQL_BUSES_LEGACY = (ph) => `
-SELECT BIN_TO_UUID(REQ_UUID) AS reqUuid,
-       BIN_TO_UUID(REQ_BUS_UUID) AS reqBusUuid,
-       BUS_TYPE_CD AS busTypeCd,
-       REQ_BUS_CNT AS reqBusCnt,
-       COALESCE(REQ_AMT, 0) AS reqAmt
- FROM TB_AUCTION_REQ_BUS
- WHERE REQ_UUID IN (${ph})
- ORDER BY REQ_UUID, REG_DT ASC, REQ_BUS_UUID ASC`;
 
 /** ARCHITECTURE TB_AUCTION_REQ_BUS: REQ_BUS_ID, REQ_ID — REQ_BUS_CNT/REQ_AMT 없을 수 있음 */
 const SQL_BUSES_ARCH_WIDE = (ph) => `
@@ -190,15 +95,19 @@ module.exports = function registerBusOperationCompletionList(pool, app) {
             req.query.driverId != null && String(req.query.driverId).trim() !== ''
                 ? String(req.query.driverId).trim()
                 : '';
+        const userIdQ =
+            req.query.userId != null && String(req.query.userId).trim() !== ''
+                ? String(req.query.userId).trim()
+                : '';
         const driverUuidQ =
             req.query.driverUuid != null && String(req.query.driverUuid).trim() !== ''
                 ? String(req.query.driverUuid).trim()
                 : '';
-        const driverParam = driverIdQ || driverUuidQ;
+        const driverParam = driverIdQ || userIdQ || driverUuidQ;
         const { from, to } = req.query;
         if (!driverParam || !from || !to) {
             return res.status(400).json({
-                error: 'driverId·driverUuid 중 하나 이상, from, to가 필요합니다. (YYYY-MM-DD)',
+                error: 'driverId(또는 userId·driverUuid), from, to가 필요합니다. (YYYY-MM-DD)',
             });
         }
         const ymd = /^\d{4}-\d{2}-\d{2}$/;
@@ -214,46 +123,38 @@ module.exports = function registerBusOperationCompletionList(pool, app) {
             return res.status(400).json({ error: RANGE_ERROR_MSG });
         }
 
-        const driverUuidNorm = String(driverParam).trim().toLowerCase();
-
         let connection;
         try {
             connection = await pool.getConnection();
-            let rows;
-            let usedArch = false;
+            let driverForRes = driverParam;
             try {
-                [rows] = await connection.execute(SQL_LIST_LEGACY, [driverUuidNorm, from, to]);
-            } catch (e) {
-                if (!isSchemaMismatchError(e)) throw e;
-                usedArch = true;
-                rows = await tryArchListRows(connection, driverIdQ, driverUuidQ, from, to);
+                const cid = await resolveCustIdByUserKey(connection, driverParam);
+                if (cid) driverForRes = cid;
+            } catch (_) {
+                /* ignore */
             }
+            const [rows] = await connection.execute(SQL_LIST_ARCH_DIRECT, [driverForRes, from, to]);
 
-            const reqUuidSet = new Set();
+            const reqIdSet = new Set();
             for (const row of rows) {
-                const ru = rowCol(row, 'reqId') ?? rowCol(row, 'reqUuid');
-                if (ru) reqUuidSet.add(String(ru).trim().toLowerCase());
+                const ru = rowCol(row, 'reqId');
+                if (ru) reqIdSet.add(String(ru).trim().toLowerCase());
             }
-            const reqUuidList = [...reqUuidSet];
+            const reqIdList = [...reqIdSet];
 
             /** @type {Map<string, Array<{reqBusUuid:string|null,busTypeCd:string|null,reqBusCnt:number,reqAmtKrw:number,sortOrder:number}>>} */
             const busesByReq = new Map();
-            if (reqUuidList.length && connection) {
+            if (reqIdList.length && connection) {
                 let busRows;
-                if (!usedArch) {
-                    const ph = reqUuidList.map(() => 'UUID_TO_BIN(?)').join(', ');
-                    [busRows] = await connection.execute(SQL_BUSES_LEGACY(ph), reqUuidList);
-                } else {
-                    const ph = reqUuidList.map(() => '?').join(', ');
-                    try {
-                        [busRows] = await connection.execute(SQL_BUSES_ARCH_WIDE(ph), reqUuidList);
-                    } catch (e2) {
-                        if (!isSchemaMismatchError(e2)) throw e2;
-                        [busRows] = await connection.execute(SQL_BUSES_ARCH_NARROW(ph), reqUuidList);
-                    }
+                const ph = reqIdList.map(() => '?').join(', ');
+                try {
+                    [busRows] = await connection.execute(SQL_BUSES_ARCH_WIDE(ph), reqIdList);
+                } catch (e2) {
+                    if (!isSchemaMismatchError(e2)) throw e2;
+                    [busRows] = await connection.execute(SQL_BUSES_ARCH_NARROW(ph), reqIdList);
                 }
                 for (const b of busRows) {
-                    const k = String(b.reqId ?? b.req_id ?? b.reqUuid ?? b.req_uuid ?? '').trim().toLowerCase();
+                    const k = String(b.reqId ?? b.req_id ?? '').trim().toLowerCase();
                     if (!k) continue;
                     if (!busesByReq.has(k)) busesByReq.set(k, []);
                     const arr = busesByReq.get(k);
@@ -262,14 +163,12 @@ module.exports = function registerBusOperationCompletionList(pool, app) {
             }
 
             const items = rows.map((row) => {
-                const reqUuid = rowCol(row, 'reqId') ?? rowCol(row, 'reqUuid');
-                const resVal = rowCol(row, 'resId') ?? rowCol(row, 'resUuid');
-                const reqKey = reqUuid ? String(reqUuid).trim().toLowerCase() : '';
+                const reqIdVal = rowCol(row, 'reqId');
+                const resVal = rowCol(row, 'resId');
+                const reqKey = reqIdVal ? String(reqIdVal).trim().toLowerCase() : '';
                 return {
                     resId: resVal,
-                    reqId: reqUuid,
-                    resUuid: resVal,
-                    reqUuid,
+                    reqId: reqIdVal,
                     tripTitle: row.tripTitle ?? row.trip_title,
                     startAddr: row.startAddr ?? row.start_addr,
                     endAddr: row.endAddr ?? row.end_addr,
@@ -278,7 +177,7 @@ module.exports = function registerBusOperationCompletionList(pool, app) {
                     startDt: row.startDt ?? row.start_dt,
                     passengerCnt: Number(row.passengerCnt ?? row.passenger_cnt) || 0,
                     driverBiddingPrice: Number(row.driverBiddingPrice ?? row.driver_bidding_price) || 0,
-                    resStat: row.resStat ?? row.res_stat,
+                    dataStat: row.dataStat ?? row.DATA_STAT ?? row.data_stat,
                     completedAt: row.completedAt ?? row.completed_at ?? row.mod_dt,
                     auctionReqBuses: reqKey ? busesByReq.get(reqKey) || [] : [],
                 };

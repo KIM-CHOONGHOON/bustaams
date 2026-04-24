@@ -55,18 +55,20 @@ function formatCapacityPassenger(item) {
  * UpcomingTrips — `downloads/bustaams_web/운행예정목록_기사/UpcomingTrips.html` 레이아웃을 React 모달로 이식 (모양·글꼴·항목 유지).
  * 데이터: GET /api/upcoming-trips
  */
-const UpcomingTripsModal = ({ open, onClose, driverUuid, onTravelerQuoteDetail }) => {
+const UpcomingTripsModal = ({ open, onClose, driverId, driverUuid, onTravelerQuoteDetail }) => {
+  const sessionDriverId =
+    (driverId != null && String(driverId).trim()) || (driverUuid != null && String(driverUuid).trim()) || '';
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(null);
 
   const fetchUpcomingTrips = useCallback(async () => {
-    if (!driverUuid) return;
+    if (!sessionDriverId) return;
     setLoading(true);
     setLoadError(null);
     try {
       const r = await fetch(
-        `${API_BASE}/api/upcoming-trips?driverUuid=${encodeURIComponent(driverUuid)}`
+        `${API_BASE}/api/upcoming-trips?driverId=${encodeURIComponent(sessionDriverId)}`
       );
       if (!r.ok) {
         let msg = `서버 오류 (${r.status})`;
@@ -88,11 +90,11 @@ const UpcomingTripsModal = ({ open, onClose, driverUuid, onTravelerQuoteDetail }
     } finally {
       setLoading(false);
     }
-  }, [driverUuid]);
+  }, [sessionDriverId]);
 
   useEffect(() => {
-    if (open && driverUuid) fetchUpcomingTrips();
-  }, [open, driverUuid, fetchUpcomingTrips]);
+    if (open && sessionDriverId) fetchUpcomingTrips();
+  }, [open, sessionDriverId, fetchUpcomingTrips]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -238,7 +240,7 @@ const UpcomingTripsModal = ({ open, onClose, driverUuid, onTravelerQuoteDetail }
                       <div className="flex gap-4 mt-8">
                         <button
                           type="button"
-                          onClick={() => hero.reqUuid && onTravelerQuoteDetail?.(hero.reqUuid)}
+                          onClick={() => hero.reqId && onTravelerQuoteDetail?.(hero.reqId)}
                           className="flex-1 kinetic-gradient text-white py-4 rounded-full font-bold shadow-md hover:shadow-xl transition-all"
                         >
                           운행 상세 확인
@@ -260,7 +262,7 @@ const UpcomingTripsModal = ({ open, onClose, driverUuid, onTravelerQuoteDetail }
                   const isSecondStyle = idx % 2 === 0;
                   return (
                     <div
-                      key={it.reqUuid || idx}
+                      key={it.reqId || idx}
                       className="bg-surface-container-lowest p-6 rounded-[1.5rem] tonal-stacking hover:translate-y-[-4px] transition-transform duration-300"
                     >
                       {isSecondStyle ? (
@@ -290,7 +292,7 @@ const UpcomingTripsModal = ({ open, onClose, driverUuid, onTravelerQuoteDetail }
                             </div>
                             <button
                               type="button"
-                              onClick={() => it.reqUuid && onTravelerQuoteDetail?.(it.reqUuid)}
+                              onClick={() => it.reqId && onTravelerQuoteDetail?.(it.reqId)}
                               className="text-primary font-bold text-sm flex items-center gap-1 group"
                             >
                               상세보기
@@ -321,7 +323,7 @@ const UpcomingTripsModal = ({ open, onClose, driverUuid, onTravelerQuoteDetail }
                             </div>
                             <button
                               type="button"
-                              onClick={() => it.reqUuid && onTravelerQuoteDetail?.(it.reqUuid)}
+                              onClick={() => it.reqId && onTravelerQuoteDetail?.(it.reqId)}
                               className="text-primary font-bold text-sm flex items-center gap-1 group"
                             >
                               상세보기

@@ -5,7 +5,7 @@ import TravelerQuoteRequestDetails from '../TravelerQuoteRequestDetails/Traveler
  * 여행자 견적 목록 (ListOfTravelerQuotations)
  * - 운전기사 대시보드 → 바로가기 메뉴 → 「여행자 견적 목록」 클릭 시 호출
  * - GET /api/list-of-traveler-quotations?driverUuid= — BIDDING + 기사별 동일출발일 제외(CONFIRM)
- * - 항목 클릭 → TravelerQuoteRequestDetails 모달 호출 (reqUuid 전달)
+ * - 항목 클릭 → TravelerQuoteRequestDetails 모달 호출 (reqId 전달)
  * - 배경 클릭으로 닫히지 않음 / X 버튼·닫기 버튼으로만 닫힘
  */
 const ListOfTravelerQuotations = ({ close, currentUser }) => {
@@ -14,7 +14,7 @@ const ListOfTravelerQuotations = ({ close, currentUser }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
-  const [selectedReqUuid, setSelectedReqUuid] = useState(null);
+  const [selectedReqId, setSelectedReqId] = useState(null);
 
   const fetchList = useCallback(async () => {
     setLoading(true);
@@ -125,9 +125,9 @@ const ListOfTravelerQuotations = ({ close, currentUser }) => {
               <div className="space-y-4">
                 {items.map((item) => (
                   <button
-                    key={item.reqUuid}
+                    key={item.reqId}
                     type="button"
-                    onClick={() => setSelectedReqUuid(item.reqUuid)}
+                    onClick={() => setSelectedReqId(item.reqId)}
                     className="w-full text-left rounded-2xl border border-gray-100 bg-white hover:border-teal-200 hover:shadow-md transition-all duration-200 p-5 group"
                   >
                     <div className="flex items-start justify-between gap-4">
@@ -216,10 +216,10 @@ const ListOfTravelerQuotations = ({ close, currentUser }) => {
       </div>
 
       {/* 상세 모달 */}
-      {selectedReqUuid && (
+      {selectedReqId && (
         <TravelerQuoteRequestDetails
-          reqUuid={selectedReqUuid}
-          close={() => setSelectedReqUuid(null)}
+          reqId={selectedReqId}
+          close={() => setSelectedReqId(null)}
           currentUser={currentUser}
         />
       )}

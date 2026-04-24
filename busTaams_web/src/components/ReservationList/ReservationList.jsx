@@ -4,7 +4,7 @@ import QuotationList from '../QuotationList/QuotationList';
 const ReservationList = ({ user, onBack }) => {
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedReqUuid, setSelectedReqUuid] = useState(null);
+  const [selectedReqId, setSelectedReqId] = useState(null);
   const [showQuotationList, setShowQuotationList] = useState(false);
 
   // 모달 열림 시 배경 스크롤 잠금
@@ -34,14 +34,14 @@ const ReservationList = ({ user, onBack }) => {
     }
   }, [user]);
 
-  const handleOpenQuotations = (reqUuid) => {
-    setSelectedReqUuid(reqUuid);
+  const handleOpenQuotations = (reqId) => {
+    setSelectedReqId(reqId);
     setShowQuotationList(true);
   };
 
   const handleCloseQuotations = () => {
     setShowQuotationList(false);
-    setSelectedReqUuid(null);
+    setSelectedReqId(null);
   };
 
   // 상세 보기 (테스트용 콘솔)
@@ -237,7 +237,7 @@ const ReservationList = ({ user, onBack }) => {
       </div>
 
       {/* Quotation List Modal */}
-      {showQuotationList && selectedReqUuid && (
+      {showQuotationList && selectedReqId && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 backdrop-blur-md p-4 animate-in fade-in duration-200">
           <div className="relative w-full max-w-6xl max-h-[90vh] bg-surface-lowest rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 border border-white/20">
             {/* Modal Header */}
@@ -260,7 +260,7 @@ const ReservationList = ({ user, onBack }) => {
             <div className="flex-1 overflow-y-auto bg-slate-50/50">
               <QuotationList 
                 user={user} 
-                reqUuid={selectedReqUuid} 
+                reqId={selectedReqId} 
                 onBack={handleCloseQuotations}
                 onViewDetail={handleViewDetail}
                 isModal={true}

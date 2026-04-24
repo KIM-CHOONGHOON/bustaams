@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 
-const QuotationList = ({ user, reqUuid, onBack, onViewDetail, isModal = false, onConfirmSuccess }) => {
+const QuotationList = ({ user, reqId, onBack, onViewDetail, isModal = false, onConfirmSuccess }) => {
   const [bids, setBids] = useState([]);
   const [reqInfo, setReqInfo] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // 견적 데이터 및 요청 정보 조회
   useEffect(() => {
-    if (!reqUuid || !user) return;
+    if (!reqId || !user) return;
 
     const fetchData = async () => {
       setLoading(true);
@@ -19,13 +19,15 @@ const QuotationList = ({ user, reqUuid, onBack, onViewDetail, isModal = false, o
         console.log('[DEBUG] reqInfo response status:', reqRes.status);
         const reqData = await reqRes.json();
         if (Array.isArray(reqData)) {
-          const found = reqData.find(r => r.REQ_UUID_STR === reqUuid);
+          const found = reqData.find(
+            (r) => r.REQ_ID === reqId || r.REQ_UUID_STR === reqId
+          );
           setReqInfo(found || null);
           console.log('[DEBUG] reqInfo found:', found ? 'Yes' : 'No');
         }
 
         // 2. 최신 입찰 목록 조회 (신규 API 활용)
-        const bidsUrl = `http://localhost:8080/api/auction/bids/${reqUuid}`;
+        const bidsUrl = `http://localhost:8080/api/auction/bids/${reqId}`;
         console.log('[DEBUG] Fetching bids from:', bidsUrl);
         const bidsRes = await fetch(bidsUrl);
         console.log('[DEBUG] bids response status:', bidsRes.status);
@@ -42,7 +44,7 @@ const QuotationList = ({ user, reqUuid, onBack, onViewDetail, isModal = false, o
     };
 
     fetchData();
-  }, [reqUuid, user]);
+  }, [reqId, user]);
 
   const handleConfirm = async (bid) => {
     if (!confirm(`${bid.driverName} 기사님의 견적으로 예약을 확정하시겠습니까?`)) return;
@@ -52,7 +54,7 @@ const QuotationList = ({ user, reqUuid, onBack, onViewDetail, isModal = false, o
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          reqUuid: reqUuid,
+          reqId: reqId,
           driverUuid: bid.DRIVER_UUID,
           bidSeq: bid.BID_SEQ
         })

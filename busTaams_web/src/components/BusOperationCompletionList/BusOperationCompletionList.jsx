@@ -66,7 +66,7 @@ function tripLabel(item) {
 
 /**
  * 버스 운행 완료 목록 — `버스 운행 완료 목록 화면.md`
- * GET /api/bus-operation-completion-list?driverId|driverUuid=&from=&to=
+ * GET /api/bus-operation-completion-list?driverId=&from=&to=  (userId·driverUuid 동의어는 서버가 수용)
  */
 const BusOperationCompletionList = ({ open, onClose, driverId, driverUuid }) => {
   const [from, setFrom] = useState('');
@@ -106,12 +106,7 @@ const BusOperationCompletionList = ({ open, onClose, driverId, driverUuid }) => 
     setLoading(true);
     setLoadError(null);
     const q = new URLSearchParams({ from: f, to: t });
-    if (driverId != null && String(driverId).trim() !== '') {
-      q.set('driverId', String(driverId).trim());
-    }
-    if (driverUuid != null && String(driverUuid).trim() !== '') {
-      q.set('driverUuid', String(driverUuid).trim());
-    }
+    q.set('driverId', sessionDriver);
     const url = `${API_BASE}/api/bus-operation-completion-list?${q.toString()}`;
     if (import.meta.env.DEV) console.warn('[BusOperationCompletionList]', url);
     try {
@@ -185,13 +180,12 @@ const BusOperationCompletionList = ({ open, onClose, driverId, driverUuid }) => 
     <>
       {selectedItem && (
         <BusOperationCompletionDetails
-          key={`${selectedItem.resId || selectedItem.resUuid || ''}-${selectedItem.reqId || selectedItem.reqUuid || ''}`}
+          key={`${selectedItem.resId || ''}-${selectedItem.reqId || ''}`}
           open
           onClose={() => setSelectedItem(null)}
-          driverId={driverId != null && String(driverId).trim() !== '' ? String(driverId).trim() : undefined}
-          driverUuid={driverUuid}
-          resId={selectedItem.resId ?? selectedItem.resUuid}
-          reqId={selectedItem.reqId ?? selectedItem.reqUuid}
+          driverId={sessionDriver}
+          resId={selectedItem.resId}
+          reqId={selectedItem.reqId}
         />
       )}
     <div
@@ -347,7 +341,7 @@ const BusOperationCompletionList = ({ open, onClose, driverId, driverUuid }) => 
                   ) : (
                     items.map((it, idx) => (
                       <tr
-                        key={it.resId || it.resUuid || `${it.reqId || it.reqUuid}-${idx}`}
+                        key={it.resId || it.reqId || `row-${idx}`}
                         className="border-b border-slate-50 hover:bg-primary-fixed/30 cursor-pointer transition-colors"
                         onClick={() => setSelectedItem(it)}
                         onKeyDown={(e) => {

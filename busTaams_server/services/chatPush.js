@@ -1,6 +1,6 @@
 /**
- * 채팅 메시지 수신 알림 — Firebase Cloud Messaging (앱·웹 동일 토큰 테이블)
- * SMS는 별도 정책(환경 변수) — 기본 미구현, 문서 참고
+ * 채팅 메시지 수신 알림 — Firebase Cloud Messaging
+ * `TB_USER_DEVICE_TOKEN`: `server.js` 부트스트랩은 `USER_ID`(VARCHAR(256)) — `TB_USER.CUST_ID`로 토큰 조회
  */
 const admin = require('firebase-admin');
 
@@ -13,10 +13,16 @@ function getMessagingSafe() {
     }
 }
 
-async function fetchTokensForUser(pool, userUuidStr) {
+/** @param {import('mysql2/promise').Pool} pool */
+async function fetchFcmTokensByCustId(pool, custId) {
+    if (!custId) return [];
+    const cid = String(custId).trim();
+    const [u] = await pool.execute(`SELECT USER_ID FROM TB_USER WHERE CUST_ID = ? LIMIT 1`, [cid]);
+    const userId = u[0]?.USER_ID;
+    if (!userId) return [];
     const [rows] = await pool.execute(
-        `SELECT FCM_TOKEN FROM TB_USER_DEVICE_TOKEN WHERE USER_UUID = UUID_TO_BIN(?)`,
-        [userUuidStr]
+        `SELECT FCM_TOKEN FROM TB_USER_DEVICE_TOKEN WHERE USER_ID = ?`,
+        [userId]
     );
     return (rows || []).map((r) => r.FCM_TOKEN).filter(Boolean);
 }
@@ -32,14 +38,16 @@ function stringifyData(data) {
 }
 
 /**
- * 등록된 모든 기기로 동일 알림 전송 (앱·웹 토큰이 같은 테이블에 있으면 한 번에 전송)
+ * 등록된 모든 기기로 동일 알림 전송
+ * @param {import('mysql2/promise').Pool} pool
+ * @param {{ custId: string, title: string, body: string, data?: object }} opts
  */
-async function notifyUserDevices(pool, { userUuidStr, title, body, data }) {
+async function notifyUserDevicesByCustId(pool, { custId, title, body, data }) {
     const messaging = getMessagingSafe();
     if (!messaging) {
         return { sent: 0, skipped: true, reason: 'firebase_admin_unavailable' };
     }
-    const tokens = await fetchTokensForUser(pool, userUuidStr);
+    const tokens = await fetchFcmTokensByCustId(pool, custId);
     if (!tokens.length) {
         return { sent: 0, skipped: false, reason: 'no_tokens' };
     }
@@ -67,38 +75,39 @@ async function notifyUserDevices(pool, { userUuidStr, title, body, data }) {
     }
 }
 
-async function notifyTravelerNewDriverMessage(pool, { travelerUuid, reqUuid, driverUuid, previewText, tripTitle }) {
+async function notifyTravelerNewDriverMessage(pool, { travelerCustId, reqId, driverCustId, previewText, tripTitle }) {
     const title = tripTitle ? `채팅 · ${String(tripTitle).slice(0, 40)}` : '버스기사 메시지';
     const body = previewText ? String(previewText).slice(0, 180) : '새 메시지가 도착했습니다.';
-    return notifyUserDevices(pool, {
-        userUuidStr: travelerUuid,
+    return notifyUserDevicesByCustId(pool, {
+        custId: travelerCustId,
         title,
         body,
         data: {
             type: 'CHAT_DRIVER_MESSAGE',
-            reqUuid: String(reqUuid),
-            driverUuid: String(driverUuid),
+            reqId: String(reqId),
+            driverId: String(driverCustId),
         },
     });
 }
 
-async function notifyDriverNewTravelerMessage(pool, { driverUuid, reqUuid, travelerUuid, previewText, tripTitle }) {
+async function notifyDriverNewTravelerMessage(pool, { driverCustId, reqId, travelerCustId, previewText, tripTitle }) {
     const title = tripTitle ? `채팅 · ${String(tripTitle).slice(0, 40)}` : '여행자 메시지';
     const body = previewText ? String(previewText).slice(0, 180) : '새 메시지가 도착했습니다.';
-    return notifyUserDevices(pool, {
-        userUuidStr: driverUuid,
+    return notifyUserDevicesByCustId(pool, {
+        custId: driverCustId,
         title,
         body,
         data: {
             type: 'CHAT_TRAVELER_MESSAGE',
-            reqUuid: String(reqUuid),
-            travelerUuid: String(travelerUuid),
+            reqId: String(reqId),
+            travelerId: String(travelerCustId),
         },
     });
 }
 
 module.exports = {
-    notifyUserDevices,
+    notifyUserDevicesByCustId,
+    fetchFcmTokensByCustId,
     notifyTravelerNewDriverMessage,
     notifyDriverNewTravelerMessage,
 };

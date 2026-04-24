@@ -1,79 +1,111 @@
 /**
  * 여행자 ↔ 기사 실시간 채팅 (여행자 클라이언트)
  * Base path: /api/live-chat-traveler
+ *
+ * `BusTaams 테이블.md`: TRAVELER_ID, DRIVER_ID, RES_ID, REQ_ID — TB_CHAT_LOG / PART / HIST
  */
 const express = require('express');
-const { randomUUID } = require('crypto');
-const { decrypt } = require('../crypto');
-const { migrateTbChatLogColumns } = require('../migrations/tbChatLogMigrate');
-const { insertTbChatLogMessage } = require('../lib/insertTbChatLogMessage');
+const { plainOrLegacyDecrypt } = require('../crypto');
+const { insertTripChatMessage } = require('../lib/insertTbChatLogMessage');
 const { notifyDriverNewTravelerMessage } = require('../services/chatPush');
+const { resolveCustIdByUserKey } = require('../lib/resolveCustIdByUserKey');
 
 function safeDecryptUserNm(val) {
-    if (val == null || val === '') return '';
-    try {
-        return decrypt(val);
-    } catch (_) {
-        return String(val);
-    }
+    return plainOrLegacyDecrypt(val);
 }
+
+function travelerKeyFromQuery(q) {
+    if (!q) return '';
+    return String(q.travelerId ?? q.travelerUuid ?? '').trim();
+}
+
+function travelerKeyFromBody(b) {
+    if (!b || typeof b !== 'object') return '';
+    return String(b.travelerId ?? b.travelerUuid ?? '').trim();
+}
+
+const SQL_RES_FOR_TRAVELER = `
+SELECT res.RES_ID AS resId,
+       res.REQ_ID AS reqId,
+       COALESCE(res.TRAVELER_ID, r.TRAVELER_ID) AS travelerId,
+       res.DRIVER_ID AS driverId
+  FROM TB_BUS_RESERVATION res
+  INNER JOIN TB_AUCTION_REQ r ON r.REQ_ID = res.REQ_ID
+ WHERE res.REQ_ID = ?
+   AND res.RES_ID = ?
+   AND COALESCE(res.TRAVELER_ID, r.TRAVELER_ID) = ?
+   AND res.DATA_STAT IN ('CONFIRM','DONE')
+ LIMIT 1`;
+
+const SQL_MESSAGES = `
+SELECT h.HIST_SEQ AS histSeq,
+       h.MSG_KIND AS msgKind,
+       h.MSG_BODY AS msgBody,
+       h.SENDER_ROLE AS senderRole,
+       h.REG_DT AS regDt
+  FROM TB_CHAT_LOG_HIST h
+ INNER JOIN TB_CHAT_LOG c ON c.CHAT_SEQ = h.CHAT_SEQ
+ WHERE c.REQ_ID = ?
+   AND c.RES_ID = ?
+ ORDER BY h.REG_DT ASC, h.HIST_SEQ ASC`;
 
 module.exports = function createLiveChatTravelerRouter(pool) {
     const router = express.Router();
 
-    async function fetchReservationForTraveler(connection, travelerUuid, reqUuid) {
-        const [rows] = await connection.execute(
-            `SELECT BIN_TO_UUID(res.RES_UUID) AS resUuid,
-                    BIN_TO_UUID(res.DRIVER_UUID) AS driverUuid
-               FROM TB_BUS_RESERVATION res
-               INNER JOIN TB_AUCTION_REQ r ON r.REQ_UUID = res.REQ_UUID
-              WHERE res.REQ_UUID = UUID_TO_BIN(?)
-                AND COALESCE(res.TRAVELER_UUID, r.TRAVELER_UUID) = UUID_TO_BIN(?)
-                AND res.RES_STAT IN ('CONFIRM','DONE')
-              ORDER BY res.BID_SEQ DESC
-              LIMIT 1`,
-            [reqUuid, travelerUuid]
-        );
+    async function resolveTravelerCustId(connection, key) {
+        let cid = await resolveCustIdByUserKey(connection, key);
+        if (!cid) cid = key;
+        return String(cid).trim();
+    }
+
+    async function fetchReservationForTraveler(connection, travelerCustId, reqId, resId) {
+        const [rows] = await connection.execute(SQL_RES_FOR_TRAVELER, [reqId, resId, travelerCustId]);
         return rows[0] || null;
     }
 
-    /** GET /chat-partners?travelerUuid= */
+    /** GET /chat-partners?travelerId= */
     router.get('/chat-partners', async (req, res) => {
-        const { travelerUuid } = req.query;
-        if (!travelerUuid) return res.status(400).json({ error: 'travelerUuid가 필요합니다.' });
+        const travelerKey = travelerKeyFromQuery(req.query);
+        if (!travelerKey) {
+            return res.status(400).json({ error: 'travelerId(또는 travelerUuid)가 필요합니다.' });
+        }
 
         let connection;
         try {
             connection = await pool.getConnection();
+            const travelerCustId = await resolveTravelerCustId(connection, travelerKey);
+
             const [rows] = await connection.execute(
                 `SELECT
-                        BIN_TO_UUID(r.REQ_UUID) AS reqUuid,
-                        BIN_TO_UUID(res.RES_UUID) AS resUuid,
-                        res.RES_STAT AS resStat,
-                        BIN_TO_UUID(res.DRIVER_UUID) AS driverUuid,
+                        r.REQ_ID AS reqId,
+                        res.RES_ID AS resId,
+                        res.DATA_STAT AS dataStat,
+                        res.DRIVER_ID AS driverId,
                         r.TRIP_TITLE AS tripTitle,
                         r.START_ADDR AS startAddr,
                         r.END_ADDR AS endAddr,
                         r.START_DT AS startDt,
                         u.USER_NM AS driverUserNmEnc
                    FROM TB_BUS_RESERVATION res
-                   INNER JOIN TB_AUCTION_REQ r ON r.REQ_UUID = res.REQ_UUID
-                    AND COALESCE(res.TRAVELER_UUID, r.TRAVELER_UUID) = UUID_TO_BIN(?)
-                    AND res.RES_STAT IN ('CONFIRM','DONE')
-                    AND res.BID_SEQ = (
-                        SELECT MAX(b.BID_SEQ) FROM TB_BUS_RESERVATION b
-                         WHERE b.REQ_UUID = res.REQ_UUID AND b.DRIVER_UUID = res.DRIVER_UUID
+                   INNER JOIN TB_AUCTION_REQ r ON r.REQ_ID = res.REQ_ID
+                    AND COALESCE(res.TRAVELER_ID, r.TRAVELER_ID) = ?
+                    AND res.DATA_STAT IN ('CONFIRM','DONE')
+                    AND res.RES_ID = (
+                        SELECT b.RES_ID FROM TB_BUS_RESERVATION b
+                         WHERE b.REQ_ID = res.REQ_ID AND b.DRIVER_ID = res.DRIVER_ID
+                         ORDER BY b.MOD_DT DESC, b.RES_ID DESC
+                         LIMIT 1
                     )
-                   LEFT JOIN TB_USER u ON u.USER_UUID = res.DRIVER_UUID
+                   LEFT JOIN TB_USER u ON u.CUST_ID = res.DRIVER_ID
                   ORDER BY r.START_DT ASC`,
-                [travelerUuid]
+                [travelerCustId]
             );
 
             const items = rows.map((row) => ({
-                reqUuid: row.reqUuid,
-                resUuid: row.resUuid,
-                resStat: row.resStat,
-                driverUuid: row.driverUuid,
+                reqId: row.reqId,
+                resId: row.resId,
+                dataStat: row.dataStat,
+                driverId: row.driverId,
                 driverName: safeDecryptUserNm(row.driverUserNmEnc) || '버스기사',
                 tripTitle: row.tripTitle || '',
                 startAddr: row.startAddr || '',
@@ -90,47 +122,28 @@ module.exports = function createLiveChatTravelerRouter(pool) {
         }
     });
 
-    /** GET /messages?travelerUuid=&reqUuid= */
+    /** GET /messages?travelerId=&reqId=&resId= */
     router.get('/messages', async (req, res) => {
-        const { travelerUuid, reqUuid } = req.query;
-        if (!travelerUuid || !reqUuid) {
-            return res.status(400).json({ error: 'travelerUuid와 reqUuid가 필요합니다.' });
+        const travelerKey = travelerKeyFromQuery(req.query);
+        const reqId = req.query.reqId != null ? String(req.query.reqId).trim() : '';
+        const resId = req.query.resId != null ? String(req.query.resId).trim() : '';
+        if (!travelerKey || !reqId || !resId) {
+            return res.status(400).json({ error: 'travelerId(또는 travelerUuid), reqId, resId가 필요합니다.' });
         }
 
         let connection;
         try {
             connection = await pool.getConnection();
-            const access = await fetchReservationForTraveler(connection, travelerUuid, reqUuid);
+            const travelerCustId = await resolveTravelerCustId(connection, travelerKey);
+            const access = await fetchReservationForTraveler(connection, travelerCustId, reqId, resId);
             if (!access) {
                 return res.status(403).json({ error: '채팅할 수 있는 견적이 아니거나 조건에 맞지 않습니다.' });
             }
 
-            const selectMessagesSql =
-                `SELECT BIN_TO_UUID(CHAT_LOG_UUID) AS chatLogUuid,
-                        MSG_KIND AS msgKind,
-                        MSG_BODY AS msgBody,
-                        SENDER_ROLE AS senderRole,
-                        REG_DT AS regDt
-                   FROM TB_CHAT_LOG
-                  WHERE REQ_UUID = UUID_TO_BIN(?)
-                    AND TRAVELER_UUID = UUID_TO_BIN(?)
-                    AND DRIVER_UUID = UUID_TO_BIN(?)
-                  ORDER BY REG_DT ASC`;
-            const selectParams = [reqUuid, travelerUuid, access.driverUuid];
-            let rows;
-            try {
-                [rows] = await connection.execute(selectMessagesSql, selectParams);
-            } catch (e) {
-                if (e.errno === 1054 || e.code === 'ER_BAD_FIELD_ERROR') {
-                    await migrateTbChatLogColumns(connection);
-                    [rows] = await connection.execute(selectMessagesSql, selectParams);
-                } else {
-                    throw e;
-                }
-            }
+            const [rows] = await connection.execute(SQL_MESSAGES, [reqId, resId]);
 
             const items = rows.map((row) => ({
-                chatLogUuid: row.chatLogUuid,
+                histSeq: row.histSeq,
                 msgKind: row.msgKind || 'TEXT',
                 msgBody: row.msgBody != null ? String(row.msgBody) : '',
                 senderRole: row.senderRole,
@@ -146,12 +159,14 @@ module.exports = function createLiveChatTravelerRouter(pool) {
         }
     });
 
-    /** POST /messages body: { travelerUuid, reqUuid, msgBody } */
+    /** POST /messages body: { travelerId, reqId, resId, msgBody } */
     router.post('/messages', async (req, res) => {
-        const { travelerUuid, reqUuid, msgBody } = req.body || {};
-        const text = typeof msgBody === 'string' ? msgBody.trim() : '';
-        if (!travelerUuid || !reqUuid) {
-            return res.status(400).json({ error: 'travelerUuid와 reqUuid가 필요합니다.' });
+        const travelerKey = travelerKeyFromBody(req.body);
+        const reqId = req.body?.reqId != null ? String(req.body.reqId).trim() : '';
+        const resId = req.body?.resId != null ? String(req.body.resId).trim() : '';
+        const text = typeof req.body?.msgBody === 'string' ? req.body.msgBody.trim() : '';
+        if (!travelerKey || !reqId || !resId) {
+            return res.status(400).json({ error: 'travelerId(또는 travelerUuid), reqId, resId가 필요합니다.' });
         }
         if (!text) {
             return res.status(400).json({ error: '메시지 내용을 입력해 주세요.' });
@@ -160,48 +175,49 @@ module.exports = function createLiveChatTravelerRouter(pool) {
         let connection;
         try {
             connection = await pool.getConnection();
-            const row = await fetchReservationForTraveler(connection, travelerUuid, reqUuid);
+            const travelerCustId = await resolveTravelerCustId(connection, travelerKey);
+            const row = await fetchReservationForTraveler(connection, travelerCustId, reqId, resId);
             if (!row) {
                 return res.status(403).json({ error: '채팅할 수 있는 견적이 아니거나 조건에 맞지 않습니다.' });
             }
-            if (!row.driverUuid) {
+            const driverCustId = row.driverId != null ? String(row.driverId).trim() : '';
+            if (!driverCustId) {
                 return res.status(400).json({ error: '기사 정보가 없어 메시지를 저장할 수 없습니다.' });
             }
-
-            const chatLogUuid = randomUUID();
-            await insertTbChatLogMessage(connection, {
-                chatLogUuid,
-                reqUuid,
-                resUuid: row.resUuid,
-                travelerUuid,
-                driverUuid: row.driverUuid,
-                senderUuid: travelerUuid,
-                senderRole: 'TRAVELER',
-                text,
-            });
 
             let tripTitle = '';
             try {
                 const [tr] = await connection.execute(
-                    `SELECT TRIP_TITLE AS t FROM TB_AUCTION_REQ WHERE REQ_UUID = UUID_TO_BIN(?) LIMIT 1`,
-                    [reqUuid]
+                    `SELECT TRIP_TITLE AS t FROM TB_AUCTION_REQ WHERE REQ_ID = ? LIMIT 1`,
+                    [reqId]
                 );
                 tripTitle = tr[0]?.t || '';
             } catch (_) {
                 /* ignore */
             }
 
+            const { histSeq } = await insertTripChatMessage(connection, {
+                reqId,
+                resId,
+                travelerCustId,
+                driverCustId,
+                senderCustId: travelerCustId,
+                senderRole: 'TRAVELER',
+                text,
+                tripTitle,
+            });
+
             void notifyDriverNewTravelerMessage(pool, {
-                driverUuid: row.driverUuid,
-                reqUuid,
-                travelerUuid,
+                driverCustId,
+                reqId,
+                travelerCustId,
                 previewText: text,
                 tripTitle,
             }).catch((err) => console.warn('live-chat-traveler push:', err.message));
 
             res.status(201).json({
                 ok: true,
-                chatLogUuid,
+                histSeq,
                 msgKind: 'TEXT',
                 msgBody: text,
                 senderRole: 'TRAVELER',

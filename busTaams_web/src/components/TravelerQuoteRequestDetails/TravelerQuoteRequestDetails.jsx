@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 
 /**
  * 여행자 견적 요청 상세 (TravelerQuoteRequestDetails)
- * - ListOfTravelerQuotations 모달에서 항목 클릭 시 reqUuid(string)를 받아 호출
- * - GET /api/traveler-quote-request-details?reqUuid=
+ * - ListOfTravelerQuotations 모달에서 항목 클릭 시 reqId(string)를 받아 호출
+ * - GET /api/traveler-quote-request-details?reqId=
  * - 데이터 출처: TB_AUCTION_REQ (마스터) + TB_AUCTION_REQ_BUS (차량) + TB_AUCTION_REQ_VIA (경유지)
  */
 
@@ -12,7 +12,7 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/,
 const RES_STAT_LABEL = { REQ: '요청', CONFIRM: '확정', DONE: '완료', TRAVELER_CANCEL: '여행자 취소', DRIVER_CANCEL: '버스기사 취소', CANCELLATION_OF_BID: '입찰 취소', CANCELLATION_OF_AUCTION: '역경매 취소' };
 const RES_STAT_COLOR = { REQ: 'text-blue-600 bg-blue-50', CONFIRM: 'text-green-600 bg-green-50', DONE: 'text-slate-600 bg-slate-100', TRAVELER_CANCEL: 'text-red-600 bg-red-50', DRIVER_CANCEL: 'text-orange-600 bg-orange-50', CANCELLATION_OF_BID: 'text-rose-600 bg-rose-50', CANCELLATION_OF_AUCTION: 'text-purple-600 bg-purple-50' };
 
-const TravelerQuoteRequestDetails = ({ close, reqUuid, currentUser }) => {
+const TravelerQuoteRequestDetails = ({ close, reqId, currentUser }) => {
     const [loading, setLoading]         = useState(true);
     const [loadError, setLoadError]     = useState(null);
     const [data, setData]               = useState(null);
@@ -37,12 +37,12 @@ const TravelerQuoteRequestDetails = ({ close, reqUuid, currentUser }) => {
     const [cancelSuccess, setCancelSuccess] = useState(false);
 
     const fetchData = useCallback(async () => {
-        if (!reqUuid) return;
+        if (!reqId) return;
         setLoading(true);
         setLoadError(null);
         try {
             const driverUuid = currentUser?.userUuid || currentUser?.USER_UUID_STR || '';
-            const url = `${API_BASE}/api/traveler-quote-request-details?reqUuid=${encodeURIComponent(reqUuid)}${driverUuid ? `&driverUuid=${encodeURIComponent(driverUuid)}` : ''}`;
+            const url = `${API_BASE}/api/traveler-quote-request-details?reqId=${encodeURIComponent(reqId)}${driverUuid ? `&driverUuid=${encodeURIComponent(driverUuid)}` : ''}`;
             const res  = await fetch(url);
             const text = await res.text();
             const trimmed = text.trimStart();
@@ -76,7 +76,7 @@ const TravelerQuoteRequestDetails = ({ close, reqUuid, currentUser }) => {
         } finally {
             setLoading(false);
         }
-    }, [reqUuid, currentUser]);
+    }, [reqId, currentUser]);
 
     const handleBidUpdate = useCallback(async () => {
         if (resStat !== 'REQ') {
@@ -97,10 +97,10 @@ const TravelerQuoteRequestDetails = ({ close, reqUuid, currentUser }) => {
         setUpdateError(null);
         setUpdateSuccess(false);
         try {
-            // resUuid가 없으면(최초/재등록) reqUuid + driverUuid 포함
+            // resUuid가 없으면(최초/재등록) reqId + driverUuid 포함
             const body = resUuid
-                ? { resUuid, reqUuid, driverUuid, bidPrice: bidPriceNum }
-                : { reqUuid, driverUuid, bidPrice: bidPriceNum };
+                ? { resUuid, reqId, driverUuid, bidPrice: bidPriceNum }
+                : { reqId, driverUuid, bidPrice: bidPriceNum };
             const res = await fetch(`${API_BASE}/api/traveler-quote-request-details/bid`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -123,7 +123,7 @@ const TravelerQuoteRequestDetails = ({ close, reqUuid, currentUser }) => {
         } finally {
             setUpdating(false);
         }
-    }, [resStat, bidPrice, resUuid, reqUuid, currentUser]);
+    }, [resStat, bidPrice, resUuid, reqId, currentUser]);
 
     // RES_STAT별 입찰 취소 불가 메시지
     const BID_CANCEL_ERROR_MSG = {
@@ -156,7 +156,7 @@ const TravelerQuoteRequestDetails = ({ close, reqUuid, currentUser }) => {
         try {
             const body = resUuid
                 ? { resUuid }
-                : { reqUuid, driverUuid };
+                : { reqId, driverUuid };
             const res = await fetch(`${API_BASE}/api/traveler-quote-request-details/bid-cancel`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -179,7 +179,7 @@ const TravelerQuoteRequestDetails = ({ close, reqUuid, currentUser }) => {
         } finally {
             setCancelling(false);
         }
-    }, [resUuid, reqUuid, currentUser]);
+    }, [resUuid, reqId, currentUser]);
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -295,8 +295,8 @@ const TravelerQuoteRequestDetails = ({ close, reqUuid, currentUser }) => {
                                                 <span className="w-2 h-2 bg-secondary rounded-full animate-pulse"></span>
                                                 실시간 입찰
                                             </span>
-                                            <span className="text-slate-400 text-xs font-mono truncate max-w-[200px]" title={data?.reqUuid}>
-                                                REQ: {data?.reqUuid ? data.reqUuid.slice(0, 8) + '…' : 'N/A'}
+                                            <span className="text-slate-400 text-xs font-mono truncate max-w-[200px]" title={data?.reqId}>
+                                                REQ: {data?.reqId ? data.reqId.slice(0, 8) + '…' : 'N/A'}
                                             </span>
                                         </div>
                                         {data?.tripTitle && (

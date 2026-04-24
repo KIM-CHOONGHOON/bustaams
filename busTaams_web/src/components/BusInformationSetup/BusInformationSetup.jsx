@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import CommonView from '../CommonView/CommonView';
 
-/** 응답 필드 busUuid = DB `TB_BUS_DRIVER_VEHICLE.BUS_ID`(동일 UUID 문자열) */
+/** API 필드 `busId` = DB `TB_BUS_DRIVER_VEHICLE.BUS_ID` (`VARCHAR(10)` 0패딩 — `BusTaams 테이블.md`). */
+/** `ownerId` = 세션 `userId` | `custId` | `userUuid` | `uuid` — REST에는 `userId` 필드로 전달. */
 /** 끝 슬래시 제거. 비어 있으면 동일 출처 `/api` + Vite proxy(개발) 사용 */
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
 
@@ -69,12 +70,17 @@ function readFileAsDataUrl(file) {
 }
 
 const BusInformationSetup = ({ close, currentUser }) => {
-    const userUuid = currentUser?.userUuid || currentUser?.uuid;
+    const ownerId =
+        currentUser?.userId ||
+        currentUser?.custId ||
+        currentUser?.userUuid ||
+        currentUser?.uuid ||
+        '';
 
     const [busCodes, setBusCodes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState(null);
-    const [existingBusUuid, setExistingBusUuid] = useState(null);
+    const [existingBusId, setExistingBusId] = useState(null);
 
     const [formData, setFormData] = useState({
         vehicleNo: '',
@@ -96,7 +102,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     /** null이면 formData 기준으로 표시, 포커스 시 네 자리 입력용 */
     const [yearDigitsInput, setYearDigitsInput] = useState(null);
-    /** CommonView 대상: { fileUuid, docTitle } | null */
+    /** CommonView 대상: { fileId, docTitle } | null (TB_FILE_MASTER.FILE_ID) */
     const [commonViewTarget, setCommonViewTarget] = useState(null);
 
     const currentYear = new Date().getFullYear();
@@ -115,12 +121,12 @@ const BusInformationSetup = ({ close, currentUser }) => {
     }, [formData.manufactureYear, yearMin, yearMax]);
 
     const fileUrl = useCallback(
-        (fileUuid) => {
+        (fileId) => {
             const base = API_BASE || '';
-            const path = `/api/driver/bus-documents/file?userUuid=${encodeURIComponent(userUuid || '')}&fileUuid=${encodeURIComponent(fileUuid)}`;
+            const path = `/api/driver/bus-documents/file?userId=${encodeURIComponent(ownerId || '')}&fileId=${encodeURIComponent(fileId)}`;
             return base ? `${base}${path}` : path;
         },
-        [userUuid]
+        [ownerId]
     );
 
     useEffect(() => {
@@ -133,7 +139,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
     useEffect(() => {
         let cancelled = false;
         (async () => {
-            if (!userUuid) {
+            if (!ownerId) {
                 setLoading(false);
                 setLoadError('로그인 정보가 없습니다.');
                 return;
@@ -144,7 +150,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
                 const api = (p) => (API_BASE ? `${API_BASE}${p}` : p);
                 const [codesOut, busOut] = await Promise.all([
                     fetchJson(api(`/api/common-codes?grpCd=BUS_TYPE`)),
-                    fetchJson(api(`/api/driver/bus?userUuid=${encodeURIComponent(userUuid)}`)),
+                    fetchJson(api(`/api/driver/bus?userId=${encodeURIComponent(ownerId)}`)),
                 ]);
                 const codesData = codesOut.data;
                 const busData = busOut.data;
@@ -159,7 +165,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
 
                 const bus = busData?.bus;
                 if (bus) {
-                    setExistingBusUuid(bus.busUuid);
+                    setExistingBusId(bus.busId);
                     const am = bus.amenities && typeof bus.amenities === 'object' ? { ...defaultAmenities(), ...bus.amenities } : defaultAmenities();
                     delete am.adas;
                     const myParsed = parseManufactureYearLabel(bus.manufactureYear || '');
@@ -179,17 +185,17 @@ const BusInformationSetup = ({ close, currentUser }) => {
                         insuranceExpDt: bus.insuranceExpDt || '',
                     });
                     setDocSlots({
-                        biz: bus.bizRegFile?.fileUuid ? { mode: 'remote', fileUuid: bus.bizRegFile.fileUuid } : null,
-                        trans: bus.transLicFile?.fileUuid ? { mode: 'remote', fileUuid: bus.transLicFile.fileUuid } : null,
-                        ins: bus.insCertFile?.fileUuid ? { mode: 'remote', fileUuid: bus.insCertFile.fileUuid } : null,
+                        biz: bus.bizRegFile?.fileId ? { mode: 'remote', fileId: bus.bizRegFile.fileId } : null,
+                        trans: bus.transLicFile?.fileId ? { mode: 'remote', fileId: bus.transLicFile.fileId } : null,
+                        ins: bus.insCertFile?.fileId ? { mode: 'remote', fileId: bus.insCertFile.fileId } : null,
                     });
                     const nextPhotos = Array(8).fill(null);
-                    (bus.vehiclePhotoFileUuids || []).slice(0, 8).forEach((uuid, i) => {
-                        if (uuid) nextPhotos[i] = { mode: 'remote', fileUuid: uuid };
+                    (bus.vehiclePhotoFileIds || []).slice(0, 8).forEach((fid, i) => {
+                        if (fid) nextPhotos[i] = { mode: 'remote', fileId: fid };
                     });
                     setPhotoSlots(nextPhotos);
                 } else {
-                    setExistingBusUuid(null);
+                    setExistingBusId(null);
                     setFormData((prev) => ({
                         ...prev,
                         serviceClass: items[0]?.dtlCd || 'NORMAL',
@@ -206,7 +212,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
         return () => {
             cancelled = true;
         };
-    }, [userUuid]);
+    }, [ownerId]);
 
     useEffect(() => {
         return () => {
@@ -295,7 +301,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!userUuid) {
+        if (!ownerId) {
             alert('로그인 정보가 없습니다.');
             return;
         }
@@ -309,7 +315,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
             alert('제작 연도를 네 자리 연도(예: 2024) 또는 목록에서 선택해 주세요.');
             return;
         }
-        if (!existingBusUuid && (myYear < yearMin || myYear > yearMax)) {
+        if (!existingBusId && (myYear < yearMin || myYear > yearMax)) {
             alert(`제작 연도는 ${yearMin}년 ~ ${yearMax}년 사이로 선택해 주세요.`);
             return;
         }
@@ -318,9 +324,9 @@ const BusInformationSetup = ({ close, currentUser }) => {
         try {
             const amenitiesPayload = { ...formData.amenities };
 
-            if (!existingBusUuid) {
+            if (!existingBusId) {
                 const body = {
-                    userUuid,
+                    userId: ownerId,
                     vehicleNo: formData.vehicleNo,
                     modelNm: formData.modelNm,
                     manufactureYear: formData.manufactureYear,
@@ -363,14 +369,14 @@ const BusInformationSetup = ({ close, currentUser }) => {
                     body: JSON.stringify(body),
                 });
                 if (!res.ok) throw new Error(data?.error || '차량 등록에 실패했습니다.');
-                if (data?.busUuid) setExistingBusUuid(data.busUuid);
+                if (data?.busId) setExistingBusId(data.busId);
                 alert('차량 정보 등록이 완료되었습니다.');
                 return;
             }
 
             const patchBody = {
-                userUuid,
-                busUuid: existingBusUuid,
+                userId: ownerId,
+                busId: existingBusId,
                 vehicleNo: formData.vehicleNo,
                 modelNm: formData.modelNm,
                 manufactureYear: formData.manufactureYear,
@@ -390,7 +396,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
             });
             if (!patchRes.ok) throw new Error(patchData?.error || '차량 정보 수정에 실패했습니다.');
 
-            const docBody = { userUuid, busUuid: existingBusUuid };
+            const docBody = { userId: ownerId, busId: existingBusId };
             let hasDoc = false;
             if (docSlots.biz?.mode === 'local' && docSlots.biz.file) {
                 docBody.businessLicenseBase64 = await readFileAsDataUrl(docSlots.biz.file);
@@ -420,7 +426,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
             for (const s of photoSlots) {
                 if (!s) continue;
                 if (s.mode === 'remote') {
-                    vehiclePhotos.push({ fileUuid: s.fileUuid });
+                    vehiclePhotos.push({ fileId: s.fileId });
                 } else if (s.mode === 'local' && s.file) {
                     vehiclePhotos.push({
                         dataUrl: await readFileAsDataUrl(s.file),
@@ -432,8 +438,8 @@ const BusInformationSetup = ({ close, currentUser }) => {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    userUuid,
-                    busUuid: existingBusUuid,
+                    userId: ownerId,
+                    busId: existingBusId,
                     vehiclePhotos,
                 }),
             });
@@ -453,7 +459,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
         if (slot.mode === 'remote') {
             return (
                 <img
-                    src={fileUrl(slot.fileUuid)}
+                    src={fileUrl(slot.fileId)}
                     alt=""
                     className="max-h-28 object-contain mx-auto"
                     onError={(e) => {
@@ -473,7 +479,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
         if (slot.mode === 'remote') {
             return (
                 <img
-                    src={fileUrl(slot.fileUuid)}
+                    src={fileUrl(slot.fileId)}
                     alt=""
                     className="w-full h-full object-cover"
                     onError={(e) => {
@@ -498,10 +504,10 @@ const BusInformationSetup = ({ close, currentUser }) => {
                 <header className="flex shrink-0 items-center justify-between border-b border-surface-container-low bg-white/80 px-8 py-6 backdrop-blur-md">
                     <div className="flex flex-col">
                         <span className="text-[10px] font-bold tracking-widest text-secondary uppercase mb-1">
-                            {existingBusUuid ? '자산 정보' : '신규 자산 등록'}
+                            {existingBusId ? '자산 정보' : '신규 자산 등록'}
                         </span>
                         <h1 className="font-extrabold text-2xl text-primary tracking-tight" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-                            차량 정보 {existingBusUuid ? '수정' : '등록'}
+                            차량 정보 {existingBusId ? '수정' : '등록'}
                         </h1>
                         <p className="text-sm text-outline-variant mt-1">
                             busTaams에 차량 정보를 등록·수정합니다. 저장 시 관리자 검토 후 반영됩니다.
@@ -815,7 +821,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
                                                         title={hasRemote ? `${title} 파일보기` : '서버에 등록된 파일이 없습니다'}
                                                         onClick={() => {
                                                             if (hasRemote) {
-                                                                setCommonViewTarget({ fileUuid: slot.fileUuid, docTitle: title });
+                                                                setCommonViewTarget({ fileId: slot.fileId, docTitle: title });
                                                             }
                                                         }}
                                                         disabled={!hasRemote}
@@ -901,7 +907,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
                                             ? '처리 중…'
                                             : loading
                                               ? '불러오는 중…'
-                                              : existingBusUuid
+                                              : existingBusId
                                                 ? '차량 수정 완료'
                                                 : '차량 등록 완료'}
                                     </button>
@@ -916,8 +922,8 @@ const BusInformationSetup = ({ close, currentUser }) => {
         {commonViewTarget && (
             <CommonView
                 close={() => setCommonViewTarget(null)}
-                fileUuid={commonViewTarget.fileUuid}
-                userUuid={userUuid}
+                fileId={commonViewTarget.fileId}
+                userId={ownerId}
                 docTitle={commonViewTarget.docTitle}
             />
         )}
