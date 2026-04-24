@@ -1,89 +1,117 @@
 /**
  * LiveChatBusDriver REST API
  * Base path: /api/live-chat-bus-driver
+ *
+ * `BusTaams 테이블.md`: TB_BUS_RESERVATION(DRIVER_ID, TRAVELER_ID, DATA_STAT, RES_ID, REQ_ID),
+ * TB_CHAT_LOG + TB_CHAT_LOG_PART + TB_CHAT_LOG_HIST
  */
 const express = require('express');
-const { randomUUID } = require('crypto');
-const { decrypt } = require('../crypto');
-const { migrateTbChatLogColumns } = require('../migrations/tbChatLogMigrate');
-const { insertTbChatLogMessage } = require('../lib/insertTbChatLogMessage');
+const { plainOrLegacyDecrypt } = require('../crypto');
+const { insertTripChatMessage } = require('../lib/insertTbChatLogMessage');
 const { notifyTravelerNewDriverMessage } = require('../services/chatPush');
+const { resolveCustIdByUserKey } = require('../lib/resolveCustIdByUserKey');
 
 function safeDecryptUserNm(val) {
-    if (val == null || val === '') return '';
-    try {
-        return decrypt(val);
-    } catch (_) {
-        return String(val);
-    }
+    return plainOrLegacyDecrypt(val);
 }
+
+function driverKeyFromQuery(q) {
+    if (!q) return '';
+    return String(q.driverId ?? q.userId ?? q.driverUuid ?? '').trim();
+}
+
+function driverKeyFromBody(b) {
+    if (!b || typeof b !== 'object') return '';
+    return String(b.driverId ?? b.userId ?? b.driverUuid ?? '').trim();
+}
+
+/** 최신 예약 1건 (동일 REQ+기사 다행 시 MOD_DT 기준) */
+const SQL_RES_FOR_DRIVER = `
+SELECT res.RES_ID AS resId,
+       res.REQ_ID AS reqId,
+       COALESCE(res.TRAVELER_ID, r.TRAVELER_ID) AS travelerId,
+       res.DRIVER_ID AS driverId
+  FROM TB_BUS_RESERVATION res
+  INNER JOIN TB_AUCTION_REQ r ON r.REQ_ID = res.REQ_ID
+ WHERE res.REQ_ID = ?
+   AND res.RES_ID = ?
+   AND res.DRIVER_ID = ?
+   AND res.DATA_STAT IN ('CONFIRM','DONE')
+ LIMIT 1`;
+
+const SQL_MESSAGES = `
+SELECT h.HIST_SEQ AS histSeq,
+       h.MSG_KIND AS msgKind,
+       h.MSG_BODY AS msgBody,
+       h.SENDER_ROLE AS senderRole,
+       h.REG_DT AS regDt
+  FROM TB_CHAT_LOG_HIST h
+ INNER JOIN TB_CHAT_LOG c ON c.CHAT_SEQ = h.CHAT_SEQ
+ WHERE c.REQ_ID = ?
+   AND c.RES_ID = ?
+ ORDER BY h.REG_DT ASC, h.HIST_SEQ ASC`;
 
 module.exports = function createLiveChatBusDriverRouter(pool) {
     const router = express.Router();
 
+    async function resolveDriverCustId(connection, driverKey) {
+        let cid = await resolveCustIdByUserKey(connection, driverKey);
+        if (!cid) cid = driverKey;
+        return String(cid).trim();
+    }
+
     /**
-     * 채팅 가능: TB_BUS_RESERVATION.DRIVER_UUID = 기사,
-     * RES_STAT IN ('CONFIRM','DONE'),
-     * TB_BUS_RESERVATION.REQ_UUID = TB_AUCTION_REQ.REQ_UUID
+     * 채팅 가능: TB_BUS_RESERVATION.DRIVER_ID = 기사 CUST_ID,
+     * DATA_STAT IN ('CONFIRM','DONE')
      */
-    async function fetchReservationForChat(connection, driverUuid, reqUuid) {
-        const [rows] = await connection.execute(
-            `SELECT BIN_TO_UUID(res.RES_UUID) AS resUuid,
-                    BIN_TO_UUID(
-                        COALESCE(res.TRAVELER_UUID, r.TRAVELER_UUID)
-                    ) AS travelerUuid
-               FROM TB_BUS_RESERVATION res
-               INNER JOIN TB_AUCTION_REQ r ON r.REQ_UUID = res.REQ_UUID
-              WHERE res.REQ_UUID = UUID_TO_BIN(?)
-                AND res.DRIVER_UUID = UUID_TO_BIN(?)
-                AND res.RES_STAT IN ('CONFIRM','DONE')
-              ORDER BY res.BID_SEQ DESC
-              LIMIT 1`,
-            [reqUuid, driverUuid]
-        );
+    async function fetchReservationForChat(connection, driverCustId, reqId, resId) {
+        const [rows] = await connection.execute(SQL_RES_FOR_DRIVER, [reqId, resId, driverCustId]);
         return rows[0] || null;
     }
 
-    /** GET /api/live-chat-bus-driver/chat-partners?driverUuid= */
+    /** GET /api/live-chat-bus-driver/chat-partners?driverId= */
     router.get('/chat-partners', async (req, res) => {
-        const { driverUuid } = req.query;
-        if (!driverUuid) return res.status(400).json({ error: 'driverUuid가 필요합니다.' });
+        const driverKey = driverKeyFromQuery(req.query);
+        if (!driverKey) {
+            return res.status(400).json({ error: 'driverId(또는 userId·driverUuid)가 필요합니다.' });
+        }
 
         let connection;
         try {
             connection = await pool.getConnection();
+            const driverCustId = await resolveDriverCustId(connection, driverKey);
+
             const [rows] = await connection.execute(
                 `SELECT
-                        BIN_TO_UUID(r.REQ_UUID) AS reqUuid,
-                        BIN_TO_UUID(res.RES_UUID) AS resUuid,
-                        res.RES_STAT AS resStat,
-                        BIN_TO_UUID(
-                            COALESCE(res.TRAVELER_UUID, r.TRAVELER_UUID)
-                        ) AS travelerUuid,
+                        r.REQ_ID AS reqId,
+                        res.RES_ID AS resId,
+                        res.DATA_STAT AS dataStat,
+                        COALESCE(res.TRAVELER_ID, r.TRAVELER_ID) AS travelerId,
                         r.TRIP_TITLE AS tripTitle,
                         r.START_ADDR AS startAddr,
                         r.END_ADDR AS endAddr,
                         r.START_DT AS startDt,
                         u.USER_NM AS travelerUserNmEnc
                    FROM TB_BUS_RESERVATION res
-                   INNER JOIN TB_AUCTION_REQ r ON r.REQ_UUID = res.REQ_UUID
-                    AND res.DRIVER_UUID = UUID_TO_BIN(?)
-                    AND res.RES_STAT IN ('CONFIRM','DONE')
-                    AND res.BID_SEQ = (
-                        SELECT MAX(b.BID_SEQ) FROM TB_BUS_RESERVATION b
-                         WHERE b.REQ_UUID = res.REQ_UUID AND b.DRIVER_UUID = res.DRIVER_UUID
+                   INNER JOIN TB_AUCTION_REQ r ON r.REQ_ID = res.REQ_ID
+                    AND res.DRIVER_ID = ?
+                    AND res.DATA_STAT IN ('CONFIRM','DONE')
+                    AND res.RES_ID = (
+                        SELECT b.RES_ID FROM TB_BUS_RESERVATION b
+                         WHERE b.REQ_ID = res.REQ_ID AND b.DRIVER_ID = res.DRIVER_ID
+                         ORDER BY b.MOD_DT DESC, b.RES_ID DESC
+                         LIMIT 1
                     )
-                   LEFT JOIN TB_USER u
-                     ON u.USER_UUID = COALESCE(res.TRAVELER_UUID, r.TRAVELER_UUID)
+                   LEFT JOIN TB_USER u ON u.CUST_ID = COALESCE(res.TRAVELER_ID, r.TRAVELER_ID)
                   ORDER BY r.START_DT ASC`,
-                [driverUuid]
+                [driverCustId]
             );
 
             const items = rows.map((row) => ({
-                reqUuid: row.reqUuid,
-                resUuid: row.resUuid,
-                resStat: row.resStat,
-                travelerUuid: row.travelerUuid,
+                reqId: row.reqId,
+                resId: row.resId,
+                dataStat: row.dataStat,
+                travelerId: row.travelerId,
                 travelerName: safeDecryptUserNm(row.travelerUserNmEnc) || '여행자',
                 tripTitle: row.tripTitle || '',
                 startAddr: row.startAddr || '',
@@ -100,46 +128,28 @@ module.exports = function createLiveChatBusDriverRouter(pool) {
         }
     });
 
-    /** GET /api/live-chat-bus-driver/messages?driverUuid=&reqUuid= */
+    /** GET /api/live-chat-bus-driver/messages?driverId=&reqId=&resId= */
     router.get('/messages', async (req, res) => {
-        const { driverUuid, reqUuid } = req.query;
-        if (!driverUuid || !reqUuid) {
-            return res.status(400).json({ error: 'driverUuid와 reqUuid가 필요합니다.' });
+        const driverKey = driverKeyFromQuery(req.query);
+        const reqId = req.query.reqId != null ? String(req.query.reqId).trim() : '';
+        const resId = req.query.resId != null ? String(req.query.resId).trim() : '';
+        if (!driverKey || !reqId || !resId) {
+            return res.status(400).json({ error: 'driverId(또는 userId·driverUuid), reqId, resId가 필요합니다.' });
         }
 
         let connection;
         try {
             connection = await pool.getConnection();
-            const access = await fetchReservationForChat(connection, driverUuid, reqUuid);
+            const driverCustId = await resolveDriverCustId(connection, driverKey);
+            const access = await fetchReservationForChat(connection, driverCustId, reqId, resId);
             if (!access) {
                 return res.status(403).json({ error: '채팅할 수 있는 견적이 아니거나 조건에 맞지 않습니다.' });
             }
 
-            const selectMessagesSql =
-                `SELECT BIN_TO_UUID(CHAT_LOG_UUID) AS chatLogUuid,
-                        MSG_KIND AS msgKind,
-                        MSG_BODY AS msgBody,
-                        SENDER_ROLE AS senderRole,
-                        REG_DT AS regDt
-                   FROM TB_CHAT_LOG
-                  WHERE REQ_UUID = UUID_TO_BIN(?)
-                    AND DRIVER_UUID = UUID_TO_BIN(?)
-                  ORDER BY REG_DT ASC`;
-            const selectParams = [reqUuid, driverUuid];
-            let rows;
-            try {
-                [rows] = await connection.execute(selectMessagesSql, selectParams);
-            } catch (e) {
-                if (e.errno === 1054 || e.code === 'ER_BAD_FIELD_ERROR') {
-                    await migrateTbChatLogColumns(connection);
-                    [rows] = await connection.execute(selectMessagesSql, selectParams);
-                } else {
-                    throw e;
-                }
-            }
+            const [rows] = await connection.execute(SQL_MESSAGES, [reqId, resId]);
 
             const items = rows.map((row) => ({
-                chatLogUuid: row.chatLogUuid,
+                histSeq: row.histSeq,
                 msgKind: row.msgKind || 'TEXT',
                 msgBody: row.msgBody != null ? String(row.msgBody) : '',
                 senderRole: row.senderRole,
@@ -155,12 +165,14 @@ module.exports = function createLiveChatBusDriverRouter(pool) {
         }
     });
 
-    /** POST /api/live-chat-bus-driver/messages  body: { driverUuid, reqUuid, msgBody } */
+    /** POST /api/live-chat-bus-driver/messages  body: { driverId, reqId, resId, msgBody } */
     router.post('/messages', async (req, res) => {
-        const { driverUuid, reqUuid, msgBody } = req.body || {};
-        const text = typeof msgBody === 'string' ? msgBody.trim() : '';
-        if (!driverUuid || !reqUuid) {
-            return res.status(400).json({ error: 'driverUuid와 reqUuid가 필요합니다.' });
+        const driverKey = driverKeyFromBody(req.body);
+        const reqId = req.body?.reqId != null ? String(req.body.reqId).trim() : '';
+        const resId = req.body?.resId != null ? String(req.body.resId).trim() : '';
+        const text = typeof req.body?.msgBody === 'string' ? req.body.msgBody.trim() : '';
+        if (!driverKey || !reqId || !resId) {
+            return res.status(400).json({ error: 'driverId(또는 userId·driverUuid), reqId, resId가 필요합니다.' });
         }
         if (!text) {
             return res.status(400).json({ error: '메시지 내용을 입력해 주세요.' });
@@ -169,47 +181,49 @@ module.exports = function createLiveChatBusDriverRouter(pool) {
         let connection;
         try {
             connection = await pool.getConnection();
-            const row = await fetchReservationForChat(connection, driverUuid, reqUuid);
+            const driverCustId = await resolveDriverCustId(connection, driverKey);
+            const row = await fetchReservationForChat(connection, driverCustId, reqId, resId);
             if (!row) {
                 return res.status(403).json({ error: '채팅할 수 있는 견적이 아니거나 조건에 맞지 않습니다.' });
             }
-            if (!row.travelerUuid) {
+            const travelerCustId = row.travelerId != null ? String(row.travelerId).trim() : '';
+            if (!travelerCustId) {
                 return res.status(400).json({ error: '여행자 정보가 없어 메시지를 저장할 수 없습니다.' });
             }
-
-            const chatLogUuid = randomUUID();
-            await insertTbChatLogMessage(connection, {
-                chatLogUuid,
-                reqUuid,
-                resUuid: row.resUuid,
-                travelerUuid: row.travelerUuid,
-                driverUuid,
-                senderUuid: driverUuid,
-                senderRole: 'DRIVER',
-                text,
-            });
 
             let tripTitle = '';
             try {
                 const [tr] = await connection.execute(
-                    `SELECT TRIP_TITLE AS t FROM TB_AUCTION_REQ WHERE REQ_UUID = UUID_TO_BIN(?) LIMIT 1`,
-                    [reqUuid]
+                    `SELECT TRIP_TITLE AS t FROM TB_AUCTION_REQ WHERE REQ_ID = ? LIMIT 1`,
+                    [reqId]
                 );
                 tripTitle = tr[0]?.t || '';
             } catch (_) {
                 /* ignore */
             }
+
+            const { histSeq } = await insertTripChatMessage(connection, {
+                reqId,
+                resId,
+                travelerCustId,
+                driverCustId,
+                senderCustId: driverCustId,
+                senderRole: 'DRIVER',
+                text,
+                tripTitle,
+            });
+
             void notifyTravelerNewDriverMessage(pool, {
-                travelerUuid: row.travelerUuid,
-                reqUuid,
-                driverUuid,
+                travelerCustId,
+                reqId,
+                driverCustId,
                 previewText: text,
                 tripTitle,
             }).catch((err) => console.warn('live-chat-bus-driver push:', err.message));
 
             res.status(201).json({
                 ok: true,
-                chatLogUuid,
+                histSeq,
                 msgKind: 'TEXT',
                 msgBody: text,
                 senderRole: 'DRIVER',

@@ -28,7 +28,7 @@ const CancelReservationModal = ({ reqData, onClose, onRefresh }) => {
       const response = await fetch('http://localhost:8080/api/auction/cancel-reservation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reqUuid: reqData.REQ_UUID_STR, cancelRole: 'CUSTOMER' })
+        body: JSON.stringify({ reqId: reqData.REQ_ID ?? reqData.REQ_UUID_STR, cancelRole: 'CUSTOMER' })
       });
 
       if (response.ok) {

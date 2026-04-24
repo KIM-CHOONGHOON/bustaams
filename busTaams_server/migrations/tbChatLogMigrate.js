@@ -25,6 +25,12 @@ async function migrateOneChatLogTable(connection, tbl) {
     if (!rows || rows.length === 0) return;
 
     const colSet = new Set(rows.map((row) => String(row.COLUMN_NAME).toUpperCase()));
+
+    /** 신규 3분할 모델(방 마스터 `CHAT_SEQ` 또는 이전 `CHAT_ID`) — 레거시 ALTER 생략 */
+    if (colSet.has('CHAT_SEQ') || colSet.has('CHAT_ID')) {
+        return;
+    }
+
     const tryAlter = async (sql) => {
         try {
             await connection.execute(sql);

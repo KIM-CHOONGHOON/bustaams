@@ -39,7 +39,7 @@ messaging.onBackgroundMessage((payload) => {
     icon: '/images/buses/mini_bus.png',
     badge: '/images/buses/mini_bus.png',
     data: payload.data || {},
-    tag: payload.data && payload.data.reqUuid ? `chat-${payload.data.reqUuid}` : 'bustaams-fcm',
+    tag: payload.data && payload.data.reqId ? `chat-${payload.data.reqId}` : 'bustaams-fcm',
     renotify: true,
   };
 

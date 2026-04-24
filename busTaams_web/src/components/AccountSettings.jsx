@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 
 const AccountSettings = ({ user, onBack, onLogout }) => {
-  const [userName, setUserName] = useState(user?.userName || '');
+  const [userName, setUserName] = useState(user?.userNm || user?.userName || '');
   const [email, setEmail] = useState(user?.userId || '');
-  const [phoneNo, setPhoneNo] = useState(user?.phoneNo || '');
+  const [phoneNo, setPhoneNo] = useState(user?.hpNo || user?.phoneNo || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -11,9 +11,9 @@ const AccountSettings = ({ user, onBack, onLogout }) => {
   // user 정보가 변경될 때마다 state 동기화
   useEffect(() => {
     if (user) {
-      setUserName(user.userName || '');
+      setUserName(user.userNm || user.userName || '');
       setEmail(user.email || user.userId || '');
-      setPhoneNo(user.phoneNo || user.phoneNumber || '');
+      setPhoneNo(user.hpNo || user.phoneNo || user.phoneNumber || '');
     }
   }, [user]);
 

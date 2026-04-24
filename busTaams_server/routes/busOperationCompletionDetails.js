@@ -1,21 +1,16 @@
 /**
  * BusOperationCompletionDetails REST API
  * GET /api/bus-operation-completion-details
- *   ?driverId=&resId=&reqId=  (권장)
- *   | driverUuid, resUuid, reqUuid (레거시 별칭, 동일 의미)
+ *   ?driverId|userId|driverUuid=&resId|reqId=
  * 타임라인: TB_AUCTION_REQ_VIA — VIA_ORD ASC, 최대 9행
  *
- * DB: 레거시(RES_UUID/REQ_UUID/RES_STAT/REQ_UUID in VIA·BUS) vs ARCHITECTURE(RES_ID/REQ_ID/DATA_STAT)
+ * `BusTaams`: RES_ID, REQ_ID, DRIVER_ID(CUST_ID), DATA_STAT, TRAVELER_ID — 레거시 BINARY/UUID 컬럼은 ER_BAD_FIELD 시 폴백.
  */
-const { decrypt } = require('../crypto');
+const { plainOrLegacyDecrypt } = require('../crypto');
+const { resolveCustIdByUserKey } = require('../lib/resolveCustIdByUserKey');
 
 function safeDecryptUserNm(val) {
-    if (val == null || val === '') return '';
-    try {
-        return decrypt(val);
-    } catch (_) {
-        return String(val);
-    }
+    return plainOrLegacyDecrypt(val);
 }
 
 const VIA_TYPE_PREFIX = {
@@ -76,15 +71,9 @@ function rowCol(row, logical) {
 function mapAuctionReqBusRows(busRows) {
     const rows = busRows || [];
     return rows.map((b, idx) => {
-        const id =
-            b.reqBusId ??
-            b.req_bus_id ??
-            b.reqBusUuid ??
-            b.req_bus_uuid ??
-            null;
+        const id = b.reqBusId ?? b.req_bus_id ?? null;
         return {
             reqBusId: id,
-            reqBusUuid: id,
             busTypeCd: String(b.busTypeCd ?? b.bus_type_cd ?? '').trim() || null,
             reqBusCnt: Number(b.reqBusCnt ?? b.req_bus_cnt) || 0,
             reqAmtKrw: Number(b.reqAmt ?? b.req_amt ?? b.reqAmtKrw) || 0,
@@ -113,6 +102,7 @@ function archDetailSelectFragments(opts) {
     const orderLimit = byRes ? '' : '\n ORDER BY res.MOD_DT DESC\n LIMIT 1';
     const sql = `SELECT
     res.RES_ID                             AS resId,
+    res.DATA_STAT                          AS dataStat,
     r.REQ_ID                               AS reqId,
     r.TRIP_TITLE                           AS tripTitle,
     r.START_DT                             AS startDt,
@@ -131,9 +121,9 @@ function archDetailSelectFragments(opts) {
     return sql;
 }
 
-async function tryArchDetailQueries(connection, duTrim, resUuid, reqUuidOpt) {
+async function tryArchDetailQueries(connection, duTrim, resUuid, reqIdOpt) {
     const byRes = Boolean(resUuid);
-    const secondId = byRes ? resUuid : reqUuidOpt;
+    const secondId = byRes ? resUuid : reqIdOpt;
 
     const attempts = [];
     const pushCombo = (masterReqAmt, driverBySessionUuid, travelerJoin) => {
@@ -172,6 +162,7 @@ async function tryArchDetailQueries(connection, duTrim, resUuid, reqUuidOpt) {
 
 const SQL_DETAIL_RES_LEGACY = `SELECT
     BIN_TO_UUID(res.RES_UUID)              AS resId,
+    res.RES_STAT                           AS dataStat,
     BIN_TO_UUID(r.REQ_UUID)                AS reqId,
     r.TRIP_TITLE                           AS tripTitle,
     r.START_DT                             AS startDt,
@@ -191,6 +182,7 @@ const SQL_DETAIL_RES_LEGACY = `SELECT
 
 const SQL_DETAIL_REQ_LEGACY = `SELECT
     BIN_TO_UUID(res.RES_UUID)              AS resId,
+    res.RES_STAT                           AS dataStat,
     BIN_TO_UUID(r.REQ_UUID)                AS reqId,
     r.TRIP_TITLE                           AS tripTitle,
     r.START_DT                             AS startDt,
@@ -212,32 +204,40 @@ const SQL_DETAIL_REQ_LEGACY = `SELECT
 
 module.exports = function registerBusOperationCompletionDetails(pool, app) {
     app.get('/api/bus-operation-completion-details', async (req, res) => {
-        const driverParam = req.query.driverId ?? req.query.driverUuid;
-        const resParam = req.query.resId ?? req.query.resUuid;
-        const reqParam = req.query.reqId ?? req.query.reqUuid;
+        const driverParam =
+            req.query.driverId ?? req.query.userId ?? req.query.driverUuid;
+        const resParam = req.query.resId;
+        const reqParam = req.query.reqId;
 
-        const resUuid = normalizeUuidParam(resParam);
-        const reqUuidOpt = normalizeUuidParam(reqParam);
+        const resIdNorm = normalizeUuidParam(resParam);
+        const reqIdOpt = normalizeUuidParam(reqParam);
         const driverUuidRaw = String(driverParam || '').trim();
         const driverUuidNorm = normalizeUuidParam(driverParam);
-        if (!driverUuidRaw || (!resUuid && !reqUuidOpt)) {
+        if (!driverUuidRaw || (!resIdNorm && !reqIdOpt)) {
             return res.status(400).json({
-                error: 'driverId(또는 driverUuid)와 resId/resUuid(또는 reqId/reqUuid)가 필요합니다.',
+                error: 'driverId(또는 userId·driverUuid)와 resId 또는 reqId가 필요합니다.',
             });
         }
 
         let connection;
         try {
             connection = await pool.getConnection();
+            let driverForArch = driverUuidRaw;
+            try {
+                const cid = await resolveCustIdByUserKey(connection, driverUuidRaw);
+                if (cid) driverForArch = cid;
+            } catch (_) {
+                /* ignore */
+            }
 
             async function loadDetailRows() {
                 const runLegacy = async () => {
-                    if (resUuid) {
-                        const [r1] = await connection.execute(SQL_DETAIL_RES_LEGACY, [driverUuidNorm, resUuid]);
+                    if (resIdNorm) {
+                        const [r1] = await connection.execute(SQL_DETAIL_RES_LEGACY, [driverUuidNorm, resIdNorm]);
                         if (r1.length) return r1;
                     }
-                    if (reqUuidOpt) {
-                        const [r2] = await connection.execute(SQL_DETAIL_REQ_LEGACY, [driverUuidNorm, reqUuidOpt]);
+                    if (reqIdOpt) {
+                        const [r2] = await connection.execute(SQL_DETAIL_REQ_LEGACY, [driverUuidNorm, reqIdOpt]);
                         if (r2.length) return r2;
                     }
                     return [];
@@ -247,7 +247,7 @@ module.exports = function registerBusOperationCompletionDetails(pool, app) {
                     if (leg.length) return { rows: leg, usedArch: false };
                 } catch (e) {
                     if (!isSchemaMismatchError(e)) throw e;
-                    const ar = await tryArchDetailQueries(connection, driverUuidRaw, resUuid, reqUuidOpt);
+                    const ar = await tryArchDetailQueries(connection, driverForArch, resIdNorm, reqIdOpt);
                     return { rows: ar, usedArch: true };
                 }
                 return { rows: [], usedArch: false };
@@ -260,9 +260,8 @@ module.exports = function registerBusOperationCompletionDetails(pool, app) {
             }
 
             const row = rows[0];
-            let reqUuidStr =
-                rowCol(row, 'reqId') ?? row.req_id ?? rowCol(row, 'reqUuid') ?? row.req_uuid;
-            if (reqUuidStr) reqUuidStr = String(reqUuidStr).trim().toLowerCase();
+            let reqIdStr = rowCol(row, 'reqId') ?? row.req_id;
+            if (reqIdStr) reqIdStr = String(reqIdStr).trim().toLowerCase();
 
             let viaRows;
             if (!usedArch) {
@@ -272,7 +271,7 @@ module.exports = function registerBusOperationCompletionDetails(pool, app) {
                      WHERE REQ_UUID = UUID_TO_BIN(?)
                      ORDER BY VIA_ORD ASC
                      LIMIT 9`,
-                    [reqUuidStr]
+                    [reqIdStr]
                 );
                 viaRows = v;
             } else {
@@ -283,19 +282,19 @@ module.exports = function registerBusOperationCompletionDetails(pool, app) {
                          WHERE REQ_ID = ?
                          ORDER BY VIA_ORD ASC
                          LIMIT 9`,
-                        [reqUuidStr]
+                        [reqIdStr]
                     );
                     viaRows = v;
                 } catch (e) {
                     if (!isSchemaMismatchError(e)) throw e;
-                    if (looksLikeUuidString(reqUuidStr)) {
+                    if (looksLikeUuidString(reqIdStr)) {
                         const [v2] = await connection.execute(
                             `SELECT VIA_ADDR AS viaAddr, VIA_ORD AS viaOrd, VIA_TYPE AS viaType
                              FROM TB_AUCTION_REQ_VIA
                              WHERE REQ_UUID = UUID_TO_BIN(?)
                              ORDER BY VIA_ORD ASC
                              LIMIT 9`,
-                            [reqUuidStr]
+                            [reqIdStr]
                         );
                         viaRows = v2;
                     } else {
@@ -314,7 +313,7 @@ module.exports = function registerBusOperationCompletionDetails(pool, app) {
                      FROM TB_AUCTION_REQ_BUS
                      WHERE REQ_UUID = UUID_TO_BIN(?)
                      ORDER BY REG_DT ASC, REQ_BUS_UUID ASC`,
-                    [reqUuidStr]
+                    [reqIdStr]
                 );
                 busRows = b;
             } else {
@@ -327,7 +326,7 @@ module.exports = function registerBusOperationCompletionDetails(pool, app) {
                          FROM TB_AUCTION_REQ_BUS
                          WHERE REQ_ID = ?
                          ORDER BY REG_DT ASC, REQ_BUS_ID ASC`,
-                        [reqUuidStr]
+                        [reqIdStr]
                     );
                     busRows = b;
                 } catch (e) {
@@ -340,7 +339,7 @@ module.exports = function registerBusOperationCompletionDetails(pool, app) {
                          FROM TB_AUCTION_REQ_BUS
                          WHERE REQ_ID = ?
                          ORDER BY REG_DT ASC, REQ_BUS_ID ASC`,
-                        [reqUuidStr]
+                        [reqIdStr]
                     );
                     busRows = b2;
                 }
@@ -357,7 +356,7 @@ module.exports = function registerBusOperationCompletionDetails(pool, app) {
             const travelerName =
                 safeDecryptUserNm(row.travelerUserNmEnc ?? row.traveler_user_nm_enc) || '';
 
-            const resIdVal = rowCol(row, 'resId') ?? row.res_id ?? rowCol(row, 'resUuid') ?? row.res_uuid;
+            const resIdVal = rowCol(row, 'resId') ?? row.res_id;
 
             res.status(200).json({
                 travelerName: travelerName || null,
@@ -370,9 +369,8 @@ module.exports = function registerBusOperationCompletionDetails(pool, app) {
                 auctionReqBuses,
                 timeline,
                 resId: resIdVal,
-                reqId: reqUuidStr,
-                resUuid: resIdVal,
-                reqUuid: reqUuidStr,
+                reqId: reqIdStr,
+                dataStat: row.dataStat ?? row.DATA_STAT ?? row.data_stat ?? 'DONE',
             });
         } catch (error) {
             console.error('bus-operation-completion-details:', error);

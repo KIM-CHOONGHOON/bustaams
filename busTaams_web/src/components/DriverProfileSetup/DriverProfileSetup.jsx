@@ -27,10 +27,10 @@ const STEPS = [
 
 const DriverProfileSetup = ({ currentUser, onBack, close }) => {
   const [formData, setFormData] = useState({
-    name: currentUser?.userName || currentUser?.name || '',
+    name: currentUser?.userNm || currentUser?.userName || currentUser?.name || '',
     rrnFront: '',
     rrnBack: '',
-    phoneNo: currentUser?.phoneNo || currentUser?.phoneNumber || currentUser?.hpNo || '',
+    phoneNo: currentUser?.hpNo || currentUser?.phoneNo || currentUser?.phoneNumber || '',
     verificationCode: '',
     licenseType: '1종 대형',
     licenseNo: '',
@@ -49,6 +49,7 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
   const [phoneConfirmation, setPhoneConfirmation] = useState(null);
   const [phoneVerifiedIdToken, setPhoneVerifiedIdToken] = useState(null);
   const recaptchaVerifierRef = useRef(null);
+  const phoneRecaptchaContainerRef = useRef(null);
   /** 서버에 저장된 기사 정보가 있으면 true — 면허/자격 블록 잠금에 사용 */
   const [profileExistsOnServer, setProfileExistsOnServer] = useState(false);
   /** true면 운전면허 정보 필드 읽기 전용(수정 버튼으로 해제) */
@@ -57,8 +58,8 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
   const [qualFieldsLocked, setQualFieldsLocked] = useState(false);
   const [hasProfilePhotoOnServer, setHasProfilePhotoOnServer] = useState(false);
   const [hasQualCertFileOnServer, setHasQualCertFileOnServer] = useState(false);
-  /** 서버에 등록된 자격증 사본 파일 UUID — CommonView 호출 시 사용 */
-  const [qualCertFileUuid, setQualCertFileUuid] = useState(null);
+  /** 서버에 등록된 자격증 사본 `TB_FILE_MASTER.FILE_ID` — CommonView 호출 시 사용 */
+  const [qualCertFileId, setQualCertFileId] = useState(null);
   /** 버스운전 자격번호 검증 상태 — UNVERIFIED / VERIFIED / SKIPPED */
   const [qualCertVerifyStatus, setQualCertVerifyStatus] = useState('UNVERIFIED');
   /** 자격증 사본 문서 보기 모달 */
@@ -156,21 +157,26 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
 
   /** 저장된 기사 정보 GET → 폼 채움 */
   useEffect(() => {
-    const uid = currentUser?.userUuid || currentUser?.uuid;
+    const uid =
+      currentUser?.userId ||
+      currentUser?.custId ||
+      currentUser?.userUuid ||
+      currentUser?.uuid ||
+      '';
     if (!uid) return;
     let cancelled = false;
     (async () => {
       try {
         const res = await fetch(
-          `${API_BASE}/api/driver/profile-setup?userUuid=${encodeURIComponent(uid)}`
+          `${API_BASE}/api/driver/profile-setup?userId=${encodeURIComponent(uid)}`
         );
         const data = await res.json();
         if (cancelled || !res.ok) return;
-        if (data.userName || data.phoneNo) {
+        if (data.userNm || data.userName || data.phoneNo || data.hpNo) {
           setFormData((prev) => ({
             ...prev,
-            name: data.userName || prev.name,
-            phoneNo: data.phoneNo || prev.phoneNo,
+            name: data.userNm || data.userName || prev.name,
+            phoneNo: data.hpNo || data.phoneNo || prev.phoneNo,
           }));
         }
         if (!data.exists) {
@@ -180,14 +186,14 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
         setProfileExistsOnServer(true);
         setHasProfilePhotoOnServer(!!data.hasProfilePhoto);
         setHasQualCertFileOnServer(!!data.hasQualCertFile);
-        setQualCertFileUuid(data.qualCertFileUuid || null);
+        setQualCertFileId(data.qualCertFileId || data.qualCertFileUuid || null);
         setQualCertVerifyStatus(data.qualCertVerifyStatus || 'UNVERIFIED');
         setLicenseFieldsLocked(true);
         setQualFieldsLocked(true);
         setFormData((prev) => ({
           ...prev,
-          name: data.userName || prev.name,
-          phoneNo: data.phoneNo || prev.phoneNo,
+          name: data.userNm || data.userName || prev.name,
+          phoneNo: data.hpNo || data.phoneNo || prev.phoneNo,
           rrnFront: data.rrnFront || prev.rrnFront,
           rrnBack: data.rrnBack || prev.rrnBack,
           licenseType: data.licenseType || prev.licenseType,
@@ -200,10 +206,11 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
         }));
 
         // 기존 프로필 사진 로드 — 스트리밍 API → blob URL
-        if (data.profilePhotoUuid) {
+        const profileFid = data.profilePhotoFileId || data.profilePhotoUuid;
+        if (profileFid) {
           try {
             const photoRes = await fetch(
-              `${API_BASE}/api/driver/profile-photo?userUuid=${encodeURIComponent(uid)}&fileUuid=${encodeURIComponent(data.profilePhotoUuid)}`
+              `${API_BASE}/api/driver/profile-photo?userId=${encodeURIComponent(uid)}&fileId=${encodeURIComponent(profileFid)}`
             );
             if (!cancelled && photoRes.ok) {
               const blob = await photoRes.blob();
@@ -273,6 +280,11 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
     }
     setPhoneSmsSending(true);
     try {
+      const containerEl = phoneRecaptchaContainerRef.current;
+      if (!containerEl) {
+        alert('인증 영역을 불러오지 못했습니다. 화면을 새로고침한 뒤 다시 시도해 주세요.');
+        return;
+      }
       if (recaptchaVerifierRef.current) {
         try {
           recaptchaVerifierRef.current.clear();
@@ -281,7 +293,7 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
         }
         recaptchaVerifierRef.current = null;
       }
-      recaptchaVerifierRef.current = new RecaptchaVerifier(phoneAuth, 'driver-phone-recaptcha', {
+      recaptchaVerifierRef.current = new RecaptchaVerifier(phoneAuth, containerEl, {
         size: 'invisible',
       });
       const e164 = toE164KR(formData.phoneNo);
@@ -291,7 +303,12 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
       alert('인증번호가 발송되었습니다.');
     } catch (e) {
       console.error(e);
-      alert(e?.message || 'SMS 발송에 실패했습니다.');
+      const code = e?.code;
+      const hint =
+        code === 'auth/captcha-check-failed'
+          ? 'reCAPTCHA 검증에 실패했습니다. Firebase Authentication > 설정에서 현재 사이트 도메인(예: localhost)이 허용 목록에 있는지 확인하고, 광고·추적 차단 확장 프로그램을 잠시 끈 뒤 다시 시도해 보세요.'
+          : null;
+      alert(hint || e?.message || 'SMS 발송에 실패했습니다.');
       try {
         recaptchaVerifierRef.current?.clear?.();
       } catch (_) {
@@ -351,8 +368,13 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
 
   const handleSubmit = async () => {
     if (isSubmitting) return;
-    const userUuid = currentUser?.userUuid || currentUser?.uuid;
-    if (!userUuid) {
+    const userKey =
+      currentUser?.userId ||
+      currentUser?.custId ||
+      currentUser?.userUuid ||
+      currentUser?.uuid ||
+      '';
+    if (!userKey) {
       alert('회원 식별 정보가 없습니다. 다시 로그인해 주세요.');
       return;
     }
@@ -365,7 +387,7 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
 
     try {
       const payload = {
-        userUuid,
+        userId: userKey,
         driverName: (formData.name || '').trim(),
         phoneIdToken: phoneVerifiedIdToken || undefined,
         rrn: `${formData.rrnFront}-${formData.rrnBack}`,
@@ -399,8 +421,9 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
         setQualCertVerifyStatus(data.qualCertVerifyStatus);
       }
       // POST 후 새로 저장된 자격증 파일 UUID 갱신
-      if (data.qualCertFileUuid) {
-        setQualCertFileUuid(data.qualCertFileUuid);
+      const newQualFid = data.qualCertFileId || data.qualCertFileUuid;
+      if (newQualFid) {
+        setQualCertFileId(newQualFid);
         setHasQualCertFileOnServer(true);
       }
       setSuccessModal({
@@ -419,6 +442,13 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
 
   const submitPrimaryLabel = profileExistsOnServer ? '수정' : '등록';
 
+  const commonViewUserId =
+    currentUser?.userId ||
+    currentUser?.custId ||
+    currentUser?.userUuid ||
+    currentUser?.uuid ||
+    '';
+
   return (
     <>
       <div
@@ -428,11 +458,11 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
         <div className="absolute inset-0" aria-hidden />
         <div className="relative my-auto flex min-h-0 w-full max-w-6xl max-h-[95vh] flex-col overflow-hidden rounded-3xl bg-surface-lowest bg-background shadow-ambient animate-in zoom-in-95 duration-200 text-on-background">
         <div className="bg-background font-body text-on-surface flex w-full flex-1 min-h-0 flex-col overflow-hidden">
-      {showQualCertViewer && qualCertFileUuid && (
+      {showQualCertViewer && qualCertFileId && (
         <CommonView
           close={() => setShowQualCertViewer(false)}
-          fileUuid={qualCertFileUuid}
-          userUuid={currentUser?.userUuid || currentUser?.uuid}
+          fileId={qualCertFileId}
+          userId={commonViewUserId}
           docTitle="버스운전 자격증 사본"
           metaPath="/api/driver/qual-cert/meta"
           streamPath="/api/driver/qual-cert/file"
@@ -472,7 +502,11 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
         {/* Main */}
         <main className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
           {/* Firebase invisible reCAPTCHA용 컨테이너 (display:none 사용 금지) */}
-          <div id="driver-phone-recaptcha" aria-hidden="true" />
+          <div
+            ref={phoneRecaptchaContainerRef}
+            id="driver-phone-recaptcha"
+            aria-hidden="true"
+          />
           <header className="flex shrink-0 items-start justify-between border-b border-outline-variant/10 bg-background px-4 md:px-8 lg:px-10 pt-4 pb-4">
             <div>
               <h2 className="text-3xl md:text-4xl font-headline font-extrabold text-primary tracking-tight mb-2">

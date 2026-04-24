@@ -55,11 +55,14 @@ function parseImageUrls(msgBody) {
 
 /**
  * LiveChatBusDriver — `downloads/.../LiveChat.html` 중앙 section(대화 헤더 제외) 구조·클래스 유지
- * REST: /api/live-chat-bus-driver
+ * REST: /api/live-chat-bus-driver — `driverId`, `reqId`, `resId`; 메시지 `histSeq`
  */
-const LiveChatBusDriver = ({ open, onClose, driverUuid, initialReqUuid }) => {
+const LiveChatBusDriver = ({ open, onClose, driverId, driverUuid, initialReqId, initialResId }) => {
+  const driverSession =
+    (driverId != null && String(driverId).trim()) || (driverUuid != null && String(driverUuid).trim()) || '';
   const [partners, setPartners] = useState([]);
-  const [reqUuid, setReqUuid] = useState('');
+  const [reqId, setReqId] = useState('');
+  const [resId, setResId] = useState('');
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loadingPartners, setLoadingPartners] = useState(false);
@@ -69,12 +72,12 @@ const LiveChatBusDriver = ({ open, onClose, driverUuid, initialReqUuid }) => {
   const scrollRef = useRef(null);
 
   const fetchPartners = useCallback(async () => {
-    if (!driverUuid) return;
+    if (!driverSession) return;
     setLoadingPartners(true);
     setError(null);
     try {
       const r = await fetch(
-        `${API_BASE}/api/live-chat-bus-driver/chat-partners?driverUuid=${encodeURIComponent(driverUuid)}`
+        `${API_BASE}/api/live-chat-bus-driver/chat-partners?driverId=${encodeURIComponent(driverSession)}`
       );
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
@@ -84,10 +87,19 @@ const LiveChatBusDriver = ({ open, onClose, driverUuid, initialReqUuid }) => {
       }
       const items = Array.isArray(data.items) ? data.items : [];
       setPartners(items);
-      setReqUuid((prev) => {
+      setReqId((prev) => {
         if (items.length === 0) return '';
-        if (initialReqUuid && items.some((p) => p.reqUuid === initialReqUuid)) return initialReqUuid;
-        if (prev && items.some((p) => p.reqUuid === prev)) return prev;
+        if (
+          initialReqId &&
+          initialResId &&
+          items.some((p) => p.reqId === initialReqId && p.resId === initialResId)
+        ) {
+          return initialReqId;
+        }
+        if (initialReqId && items.some((p) => p.reqId === initialReqId)) {
+          return initialReqId;
+        }
+        if (prev && items.some((p) => p.reqId === prev)) return prev;
         return '';
       });
     } catch (e) {
@@ -96,10 +108,19 @@ const LiveChatBusDriver = ({ open, onClose, driverUuid, initialReqUuid }) => {
     } finally {
       setLoadingPartners(false);
     }
-  }, [driverUuid, initialReqUuid]);
+  }, [driverSession, initialReqId, initialResId]);
+
+  useEffect(() => {
+    if (!reqId || !partners.length) {
+      if (!reqId) setResId('');
+      return;
+    }
+    const row = partners.find((p) => p.reqId === reqId);
+    if (row) setResId(row.resId);
+  }, [reqId, partners]);
 
   const fetchMessages = useCallback(async () => {
-    if (!driverUuid || !reqUuid) {
+    if (!driverSession || !reqId || !resId) {
       setMessages([]);
       return;
     }
@@ -107,7 +128,7 @@ const LiveChatBusDriver = ({ open, onClose, driverUuid, initialReqUuid }) => {
     setError(null);
     try {
       const r = await fetch(
-        `${API_BASE}/api/live-chat-bus-driver/messages?driverUuid=${encodeURIComponent(driverUuid)}&reqUuid=${encodeURIComponent(reqUuid)}`
+        `${API_BASE}/api/live-chat-bus-driver/messages?driverId=${encodeURIComponent(driverSession)}&reqId=${encodeURIComponent(reqId)}&resId=${encodeURIComponent(resId)}`
       );
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
@@ -122,7 +143,7 @@ const LiveChatBusDriver = ({ open, onClose, driverUuid, initialReqUuid }) => {
     } finally {
       setLoadingMessages(false);
     }
-  }, [driverUuid, reqUuid]);
+  }, [driverSession, reqId, resId]);
 
   useEffect(() => {
     if (!open) return;
@@ -133,28 +154,28 @@ const LiveChatBusDriver = ({ open, onClose, driverUuid, initialReqUuid }) => {
   }, [open]);
 
   useEffect(() => {
-    if (!open || !driverUuid) return;
+    if (!open || !driverSession) return;
     fetchPartners();
-  }, [open, driverUuid, fetchPartners]);
+  }, [open, driverSession, fetchPartners]);
 
   useEffect(() => {
-    if (!reqUuid) {
+    if (!reqId) {
       setMessages([]);
       return;
     }
     setMessages([]);
-  }, [reqUuid]);
+  }, [reqId]);
 
   useEffect(() => {
-    if (!open || !reqUuid) return;
+    if (!open || !reqId || !resId) return;
     fetchMessages();
-  }, [open, reqUuid, fetchMessages]);
+  }, [open, reqId, resId, fetchMessages]);
 
   useEffect(() => {
-    if (!open || !driverUuid || !reqUuid) return;
+    if (!open || !driverSession || !reqId || !resId) return;
     const id = window.setInterval(fetchMessages, 5000);
     return () => window.clearInterval(id);
-  }, [open, driverUuid, reqUuid, fetchMessages]);
+  }, [open, driverSession, reqId, resId, fetchMessages]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -163,14 +184,14 @@ const LiveChatBusDriver = ({ open, onClose, driverUuid, initialReqUuid }) => {
 
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || !driverUuid || !reqUuid || sending) return;
+    if (!text || !driverSession || !reqId || !resId || sending) return;
     setSending(true);
     setError(null);
     try {
       const r = await fetch(`${API_BASE}/api/live-chat-bus-driver/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ driverUuid, reqUuid, msgBody: text }),
+        body: JSON.stringify({ driverId: driverSession, reqId, resId, msgBody: text }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
@@ -192,10 +213,10 @@ const LiveChatBusDriver = ({ open, onClose, driverUuid, initialReqUuid }) => {
     for (const m of messages) {
       const dk = dateKey(m.regDt);
       if (dk && dk !== prevD) {
-        out.push({ kind: 'sep', key: `sep-${m.chatLogUuid}`, regDt: m.regDt });
+        out.push({ kind: 'sep', key: `sep-${m.histSeq}`, regDt: m.regDt });
         prevD = dk;
       }
-      out.push({ kind: 'msg', key: m.chatLogUuid, m });
+      out.push({ kind: 'msg', key: String(m.histSeq), m });
     }
     return out;
   }, [messages]);
@@ -239,12 +260,15 @@ const LiveChatBusDriver = ({ open, onClose, driverUuid, initialReqUuid }) => {
                 partners.map((p) => {
                   const title =
                     (p.tripTitle || `${p.startAddr || ''} ↔ ${p.endAddr || ''}`).trim() || '견적';
-                  const active = p.reqUuid === reqUuid;
+                  const active = p.reqId === reqId && p.resId === resId;
                   return (
                     <button
-                      key={p.reqUuid}
+                      key={`${p.reqId}-${p.resId}`}
                       type="button"
-                      onClick={() => setReqUuid(p.reqUuid)}
+                      onClick={() => {
+                        setReqId(p.reqId);
+                        setResId(p.resId);
+                      }}
                       className={`w-full text-left p-4 mb-2 rounded-2xl flex gap-4 cursor-pointer transition-all duration-300 ${
                         active
                           ? 'bg-surface-container-lowest shadow-[0_8px_24px_-8px_rgba(0,104,95,0.12)]'
@@ -267,7 +291,7 @@ const LiveChatBusDriver = ({ open, onClose, driverUuid, initialReqUuid }) => {
                           </span>
                         </div>
                         <p className="text-xs text-on-surface-variant font-medium truncate">
-                          {p.travelerName} · {p.resStat}
+                          {p.travelerName} · {p.dataStat}
                         </p>
                       </div>
                     </button>
@@ -286,21 +310,22 @@ const LiveChatBusDriver = ({ open, onClose, driverUuid, initialReqUuid }) => {
               ref={scrollRef}
               className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar pb-36"
             >
-              {!reqUuid && partners.length > 0 && (
+              {(!reqId || !resId) && partners.length > 0 && (
                 <div className="flex flex-col items-center justify-center min-h-[200px] text-outline text-sm text-center px-4">
                   <span className="material-symbols-outlined text-4xl mb-3 opacity-40">chat</span>
                   왼쪽 목록에서 견적을 선택하면 여행자와 채팅할 수 있습니다.
                 </div>
               )}
 
-              {reqUuid && loadingMessages && (
+              {reqId && resId && loadingMessages && (
                 <div className="flex justify-center text-outline text-sm gap-2">
                   <span className="material-symbols-outlined animate-spin">progress_activity</span>
                   불러오는 중…
                 </div>
               )}
 
-              {reqUuid &&
+              {reqId &&
+                resId &&
                 !loadingMessages &&
                 messages.length === 0 && (
                   <div className="flex flex-col items-center justify-center min-h-[160px] text-outline text-sm text-center px-4">
@@ -308,7 +333,8 @@ const LiveChatBusDriver = ({ open, onClose, driverUuid, initialReqUuid }) => {
                   </div>
                 )}
 
-              {reqUuid &&
+              {reqId &&
+                resId &&
                 !loadingMessages &&
                 timeline.map((node) => {
                   if (node.kind === 'sep') {
@@ -425,7 +451,7 @@ const LiveChatBusDriver = ({ open, onClose, driverUuid, initialReqUuid }) => {
                       handleSend();
                     }
                   }}
-                  disabled={!reqUuid || sending || partners.length === 0}
+                  disabled={!reqId || !resId || sending || partners.length === 0}
                 />
                 <div className="flex items-center gap-4">
                   <button type="button" className="text-outline hover:text-teal-600">
@@ -435,7 +461,7 @@ const LiveChatBusDriver = ({ open, onClose, driverUuid, initialReqUuid }) => {
                   </button>
                   <button
                     type="button"
-                    disabled={!reqUuid || sending || partners.length === 0}
+                    disabled={!reqId || !resId || sending || partners.length === 0}
                     onClick={handleSend}
                     className="bg-gradient-to-tr from-primary to-primary-container w-10 h-10 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100"
                   >

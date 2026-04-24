@@ -1,5 +1,108 @@
+-- =============================================================================
+-- bustaams 스키마 — 전체 테이블 DDL (한 파일)
+-- 생성: BusTaams 테이블.md (§1~§3) 기준으로 동기화. §4 구버전 TB_USER는 제외.
+--
+-- [채팅 — TB_CHAT_LOG / TB_CHAT_LOG_PART / TB_CHAT_LOG_HIST: 변경·신규 정본]
+--   - TB_CHAT_LOG: 방(마스터) — **개편(교체).** PK `CHAT_SEQ` int NOT NULL AUTO_INCREMENT (이전·구명 `CHAT_ID` → `CHAT_SEQ`). ROOM_KIND(·`OTHER`), CHAT_TITLE, CHAT_COVER_FILE_ID, REQ/RES, UK_CHAT_LOG_RES, CHK(REQ/RES 동시 NULL 또는 동시 NOT NULL).
+--   - TB_CHAT_LOG_PART: **신규 추가.** 1(방):N(참가) — 복합 PK (`CHAT_SEQ`, `CUST_ID`), PART_TYPE·JOINED_DT·FK → TB_CHAT_LOG(`CHAT_SEQ`) ON DELETE CASCADE.
+--   - TB_CHAT_LOG_HIST: **신규(메시지 전용).** PK `HIST_SEQ` int NOT NULL AUTO_INCREMENT (이전·구명 `HIST_ID` → `HIST_SEQ`, varchar 혼용 스키마 아님). `CHAT_SEQ` FK, SENDER/MSG/FILE_ID.
+--   - **폐지(참고):** `CHAT_LOG_ID` 한 테이블에 메시지 본문 혼재, 또는 UUID(16) 혼용 옛 DDL — **미사용.** `BusTaams 테이블.md` §3, `실시간채팅_버스기사 화면.md` §4, `busTaams_server/server.js` ensureTbChatLog* 와 **본 파일 CREATE 블록**이 동일 기준(동기).
+-- TB_SUBSCRIPTION: 운영 CUST_ID 일원화에 맞춰 DRIVER_ID varchar(10), FK → TB_USER(CUST_ID) 로 정합.
+-- TB_DRIVER_DOCS: 기사 키 CUST_ID varchar(10), PK(CUST_ID,DOC_TYPE), FK → TB_USER(CUST_ID). DOC_TYPE COMMENT·TB_COMMON_CODE(GRP_CD=DOC_TYPE) — BusTaams 테이블.md §3·sql/tb_common_code_doc_type.sql.
+-- 주의: 운영 DB와 diff 시 운영 SHOW CREATE TABLE 이 최종 기준. (다른 테이블의 USER_ID FK는 BusTaams 원문과 동일할 수 있음)
+-- =============================================================================
+
+-- bustaams.TB_USER definition
+
+CREATE TABLE `TB_USER` (
+  `CUST_ID` varchar(10) NOT NULL COMMENT '회원 내부 식별자(신규 가입 시 0패딩 순번, 예: 0000000001)',
+  `USER_ID` varchar(256) NOT NULL COMMENT '로그인 ID 또는 카카오·네이버 연동 식별 조합 — SNS 정합 검증용',
+  `EMAIL` varchar(100) DEFAULT NULL,
+  `SNS_TYPE` enum('NONE','KAKAO','NAVER') DEFAULT 'NONE' COMMENT '간편로그인 타입',
+  `USER_TYPE` enum('TRAVELER','DRIVER','PARTNER','ADMIN') NOT NULL COMMENT '회원구분 — 로그인 후 MainDashBoard 분기(관리자는 ADMIN 또는 별도 롤 테이블)',
+  `PASSWORD` varchar(255) NOT NULL COMMENT '비밀번호 (단방향 암호화)',
+  `USER_NM` varchar(255) DEFAULT NULL,
+  `RESIDENT_NO_ENC` varchar(255) DEFAULT NULL COMMENT '주민등록번호 (양방향 암호화) - 기사 등록용',
+  `HP_NO` varchar(255) DEFAULT NULL,
+  `PROFILE_IMG_PATH` varchar(512) DEFAULT NULL,
+  `PROFILE_FILE_ID` varchar(20) DEFAULT NULL COMMENT '프로필 사진 FILE_ID (TB_FILE_MASTER)',
+  `SMS_AUTH_YN` enum('Y','N') DEFAULT 'N' COMMENT 'SMS 문자 인증 여부',
+  `RECOM_CODE` varchar(20) DEFAULT NULL COMMENT '추천인 코드 (영업파트너의 CUST_ID 또는 별도 코드)',
+  `JOIN_DT` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '가입 일시',
+  `USER_STAT` enum('ACTIVE','LEAVE','BANNED','TEMPORARY') DEFAULT 'ACTIVE' COMMENT '상태',
+  `MOD_DT` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '수정 일시',
+  `MOD_ID` varchar(30) DEFAULT NULL COMMENT '수정자 ID',
+  PRIMARY KEY (`CUST_ID`),
+  UNIQUE KEY `UK_USER_LOGIN_ID` (`USER_ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='통합 회원 및 개인정보 관리';
+
+
+-- bustaams.TB_AUCTION_REQ definition
+
+CREATE TABLE `TB_AUCTION_REQ` (
+  `REQ_ID` varchar(10) NOT NULL COMMENT '견적 요청 마스터 키',
+  `TRAVELER_ID` varchar(10) NOT NULL COMMENT '여행자 TB_USER.CUST_ID',
+  `TRIP_TITLE` varchar(255) DEFAULT NULL COMMENT '여정 제목',
+  `START_ADDR` varchar(255) NOT NULL COMMENT '출발지 주소',
+  `END_ADDR` varchar(255) NOT NULL COMMENT '목적지 주소',
+  `START_DT` datetime NOT NULL COMMENT '출발 일시',
+  `END_DT` datetime NOT NULL COMMENT '도착 일시',
+  `PASSENGER_CNT` int NOT NULL COMMENT '탑승 인원',
+  `REQ_AMT` decimal(13,0) NOT NULL DEFAULT '0' COMMENT '요청 금액(원)',
+  `DATA_STAT` enum('AUCTION','BIDDING','CONFIRM','DONE','TRAVELER_CANCEL','DRIVER_CANCEL','BUS_CHANGE','BUS_CANCEL') DEFAULT 'AUCTION' COMMENT '마스터 상태',
+  `EXPIRE_DT` datetime NOT NULL COMMENT '입찰 마감 예정 일시',
+  `REG_DT` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '등록 일시',
+  `REG_ID` varchar(30) DEFAULT NULL COMMENT '등록자 ID',
+  `MOD_DT` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '수정 일시',
+  `MOD_ID` varchar(30) DEFAULT NULL COMMENT '수정자 ID',
+  PRIMARY KEY (`REQ_ID`),
+  KEY `IDX_TRAVELER_ID` (`TRAVELER_ID`),
+  CONSTRAINT `FK_AUCTION_REQ_TRAVELER` FOREIGN KEY (`TRAVELER_ID`) REFERENCES `TB_USER` (`CUST_ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='견적 요청 기본 정보 (Master)';
+
+
+-- bustaams.TB_FILE_MASTER definition
+
+CREATE TABLE `TB_FILE_MASTER` (
+  `FILE_ID` varchar(20) NOT NULL COMMENT '파일 고유 식별자 (ID)',
+  `FILE_CATEGORY` varchar(50) NOT NULL COMMENT '파일 분류 코드',
+  `GCS_BUCKET_NM` varchar(100) DEFAULT 'bustaams-secure-data' COMMENT 'GCS 버킷명',
+  `GCS_PATH` varchar(255) NOT NULL COMMENT 'GCS 내 물리적 경로',
+  `ORG_FILE_NM` varchar(255) DEFAULT NULL COMMENT '원본 파일명',
+  `FILE_EXT` char(5) DEFAULT 'png' COMMENT '파일 확장자',
+  `FILE_SIZE` bigint DEFAULT NULL COMMENT '파일 크기 (Byte)',
+  `REG_DT` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '등록 일시',
+  `REG_ID` varchar(30) DEFAULT NULL COMMENT '등록자 ID',
+  `MOD_DT` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '수정 일시',
+  `MOD_ID` varchar(30) DEFAULT NULL COMMENT '수정자 ID',
+  PRIMARY KEY (`FILE_ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='공통 파일 마스터 테이블';
+
+
+-- bustaams.TB_COMMON_CODE definition
+
+CREATE TABLE `TB_COMMON_CODE` (
+  `GRP_CD` varchar(30) NOT NULL COMMENT '그룹 코드 (예: USER_STAT, BUS_TYPE)',
+  `DTL_CD` varchar(30) NOT NULL COMMENT '상세 코드 (예: ACTIVE, PREMIUM_28)',
+  `CD_NM_KO` varchar(100) NOT NULL COMMENT '코드 한글명',
+  `CD_NM_EN` varchar(100) DEFAULT NULL COMMENT '코드 영문명',
+  `CD_FNUM` decimal(13,3) DEFAULT '0.000' COMMENT '코드 시작값에 해당하는 참고숫자',
+  `CD_TNUM` decimal(13,3) DEFAULT '0.000' COMMENT '코드 종료값에 해당하는 참고숫자',
+  `USE_YN` enum('Y','N') DEFAULT 'Y' COMMENT '사용 여부',
+  `DISP_ORD` int DEFAULT '0' COMMENT '출력 순서',
+  `CD_DESC` text COMMENT '코드 상세 설명',
+  `REG_DT` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '등록 일시',
+  `REG_ID` varchar(30) DEFAULT NULL COMMENT '등록자 ID',
+  `MOD_DT` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '수정 일시',
+  `MOD_ID` varchar(30) DEFAULT NULL COMMENT '수정자 ID',
+  PRIMARY KEY (`GRP_CD`,`DTL_CD`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='시스템 공통 코드 관리 테이블';
+
+
+-- bustaams.TB_SUBSCRIPTION definition
+
 CREATE TABLE `TB_SUBSCRIPTION` (
-  `DRIVER_ID` varchar(255) NOT NULL COMMENT '버스기사 TB_USER.USER_ID',
+  `DRIVER_ID` varchar(10) NOT NULL COMMENT '버스기사 TB_USER.CUST_ID',
   `YYYYMM` varchar(6) NOT NULL COMMENT '월구독년월(YYYYMM)',
   `FEE_POLICY` enum('DRIVER_GENERAL','DRIVER_MIDDLE','DRIVER_HIGH') NOT NULL COMMENT '요금 정책',
   `BASIC_CNT` int NOT NULL DEFAULT '0' COMMENT '월 응찰 가능 건수',
@@ -11,7 +114,7 @@ CREATE TABLE `TB_SUBSCRIPTION` (
   `MOD_ID` varchar(30) DEFAULT NULL COMMENT '수정자 ID',
   PRIMARY KEY (`DRIVER_ID`,`YYYYMM`),
   KEY `IDX_SUB_YYYYMM` (`YYYYMM`),
-  CONSTRAINT `FK_SUB_USER` FOREIGN KEY (`DRIVER_ID`) REFERENCES `TB_USER` (`USER_ID`)
+  CONSTRAINT `FK_SUB_USER` FOREIGN KEY (`DRIVER_ID`) REFERENCES `TB_USER` (`CUST_ID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='버스기사 월별 응찰 관리';
 
 
@@ -122,45 +225,66 @@ CREATE TABLE `TB_BUS_RESERVATION` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='버스 예약 및 매칭 확정 정보';
 
 
--- bustaams.TB_CHAT_LOG definition
+-- bustaams.TB_CHAT_LOG definition — 대화(방) 마스터
 
 CREATE TABLE `TB_CHAT_LOG` (
-  `CHAT_LOG_ID` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '채팅 로그 PK',
-  `REQ_ID` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'TB_AUCTION_REQ.REQ_ID',
-  `RES_ID` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'TB_BUS_RESERVATION.RES_ID',
-  `TRAVELER_ID` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '여행자 USER_ID',
-  `DRIVER_ID` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '기사 USER_ID',
-  `SENDER_ID` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '발신자 USER_ID',
-  `SENDER_ROLE` enum('TRAVELER','DRIVER','SYSTEM') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `MSG_KIND` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'TEXT' COMMENT 'TEXT, IMAGE, FILE, SYSTEM',
-  `MSG_BODY` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '본문 또는 시스템 문구',
-  `FILE_ID` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '첨부 시 TB_FILE_MASTER',
+  `CHAT_SEQ` int NOT NULL AUTO_INCREMENT COMMENT '대화(방) 일련 — INT, 자동채번',
+  `ROOM_KIND` enum('TRAVELER','DRIVER','PARTNER','EMPL','OTHER') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL
+    COMMENT 'TRAVELER:여행자, DRIVER:버스기사, PARTNER:영업회원, EMPL:관리직원, OTHER:이외 — 방 맥락·대표 UI(참가자 상세는 TB_CHAT_LOG_PART)',
+  `CHAT_TITLE` varchar(200) DEFAULT NULL COMMENT '대화(방) 제목 — 목록·헤더 표시(미입력 시 앱에서 REQ/닉 등으로 합성 가능)',
+  `CHAT_COVER_FILE_ID` varchar(20) DEFAULT NULL COMMENT '대화창 썸네일·로고·사진 — TB_FILE_MASTER.FILE_ID(선택)',
+  `REQ_ID` varchar(10) DEFAULT NULL COMMENT 'TB_AUCTION_REQ — 견적/예약 미연동 시 NULL',
+  `RES_ID` varchar(10) DEFAULT NULL COMMENT 'TB_BUS_RESERVATION — 견적/예약 미연동 시 NULL',
+  `CREATED_BY_CUST_ID` varchar(10) NOT NULL COMMENT '방 개설자 TB_USER.CUST_ID',
+  `LAST_MSG_DT` datetime DEFAULT NULL,
   `REG_DT` datetime DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`CHAT_LOG_ID`),
-  KEY `IDX_CHAT_LOG_REQ_REG` (`REQ_ID`,`REG_DT`),
-  KEY `IDX_CHAT_LOG_DRIVER` (`DRIVER_ID`,`REG_DT`),
-  KEY `IDX_CHAT_LOG_THREAD` (`REQ_ID`,`DRIVER_ID`,`TRAVELER_ID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='실시간 채팅 로그';
+  `REG_ID` varchar(10) DEFAULT NULL,
+  `MOD_DT` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `MOD_ID` varchar(10) DEFAULT NULL,
+  PRIMARY KEY (`CHAT_SEQ`),
+  UNIQUE KEY `UK_CHAT_LOG_RES` (`REQ_ID`,`RES_ID`),
+  KEY `IDX_CHAT_LOG_ROOM_KIND` (`ROOM_KIND`,`REG_DT`),
+  KEY `IDX_CHAT_LOG_CREATED` (`CREATED_BY_CUST_ID`,`REG_DT`),
+  CONSTRAINT `CHK_CHAT_LOG_REQ_RES` CHECK (
+    (`REQ_ID` IS NULL AND `RES_ID` IS NULL) OR (`REQ_ID` IS NOT NULL AND `RES_ID` IS NOT NULL)
+  )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='채팅 대화(방) 마스터 — 1:N 참가는 TB_CHAT_LOG_PART';
 
 
--- bustaams.TB_COMMON_CODE definition
+-- bustaams.TB_CHAT_LOG_PART definition — 참가자(1:N)
 
-CREATE TABLE `TB_COMMON_CODE` (
-  `GRP_CD` varchar(30) NOT NULL COMMENT '그룹 코드 (예: USER_STAT, BUS_TYPE)',
-  `DTL_CD` varchar(30) NOT NULL COMMENT '상세 코드 (예: ACTIVE, PREMIUM_28)',
-  `CD_NM_KO` varchar(100) NOT NULL COMMENT '코드 한글명',
-  `CD_NM_EN` varchar(100) DEFAULT NULL COMMENT '코드 영문명',
-  `CD_FNUM` decimal(13,3) DEFAULT '0.000' COMMENT '코드 시작값에 해당하는 참고숫자',
-  `CD_TNUM` decimal(13,3) DEFAULT '0.000' COMMENT '코드 종료값에 해당하는 참고숫자',
-  `USE_YN` enum('Y','N') DEFAULT 'Y' COMMENT '사용 여부',
-  `DISP_ORD` int DEFAULT '0' COMMENT '출력 순서',
-  `CD_DESC` text COMMENT '코드 상세 설명',
-  `REG_DT` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '등록 일시',
-  `REG_ID` varchar(30) DEFAULT NULL COMMENT '등록자 ID',
-  `MOD_DT` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '수정 일시',
-  `MOD_ID` varchar(30) DEFAULT NULL COMMENT '수정자 ID',
-  PRIMARY KEY (`GRP_CD`,`DTL_CD`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='시스템 공통 코드 관리 테이블';
+CREATE TABLE `TB_CHAT_LOG_PART` (
+  `CHAT_SEQ` int NOT NULL COMMENT 'TB_CHAT_LOG',
+  `CUST_ID` varchar(10) NOT NULL COMMENT 'TB_USER.CUST_ID',
+  `PART_TYPE` enum('TRAVELER','DRIVER','PARTNER','EMPL') NOT NULL
+    COMMENT 'TRAVELER:여행자, DRIVER:버스기사, PARTNER:영업회원, EMPL:관리직원 — 이 방에서의 역할(표시·권한)',
+  `JOINED_DT` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '방 입장(등록) 시각',
+  `INVITER_CUST_ID` varchar(10) DEFAULT NULL COMMENT '초대로 입장 시 초대한 CUST_ID',
+  PRIMARY KEY (`CHAT_SEQ`,`CUST_ID`),
+  KEY `IDX_PART_CUST` (`CUST_ID`,`CHAT_SEQ`),
+  CONSTRAINT `FK_PART_CHAT` FOREIGN KEY (`CHAT_SEQ`) REFERENCES `TB_CHAT_LOG` (`CHAT_SEQ`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='채팅방 참가자(1:N)';
+
+
+-- bustaams.TB_CHAT_LOG_HIST definition — 메시지
+
+CREATE TABLE `TB_CHAT_LOG_HIST` (
+  `HIST_SEQ` int NOT NULL AUTO_INCREMENT COMMENT '메시지 일련 — INT, 자동채번',
+  `CHAT_SEQ` int NOT NULL,
+  `SENDER_CUST_ID` varchar(10) NOT NULL,
+  `SENDER_ROLE` enum('TRAVELER','DRIVER','PARTNER','EMPL','SYSTEM') NOT NULL
+    COMMENT 'TRAVELER:여행자, DRIVER:버스기사, PARTNER:영업회원, EMPL:관리직원, SYSTEM:시스템',
+  `MSG_KIND` varchar(20) NOT NULL DEFAULT 'TEXT',
+  `MSG_BODY` text,
+  `FILE_ID` varchar(20) DEFAULT NULL,
+  `REG_DT` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`HIST_SEQ`),
+  KEY `IDX_HIST_CHAT` (`CHAT_SEQ`,`REG_DT`),
+  KEY `IDX_HIST_SENDER` (`SENDER_CUST_ID`,`REG_DT`),
+  CONSTRAINT `FK_HIST_CHAT` FOREIGN KEY (`CHAT_SEQ`) REFERENCES `TB_CHAT_LOG` (`CHAT_SEQ`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='채팅 메시지';
 
 
 -- bustaams.TB_DRIVER_DETAIL definition
@@ -181,48 +305,31 @@ CREATE TABLE `TB_DRIVER_DETAIL` (
 
 
 -- bustaams.TB_DRIVER_DOCS definition
+-- 기사 키: CUST_ID = TB_USER.CUST_ID. DOC_TYPE ↔ TB_COMMON_CODE(GRP_CD=DOC_TYPE). 시드: sql/tb_common_code_doc_type.sql
 
 CREATE TABLE `TB_DRIVER_DOCS` (
-  `USER_ID` varchar(255) NOT NULL COMMENT '기사 식별자 (ID)',
-  `DOC_TYPE` enum('LICENSE','QUALIFICATION','APTITUDE','BIZ_REG','TRANSPORT_PERMIT','INSURANCE') NOT NULL,
-  `FILE_ID` varchar(20) DEFAULT NULL,
-  `FILE_PATH` varchar(512) DEFAULT NULL,
-  `LICENSE_TYPE_CD` varchar(30) DEFAULT NULL COMMENT '면허 종류 코드 (TB_COMMON_CODE 참조, DOC_TYPE이 LICENSE일 때만 사용)',
-  `DOC_NO_ENC` varchar(255) DEFAULT NULL COMMENT '면허 번호 또는 버스운전 자격번호 (양방향 암호화)',
-  `ISSUE_DT` date DEFAULT NULL COMMENT '면허/자격 발급 일자',
-  `EXP_DT` date DEFAULT NULL COMMENT '면허/자격 유효 기간 (만료일)',
-  `INFO_STAT_CD` varchar(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '면허유효여부/자격유지상태 상세 코드',
+  `CUST_ID` varchar(10) NOT NULL COMMENT '기사 TB_USER.CUST_ID',
+  `DOC_TYPE` enum('LICENSE','QUALIFICATION','APTITUDE','BIZ_REG','TRANSPORT_PERMIT','INSURANCE') NOT NULL COMMENT '서류 구분 — TB_COMMON_CODE(GRP_CD=DOC_TYPE)의 DTL_CD와 동일. LICENSE:운전면허증, QUALIFICATION:버스운전자격증, APTITUDE:운전적성정밀검사, BIZ_REG:사업자등록증, TRANSPORT_PERMIT:여객자동차운송사업허가증, INSURANCE:보험가입증명서',
+  `FILE_ID` varchar(20) DEFAULT NULL COMMENT '첨부 파일 TB_FILE_MASTER.FILE_ID (0패딩 순번)',
+  `FILE_PATH` varchar(512) DEFAULT NULL COMMENT '레거시/직접 경로 URL (선택, FILE_ID 우선)',
+  `LICENSE_TYPE_CD` varchar(30) DEFAULT NULL COMMENT '면허 종류 코드 (TB_COMMON_CODE 등, DOC_TYPE=LICENSE일 때)',
+  `DOC_NO_ENC` varchar(255) DEFAULT NULL COMMENT '면허·자격 등 문서 번호 (양방향 암호화)',
+  `ISSUE_DT` date DEFAULT NULL COMMENT '발급 일자',
+  `EXP_DT` date DEFAULT NULL COMMENT '만료일',
+  `INFO_STAT_CD` varchar(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '유효·자격 유지 상세 코드',
   `APPROVE_STAT` enum('WAIT','APPROVE','REJECT') DEFAULT 'WAIT' COMMENT '본사 승인 상태',
   `REJECT_REASON` text COMMENT '반려 사유',
-  `APPROVER_ID` varchar(50) DEFAULT NULL COMMENT '본사 승인자 ID',
+  `APPROVER_ID` varchar(10) DEFAULT NULL COMMENT '본사 승인자 TB_USER.CUST_ID(선택)',
   `APPROVE_DT` datetime DEFAULT NULL COMMENT '본사 최종 승인 일시',
   `REG_DT` datetime DEFAULT CURRENT_TIMESTAMP,
   `REG_ID` varchar(30) DEFAULT NULL COMMENT '등록자 ID',
-  `MOD_DT` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '수정 일시',
+  `MOD_DT` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '수정 일시',
   `MOD_ID` varchar(30) DEFAULT NULL COMMENT '수정자 ID',
-  PRIMARY KEY (`USER_ID`,`DOC_TYPE`),
+  PRIMARY KEY (`CUST_ID`,`DOC_TYPE`),
   KEY `FK_DOCS_FILE` (`FILE_ID`),
   CONSTRAINT `FK_DOCS_FILE` FOREIGN KEY (`FILE_ID`) REFERENCES `TB_FILE_MASTER` (`FILE_ID`),
-  CONSTRAINT `FK_DOCS_USER` FOREIGN KEY (`USER_ID`) REFERENCES `TB_USER` (`USER_ID`) ON DELETE CASCADE
+  CONSTRAINT `FK_DOCS_USER` FOREIGN KEY (`CUST_ID`) REFERENCES `TB_USER` (`CUST_ID`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='기사 자격 증빙 및 본사 심사 이력';
-
-
--- bustaams.TB_FILE_MASTER definition
-
-CREATE TABLE `TB_FILE_MASTER` (
-  `FILE_ID` varchar(20) NOT NULL COMMENT '파일 고유 식별자 (ID)',
-  `FILE_CATEGORY` varchar(50) NOT NULL COMMENT '파일 분류 코드',
-  `GCS_BUCKET_NM` varchar(100) DEFAULT 'bustaams-secure-data' COMMENT 'GCS 버킷명',
-  `GCS_PATH` varchar(255) NOT NULL COMMENT 'GCS 내 물리적 경로',
-  `ORG_FILE_NM` varchar(255) DEFAULT NULL COMMENT '원본 파일명',
-  `FILE_EXT` char(5) DEFAULT 'png' COMMENT '파일 확장자',
-  `FILE_SIZE` bigint DEFAULT NULL COMMENT '파일 크기 (Byte)',
-  `REG_DT` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '등록 일시',
-  `REG_ID` varchar(30) DEFAULT NULL COMMENT '등록자 ID',
-  `MOD_DT` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '수정 일시',
-  `MOD_ID` varchar(30) DEFAULT NULL COMMENT '수정자 ID',
-  PRIMARY KEY (`FILE_ID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='공통 파일 마스터 테이블';
 
 
 -- bustaams.TB_INQUIRY definition
@@ -290,25 +397,6 @@ CREATE TABLE `TB_SMS_LOG` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='문자 및 알림톡 발송 이력 관리';
 
 
--- bustaams.TB_SUBSCRIPTION definition
-
-CREATE TABLE `TB_SUBSCRIPTION` (
-  `DRIVER_ID` varchar(255) NOT NULL COMMENT '버스기사 TB_USER.USER_ID',
-  `YYYYMM` varchar(6) NOT NULL COMMENT '월구독년월(YYYYMM)',
-  `FEE_POLICY` enum('DRIVER_GENERAL','DRIVER_MIDDLE','DRIVER_HIGH') NOT NULL COMMENT '요금 정책',
-  `BASIC_CNT` int NOT NULL DEFAULT '0' COMMENT '월 응찰 가능 건수',
-  `USE_CNT` int NOT NULL DEFAULT '0' COMMENT '월 응찰 건수',
-  `REMAINING_CNT` int NOT NULL DEFAULT '0' COMMENT '응찰 가능 잔여 건수',
-  `REG_DT` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '등록 일시',
-  `REG_ID` varchar(30) DEFAULT NULL COMMENT '등록자 ID',
-  `MOD_DT` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '수정 일시',
-  `MOD_ID` varchar(30) DEFAULT NULL COMMENT '수정자 ID',
-  PRIMARY KEY (`DRIVER_ID`,`YYYYMM`),
-  KEY `IDX_SUB_YYYYMM` (`YYYYMM`),
-  CONSTRAINT `FK_SUB_USER` FOREIGN KEY (`DRIVER_ID`) REFERENCES `TB_USER` (`USER_ID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='버스기사 월별 응찰 관리';
-
-
 -- bustaams.TB_TERMS_MASTER definition
 
 CREATE TABLE `TB_TERMS_MASTER` (
@@ -339,29 +427,6 @@ CREATE TABLE `TB_TRIP_REVIEW` (
   `MOD_ID` varchar(30) DEFAULT NULL COMMENT '수정자 ID',
   PRIMARY KEY (`REVIEW_ID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='서비스 만족도 리뷰 관리';
-
-
--- bustaams.TB_USER definition
-
-CREATE TABLE `TB_USER` (
-  `USER_ID` varchar(255) NOT NULL,
-  `EMAIL` varchar(100) DEFAULT NULL,
-  `SNS_TYPE` enum('NONE','KAKAO','NAVER') DEFAULT 'NONE' COMMENT '간편로그인 타입',
-  `USER_TYPE` enum('TRAVELER','DRIVER','PARTNER') NOT NULL COMMENT '회원구분',
-  `PASSWORD` varchar(255) NOT NULL COMMENT '비밀번호 (단방향 암호화)',
-  `USER_NM` varchar(255) DEFAULT NULL,
-  `RESIDENT_NO_ENC` varchar(255) DEFAULT NULL COMMENT '주민등록번호 (양방향 암호화) - 기사 등록용 추가',
-  `HP_NO` varchar(255) DEFAULT NULL,
-  `PROFILE_IMG_PATH` varchar(512) DEFAULT NULL,
-  `PROFILE_FILE_ID` varchar(20) DEFAULT NULL COMMENT '프로필 사진 파일 식별자 (TB_FILE_MASTER 참조)',
-  `SMS_AUTH_YN` enum('Y','N') DEFAULT 'N' COMMENT 'SMS 문자 인증 여부',
-  `RECOM_CODE` varchar(20) DEFAULT NULL COMMENT '추천인 코드 (영업파트너의 USER_ID)',
-  `JOIN_DT` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '가입 일시',
-  `USER_STAT` enum('ACTIVE','LEAVE','BANNED','TEMPORARY') DEFAULT 'ACTIVE' COMMENT '상태',
-  `MOD_DT` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '수정 일시',
-  `MOD_ID` varchar(30) DEFAULT NULL COMMENT '수정자 ID',
-  PRIMARY KEY (`USER_ID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='통합 회원 및 개인정보 관리 [2, 3]';
 
 
 -- bustaams.TB_USER_CANCEL_HIST definition
@@ -416,6 +481,7 @@ CREATE TABLE `TB_USER_DEVICE_TOKEN` (
   KEY `IDX_USER_DEVICE_UPD` (`USER_UUID`,`UPD_DT`)
 ) ENGINE=InnoDB AUTO_INCREMENT=108 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='FCM 기기 토큰 (채팅 알림 등)';
 
+
 -- bustaams.TB_USER_TERMS_HIST definition
 
 CREATE TABLE `TB_USER_TERMS_HIST` (
@@ -433,3 +499,7 @@ CREATE TABLE `TB_USER_TERMS_HIST` (
   PRIMARY KEY (`USER_ID`,`TERMS_HIST_SEQ`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='회원 약관 동의 및 서명 관리';
 
+-- =============================================================================
+-- (문서) 채팅 3테이블 `CREATE` — BusTaams 테이블.md §3·실시간채팅_버스기사 화면.md 와 엄격 동기.
+-- 최종 반영(키 명·타입): 2026-04-30 — CHAT_SEQ / HIST_SEQ (int, AUTO_INCREMENT)
+-- =============================================================================

@@ -4,55 +4,11 @@
  * GET /api/list-of-traveler-quotations?driverUuid=  (호환 별칭)
  *
  * TB_AUCTION_REQ.DATA_STAT IN ('AUCTION','BIDDING'), DATE(START_DT) > CURDATE()
- * + 기사별 재응찰 제외 · 동일 출발일 CONFIRM 제외 (레거시/ARCH 이중)
+ * + 기사별 재응찰 제외 · 동일 출발일 CONFIRM 제외
+ * 기사 식별: VARCHAR (`TB_USER.USER_ID` = `TB_BUS_RESERVATION.DRIVER_ID`). UUID_TO_BIN·USER_UUID 없음.
  */
 function isSchemaMismatchError(e) {
     return e && (e.errno === 1054 || e.code === 'ER_BAD_FIELD_ERROR');
-}
-
-function looksLikeUuidString(s) {
-    if (!s || typeof s !== 'string') return false;
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.trim());
-}
-
-async function resolveDriverReservationId(connection, driverParam) {
-    const d = String(driverParam ?? '').trim();
-    if (!d) return null;
-    if (!looksLikeUuidString(d)) return d;
-    try {
-        const [r] = await connection.execute(
-            `SELECT COALESCE(NULLIF(TRIM(USER_SEQ_ID), ''), USER_ID) AS kid
-             FROM TB_USER WHERE USER_UUID = UUID_TO_BIN(?) LIMIT 1`,
-            [d]
-        );
-        return r[0]?.kid ?? null;
-    } catch (e) {
-        if (isSchemaMismatchError(e)) return null;
-        throw e;
-    }
-}
-
-function legacyBlocks(driverUuid) {
-    if (!driverUuid) return { sql: '', params: [] };
-    const reBid = `
-             AND NOT EXISTS (
-                SELECT 1
-                  FROM TB_BUS_RESERVATION res
-                 WHERE res.REQ_UUID = r.REQ_UUID
-                   AND res.DRIVER_UUID = UUID_TO_BIN(?)
-                   AND res.DATA_STAT IN ('BUS_CHANGE', 'TRAVELER_CANCEL', 'DRIVER_CANCEL')
-              )`;
-    const sameDay = `
-             AND NOT EXISTS (
-                SELECT 1
-                  FROM TB_BUS_RESERVATION res
-                  INNER JOIN TB_AUCTION_REQ ar ON ar.REQ_UUID = res.REQ_UUID
-                 WHERE res.DRIVER_UUID = UUID_TO_BIN(?)
-                   AND res.DATA_STAT = 'CONFIRM'
-                   AND DATE(ar.START_DT) = DATE(r.START_DT)
-                   AND ar.REQ_UUID <> r.REQ_UUID
-              )`;
-    return { sql: reBid + sameDay, params: [driverUuid, driverUuid] };
 }
 
 function archBlocks(driverId) {
@@ -76,39 +32,6 @@ function archBlocks(driverId) {
                    AND ar.REQ_ID <> r.REQ_ID
               )`;
     return { sql: reBid + sameDay, params: [driverId, driverId] };
-}
-
-async function runLegacyList(connection, driverUuid, extraCols) {
-    const { sql: blocks, params: blockParams } = legacyBlocks(driverUuid);
-    const listSql = `
-            SELECT
-                BIN_TO_UUID(r.REQ_UUID)          AS reqId,
-                r.TRIP_TITLE                     AS tripTitle,
-                r.START_ADDR                     AS startAddr,
-                r.END_ADDR                       AS endAddr,
-                r.START_DT                       AS startDt,
-                r.END_DT                         AS endDt,
-                r.PASSENGER_CNT                  AS passengerCnt,
-                r.DATA_STAT                       AS dataStat,
-                COALESCE(r.REQ_AMT, 0)           AS reqAmt,
-                r.EXPIRE_DT                      AS expireDt,
-                r.REG_DT                         AS regDt,
-                ANY_VALUE(b.BUS_TYPE_CD)         AS busType,
-                COALESCE(ANY_VALUE(b.REQ_BUS_CNT), 1) AS busCnt,
-                COUNT(DISTINCT v.VIA_UUID)       AS waypointCount
-                ${extraCols}
-             FROM TB_AUCTION_REQ r
-             LEFT JOIN TB_AUCTION_REQ_BUS b ON b.REQ_UUID = r.REQ_UUID
-             LEFT JOIN TB_AUCTION_REQ_VIA v ON v.REQ_UUID = r.REQ_UUID
-             WHERE r.DATA_STAT IN ('AUCTION','BIDDING')
-               AND DATE(r.START_DT) > CURDATE()
-             ${blocks}
-             GROUP BY r.REQ_UUID, r.TRIP_TITLE, r.START_ADDR, r.END_ADDR,
-                      r.START_DT, r.END_DT, r.PASSENGER_CNT, r.DATA_STAT,
-                      r.REQ_AMT, r.EXPIRE_DT, r.REG_DT
-             ORDER BY r.REG_DT DESC`;
-    const [rows] = await connection.execute(listSql, blockParams);
-    return rows;
 }
 
 async function runArchList(connection, driverId, extraCols) {
@@ -223,17 +146,15 @@ module.exports = function registerDriverQuotationOpportunitiesList(pool, app) {
         let connection;
         try {
             connection = await pool.getConnection();
-            const driverIdOnly = req.query.driverId != null && String(req.query.driverId).trim() !== '';
-            const duRaw = driverIdOnly
-                ? String(req.query.driverId).trim()
-                : String(req.query.driverUuid || '').trim();
+            const duRaw =
+                (req.query.driverId != null && String(req.query.driverId).trim()) ||
+                (req.query.driverUuid != null && String(req.query.driverUuid).trim()) ||
+                '';
             if (!duRaw) {
                 return res.status(400).json({ error: 'driverUuid 또는 driverId가 필요합니다.' });
             }
 
-            let rows = driverIdOnly
-                ? await fetchRowsByDriverId(connection, duRaw)
-                : await fetchRows(connection, duRaw);
+            let rows = await fetchRowsByDriverId(connection, duRaw);
             rows = rows.map((row) => ({
                 ...row,
                 roundTripYn: String(row.roundTripYn || 'N').trim().toUpperCase() === 'Y' ? 'Y' : 'N',

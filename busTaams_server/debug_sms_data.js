@@ -7,12 +7,12 @@ async function debugData() {
         console.table(vehicles);
 
         console.log('\n--- 최근 TB_AUCTION_REQ 데이터 확인 ---');
-        const [requests] = await pool.execute('SELECT BIN_TO_UUID(REQ_UUID) as reqUuid, TRIP_TITLE, REG_DT FROM TB_AUCTION_REQ ORDER BY REG_DT DESC LIMIT 3');
+        const [requests] = await pool.execute('SELECT REQ_ID as reqId, TRIP_TITLE, REG_DT FROM TB_AUCTION_REQ ORDER BY REG_DT DESC LIMIT 3');
         console.table(requests);
 
         if (requests.length > 0) {
             console.log('\n--- 최근 요청된 차종 확인 ---');
-            const [reqBuses] = await pool.execute('SELECT BUS_TYPE_CD, REQ_BUS_CNT FROM TB_AUCTION_REQ_BUS WHERE REQ_UUID = UUID_TO_BIN(?)', [requests[0].reqUuid]);
+            const [reqBuses] = await pool.execute('SELECT BUS_TYPE_CD, REQ_BUS_CNT FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ?', [requests[0].reqId]);
             console.table(reqBuses);
         }
 

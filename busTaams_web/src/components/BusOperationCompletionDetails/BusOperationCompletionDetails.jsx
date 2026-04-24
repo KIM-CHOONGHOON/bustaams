@@ -40,25 +40,22 @@ function formatDateTime(iso) {
  * 모달: 헤더「버스 운행 완료 상세 정보」·닫기.
  * 본문 1행 2열: 좌「여행자 등록 정보」+「요청 차량」, 우「왕복 운행 타임라인」. `TB_AUCTION_REQ_BUS` = auctionReqBuses.
  *
- * Props: `driverId`·`resId`·`reqId` 권장 (`driverUuid`·`resUuid`·`reqUuid` 레거시 별칭).
+ * Props: `driverId`·`resId`·`reqId` (TB_BUS_RESERVATION / TB_AUCTION_REQ 키)
  */
 const BusOperationCompletionDetails = ({
   open,
   onClose,
   driverId,
-  driverUuid,
   resId,
-  resUuid,
   reqId,
-  reqUuid: reqUuidProp,
 }) => {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(null);
 
-  const effectiveDriver = driverId != null && String(driverId).trim() !== '' ? driverId : driverUuid;
-  const effectiveRes = resId != null && String(resId).trim() !== '' ? resId : resUuid;
-  const effectiveReq = reqId != null && String(reqId).trim() !== '' ? reqId : reqUuidProp;
+  const effectiveDriver = driverId != null && String(driverId).trim() !== '' ? String(driverId).trim() : '';
+  const effectiveRes = resId != null && String(resId).trim() !== '' ? resId : '';
+  const effectiveReq = reqId != null && String(reqId).trim() !== '' ? reqId : '';
 
   const fetchDetail = useCallback(async () => {
     const du = normalizeDriverSessionParam(effectiveDriver);
@@ -70,17 +67,9 @@ const BusOperationCompletionDetails = ({
     setLoading(true);
     setLoadError(null);
     const q = new URLSearchParams();
-    const usedDriverId = driverId != null && String(driverId).trim() !== '';
-    if (usedDriverId) q.set('driverId', du);
-    else q.set('driverUuid', du);
-    if (ru) {
-      if (resId != null && String(resId).trim() !== '') q.set('resId', ru);
-      else q.set('resUuid', ru);
-    }
-    if (rq) {
-      if (reqId != null && String(reqId).trim() !== '') q.set('reqId', rq);
-      else q.set('reqUuid', rq);
-    }
+    q.set('driverId', du);
+    if (ru) q.set('resId', ru);
+    if (rq) q.set('reqId', rq);
     const url = `${API_BASE}/api/bus-operation-completion-details?${q.toString()}`;
     if (import.meta.env.DEV) console.warn('[BusOperationCompletionDetails]', url);
     try {
@@ -98,7 +87,7 @@ const BusOperationCompletionDetails = ({
     } finally {
       setLoading(false);
     }
-  }, [driverId, driverUuid, effectiveDriver, effectiveRes, effectiveReq, resId, reqId, resUuid, reqUuidProp]);
+  }, [effectiveDriver, effectiveRes, effectiveReq, resId, reqId]);
 
   useEffect(() => {
     if (!open || !effectiveDriver) return undefined;

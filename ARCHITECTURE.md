@@ -237,12 +237,11 @@ A bespoke card for bus auctions.
 
 ## 🧾 비즈니스 식별자(ID) 규격 및 채번
 
-- **표준 규격:** 모든 주요 마스터 및 트랜잭션 테이블의 PK는 **10자리 숫자 형태의 문자열(VARCHAR(10))**을 사용한다. (예: `0000000001`)
-- **대상 필드:** `CUST_ID` (회원), `REQ_ID` (요청), `BUS_ID` (차량), `RES_ID` (예약/입찰) 등.
-- **채번 규칙:** 기존 최대값에 +1을 한 뒤 `padStart(10, '0')`를 적용하여 항상 10자리를 유지한다.
-- **파일 식별자:** `FILE_ID`는 파일 생성 시점(YYYYMMDD)을 포함한 **20자리 숫자 문자열(VARCHAR(20))**을 사용한다.
-- **구현:** 서버 `busTaams_server/lib/idGenerator.js` (또는 `server.js` 내 생성 로직) — 프론트엔드에서도 동일한 규격으로 세션 정보를 관리한다.
-- **DDL 기준 문서:** `Bustaams 테이블.md` (본 규격이 최우선이며, 모든 DDL은 이에 맞춰 마이그레이션 되어야 한다.)
+- **10자리 순번 PK (VARCHAR(10)):** `CUST_ID`, `REQ_ID`, `BUS_ID`, `RES_ID` 등 — 기존 최대값 +1 후 `padStart(10, '0')`.
+- **파일 식별자 (VARCHAR(20)):** `FILE_ID` — 0패딩 20자리(예: `00000000000000000001`). `BusTaams 테이블.md`·`BUSTAAMS_테이블 생성 쿼리 전체.md` 정본 우선.
+- **로그인·세션용 문자열:** 업무 키는 **`VARCHAR(256)` 이하** (예: `TB_USER.USER_ID`) — `normalizeVarcharId()` / `App.jsx` `clipBizVarcharId()`로 상한 통일. 순번 규칙의 예외가 될 수 있음.
+- **구현:** `server.js`·`lib/idConstants.js`·`lib/bustaamsIds.js` (프로젝트에 맞는 모듈 사용) — `idGenerator.js` 명이 문서·브랜치에 따라 다를 수 있음.
+- **DDL:** 위 두 MD와 스키마가 어긋나면 **DDL·마이그레이션**을 기준으로 본 절을 맞출 것.
 
 ---
 

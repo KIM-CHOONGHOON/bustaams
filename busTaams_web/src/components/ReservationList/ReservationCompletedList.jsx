@@ -30,14 +30,14 @@ const ReservationCompletedList = ({ user, onBack }) => {
     fetchConfirmedReservations();
   }, [user]);
 
-  const handleCancelReservation = async (reqUuid) => {
+  const handleCancelReservation = async (reqId) => {
     if (!window.confirm('정말로 이 예약을 취소하시겠습니까?')) return;
 
     try {
       const response = await fetch('http://localhost:8080/api/auction/cancel-reservation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reqUuid })
+        body: JSON.stringify({ reqId })
       });
 
       if (response.ok) {
