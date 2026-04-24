@@ -1,4 +1,5 @@
 const express = require('express');
+console.log('📦 server.js 로딩 중...');
 const cors = require('cors');
 require('dotenv').config();
 const pool = require('./db');
@@ -30,6 +31,8 @@ const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
+
+const PORT = process.env.PORT || 8080;
 
 // Global request logger - Enhanced for better visibility
 app.use((req, res, next) => {
@@ -2872,7 +2875,6 @@ app.get('/api/auction-list', async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 8080;
 
 async function ensureAuctionTables(connection) {
     // 1. TB_AUCTION_REQ (Master)
@@ -3233,10 +3235,16 @@ app.use('/api/live-chat-traveler', createLiveChatTravelerRouter(pool));
 app.use('/api/user/device-token', createUserDeviceTokenRouter(pool));
 
 (async function startServer() {
-    // ── 서버 시작 시 DB 스키마 마이그레이션 (테이블·컬럼 자동 생성·추가) ──
+    console.log('\n==================================================');
+    console.log('🚀 busTaams 서버 초기화 시작...');
+    console.log('📅 시점:', new Date().toLocaleString());
+    console.log('==================================================\n');
+
     let connection;
     try {
+        console.log('📡 [1/3] 데이터베이스 연결 시도 중...');
         connection = await pool.getConnection();
+        console.log('✅ [1/3] DB 연결 성공!');
 
         await ensureTbUserTable(connection);
         await ensureTbUserColumns(connection);
