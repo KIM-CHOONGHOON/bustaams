@@ -8,11 +8,11 @@ async function testFlow() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            userId: 'final_user_01', // 사용자가 입력한 아이디 (255자 규격)
-            email: 'final@example.com', // 별도로 입력한 이메일
-            password: 'Password1!',
-            userName: 'FinalTestUser',
-            phoneNo: '01011119999',
+            userId: 'alimtalk_test_final', 
+            email: 'final_test@example.com',
+            password: 'password123',
+            userName: '최종테스트',
+            phoneNo: '01099998888',
             smsAuthYn: 'Y',
             userType: 'CUSTOMER',
             agreedTerms: [1, 2, 3],

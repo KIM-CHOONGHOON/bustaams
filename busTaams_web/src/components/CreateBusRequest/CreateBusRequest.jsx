@@ -2,7 +2,6 @@ import React from 'react';
 
 const initialState = {
   title: '',
-  boardingCount: 0,
   departure: { address: '', detail: '', lat: null, lng: null, distFromPrev: 0 },
   arrival: { address: '', detail: '', lat: null, lng: null, distFromPrev: 0 },
   waypoints: [],
@@ -194,8 +193,7 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
         dispatch({ type: 'SET_FIELD', name, value: parseComma(value) });
         return;
     }
-    const finalValue = name === 'boardingCount' ? (parseInt(value) || 0) : value;
-    dispatch({ type: 'SET_FIELD', name, value: finalValue });
+    dispatch({ type: 'SET_FIELD', name, value });
   };
 
   const handleAddressChange = (type, value, index = null, field = 'detail') => {
@@ -331,11 +329,23 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
        return sorted;
     };
 
-    // 1. Sort Start Waypoints (Departure -> Waypoints -> Arrival)
-    const sortedWaypoints = sortPoints(updatedDeparture, updatedWaypoints);
+    // [근본 해결] 경유지 목록에서 출발지 또는 도착지와 주소가 중복되는 항목 제거
+    const filterDuplicates = (candidates, ...pointsToExclude) => {
+      const addressesToExclude = pointsToExclude.map(p => p.address?.trim()).filter(Boolean);
+      return candidates.filter(cp => {
+        const addr = cp.address?.trim();
+        return addr && !addressesToExclude.includes(addr);
+      });
+    };
+
+    const uniqueWaypoints = filterDuplicates(updatedWaypoints, updatedDeparture, updatedArrival);
+    const uniqueReturnWaypoints = filterDuplicates(updatedReturnWaypoints, updatedArrival, updatedFinalArrival);
+
+    // 1. Sort Start Waypoints
+    const sortedWaypoints = sortPoints(updatedDeparture, uniqueWaypoints);
     
-    // 2. Sort Return Waypoints (Arrival -> ReturnWaypoints -> FinalArrival)
-    const sortedReturnWaypoints = sortPoints(updatedArrival, updatedReturnWaypoints);
+    // 2. Sort Return Waypoints
+    const sortedReturnWaypoints = sortPoints(updatedArrival, uniqueReturnWaypoints);
 
     // 3. Calculate Total Distance
     let totalDist = 0;
@@ -400,37 +410,69 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
           { ...formData.finalArrival, type: 'END_NODE' }
         ];
 
-        const allPoints = [...mainJourney, ...returnJourney];
+        // [중복 제거] 주소가 비어있거나, 이전 지점과 공백 제외 주소가 완전히 동일한 경우 필터링
+        const cleanedPoints = [...mainJourney, ...returnJourney].filter((p, i, arr) => {
+          const currentAddr = p.address?.replace(/\s/g, ''); // 공백 제거 후 비교
+          if (!currentAddr) return false;
+          if (i > 0) {
+            const prevAddr = arr[i-1].address?.replace(/\s/g, '');
+            if (currentAddr === prevAddr) return false;
+          }
+          return true;
+        });
+
+        const allPoints = cleanedPoints;
 
         // Format for backend with sequential VIA_ORD
-        const enrichedWaypoints = allPoints.map((p, i) => ({
-          address: `${p.address} ${p.detail || ''}`.trim(),
-          lat: p.lat,
-          lng: p.lng,
-          type: p.type,
-          ord: i + 1 // Sequential order for VIA_ORD
-        }));
+        const enrichedWaypoints = allPoints.map((p, i) => {
+            // 강제 타입 지정: 첫 번째는 무조건 START_NODE, 나머지는 원래 타입 유지하되 START_NODE가 또 나오면 START_WAY로 교정
+            let type = p.type;
+            if (i === 0) type = 'START_NODE';
+            else if (type === 'START_NODE') type = 'START_WAY';
+            
+            return {
+                address: `${p.address} ${p.detail || ''}`.trim(),
+                lat: p.lat,
+                lng: p.lng,
+                type: type,
+                ord: i + 1
+            };
+        });
 
         const payload = {
-            userUuid: currentUser.userUuid,
-            userId: currentUser.userId || currentUser.email, // Use userId for REG_ID
+            custId: currentUser.custId,   // [수정] 10자리 숫자 식별자 전달
+            userId: currentUser.userId,   // 로그인 아이디(이메일) 전달
             tripTitle: formData.title,
             startAddr: enrichedWaypoints[0].address,
             endAddr: enrichedWaypoints[enrichedWaypoints.length - 1].address,
             startDt: `${formData.departureDate} ${formData.departureTime}:00`,
             endDt: `${formData.arrivalDate} ${formData.arrivalTime}:00`,
-            passengerCnt: parseInt(formData.boardingCount),
+            passengerCnt: 0, // 승차인원 항목 삭제에 따른 기본값 처리
             totalAmount: totalAmount,
             waypoints: enrichedWaypoints,
             vehicles: [
-                { type: 'STANDARD_28', qty: formData.standardQty, price: formData.standardPrice },
-                { type: 'PREMIUM_45', qty: formData.premiumQty, price: formData.premiumPrice },
-                { type: 'GOLD_21', qty: formData.premiumGoldQty, price: formData.premiumGoldPrice },
-                { type: 'VVIP_16', qty: formData.vvipQty, price: formData.vvipPrice },
-                { type: 'MINI_25', qty: formData.miniBusQty, price: formData.miniBusPrice },
-                { type: 'VAN_11', qty: formData.largeVanQty, price: formData.largeVanPrice }
+                { type: 'STANDARD_28', qty: formData.standardQty, price: Number(String(formData.standardPrice || 0).replace(/[^0-9]/g, '')) || 0 },
+                { type: 'PREMIUM_45', qty: formData.premiumQty, price: Number(String(formData.premiumPrice || 0).replace(/[^0-9]/g, '')) || 0 },
+                { type: 'GOLD_21', qty: formData.premiumGoldQty, price: Number(String(formData.premiumGoldPrice || 0).replace(/[^0-9]/g, '')) || 0 },
+                { type: 'VVIP_16', qty: formData.vvipQty, price: Number(String(formData.vvipPrice || 0).replace(/[^0-9]/g, '')) || 0 },
+                { type: 'MINI_25', qty: formData.miniBusQty, price: Number(String(formData.miniBusPrice || 0).replace(/[^0-9]/g, '')) || 0 },
+                { type: 'VAN_11', qty: formData.largeVanQty, price: Number(String(formData.largeVanPrice || 0).replace(/[^0-9]/g, '')) || 0 }
             ].filter(v => v.qty > 0)
         };
+
+        // [디버깅] 전송 전 사용자에게 데이터 확인 받기
+        const confirmMsg = `[데이터 전송 확인]\n\n` +
+                           `1. 총 금액: ${totalAmount}원\n` +
+                           `2. 경로 순서:\n${enrichedWaypoints.map(w => `${w.ord}. [${w.type}] ${w.address}`).join('\n')}\n\n` +
+                           `위 데이터로 등록하시겠습니까?`;
+        
+        if (!window.confirm(confirmMsg)) {
+            setIsSubmitting(false);
+            return;
+        }
+
+        console.log('[DEBUG] Reservation Payload:', JSON.stringify(payload, null, 2));
+
         const response = await fetch('http://localhost:8080/api/auction/request', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

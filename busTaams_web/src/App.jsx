@@ -31,26 +31,50 @@ function clipBizVarcharId(s) {
   return t.length <= BIZ_VARCHAR_ID_MAX ? t : t.slice(0, BIZ_VARCHAR_ID_MAX);
 }
 
-/** 로그인 응답·localStorage 복원 시 userType·uuid 필드 정규화 (DB/클라이언트 대소문자 차이 대비) */
+/** 로그인 응답·localStorage 복원 시 userType·custId 필드 정규화 (DB/클라이언트 대소문자 차이 대비) */
 function normalizeUserSession(raw) {
   if (!raw || typeof raw !== 'object') return raw;
   const u = { ...raw };
+  
+  // userType 정규화
   const t = u.userType ?? u.USER_TYPE;
   if (t != null && String(t).trim() !== '') {
     u.userType = String(t).trim().toUpperCase();
   }
-  if (!u.uuid && u.userUuid) u.uuid = u.userUuid;
-  if (!u.userUuid && u.uuid) u.userUuid = u.uuid;
-  // TB_USER.USER_ID 문자열: 로그인 API는 userId/tbUserId 중심. uuid/userUuid/driverId는 동의어(값은 VARCHAR ID, UUID 컬럼 없음)
-  const userPk = clipBizVarcharId(
-    (u.tbUserId != null && String(u.tbUserId).trim()) ||
-      (u.userId != null && String(u.userId).trim()) ||
-      (u.USER_ID != null && String(u.USER_ID).trim()) ||
-      ''
+
+  // CUST_ID (내부 식별자) 표준화
+  let cidCandidate = (u.custId != null && String(u.custId).trim()) ||
+    (u.CUST_ID != null && String(u.CUST_ID).trim()) ||
+    (u.userUuid != null && String(u.userUuid).trim()) ||
+    (u.uuid != null && String(u.uuid).trim()) ||
+    '';
+
+  // [추가] 레거시 UUID 형식(하이픈 포함)인 경우 무시 (10자리 숫자 ID 체계 준수)
+  if (cidCandidate.includes('-')) {
+    cidCandidate = '';
+  }
+
+  const cid = clipBizVarcharId(cidCandidate);
+  
+  if (cid) {
+    u.custId = cid;
+    u.uuid = cid; // 하위 호환성 유지
+    u.userUuid = cid; // 하위 호환성 유지
+  } else {
+    // ID가 없거나 레거시인 경우 식별자 제거
+    delete u.custId;
+    delete u.uuid;
+    delete u.userUuid;
+  }
+
+  // USER_ID (로그인 ID/이메일) 표준화
+  const uid = clipBizVarcharId(
+    (u.userId != null && String(u.userId).trim()) ||
+    (u.USER_ID != null && String(u.USER_ID).trim()) ||
+    ''
   );
-  if (userPk && !u.uuid) u.uuid = userPk;
-  if (userPk && !u.userUuid) u.userUuid = userPk;
-  if (userPk && !u.driverId) u.driverId = userPk;
+  if (uid) u.userId = uid;
+
   return u;
 }
 
@@ -719,25 +743,27 @@ function SignUpModal({ close }) {
 
 function App() {
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showDriverProfileModal, setShowDriverProfileModal] = useState(false);
   const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [showSignUpModal, setShowSignUpModal] = useState(false);
   const [currentView, setCurrentView] = useState('home'); // 'home' or 'signup'
   const [userRole, setUserRole] = useState('customer');
   const [user, setUser] = useState(null);
 
-  const [showBusInfoModal, setShowBusInfoModal] = useState(false);
-  const [showProfileSetupModal, setShowProfileSetupModal] = useState(false);
-  const [showQuotationModal, setShowQuotationModal] = useState(false);
+  const [showBusInfoModal, setShowBusInfoModal] = React.useState(false);
+  const [showProfileSetupModal, setShowProfileSetupModal] = React.useState(false);
+  const [showQuotationModal, setShowQuotationModal] = React.useState(false);
   /** 실시간 입찰 기회 카드 → 여행자 견적 요청 상세 */
-  const [travelerQuoteReqUuid, setTravelerQuoteReqUuid] = useState(null);
-  const [driverView, setDriverView] = useState('dashboard');
+  const [travelerQuoteReqId, setTravelerQuoteReqId] = React.useState(null);
+  const [driverView, setDriverView] = React.useState('dashboard');
   const [customerView, setCustomerView] = React.useState('dashboard');
-  const [showBusRegisterModal, setShowBusRegisterModal] = useState(false);
-  const [showLiveChatTraveler, setShowLiveChatTraveler] = useState(false);
-  const [showReservationListModal, setShowReservationListModal] = useState(false);
+  const [showBusRegisterModal, setShowBusRegisterModal] = React.useState(false);
+  const [showLiveChatTraveler, setShowLiveChatTraveler] = React.useState(false);
+  const [showReservationListModal, setShowReservationListModal] = React.useState(false);
+  const [dashboardRefreshKey, setDashboardRefreshKey] = React.useState(0);
 
   // Load user from localStorage on mount
-  useEffect(() => {
+  React.useEffect(() => {
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
       try {
@@ -748,11 +774,11 @@ function App() {
     }
   }, []);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (!user) return;
-    const uid = user.userUuid || user.uuid;
-    if (!uid) return;
-    registerWebFcmTokenIfPossible(uid).catch(() => {});
+    const cid = user.custId;
+    if (!cid) return;
+    registerWebFcmTokenIfPossible(cid).catch(() => {});
   }, [user]);
 
   const handleLogout = () => {
@@ -761,7 +787,7 @@ function App() {
     setCustomerView('dashboard');
     setShowBusRegisterModal(false);
     setDriverView('dashboard');
-    setTravelerQuoteReqUuid(null);
+    setTravelerQuoteReqId(null);
     setShowLiveChatTraveler(false);
   };
 
@@ -772,7 +798,7 @@ function App() {
     setShowBusRegisterModal(false);
     setShowBusInfoModal(false);
     setShowProfileSetupModal(false);
-    setTravelerQuoteReqUuid(null);
+    setTravelerQuoteReqId(null);
     setShowLiveChatTraveler(false);
     setCurrentView('home');
     if (user?.userType === 'DRIVER') {
@@ -806,35 +832,42 @@ function App() {
         </>
       ) : (
         <main className="flex min-h-0 flex-1 flex-col">
-          {currentView === 'home' ? (
-            user ? (
-              user.userType === 'CONSUMER' || user.userType === 'TRAVELER' || user.userType === 'CUSTOMER' ? (
-                customerView === 'confirmedList' ? (
-                  <ReservationCompletedList user={user} onBack={() => setCustomerView('dashboard')} />
-                ) : (
-                  <CustomerDashboard 
-                    user={user} 
-                    setShowAccountSettings={setShowAccountSettings} 
-                    onBusRegister={() => setShowBusRegisterModal(true)}
-                    onViewReservationList={() => setShowReservationListModal(true)}
-                    onViewConfirmedList={() => setCustomerView('confirmedList')}
-                    onOpenLiveChat={() => setShowLiveChatTraveler(true)}
-                  />
-                )
-              ) : user.userType === 'DRIVER' ? (
-                  <DriverDashboard 
-                    currentUser={user} 
-                    onProfileSetup={() => setShowProfileSetupModal(true)}
-                    onBusInfoSetup={() => setShowBusInfoModal(true)}
-                    onQuotationList={() => setShowQuotationModal(true)}
-                    onTravelerQuoteDetail={(reqUuid) => setTravelerQuoteReqUuid(reqUuid)}
-                  />
-              ) : user.userType === 'SALES' || user.userType === 'PARTNER' ? (
-                  <PartnerDashboard currentUser={user} onLogout={handleLogout} />
-              ) : null
+          {currentView === 'signup' ? (
+            <SignupPage onBack={() => {
+              setCurrentView('home');
+              setShowLoginModal(true);
+            }} />
+          ) : currentView === 'home' && user ? (
+            user.userType === 'CONSUMER' || user.userType === 'TRAVELER' || user.userType === 'CUSTOMER' ? (
+              customerView === 'confirmedList' ? (
+                <ReservationCompletedList user={user} onBack={() => setCustomerView('dashboard')} />
+              ) : (
+                <CustomerDashboard 
+                  user={user} 
+                  setShowAccountSettings={setShowAccountSettings} 
+                  onBusRegister={() => setShowBusRegisterModal(true)}
+                  onViewReservationList={() => setShowReservationListModal(true)}
+                  onViewConfirmedList={() => setCustomerView('confirmedList')}
+                  onOpenLiveChat={() => setShowLiveChatTraveler(true)}
+                  refreshTrigger={dashboardRefreshKey}
+                />
+              )
+            ) : user.userType === 'DRIVER' ? (
+                <DriverDashboard 
+                  currentUser={user} 
+                  onProfileSetup={() => setShowProfileSetupModal(true)}
+                  onBusInfoSetup={() => setShowBusInfoModal(true)}
+                  onQuotationList={() => setShowQuotationModal(true)}
+                  onTravelerQuoteDetail={(reqId) => setTravelerQuoteReqId(reqId)}
+                />
+            ) : user.userType === 'SALES' || user.userType === 'PARTNER' ? (
+                <PartnerDashboard currentUser={user} onLogout={handleLogout} />
             ) : null
           ) : (
-            <SignupPage onBack={() => setCurrentView('home')} />
+            <SignupPage onBack={() => {
+              setCurrentView('home');
+              setShowLoginModal(true);
+            }} />
           )}
         </main>
       )}
@@ -868,17 +901,17 @@ function App() {
       {showBusInfoModal && <BusInformationSetup close={() => setShowBusInfoModal(false)} currentUser={user} />}
       {showProfileSetupModal && <DriverProfileSetup close={() => setShowProfileSetupModal(false)} currentUser={user} />}
       {showQuotationModal && <ListOfTravelerQuotations close={() => setShowQuotationModal(false)} currentUser={user} />}
-      {travelerQuoteReqUuid && (
+      {travelerQuoteReqId && (
         <TravelerQuoteRequestDetails
-          reqUuid={travelerQuoteReqUuid}
-          close={() => setTravelerQuoteReqUuid(null)}
+          reqId={travelerQuoteReqId}
+          close={() => setTravelerQuoteReqId(null)}
           currentUser={user}
         />
       )}
       <LiveChatTraveler
         open={showLiveChatTraveler}
         onClose={() => setShowLiveChatTraveler(false)}
-        travelerUuid={user?.userUuid || user?.uuid}
+        travelerId={user?.custId}
       />
       {showReservationListModal && (
         <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
@@ -903,6 +936,7 @@ function App() {
           onBack={() => setShowBusRegisterModal(false)}
           onSuccess={() => {
             setShowBusRegisterModal(false);
+            setDashboardRefreshKey(prev => prev + 1); // [추가] 대시보드 리플레쉬 트리거
             setShowReservationListModal(true);
           }}
         />

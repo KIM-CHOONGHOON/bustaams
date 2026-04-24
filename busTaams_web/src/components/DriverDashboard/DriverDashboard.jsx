@@ -407,8 +407,8 @@ const DriverDashboard = ({
   const [showLiveChatBusDriver, setShowLiveChatBusDriver] = useState(false);
 
   useEffect(() => {
-    const driverUuid = currentUser?.uuid || currentUser?.userUuid || currentUser?.USER_UUID_STR;
-    if (!driverUuid) {
+    const driverCustId = currentUser?.custId || currentUser?.uuid || currentUser?.userUuid;
+    if (!driverCustId) {
       setAuctionLoading(false);
       setAuctionList([]);
       setAuctionEmptyMessage('등록된 입찰이 없습니다');
@@ -420,12 +420,12 @@ const DriverDashboard = ({
     const fetchAll = async () => {
       try {
         const headers = { 'Content-Type': 'application/json' };
-        const enc = encodeURIComponent(driverUuid);
+        const enc = encodeURIComponent(driverCustId);
 
         const [statsRes, scheduleRes, auctionRes] = await Promise.allSettled([
-          fetch(`${API_BASE}/api/driver/dashboard?uuid=${enc}`, { headers }),
-          fetch(`${API_BASE}/api/driver/schedule/today?uuid=${enc}`, { headers }),
-          fetch(`${API_BASE}/api/auction-list?driverUuid=${enc}`, { headers }),
+          fetch(`${API_BASE}/api/driver/dashboard?custId=${enc}`, { headers }),
+          fetch(`${API_BASE}/api/driver/schedule/today?custId=${enc}`, { headers }),
+          fetch(`${API_BASE}/api/auction-list?driverId=${enc}`, { headers }),
         ]);
 
         if (statsRes.status === 'fulfilled' && statsRes.value.ok) {
@@ -470,13 +470,13 @@ const DriverDashboard = ({
   }, [currentUser]);
 
   const refetchAuctionList = useCallback(async () => {
-    const driverUuid = currentUser?.uuid || currentUser?.userUuid || currentUser?.USER_UUID_STR;
-    if (!driverUuid) return;
+    const driverCustId = currentUser?.custId || currentUser?.uuid || currentUser?.userUuid;
+    if (!driverCustId) return;
     setAuctionLoading(true);
     setAuctionListError(null);
     try {
       const r = await fetch(
-        `${API_BASE}/api/auction-list?driverUuid=${encodeURIComponent(driverUuid)}`
+        `${API_BASE}/api/auction-list?driverId=${encodeURIComponent(driverCustId)}`
       );
       if (r.ok) {
         const d = await r.json();
@@ -540,7 +540,7 @@ const DriverDashboard = ({
       <UpcomingTripsModal
         open={showUpcomingTripsModal}
         onClose={() => setShowUpcomingTripsModal(false)}
-        driverUuid={currentUser?.uuid || currentUser?.userUuid || currentUser?.USER_UUID_STR}
+        driverUuid={currentUser?.custId || currentUser?.uuid}
         onTravelerQuoteDetail={(reqUuid) => {
           setShowUpcomingTripsModal(false);
           onTravelerQuoteDetail?.(reqUuid);
@@ -550,7 +550,7 @@ const DriverDashboard = ({
       <LiveChatBusDriver
         open={showLiveChatBusDriver}
         onClose={() => setShowLiveChatBusDriver(false)}
-        driverUuid={currentUser?.uuid || currentUser?.userUuid || currentUser?.USER_UUID_STR}
+        driverUuid={currentUser?.custId || currentUser?.uuid}
         initialReqUuid={null}
       />
     </div>

@@ -16,8 +16,8 @@ const ReservationList = ({ user, onBack }) => {
   }, []);
 
   useEffect(() => {
-    if (user && user.userUuid) {
-      fetch(`http://localhost:8080/api/auction/history/${user.userUuid}`)
+    if (user && user.custId) {
+      fetch(`http://localhost:8080/api/auction/history/${user.custId}`)
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) {
@@ -267,9 +267,9 @@ const ReservationList = ({ user, onBack }) => {
                 onConfirmSuccess={() => {
                    handleCloseQuotations();
                    // Refresh reservations if needed
-                   if (user && user.userUuid) {
+                   if (user && user.custId) {
                       setLoading(true);
-                      fetch(`http://localhost:8080/api/auction/history/${user.userUuid}`)
+                      fetch(`http://localhost:8080/api/auction/history/${user.custId}`)
                         .then(res => res.json())
                         .then(data => {
                           if (Array.isArray(data)) setReservations(data);

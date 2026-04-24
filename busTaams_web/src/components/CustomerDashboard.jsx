@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import DetailBusRequestModal from './DetailBusRequestModal';
 import TripHistoryModal from './ReservationList/TripHistoryModal';
 
-const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onViewReservationList, onViewConfirmedList, onOpenLiveChat }) => {
+const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onViewReservationList, onViewConfirmedList, onOpenLiveChat, refreshTrigger }) => {
   const [recentRequests, setRecentRequests] = useState([]);
   const [selectedRequestId, setSelectedRequestId] = useState(null);
   const [showTripHistory, setShowTripHistory] = useState(false);
 
   useEffect(() => {
-    if (user && user.userUuid) {
-      fetch(`http://localhost:8080/api/auction/user/${user.userUuid}`)
+    if (user && user.custId) {
+      fetch(`http://localhost:8080/api/auction/user/${user.custId}`)
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) {
@@ -20,7 +20,7 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
         })
         .catch(err => console.error('Error fetching recent request:', err));
     }
-  }, [user]);
+  }, [user, refreshTrigger]); // [수정] refreshTrigger 추가
 
   // 주소에서 시/도 + 시군구만 추출 (앞 두 단어)
   const trimAddress = (addr) => {
@@ -98,7 +98,7 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
               const passengerCntDisplay = getVehicleDisplay(req);
 
               return (
-                <div key={req.REQ_UUID_STR || idx} className="hero-gradient rounded-3xl p-12 text-white flex flex-col md:flex-row items-center justify-between relative overflow-hidden tonal-stacking">
+                <div key={req.REQ_ID || idx} className="hero-gradient rounded-3xl p-12 text-white flex flex-col md:flex-row items-center justify-between relative overflow-hidden tonal-stacking">
                   <div className="relative z-10 max-w-2xl pt-4">
                     <h1 className="text-5xl font-headline font-extrabold mb-8 leading-tight tracking-tighter">
                       {startAddrDisplay} → {endAddrDisplay}<br/>
@@ -112,20 +112,20 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
                     </div>
                   </div>
                   <button 
-                    className={`hidden lg:block absolute right-[-10%] bottom-[-20%] w-[600px] h-[600px] transition-all duration-300 group/btn cursor-pointer ${selectedRequestId === req.REQ_UUID_STR ? 'opacity-100 z-20' : 'opacity-40 hover:opacity-80 z-10'}`}
-                    onClick={() => setSelectedRequestId(req.REQ_UUID_STR === selectedRequestId ? null : req.REQ_UUID_STR)}
+                    className={`hidden lg:block absolute right-[-10%] bottom-[-20%] w-[600px] h-[600px] transition-all duration-300 group/btn cursor-pointer ${selectedRequestId === req.REQ_ID ? 'opacity-100 z-20' : 'opacity-40 hover:opacity-80 z-10'}`}
+                    onClick={() => setSelectedRequestId(req.REQ_ID === selectedRequestId ? null : req.REQ_ID)}
                   >
                     <img 
                       alt="Premium Bus" 
-                      className={`w-full h-full object-contain transition-transform duration-700 ${selectedRequestId === req.REQ_UUID_STR ? 'scale-110 drop-shadow-2xl' : 'group-hover/btn:scale-105 drop-shadow-lg'}`} 
+                      className={`w-full h-full object-contain transition-transform duration-700 ${selectedRequestId === req.REQ_ID ? 'scale-110 drop-shadow-2xl' : 'group-hover/btn:scale-105 drop-shadow-lg'}`} 
                       src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnB-qy8bgCj68b05tkEWLpYiY4ZwW78YbL6_ihG9UV2iKi91YT8DInWGGQPzO8hqj_oE3V7tLKiRBDwtBsvZd0IEjssiPTCBonMM8MLCDhEVK1aQRkjr7oF3QPUpb2SQ4BGc4OCC3xmZM6w9wz-9r2AVBOidU8Zqt-f9oLAlKp17FRpveMs5Pmt7QZ6vF-vhEMPIk4SjEUJQFSe4wCMRy5_3l8fE36gm_83HigLyeQTf8DRLh2vFSnxs0i8uMGZXQpU_B3bH6Rweo" 
                     />
-                    <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${selectedRequestId === req.REQ_UUID_STR ? 'opacity-100' : 'opacity-0 group-hover/btn:opacity-100'}`}>
-                      <span className={`font-bold px-6 py-3 rounded-full shadow-lg transition-all duration-300 flex items-center gap-2 ${selectedRequestId === req.REQ_UUID_STR ? 'bg-primary text-white scale-110' : 'bg-white text-primary transform translate-y-4 group-hover/btn:translate-y-0'}`}>
+                    <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${selectedRequestId === req.REQ_ID ? 'opacity-100' : 'opacity-0 group-hover/btn:opacity-100'}`}>
+                      <span className={`font-bold px-6 py-3 rounded-full shadow-lg transition-all duration-300 flex items-center gap-2 ${selectedRequestId === req.REQ_ID ? 'bg-primary text-white scale-110' : 'bg-white text-primary transform translate-y-4 group-hover/btn:translate-y-0'}`}>
                         <span className="material-symbols-outlined">
-                          {selectedRequestId === req.REQ_UUID_STR ? 'check_circle' : 'receipt_long'}
+                          {selectedRequestId === req.REQ_ID ? 'check_circle' : 'receipt_long'}
                         </span>
-                        {selectedRequestId === req.REQ_UUID_STR ? '열기' : '견적서 상세'}
+                        {selectedRequestId === req.REQ_ID ? '열기' : '견적서 상세'}
                       </span>
                     </div>
                   </button>
@@ -281,7 +281,7 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
 
       {selectedRequestId && (
         <DetailBusRequestModal 
-          reqData={recentRequests.find(r => r.REQ_UUID_STR === selectedRequestId)} 
+          reqData={recentRequests.find(r => r.REQ_ID === selectedRequestId)} 
           onClose={() => setSelectedRequestId(null)} 
         />
       )}
