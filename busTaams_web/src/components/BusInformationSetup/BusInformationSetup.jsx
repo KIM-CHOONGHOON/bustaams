@@ -73,8 +73,6 @@ const BusInformationSetup = ({ close, currentUser }) => {
     const ownerId =
         currentUser?.userId ||
         currentUser?.custId ||
-        currentUser?.userUuid ||
-        currentUser?.uuid ||
         '';
 
     const [busCodes, setBusCodes] = useState([]);

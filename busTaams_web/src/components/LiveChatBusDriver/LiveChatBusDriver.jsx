@@ -57,9 +57,8 @@ function parseImageUrls(msgBody) {
  * LiveChatBusDriver — `downloads/.../LiveChat.html` 중앙 section(대화 헤더 제외) 구조·클래스 유지
  * REST: /api/live-chat-bus-driver — `driverId`, `reqId`, `resId`; 메시지 `histSeq`
  */
-const LiveChatBusDriver = ({ open, onClose, driverId, driverUuid, initialReqId, initialResId }) => {
-  const driverSession =
-    (driverId != null && String(driverId).trim()) || (driverUuid != null && String(driverUuid).trim()) || '';
+const LiveChatBusDriver = ({ open, onClose, driverId, initialReqId, initialResId }) => {
+  const driverSession = (driverId != null && String(driverId).trim()) || '';
   const [partners, setPartners] = useState([]);
   const [reqId, setReqId] = useState('');
   const [resId, setResId] = useState('');

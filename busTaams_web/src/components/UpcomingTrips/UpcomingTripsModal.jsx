@@ -55,9 +55,8 @@ function formatCapacityPassenger(item) {
  * UpcomingTrips — `downloads/bustaams_web/운행예정목록_기사/UpcomingTrips.html` 레이아웃을 React 모달로 이식 (모양·글꼴·항목 유지).
  * 데이터: GET /api/upcoming-trips
  */
-const UpcomingTripsModal = ({ open, onClose, driverId, driverUuid, onTravelerQuoteDetail }) => {
-  const sessionDriverId =
-    (driverId != null && String(driverId).trim()) || (driverUuid != null && String(driverUuid).trim()) || '';
+const UpcomingTripsModal = ({ open, onClose, driverId, onTravelerQuoteDetail }) => {
+  const sessionDriverId = (driverId != null && String(driverId).trim()) || '';
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(null);

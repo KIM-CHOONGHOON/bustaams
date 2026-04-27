@@ -160,8 +160,6 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
     const uid =
       currentUser?.userId ||
       currentUser?.custId ||
-      currentUser?.userUuid ||
-      currentUser?.uuid ||
       '';
     if (!uid) return;
     let cancelled = false;
@@ -186,7 +184,7 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
         setProfileExistsOnServer(true);
         setHasProfilePhotoOnServer(!!data.hasProfilePhoto);
         setHasQualCertFileOnServer(!!data.hasQualCertFile);
-        setQualCertFileId(data.qualCertFileId || data.qualCertFileUuid || null);
+        setQualCertFileId(data.qualCertFileId || null);
         setQualCertVerifyStatus(data.qualCertVerifyStatus || 'UNVERIFIED');
         setLicenseFieldsLocked(true);
         setQualFieldsLocked(true);
@@ -206,7 +204,7 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
         }));
 
         // 기존 프로필 사진 로드 — 스트리밍 API → blob URL
-        const profileFid = data.profilePhotoFileId || data.profilePhotoUuid;
+        const profileFid = data.profilePhotoFileId;
         if (profileFid) {
           try {
             const photoRes = await fetch(
@@ -371,8 +369,6 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
     const userKey =
       currentUser?.userId ||
       currentUser?.custId ||
-      currentUser?.userUuid ||
-      currentUser?.uuid ||
       '';
     if (!userKey) {
       alert('회원 식별 정보가 없습니다. 다시 로그인해 주세요.');
@@ -421,7 +417,7 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
         setQualCertVerifyStatus(data.qualCertVerifyStatus);
       }
       // POST 후 새로 저장된 자격증 파일 UUID 갱신
-      const newQualFid = data.qualCertFileId || data.qualCertFileUuid;
+      const newQualFid = data.qualCertFileId;
       if (newQualFid) {
         setQualCertFileId(newQualFid);
         setHasQualCertFileOnServer(true);
@@ -445,8 +441,6 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
   const commonViewUserId =
     currentUser?.userId ||
     currentUser?.custId ||
-    currentUser?.userUuid ||
-    currentUser?.uuid ||
     '';
 
   return (

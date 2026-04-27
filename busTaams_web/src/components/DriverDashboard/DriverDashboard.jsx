@@ -407,7 +407,7 @@ const DriverDashboard = ({
   const [showLiveChatBusDriver, setShowLiveChatBusDriver] = useState(false);
 
   useEffect(() => {
-    const driverCustId = currentUser?.custId || currentUser?.uuid || currentUser?.userUuid;
+    const driverCustId = currentUser?.custId || currentUser?.userId;
     if (!driverCustId) {
       setAuctionLoading(false);
       setAuctionList([]);
@@ -470,7 +470,7 @@ const DriverDashboard = ({
   }, [currentUser]);
 
   const refetchAuctionList = useCallback(async () => {
-    const driverCustId = currentUser?.custId || currentUser?.uuid || currentUser?.userUuid;
+    const driverCustId = currentUser?.custId || currentUser?.userId;
     if (!driverCustId) return;
     setAuctionLoading(true);
     setAuctionListError(null);
@@ -540,7 +540,7 @@ const DriverDashboard = ({
       <UpcomingTripsModal
         open={showUpcomingTripsModal}
         onClose={() => setShowUpcomingTripsModal(false)}
-        driverUuid={currentUser?.custId || currentUser?.uuid}
+        driverId={currentUser?.custId || currentUser?.userId}
         onTravelerQuoteDetail={(reqUuid) => {
           setShowUpcomingTripsModal(false);
           onTravelerQuoteDetail?.(reqUuid);
@@ -550,7 +550,7 @@ const DriverDashboard = ({
       <LiveChatBusDriver
         open={showLiveChatBusDriver}
         onClose={() => setShowLiveChatBusDriver(false)}
-        driverUuid={currentUser?.custId || currentUser?.uuid}
+        driverId={currentUser?.custId || currentUser?.userId}
         initialReqUuid={null}
       />
     </div>

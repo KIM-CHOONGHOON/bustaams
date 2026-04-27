@@ -62,11 +62,11 @@ async function fetchCommonViewBusDocMeta(ownerId, fileId, metaPath) {
  *   streamPath   — 파일 스트리밍 경로  (기본: /api/driver/bus-documents/file)
  *   downloadPath — 다운로드 경로       (기본: /api/common-view/bus-document/download)
  *
- * @param {{ close: () => void, fileId?: string, fileUuid?: string, userId?: string, userUuid?: string, docTitle?: string, metaPath?: string, streamPath?: string, downloadPath?: string }} props
+ * @param {{ close: () => void, fileId?: string, userId?: string, docTitle?: string, metaPath?: string, streamPath?: string, downloadPath?: string }} props
  */
-function CommonView({ close, fileId, fileUuid, userId, userUuid, docTitle, metaPath, streamPath, downloadPath }) {
-    const docFileId = (fileId && String(fileId).trim()) || (fileUuid && String(fileUuid).trim()) || '';
-    const ownerId = (userId && String(userId).trim()) || (userUuid && String(userUuid).trim()) || '';
+function CommonView({ close, fileId, userId, docTitle, metaPath, streamPath, downloadPath }) {
+    const docFileId = (fileId && String(fileId).trim()) || '';
+    const ownerId = (userId && String(userId).trim()) || '';
     const isDocMode = !!(docFileId && ownerId);
 
     const META_PATH   = metaPath   || '/api/common-view/bus-document/meta';
