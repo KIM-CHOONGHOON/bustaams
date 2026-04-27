@@ -1,146 +1,477 @@
-# BusTaams 프로젝트 테이블 설계 (MySQL)
+# BusTaams 프로젝트 테이블 설계 (Full Schema)
 
-본 문서는 `bustaams` 프로젝트의 데이터베이스 스키마 및 관련 연동 구조를 정의합니다. 모든 PK는 UUID(Binary 16)를 사용하며, 민감 정보는 양방향 암호화하여 저장합니다.
 
----
+## TB_AUCTION_REQ
 
-## 1. 공통 파일 마스터 관리 (GCS 연동)
-**테이블명:** `TB_FILE_MASTER`  
-*파일 및 이미지 리소스를 구글 클라우드 스토리지(GCS)와 연동하여 관리하는 마스터 테이블입니다.*
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **REQ_ID** | varchar(10) | NO | PRI | NULL |  |
+| **TRAVELER_ID** | varchar(10) | NO |  | NULL |  |
+| **TRIP_TITLE** | varchar(256) | YES |  | NULL |  |
+| **START_ADDR** | varchar(256) | NO |  | NULL |  |
+| **END_ADDR** | varchar(256) | NO |  | NULL |  |
+| **START_DT** | datetime | NO |  | NULL |  |
+| **END_DT** | datetime | NO |  | NULL |  |
+| **BUS_CHANG_CNT** | int | NO |  | 0 |  |
+| **PASSENGER_CNT** | int | YES |  | 0 |  |
+| **REQ_AMT** | decimal(13,0) | NO |  | 0 |  |
+| **DATA_STAT** | enum('AUCTION','BIDDING','CONFIRM','DONE','TRAVELER_CANCEL','DRIVER_CANCEL','BUS_CHANGE','BUS_CANCEL','OTHER') | YES |  | AUCTION |  |
+| **EXPIRE_DT** | datetime | NO |  | NULL |  |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **REG_ID** | varchar(10) | YES |  | NULL |  |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  |
 
-| 컬럼명 | 데이터 타입 | 제약 조건 | 설명 |
-| :--- | :--- | :--- | :--- |
-| **FILE_UUID** | BINARY(16) | NOT NULL, PK | 파일 고유 식별자 (UUID) |
-| **FILE_CATEGORY** | ENUM | NOT NULL | 파일 분류 ('SIGNATURE', 'LICENSE', 'BUS_PHOTO', 'DOCS') |
-| **GCS_BUCKET_NM** | VARCHAR(100) | DEFAULT 'bustaams-secure-data' | GCS 버킷명 |
-| **GCS_PATH** | VARCHAR(255) | NOT NULL | GCS 내 물리적 경로 |
-| **ORG_FILE_NM** | VARCHAR(255) | - | 원본 파일명 |
-| **FILE_EXT** | CHAR(5) | DEFAULT 'png' | 파일 확장자 |
-| **FILE_SIZE** | BIGINT | - | 파일 크기 (Byte) |
-| **REG_DT** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 업로드 일시 |
+## TB_AUCTION_REQ_BUS
 
----
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **REQ_ID** | varchar(10) | NO | PRI | NULL |  |
+| **REQ_BUS_SEQ** | int | NO | PRI | NULL |  |
+| **BUS_TYPE_CD** | varchar(30) | NO |  | NULL |  |
+| **DATA_STAT** | enum('AUCTION','BIDDING','CONFIRM','DONE','TRAVELER_CANCEL','DRIVER_CANCEL','BUS_CHANGE','BUS_CANCEL') | YES |  | AUCTION |  |
+| **TOLLS_AMT** | decimal(13,0) | YES |  | NULL |  |
+| **FUEL_COST** | decimal(13,0) | YES |  | NULL |  |
+| **RES_BUS_AMT** | decimal(13,0) | YES |  | NULL |  |
+| **RES_FEE_TOTAL_AMT** | decimal(13,0) | YES |  | NULL |  |
+| **RES_FEE_REFUND_AMT** | decimal(13,0) | YES |  | NULL |  |
+| **RES_FEE_ATTRIBUTION_AMT** | decimal(18,3) | YES |  | NULL |  |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **REG_ID** | varchar(10) | YES |  | NULL |  |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  |
 
-## 2. 통합 회원 및 개인정보 관리
-**테이블명:** `TB_USER`  
-*회원 기본 정보 및 개인정보 암호화 저장을 관리하는 핵심 테이블입니다.*
+## TB_AUCTION_REQ_VIA
 
-| 컬럼명 | 데이터 타입 | 제약 조건 | 설명 |
-| :--- | :--- | :--- | :--- |
-| **USER_UUID** | BINARY(16) | NOT NULL, PK | 시스템 관리용 고유 식별자 (UUID) |
-| **USER_ID_ENC** | VARCHAR(255) | NOT NULL, UNIQUE | 사용자 입력 ID / SNS ID (양방향 암호화) |
-| **SNS_TYPE** | ENUM | DEFAULT 'NONE' | 간편로그인 타입 ('NONE', 'KAKAO', 'NAVER') |
-| **USER_TYPE** | ENUM | NOT NULL | 회원구분 ('TRAVELER', 'DRIVER', 'PARTNER') |
-| **PASSWORD** | VARCHAR(255) | NOT NULL | 비밀번호 (단방향 암호화) |
-| **USER_NM** | VARCHAR(255) | NOT NULL | 회원성명 (양방향 암호화) |
-| **HP_NO** | VARCHAR(255) | NOT NULL | 전화번호 (양방향 암호화) |
-| **EMAIL_ENC** | VARCHAR(255) | - | 이메일 주소 (양방향 암호화) |
-| **SMS_AUTH_YN** | ENUM | DEFAULT 'N' | SMS 문자 인증 여부 ('Y', 'N') |
-| **RECOM_CODE** | BINARY(16) | - | 추천인 코드 (영업파트너의 USER_UUID) |
-| **JOIN_DT** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 가입 일시 |
-| **USER_STAT** | ENUM | DEFAULT 'ACTIVE' | 상태 ('ACTIVE', 'LEAVE', 'BANNED') |
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **REQ_ID** | varchar(10) | NO | PRI | NULL |  |
+| **VIA_SEQ** | int | NO | PRI | NULL |  |
+| **VIA_TYPE** | enum('START_NODE','START_WAY','ROUND_TRIP','END_WAY','END_NODE') | NO |  | START_WAY |  |
+| **VIA_ADDR** | varchar(255) | NO |  | NULL |  |
+| **LAT** | decimal(10,8) | YES |  | NULL |  |
+| **LNG** | decimal(11,8) | YES |  | NULL |  |
+| **DIST_FROM_PREV** | decimal(10,2) | YES |  | 0.00 |  |
+| **TIME_FROM_PREV** | int | YES |  | 0 |  |
+| **STOP_TIME_MIN** | int | YES |  | 0 |  |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **REG_ID** | varchar(10) | YES |  | NULL |  |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  |
+| **VIA_ORD** | int | NO |  | 1 |  |
 
----
+## TB_BUS_DRIVER_VEHICLE
 
-## 3. 약관 및 이력 관리 (추가 설계)
-*회원 가입 및 서비스 이용에 필요한 약관과 동의 이력을 관리합니다.*
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **BUS_ID** | varchar(10) | NO | PRI | NULL |  |
+| **CUST_ID** | varchar(10) | NO | MUL | NULL |  |
+| **VEHICLE_NO** | varchar(20) | NO |  | NULL |  |
+| **MODEL_NM** | varchar(100) | NO |  | NULL |  |
+| **MANUFACTURE_YEAR** | varchar(10) | YES |  | NULL |  |
+| **MILEAGE** | int | YES |  | 0 |  |
+| **SERVICE_CLASS** | varchar(50) | NO |  | NULL |  |
+| **AMENITIES** | json | YES |  | NULL |  |
+| **HAS_ADAS** | char(1) | NO |  | N |  |
+| **LAST_INSPECT_DT** | date | YES |  | NULL |  |
+| **INSURANCE_EXP_DT** | date | YES |  | NULL |  |
+| **VEHICLE_PHOTOS_JSON** | json | YES |  | NULL |  |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **REG_ID** | varchar(10) | YES |  | NULL |  |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  |
 
-### 3-1. 약관 마스터 (`TB_TERMS_MASTER`)
-| 컬럼명 | 데이터 타입 | 설명 |
-| :--- | :--- | :--- |
-| **TERMS_ID** | INT | AUTO_INCREMENT, PK |
-| **TERMS_TYPE** | VARCHAR(20) | 약관 종류 (SVC, PRIVACY, LOCATION, MKT, DRIVER) |
-| **TERMS_VERSION** | VARCHAR(10) | 약관 버전 (예: v1.0, v2.1) |
-| **REQUIRE_YN** | CHAR(1) | 필수 동의 여부 (Y/N) |
-| **CONTENT_URL** | VARCHAR(500) | GCS 내 약관 전문(PDF/MD) 물리 파일 경로 |
-| **ENFORCE_DT** | DATE | 해당 버전 약관의 실제 시행 일자 |
-| **REG_DT** | DATETIME | 약관 등록 일시 |
+## TB_BUS_DRIVER_VEHICLE_FILE_HIST
 
-### 3-2. 회원 약관 동의 이력 (`TB_USER_TERMS_HIST`)
-| 컬럼명 | 데이터 타입 | 설명 |
-| :--- | :--- | :--- |
-| **HIST_ID** | BIGINT | AUTO_INCREMENT, PK |
-| **USER_UUID** | BINARY(16) | 동의한 회원 식별자 (TB_USER.USER_UUID 참조) |
-| **TERMS_ID** | INT | 동의한 약관 ID (TB_TERMS_MASTER.TERMS_ID 참조) |
-| **SIGN_FILE_UUID** | BINARY(16) | 전자 서명 파일 식별자 (TB_FILE_MASTER.FILE_UUID 참조) |
-| **AGREE_YN** | CHAR(1) | 동의 여부 (Y/N) |
-| **AGREE_DT** | DATETIME | 사용자 실제 약관 동의/거절 행위 일시 |
-| **CLIENT_IP** | VARCHAR(45) | 동의 당시 접속 IP 주소 (Auditing 용도) |
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **HIST_ID** | varchar(255) | NO | PRI | NULL |  |
+| **BUS_ID** | varchar(255) | NO | MUL | NULL |  |
+| **FILE_ID** | varchar(255) | NO | MUL | NULL |  |
+| **FILE_CATEGORY** | varchar(50) | NO |  | NULL |  |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 
----
+## TB_BUS_RESERVATION
 
-## 4. 기사 전문 정보 관리
-**테이블명:** `TB_DRIVER_INFO`  
-*기사님의 면허, 자격증, 프로필 등 전문적인 정보를 관리하는 테이블입니다. 민감 정보는 양방향 암호화하여 저장합니다.*
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **RES_ID** | varchar(10) | NO | PRI | NULL |  |
+| **REQ_ID** | varchar(10) | NO |  | NULL |  |
+| **REQ_BUS_ID** | varchar(10) | NO |  | NULL |  |
+| **DRIVER_ID** | varchar(10) | YES |  | NULL |  |
+| **BUS_ID** | varchar(10) | YES |  | NULL |  |
+| **DRIVER_BIDDING_PRICE** | decimal(13,0) | NO |  | NULL |  |
+| **RES_FEE_TOTAL_AMT** | decimal(13,0) | YES |  | NULL |  |
+| **RES_FEE_REFUND_AMT** | decimal(13,0) | YES |  | NULL |  |
+| **RES_FEE_ATTRIBUTION_AMT** | decimal(13,0) | YES |  | NULL |  |
+| **DATA_STAT** | enum('AUCTION','BIDDING','CONFIRM','DONE','TRAVELER_CANCEL','DRIVER_CANCEL','BUS_CHANGE','BUS_CANCEL','OTHER') | YES |  | AUCTION |  |
+| **CONFIRM_DT** | datetime | YES |  | NULL |  |
+| **REG_DT** | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **REG_ID** | varchar(10) | YES |  | NULL |  |
+| **MOD_DT** | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  |
 
-| 컬럼명 | 데이터 타입 | 제약 조건 | 설명 |
-| :--- | :--- | :--- | :--- |
-| **USER_UUID** | BINARY(16) | NOT NULL, PK | 회원 고유 식별자 (FK: TB_USER) |
-| **RRN_ENC** | VARCHAR(512) | NOT NULL | 주민등록번호 (양방향 암호화) |
-| **LICENSE_TYPE** | VARCHAR(50) | - | 면허 종류 (예: 1종 대형) |
-| **LICENSE_NO** | VARCHAR(100) | - | 면허 번호 |
-| **LICENSE_SERIAL_NO** | VARCHAR(100) | - | 면허 암호일련번호(면허증 우측 소형 사진 아래 영문·숫자, 진위 검증 연동용) |
-| **LICENSE_ISSUE_DT** | DATE | - | 발급 일자 |
-| **LICENSE_EXPIRY_DT** | DATE | - | 유효 기간 |
-| **QUAL_CERT_NO** | VARCHAR(100) | - | 버스운전 자격번호 |
-| **QUAL_CERT_FILE_UUID** | BINARY(16) | - | 자격증 사본 (FK: TB_FILE_MASTER) |
-| **PROFILE_PHOTO_UUID** | BINARY(16) | - | 프로필 사진 (FK: TB_FILE_MASTER) |
-| **BIO_TEXT** | TEXT | - | 자기소개 및 강점 |
-| **CREATE_DT** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 등록 일시 |
-| **UPDATE_DT** | DATETIME | DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | 수정 일시 |
+## TB_CHAT_LOG
 
----
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **CHAT_LOG_UUID** | binary(16) | NO |  | NULL |  |
+| **CHAT_SEQ** | int | NO | PRI | NULL | auto_increment |
+| **ROOM_KIND** | enum('TRAVELER','DRIVER','PARTNER','EMPL','OTHER') | NO | MUL | NULL |  |
+| **CHAT_TITLE** | varchar(200) | YES |  | NULL |  |
+| **CHAT_COVER_FILE_ID** | varchar(20) | YES |  | NULL |  |
+| **REQ_ID** | varchar(10) | YES | MUL | NULL |  |
+| **RES_ID** | varchar(10) | YES |  | NULL |  |
+| **CREATED_BY_CUST_ID** | varchar(10) | NO | MUL | NULL |  |
+| **LAST_MSG_DT** | datetime | YES |  | NULL |  |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **REG_ID** | varchar(10) | YES |  | NULL |  |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  |
+| **REQ_UUID** | binary(16) | YES | MUL | NULL |  |
+| **RES_UUID** | binary(16) | YES |  | NULL |  |
+| **TRAVELER_UUID** | binary(16) | YES |  | NULL |  |
+| **DRIVER_UUID** | binary(16) | YES | MUL | NULL |  |
+| **SENDER_UUID** | binary(16) | YES |  | NULL |  |
+| **SENDER_ROLE** | enum('TRAVELER','DRIVER','SYSTEM') | YES |  | NULL |  |
+| **MSG_KIND** | varchar(20) | NO |  | TEXT |  |
+| **MSG_BODY** | text | YES |  | NULL |  |
+| **FILE_UUID** | binary(16) | YES |  | NULL |  |
 
-## 5. 차량 정보 관리 (TB_DRIVER_BUS)
-**테이블명:** `TB_DRIVER_BUS`
-*기사님이 등록한 차량(버스)의 상세 정보를 관리하는 테이블입니다.*
+## TB_CHAT_LOG_HIST
 
-| 컬럼명 | 데이터 타입 | 제약 조건 | 설명 |
-| :--- | :--- | :--- | :--- |
-| **BUS_UUID** | BINARY(16) | NOT NULL, PK | 버스 관리 고유 식별자 |
-| **USER_UUID** | BINARY(16) | NOT NULL | 소유주 기사 고유 식별자 (FK: TB_USER) |
-| **VEHICLE_NO** | VARCHAR(20) | NOT NULL, UNIQUE | 차량 번호 |
-| **MODEL_NM** | VARCHAR(100) | NOT NULL | 모델명 (예: 유니버스 노블 EX) |
-| **MANUFACTURE_YEAR** | VARCHAR(10) | - | 제작 연도 (예: 2024년형) |
-| **MILEAGE** | INT | DEFAULT 0 | 주행 거리 (km) |
-| **SERVICE_CLASS** | VARCHAR(50) | NOT NULL | 서비스 등급 (PREMIUM_GOLD, PRESTIGE 등) |
-| **AMENITIES** | JSON | - | 제공 편의 시설 |
-| **LAST_INSPECT_DT** | DATE | - | 최근 정기 점검일 |
-| **INSURANCE_EXP_DT** | DATE | - | 보험 만료 예정일 |
-| **BIZ_REG_FILE_UUID** | BINARY(16) | - | 사업자 등록증 파일 (FK: TB_FILE_MASTER) |
-| **TRANS_LIC_FILE_UUID** | BINARY(16) | - | 운송사업 허가증 파일 |
-| **INS_CERT_FILE_UUID** | BINARY(16) | - | 보험증권 파일 |
-| **REG_DT** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 등록 일시 |
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **HIST_SEQ** | int | NO | PRI | NULL | auto_increment |
+| **CHAT_SEQ** | int | NO | MUL | NULL |  |
+| **SENDER_CUST_ID** | varchar(10) | NO | MUL | NULL |  |
+| **SENDER_ROLE** | enum('TRAVELER','DRIVER','PARTNER','EMPL','SYSTEM') | NO |  | NULL |  |
+| **MSG_KIND** | varchar(20) | NO |  | TEXT |  |
+| **MSG_BODY** | text | YES |  | NULL |  |
+| **FILE_ID** | varchar(20) | YES |  | NULL |  |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 
----
+## TB_CHAT_LOG_PART
 
-## 6. 견적 요청 관리 (TB_BUS_REQUEST)
-**테이블명:** `TB_BUS_REQUEST`
-*고객(Traveler)이 등록한 버스 대절 예약/견적 요청 정보를 관리하는 테이블입니다.*
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **CHAT_SEQ** | int | NO | PRI | NULL |  |
+| **CUST_ID** | varchar(10) | NO | PRI | NULL |  |
+| **PART_TYPE** | enum('TRAVELER','DRIVER','PARTNER','EMPL') | NO |  | NULL |  |
+| **JOINED_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **INVITER_CUST_ID** | varchar(10) | YES |  | NULL |  |
 
-| 컬럼명 | 데이터 타입 | 제약 조건 | 설명 |
-| :--- | :--- | :--- | :--- |
-| **REQUEST_UUID** | BINARY(16) | NOT NULL, PK | 견적 요청 고유 식별자 |
-| **TRAVELER_UUID**| BINARY(16) | NOT NULL | 요청 고객 고유 식별자 (FK: TB_USER) |
-| **DEPARTURE_LOC**| VARCHAR(255) | NOT NULL | 출발지 |
-| **DESTINATION_LOC**| VARCHAR(255) | NOT NULL | 목적지 |
-| **PASSENGER_CNT**| INT | NOT NULL | 탑승 인원 수 |
-| **SERVICE_TYPE** | VARCHAR(50) | - | 요청 버스 타입 (예: 45인승 대형) |
-| **REQUEST_STATUS**| VARCHAR(20) | DEFAULT 'OPEN' | 상태 (OPEN, CLOSED, CANCELED) |
-| **CREATE_DT** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 요청 등록 일시 |
+## TB_COMMON_CODE
 
----
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **GRP_CD** | varchar(30) | NO | PRI | NULL |  |
+| **DTL_CD** | varchar(30) | NO | PRI | NULL |  |
+| **CD_NM_KO** | varchar(100) | NO |  | NULL |  |
+| **CD_NM_EN** | varchar(100) | YES |  | NULL |  |
+| **CD_FNUM** | decimal(13,3) | YES |  | 0.000 |  |
+| **CD_TNUM** | decimal(13,3) | YES |  | 0.000 |  |
+| **USE_YN** | enum('Y','N') | YES |  | Y |  |
+| **DISP_ORD** | int | YES |  | 0 |  |
+| **CD_DESC** | text | YES |  | NULL |  |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **REG_ID** | varchar(30) | YES |  | NULL |  |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **MOD_ID** | varchar(30) | YES |  | NULL |  |
 
-## 7. 입찰/견적 관리 (TB_BID)
-**테이블명:** `TB_BID`
-*특정 견적 요청에 대해 기사님(Driver)이 제출한 입찰(견적) 내역을 관리하는 테이블입니다.*
+## TB_DRIVER_DETAIL
 
-| 컬럼명 | 데이터 타입 | 제약 조건 | 설명 |
-| :--- | :--- | :--- | :--- |
-| **BID_UUID** | BINARY(16) | NOT NULL, PK | 입찰 내역 고유 식별자 |
-| **REQUEST_UUID** | BINARY(16) | NOT NULL | 대상 견적 요청 고유 식별자 (FK: TB_BUS_REQUEST) |
-| **DRIVER_UUID** | BINARY(16) | NOT NULL | 투찰한 기사 고유 식별자 (FK: TB_USER) |
-| **BUS_UUID** | BINARY(16) | - | 투찰에 사용하는 버스 식별자 (FK: TB_DRIVER_BUS) |
-| **BID_AMT** | DECIMAL(15,2)| NOT NULL | 제출 견적가 (금액) |
-| **BID_STATUS** | VARCHAR(20) | DEFAULT 'ACTIVE' | 입찰 상태 (ACTIVE, ACCEPTED, REJECTED) |
-| **CREATE_DT** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 입찰 제출 일시 |
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **USER_ID** | varchar(255) | NO | PRI | NULL |  |
+| **BIRTH_YMD** | varchar(6) | YES |  | NULL |  |
+| **SEX** | varchar(1) | YES |  | NULL |  |
+| **ADDR_TYPE** | enum('HOME','OFFICE','OTHER') | NO | MUL | HOME |  |
+| **ADDR_NAME** | varchar(40) | YES |  | NULL |  |
+| **ZIPCODE** | varchar(10) | YES |  | NULL |  |
+| **ADDRESS** | varchar(255) | YES |  | NULL |  |
+| **DETAIL_ADDRESS** | varchar(255) | YES |  | NULL |  |
+| **FEE_POLICY** | varchar(30) | YES |  | NULL |  |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **REG_ID** | varchar(30) | YES |  | NULL |  |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
+| **MOD_ID** | varchar(30) | YES |  | NULL |  |
+
+## TB_DRIVER_DOCS
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **CUST_ID** | varchar(10) | NO | PRI | NULL |  |
+| **DOC_TYPE** | enum('LICENSE','QUALIFICATION','APTITUDE','BIZ_REG','TRANSPORT_PERMIT','INSURANCE') | NO | PRI | NULL |  |
+| **DOC_TYPE_SEQ** | int unsigned | NO | PRI | NULL |  |
+| **FILE_ID** | varchar(20) | NO | UNI | NULL |  |
+| **GCS_BUCKET_NM** | varchar(100) | YES |  | bustaams-secure-data |  |
+| **GCS_PATH** | varchar(255) | NO |  | NULL |  |
+| **ORG_FILE_NM** | varchar(255) | YES |  | NULL |  |
+| **ORG_FILE_EXT** | char(5) | YES |  | png |  |
+| **FILE_SIZE** | bigint | YES |  | NULL |  |
+| **LICENSE_TYPE_CD** | varchar(30) | YES |  | NULL |  |
+| **DOC_NO_ENC** | varchar(255) | YES |  | NULL |  |
+| **ISSUE_DT** | date | YES |  | NULL |  |
+| **EXP_DT** | date | YES |  | NULL |  |
+| **INFO_STAT_CD** | varchar(300) | YES |  | NULL |  |
+| **APPROVE_STAT** | enum('WAIT','APPROVE','REJECT') | YES |  | WAIT |  |
+| **REJECT_REASON** | text | YES |  | NULL |  |
+| **APPROVER_ID** | varchar(10) | YES |  | NULL |  |
+| **APPROVE_DT** | datetime | YES |  | NULL |  |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **REG_ID** | varchar(30) | YES |  | NULL |  |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
+| **MOD_ID** | varchar(30) | YES |  | NULL |  |
+
+## TB_DRIVER_INFO
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **USER_ID** | varchar(256) | NO | PRI | NULL |  |
+| **RRN_ENC** | varchar(512) | NO |  | NULL |  |
+| **LICENSE_TYPE** | varchar(50) | YES |  | NULL |  |
+| **LICENSE_NO** | varchar(100) | YES |  | NULL |  |
+| **LICENSE_SERIAL_NO** | varchar(100) | YES |  | NULL |  |
+| **LICENSE_ISSUE_DT** | date | YES |  | NULL |  |
+| **LICENSE_EXPIRY_DT** | date | YES |  | NULL |  |
+| **QUAL_CERT_NO** | varchar(100) | YES |  | NULL |  |
+| **QUAL_CERT_VERIFY_STATUS** | varchar(20) | NO |  | UNVERIFIED |  |
+| **QUAL_CERT_VERIFY_DT** | datetime | YES |  | NULL |  |
+| **QUAL_CERT_FILE_ID** | varchar(20) | YES |  | NULL |  |
+| **PROFILE_PHOTO_ID** | varchar(20) | YES |  | NULL |  |
+| **BIO_TEXT** | text | YES |  | NULL |  |
+| **CREATE_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **UPDATE_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
+
+## TB_FILE_MASTER
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **FILE_ID** | varchar(20) | NO | PRI | NULL |  |
+| **FILE_CATEGORY** | varchar(50) | NO |  | NULL |  |
+| **GCS_BUCKET_NM** | varchar(100) | YES |  | bustaams-secure-data |  |
+| **GCS_PATH** | varchar(255) | NO |  | NULL |  |
+| **ORG_FILE_NM** | varchar(255) | YES |  | NULL |  |
+| **FILE_EXT** | char(5) | YES |  | png |  |
+| **FILE_SIZE** | bigint | YES |  | NULL |  |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **REG_ID** | varchar(10) | YES |  | NULL |  |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  |
+
+## TB_INQUIRY
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **CUST_ID** | varchar(10) | NO | PRI | NULL |  |
+| **INQ_SEQ** | int | NO | PRI | NULL |  |
+| **INQ_CATEGORY** | enum('BID_RES','PAY_REFUND','CANCEL_RULE','BUS_STAT','SUGGESTION') | NO |  | NULL |  |
+| **TITLE** | varchar(255) | NO |  | NULL |  |
+| **CONTENT** | text | NO |  | NULL |  |
+| **ATTACH_FILE_ID** | varchar(20) | YES |  | NULL |  |
+| **REPLY_CONTENT** | text | YES |  | NULL |  |
+| **REPLY_DT** | datetime | YES |  | NULL |  |
+| **INQ_STAT** | enum('WAITING','COMPLETED') | YES |  | WAITING |  |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **REG_ID** | varchar(10) | YES |  | NULL |  |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  |
+
+## TB_PAYMENT_CARD
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **CUST_ID** | varchar(10) | NO | PRI | NULL |  |
+| **CARD_SEQ** | int | NO | PRI | NULL |  |
+| **CARD_NICKNAME** | varchar(50) | YES |  | NULL |  |
+| **CARD_NO_ENC** | varchar(255) | NO |  | NULL |  |
+| **EXP_MONTH** | char(2) | NO |  | NULL |  |
+| **EXP_YEAR** | char(2) | NO |  | NULL |  |
+| **IS_PRIMARY** | enum('Y','N') | YES |  | N |  |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **REG_ID** | varchar(10) | YES |  | NULL |  |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  |
+
+## TB_SMS_LOG
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **LOG_SEQ** | int | NO | PRI | NULL | auto_increment |
+| **REQ_ID** | varchar(10) | YES |  | NULL |  |
+| **SEND_CATEGORY** | enum('AUCTION','BIDDING','CONFIRM','DONE','TRAVELER_CANCEL','DRIVER_CANCEL','BUS_CHANGE','BUS_CANCEL','SIGN_UP','NEW_PASSWORD','OTHER','REQ_REG','NEW_BID','RES_CANCEL','ETC','JOIN','NEWPW') | NO |  | ETC |  |
+| **SENDER_ID** | varchar(10) | YES |  | NULL |  |
+| **RECEIVER_ID** | varchar(10) | YES |  | NULL |  |
+| **RECEIVER_PHONE** | varchar(20) | NO |  | NULL |  |
+| **MSG_CONTENT** | text | NO |  | NULL |  |
+| **MSG_TYPE** | varchar(20) | NO |  | SMS |  |
+| **SEND_STAT** | varchar(20) | NO |  | PENDING |  |
+| **ERROR_MSG** | text | YES |  | NULL |  |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **REG_ID** | varchar(10) | YES |  | NULL |  |
+
+## TB_SUBSCRIPTION
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **CUST_ID** | varchar(10) | NO | PRI | NULL |  |
+| **YYYYMM** | varchar(6) | NO | PRI | NULL |  |
+| **FEE_POLICY** | enum('DRIVER_GENERAL','DRIVER_MIDDLE','DRIVER_HIGH') | NO |  | NULL |  |
+| **BASIC_CNT** | int | NO |  | 0 |  |
+| **USE_CNT** | int | NO |  | 0 |  |
+| **REMAINING_CNT** | int | NO |  | 0 |  |
+| **REG_DT** | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **REG_ID** | varchar(10) | YES |  | NULL |  |
+| **MOD_DT** | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  |
+
+## TB_TERMS_MASTER
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **TERMS_SEQ** | int | NO | PRI | NULL | auto_increment |
+| **TERMS_TYPE** | varchar(20) | NO |  | NULL |  |
+| **TERMS_VERSION** | varchar(10) | NO |  | NULL |  |
+| **REQUIRE_YN** | char(1) | YES |  | Y |  |
+| **CONTENT_URL** | varchar(500) | YES |  | NULL |  |
+| **ENFORCE_DT** | date | NO |  | NULL |  |
+| **REG_DT** | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **REG_ID** | varchar(10) | YES |  | NULL |  |
+| **MOD_DT** | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  |
+
+## TB_TRIP_REVIEW
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **RES_ID** | varchar(10) | NO | PRI | NULL |  |
+| **REVIEW_SEQ** | int | NO | PRI | NULL |  |
+| **WRITER_ID** | varchar(10) | NO |  | NULL |  |
+| **DRIVER_ID** | varchar(10) | NO |  | NULL |  |
+| **STAR_RATING** | tinyint | YES |  | 5 |  |
+| **COMMENT_TEXT** | text | YES |  | NULL |  |
+| **REPLY_TEXT** | text | YES |  | NULL |  |
+| **REPLY_DT** | datetime | YES |  | NULL |  |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **REG_ID** | varchar(10) | YES |  | NULL |  |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  |
+
+## TB_USER
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **CUST_ID** | varchar(10) | NO | PRI | NULL |  |
+| **USER_ID** | varchar(256) | NO | UNI | NULL |  |
+| **EMAIL** | varchar(100) | YES |  | NULL |  |
+| **SNS_TYPE** | enum('NONE','KAKAO','NAVER') | YES |  | NONE |  |
+| **USER_TYPE** | enum('TRAVELER','DRIVER','PARTNER') | NO |  | NULL |  |
+| **PASSWORD** | varchar(255) | NO |  | NULL |  |
+| **USER_NM** | varchar(255) | YES |  | NULL |  |
+| **RESIDENT_NO_ENC** | varchar(255) | YES |  | NULL |  |
+| **HP_NO** | varchar(255) | YES |  | NULL |  |
+| **USER_IMAGE** | varchar(255) | YES |  | NULL |  |
+| **PROFILE_IMG_PATH** | varchar(512) | YES |  | NULL |  |
+| **PROFILE_FILE_ID** | varchar(20) | YES |  | NULL |  |
+| **SMS_AUTH_YN** | enum('Y','N') | YES |  | N |  |
+| **RECOM_CODE** | varchar(20) | YES |  | NULL |  |
+| **JOIN_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **USER_STAT** | enum('ACTIVE','LEAVE','BANNED','TEMPORARY') | YES |  | ACTIVE |  |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  |
+| **RRN_ENC** | varchar(512) | YES |  | NULL |  |
+| **LICENSE_TYPE** | varchar(50) | YES |  | NULL |  |
+| **LICENSE_NO** | varchar(100) | YES |  | NULL |  |
+| **LICENSE_SERIAL_NO** | varchar(100) | YES |  | NULL |  |
+| **LICENSE_ISSUE_DT** | date | YES |  | NULL |  |
+| **LICENSE_EXPIRY_DT** | date | YES |  | NULL |  |
+| **QUAL_CERT_NO** | varchar(100) | YES |  | NULL |  |
+| **QUAL_CERT_VERIFY_STATUS** | varchar(20) | NO |  | UNVERIFIED |  |
+| **QUAL_CERT_VERIFY_DT** | datetime | YES |  | NULL |  |
+| **QUAL_CERT_FILE_ID** | varchar(20) | YES |  | NULL |  |
+| **DRIVER_BIO** | text | YES |  | NULL |  |
+
+## TB_USER_CANCEL_HIST
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **CUST_ID** | varchar(10) | NO | PRI | NULL |  |
+| **HIST_SEQ** | int | NO | PRI | NULL |  |
+| **CANCEL_REASON_GRP_CD** | varchar(50) | NO |  | CANCEL_REASON |  |
+| **CANCEL_REASON_DTL_CD** | varchar(50) | NO |  | NULL |  |
+| **CANCEL_REASON_TEXT** | text | YES |  | NULL |  |
+| **REASON_DOC_FILE_NM** | varchar(500) | YES |  | NULL |  |
+| **REG_DT** | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **REG_ID** | varchar(10) | YES |  | NULL |  |
+| **MOD_DT** | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  |
+
+## TB_USER_CANCEL_MANAGE
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **CUST_ID** | varchar(10) | NO | PRI | NULL |  |
+| **CANCEL_CNT** | int | NO |  | 0 |  |
+| **CANCEL_BUS_DRIVER_CNT** | int | NO |  | 0 |  |
+| **CANCEL_TRAVELER_ALL_CNT** | int | NO |  | 0 |  |
+| **CANCEL_TRAVELER_PARTIAL_BUS_CNT** | int | NO |  | 0 |  |
+| **TRADE_RESTRICT_YN** | char(1) | NO |  | N |  |
+| **TRADE_RESTRICT_START_DT** | datetime | YES |  | NULL |  |
+| **TRADE_RESTRICT_END_DT** | datetime | YES |  | NULL |  |
+| **REG_DT** | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **REG_ID** | varchar(10) | YES |  | NULL |  |
+| **MOD_DT** | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  |
+
+## TB_USER_DEVICE_TOKEN
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **CUST_ID** | varchar(10) | NO | PRI | NULL |  |
+| **FCM_TOKEN** | varchar(512) | NO |  | NULL |  |
+| **CLIENT_KIND** | varchar(20) | NO |  | web |  |
+| **REG_DT** | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| **REG_ID** | varchar(10) | YES |  | NULL |  |
+| **MOD_DT** | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  |
+
+## TB_USER_TERMS_HIST
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **CUST_ID** | varchar(10) | NO | PRI | NULL |  |
+| **TERMS_HIST_SEQ** | int | NO | PRI | NULL |  |
+| **TERMS_TYPE** | enum('SERVICE','TRAVELER_SERVICE','DRIVER_SERVICE','PRIVACY','MARKETING','PARTNER_CONTRACT') | NO |  | NULL |  |
+| **TERMS_VER** | varchar(10) | NO |  | NULL |  |
+| **AGREE_YN** | enum('Y','N') | YES |  | Y |  |
+| **MKT_SMS_YN** | enum('Y','N') | YES |  | N |  |
+| **MKT_PUSH_YN** | enum('Y','N') | YES |  | N |  |
+| **MKT_EMAIL_YN** | enum('Y','N') | YES |  | N |  |
+| **MKT_TEL_YN** | enum('Y','N') | YES |  | N |  |
+| **SIGN_FILE_ID** | varchar(20) | YES |  | NULL |  |
+| **AGREE_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+
+## 비즈니스 규칙 (Business Rules)
+
+### 1. 버스 변경 (Bus Change) & 재등록 (Re-registration)
+- **제한**: 각 예약(`REQ_ID`)당 최대 **3회**까지 가능.
+- **변경(Change) 로직**:
+  - `TB_AUCTION_REQ.DATA_STAT`을 `'BUS_CHANGE'`로 변경 -> **목록에서 즉시 제외됨**.
+  - `TB_AUCTION_REQ.BUS_CHANG_CNT`를 **+1** 증가.
+  - `TB_AUCTION_REQ_BUS`의 해당 차량 행의 상태를 `'BUS_CHANGE'`로 변경.
+- **재등록(Re-registration) 로직**:
+  - 변경 성공 직후 전용 모달(`BusReRegistrationModal`)을 통해 새로운 차량 및 가격을 입력받음.
+  - `TB_AUCTION_REQ_BUS`에 새로운 차량 정보를 `INSERT` (상태: `'AUCTION'`).
+  - `TB_AUCTION_REQ.DATA_STAT`을 다시 `'AUCTION'`으로 복구 -> **목록에 다시 노출됨**.
+- **목록 필터링**: 나의 예약 목록 조회 시 마스터(`TB_AUCTION_REQ`)의 `DATA_STAT`이 `('TRAVELER_CANCEL', 'BUS_CHANGE')`인 항목은 제외함. 단, 버스(`TB_AUCTION_REQ_BUS`) 단위의 `BUS_CANCEL`은 목록에 노출함.
+
+### 2. 사용자 취소 페널티 (Cancellation Penalty)
+- **제한**: 누적 취소 횟수가 **3회** 이상일 경우 서비스 이용 제한.
+- **체크 시점**: 로그인 시 및 주요 서비스(여행 등록, 입찰 참여) 진입 시.
+- **제한 내용**:
+  - **여행자**: 새로운 여행 예약 등록 불가.
+  - **버스기사**: 실시간 입찰 참여 불가.
+- **관련 테이블**: `TB_USER_CANCEL_MANAGE`
+  - 여행자: `CANCEL_TRAVELER_ALL_CNT` 체크.
+  - 버스기사: `CANCEL_BUS_DRIVER_CNT` 체크.

@@ -226,6 +226,7 @@ function AuctionList({
   emptyMessage = '등록된 입찰이 없습니다',
   onBidClick,
   onRetry,
+  currentUser,
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -297,10 +298,22 @@ function AuctionList({
                 key={`${item.reqUuid}-${currentIndex}`}
                 role="button"
                 tabIndex={0}
-                onClick={() => onBidClick?.(item.reqUuid)}
+                onClick={() => {
+                  const cancelCnt = currentUser?.cancelManage?.cancelBusDriverCnt || 0;
+                  if (cancelCnt >= 3) {
+                    alert(`안내: 취소 건수가 ${cancelCnt}회 누적되어, 현재 더 이상의 버스 입찰에 참여하실 수 없습니다.`);
+                    return;
+                  }
+                  onBidClick?.(item.reqUuid);
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
+                    const cancelCnt = currentUser?.cancelManage?.cancelBusDriverCnt || 0;
+                    if (cancelCnt >= 3) {
+                      alert(`안내: 취소 건수가 ${cancelCnt}회 누적되어, 현재 더 이상의 버스 입찰에 참여하실 수 없습니다.`);
+                      return;
+                    }
                     onBidClick?.(item.reqUuid);
                   }
                 }}
@@ -365,6 +378,11 @@ function AuctionList({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
+                        const cancelCnt = currentUser?.cancelManage?.cancelBusDriverCnt || 0;
+                        if (cancelCnt >= 3) {
+                          alert(`안내: 취소 건수가 ${cancelCnt}회 누적되어, 현재 더 이상의 버스 입찰에 참여하실 수 없습니다.`);
+                          return;
+                        }
                         onBidClick?.(item.reqUuid);
                       }}
                       className={`px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
@@ -524,8 +542,16 @@ const DriverDashboard = ({
             loading={auctionLoading}
             loadError={auctionListError}
             emptyMessage={auctionEmptyMessage}
-            onBidClick={(reqUuid) => onTravelerQuoteDetail?.(reqUuid)}
+            onBidClick={(reqUuid) => {
+              const cancelCnt = currentUser?.cancelManage?.cancelBusDriverCnt || 0;
+              if (cancelCnt >= 3) {
+                alert(`안내: 취소 건수가 ${cancelCnt}회 누적되어, 현재 더 이상의 버스 입찰에 참여하실 수 없습니다.`);
+                return;
+              }
+              onTravelerQuoteDetail?.(reqUuid);
+            }}
             onRetry={refetchAuctionList}
+            currentUser={currentUser} // Pass currentUser to AuctionList for penalty check
           />
         </div>
       </main>

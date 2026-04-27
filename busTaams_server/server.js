@@ -126,6 +126,8 @@ async function verifyFirebasePhoneIdTokenIfRequired(idToken, options = {}) {
 
 
 
+
+
 /** TB_FILE_MASTER — 프로필/자격증 파일 메타 저장용 (없으면 INSERT 실패) */
 async function ensureTbFileMasterTable(connection) {
     await connection.execute(`
@@ -1261,7 +1263,7 @@ app.post('/api/auction/request', async (req, res) => {
             const [maxReqRows] = await connection.execute('SELECT MAX(REQ_ID) as maxId FROM TB_AUCTION_REQ');
             const reqId = generateNextNumericId(maxReqRows[0].maxId);
             
-            const secureRegId = (userId || custId || 'unknown').substring(0, 30);
+            const secureRegId = (userId || custId || 'unknown').substring(0, 10);
             
             // 1. TB_AUCTION_REQ (Master) Insert
             // END_ADDR should be the Destination (ROUND_TRIP) in waypoints
@@ -1298,33 +1300,26 @@ app.post('/api/auction/request', async (req, res) => {
             if (vehicles && vehicles.length > 0) {
                 const busQuery = `
                     INSERT INTO TB_AUCTION_REQ_BUS (
-                        REQ_BUS_ID, REQ_ID, BUS_TYPE_CD, 
+                        REQ_ID, REQ_BUS_SEQ, BUS_TYPE_CD, 
                         RES_FEE_TOTAL_AMT, RES_FEE_REFUND_AMT, RES_FEE_ATTRIBUTION_AMT,
                         REG_DT, REG_ID, DATA_STAT, RES_BUS_AMT
                     ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, 'AUCTION', ?)
                 `;
                 
-                const [maxBusRows] = await connection.execute('SELECT MAX(REQ_BUS_ID) as maxId FROM TB_AUCTION_REQ_BUS');
-                let currentMaxBusId = maxBusRows[0].maxId || '0000000000';
-
+                let busSeq = 1;
                 for (const bus of vehicles) {
                     const qty = bus.qty || 0;
-                    // [안전 장치] 금액에 쉼표 등이 포함되어 있어도 순수 숫자만 추출
                     const rawPrice = bus.price || 0;
                     const finalPrice = Number(String(rawPrice).replace(/[^0-9]/g, '')) || 0;
-                    if (finalPrice === 0) console.warn('[WARNING] Bus price is 0 for type:', bus.type);
 
                     for (let i = 0; i < qty; i++) {
-                        const busBusId = generateNextNumericId(currentMaxBusId);
-                        currentMaxBusId = busBusId;
-
                         const totalFee = finalPrice * 0.066;
                         const refundFee = finalPrice * 0.055;
                         const attributionFee = finalPrice * 0.011;
 
                         await connection.execute(busQuery, [
-                            busBusId, 
                             reqId, 
+                            busSeq++, 
                             bus.type, 
                             totalFee, 
                             refundFee, 
@@ -1339,32 +1334,27 @@ app.post('/api/auction/request', async (req, res) => {
             // 3. TB_AUCTION_REQ_VIA (Unified Path) Insert
             const viaQuery = `
                 INSERT INTO TB_AUCTION_REQ_VIA (
-                    VIA_ID, REQ_ID, VIA_ORD, VIA_ADDR, VIA_TYPE, STOP_TIME_MIN, REG_DT, REG_ID
+                    REQ_ID, VIA_SEQ, VIA_ORD, VIA_ADDR, VIA_TYPE, STOP_TIME_MIN, REG_DT, REG_ID
                 ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)
             `;
             
-            const [maxViaRows] = await connection.execute('SELECT MAX(VIA_ID) as maxId FROM TB_AUCTION_REQ_VIA');
-            let currentMaxViaId = maxViaRows[0].maxId || '0000000000';
-            
+            let viaSeq = 1;
             let currentOrd = 1;
             if (waypoints && waypoints.length > 0) {
                 for (let i = 0; i < waypoints.length; i++) {
                     const wp = waypoints[i];
                     
-                    // [정밀 타입 지정] 서버 순번에 따라 타입을 확정적으로 결정 (프론트 데이터 맹신 지양)
                     let forcedType = wp.type || 'START_WAY';
                     if (currentOrd === 1) forcedType = 'START_NODE';
                     else if (forcedType === 'START_NODE') forcedType = 'START_WAY';
 
-                    const viaId = generateNextNumericId(currentMaxViaId);
-                    currentMaxViaId = viaId;
                     const addr = wp.address || wp.addr;
                     
                     console.log(`[VIA_INSERT] Ord: ${currentOrd}, Type: ${forcedType}, Addr: ${addr}`);
 
                     await connection.execute(viaQuery, [
-                        viaId, 
                         reqId, 
+                        viaSeq++, 
                         currentOrd++, 
                         addr, 
                         forcedType, 
@@ -1500,14 +1490,19 @@ app.get('/api/auction/user/:custId', async (req, res) => {
                 r.REQ_ID, 
                 r.TRIP_TITLE, r.START_ADDR, r.END_ADDR, 
                 r.START_DT, r.END_DT, r.PASSENGER_CNT, r.DATA_STAT, r.REQ_AMT,
-                (SELECT GROUP_CONCAT(BUS_TYPE_CD) FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID) as ALL_BUS_TYPES,
-                (SELECT COUNT(*) FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID) as TOTAL_BUS_CNT,
+                (SELECT GROUP_CONCAT(CONCAT(BUS_TYPE_CD, ':', CAST(COALESCE(RES_BUS_AMT, RES_FEE_TOTAL_AMT, 0) AS CHAR))) FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT IN ('AUCTION', 'BIDDING', 'CONFIRM')) as ALL_BUS_TYPES,
+                (SELECT COUNT(*) FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT IN ('AUCTION', 'BIDDING', 'CONFIRM')) as TOTAL_BUS_CNT,
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'START_WAY' ORDER BY VIA_ORD ASC LIMIT 1) as VIA_START_ADDR,
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' ORDER BY VIA_ORD ASC LIMIT 1) as VIA_END_ADDR
             FROM TB_AUCTION_REQ r
             WHERE r.TRAVELER_ID = ? 
               AND r.DATA_STAT NOT IN ('DONE', 'TRAVELER_CANCEL')
-              AND r.START_DT >= NOW()
+              AND r.START_DT > NOW()
+              AND EXISTS (
+                  SELECT 1 FROM TB_AUCTION_REQ_BUS 
+                  WHERE REQ_ID = r.REQ_ID 
+                    AND DATA_STAT IN ('AUCTION', 'BIDDING', 'CONFIRM')
+              )
             ORDER BY r.REG_DT DESC
         `;
         
@@ -1533,6 +1528,26 @@ app.get('/api/auction/user/:custId', async (req, res) => {
     }
 });
 
+// 특정 예약 요청에 속한 버스 목록 조회 (있는 그대로)
+app.get('/api/auction/req-buses/:reqId', async (req, res) => {
+    try {
+        const { reqId } = req.params;
+        const [rows] = await pool.execute(
+            `SELECT 
+                BUS_TYPE_CD, 
+                RES_BUS_AMT as UNIT_REQ_AMT, 
+                DATA_STAT as BUS_STAT 
+             FROM TB_AUCTION_REQ_BUS 
+             WHERE REQ_ID = ? AND DATA_STAT IN ('AUCTION', 'BIDDING', 'CONFIRM')`,
+            [reqId]
+        );
+        res.status(200).json(rows);
+    } catch (error) {
+        console.error('Fetch Req Buses Error:', error);
+        res.status(500).json({ error: '버스 목록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
 // 사용자의 확정된 예약 목록 조회 (GET /api/auction/confirmed/:custId)
 app.get('/api/auction/confirmed/:custId', async (req, res) => {
     let connection;
@@ -1550,30 +1565,43 @@ app.get('/api/auction/confirmed/:custId', async (req, res) => {
                 r.START_DT, r.END_DT, r.PASSENGER_CNT, r.DATA_STAT, r.REQ_AMT
             FROM TB_AUCTION_REQ r
             WHERE r.TRAVELER_ID = ?
-              AND r.DATA_STAT = 'CONFIRM'
+              AND r.DATA_STAT IN ('BIDDING', 'CONFIRM')
               AND r.START_DT >= NOW()
             ORDER BY r.REG_DT DESC
         `;
         
         const [masters] = await connection.execute(masterQuery, [custId]);
         
-        // 2. 각 여정별로 포함된 모든 차량 상세 정보(TB_AUCTION_REQ_BUS) 가져오기
+        // 2. 각 여정별로 포함된 모든 확정 차량 상세 정보 가져오기
         for (let master of masters) {
             const busQuery = `
                 SELECT 
-                    ab.REQ_BUS_ID,
+                    ab.REQ_BUS_SEQ,
                     v.SERVICE_CLASS as BUS_TYPE_CD, 
+                    v.MODEL_NM as BUS_MODEL,
+                    v.VEHICLE_NO as BUS_NO,
+                    res.DRIVER_BIDDING_PRICE as FINAL_AMT,
                     res.DATA_STAT as RES_STAT,
-                    res.DRIVER_BIDDING_PRICE as REQ_AMT 
+                    u.USER_NM as DRIVER_NAME,
+                    u.USER_PHN as DRIVER_PHONE
                 FROM TB_AUCTION_REQ_BUS ab
-                INNER JOIN TB_BUS_RESERVATION res ON ab.REQ_ID = res.REQ_ID 
-                INNER JOIN TB_BUS_DRIVER_VEHICLE v ON res.BUS_ID = v.BUS_ID
+                LEFT JOIN TB_BUS_RESERVATION res ON ab.REQ_ID = res.REQ_ID 
+                    AND CAST(ab.REQ_BUS_SEQ AS CHAR) = res.REQ_BUS_ID
+                    AND res.DATA_STAT = 'CONFIRM'
+                LEFT JOIN TB_BUS_DRIVER_VEHICLE v ON res.BUS_ID = v.BUS_ID
+                LEFT JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID
                 WHERE ab.REQ_ID = ?
-                  AND res.DATA_STAT = 'CONFIRM'
-                GROUP BY ab.REQ_BUS_ID, v.SERVICE_CLASS, res.DATA_STAT, res.DRIVER_BIDDING_PRICE
             `;
             const [buses] = await connection.execute(busQuery, [master.REQ_ID]);
-            master.vehicles = buses;
+            
+            // 드라이버 이름 복호화 처리
+            const processedBuses = buses.map(bus => {
+                let name = bus.DRIVER_NAME || '정보 없음';
+                try { if (name.includes(':')) name = decrypt(name); } catch(e) {}
+                return { ...bus, DRIVER_NAME: name };
+            });
+
+            master.vehicles = processedBuses;
 
             // 경유지 정보도 함께 가져오기
             const viaQuery = `
@@ -1629,47 +1657,99 @@ app.post('/api/auction/cancel-bus', async (req, res) => {
     }
 });
 
-// API: 예약 취소 처리 (상태값 세분화: 고객 vs 기사)
-// POST /api/auction/cancel-reservation
-app.post('/api/auction/cancel-reservation', async (req, res) => {
+// API: 복합 예약 취소 (사유 입력 + 파일 업로드 + 이력 관리)
+// POST /api/auction/complex-cancel
+app.post('/api/auction/complex-cancel', async (req, res) => {
     let connection;
     try {
-        const { reqUuid, cancelRole } = req.body;
-        if (!reqUuid) return res.status(400).json({ error: 'reqUuid is required' });
+        // 유연한 파라미터 수신을 위해 여러 키 확인
+        const { reasonCode, reasonText, fileData, fileName } = req.body;
+        const reqUuid = req.body.reqUuid || req.body.reqId || req.body.REQ_ID;
+        const custId = req.body.custId || req.body.travelerId || req.body.TRAVELER_ID;
+        
+        console.log('[DEBUG] Complex Cancel Request Body:', { reqUuid, custId, reasonCode });
 
-        // 취소 주체에 따른 상태값 결정 (기본값: TRAVELER_CANCEL)
-        const targetStatus = (cancelRole === 'DRIVER') ? 'DRIVER_CANCEL' : 'TRAVELER_CANCEL';
+        if (!reqUuid || !custId) {
+            return res.status(400).json({ 
+                error: 'reqUuid and custId are required', 
+                received: { reqUuid, custId } 
+            });
+        }
 
         connection = await pool.getConnection();
         await connection.beginTransaction();
 
-        // 1. 해당 요청서와 연결된 모든 예약(입찰) 상태를 주체별 취소 상태로 변경
-        await connection.execute(`
-            UPDATE TB_BUS_RESERVATION 
-            SET DATA_STAT = ?,
-                MOD_DT = NOW()
-            WHERE REQ_ID = ?
-        `, [targetStatus, reqUuid]);
+        // 1. 파일 처리 (GCS 업로드 및 TB_FILE_MASTER 등록)
+        let fileId = null;
+        if (fileData) {
+            const parsed = parseDataUrlPayload(fileData, fileName);
+            if (parsed) {
+                // 새로운 FILE_ID 생성
+                const [maxRows] = await connection.execute('SELECT MAX(FILE_ID) as maxId FROM TB_FILE_MASTER');
+                fileId = generateNextNumericId(maxRows[0].maxId || '0', 20);
+                
+                const gcsPath = `cancel_docs/${custId}/${fileId}_${parsed.orgName}.${parsed.ext}`;
+                const gcsFile = bucket.file(gcsPath);
+                
+                // GCS에 파일 저장
+                await gcsFile.save(parsed.buffer, { 
+                    metadata: { contentType: parsed.mime }, 
+                    resumable: false 
+                });
 
-        // 2. 상위 요청서의 상태를 주체별 취소 상태로 변경
+                // TB_FILE_MASTER 기록
+                await connection.execute(`
+                    INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT)
+                    VALUES (?, 'CANCEL_DOC', ?, ?, ?, ?, ?, NOW())
+                `, [fileId, bucketName, gcsPath, parsed.orgName, parsed.ext, parsed.buffer.length]);
+            }
+        }
+
+        // 2. TB_AUCTION_REQ 상태 변경
         await connection.execute(`
             UPDATE TB_AUCTION_REQ 
-            SET DATA_STAT = ?,
+            SET DATA_STAT = 'TRAVELER_CANCEL',
                 MOD_DT = NOW()
             WHERE REQ_ID = ?
-        `, [targetStatus, reqUuid]);
+        `, [reqUuid]);
+
+        // 3. 연결된 모든 입찰 건(TB_BUS_RESERVATION) 상태 변경
+        await connection.execute(`
+            UPDATE TB_BUS_RESERVATION 
+            SET DATA_STAT = 'TRAVELER_CANCEL',
+                MOD_DT = NOW()
+            WHERE REQ_ID = ?
+        `, [reqUuid]);
+
+        // 4. TB_USER_CANCEL_HIST 이력 삽입
+        const [maxHistRows] = await connection.execute('SELECT MAX(HIST_SEQ) as maxSeq FROM TB_USER_CANCEL_HIST WHERE CUST_ID = ?', [custId]);
+        const nextHistSeq = (maxHistRows[0].maxSeq || 0) + 1;
+        
+        await connection.execute(`
+            INSERT INTO TB_USER_CANCEL_HIST (
+                CUST_ID, HIST_SEQ, CANCEL_REASON_GRP_CD, CANCEL_REASON_DTL_CD, 
+                CANCEL_REASON_TEXT, REASON_DOC_FILE_NM, REG_DT, MOD_DT
+            ) VALUES (?, ?, 'CANCEL_REASON', ?, ?, ?, NOW(), NOW())
+        `, [custId, nextHistSeq, reasonCode, reasonText || '', fileId]); // FILE_ID를 파일명 컬럼에 저장 (참조용)
+
+        // 5. TB_USER_CANCEL_MANAGE 카운트 업데이트 (Upsert)
+        await connection.execute(`
+            INSERT INTO TB_USER_CANCEL_MANAGE (
+                CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_ALL_CNT, REG_DT, MOD_DT
+            ) VALUES (?, 1, 1, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE 
+                CANCEL_CNT = CANCEL_CNT + 1,
+                CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
+                MOD_DT = NOW()
+        `, [custId]);
 
         await connection.commit();
-        res.status(200).json({ 
-            success: true, 
-            message: `예약이 성공적으로 취소되었습니다. (${cancelRole === 'DRIVER' ? '기사 취소' : '고객 취소'})`,
-            status: targetStatus 
-        });
+        res.status(200).json({ success: true, message: '예약 취소가 성공적으로 처리되었습니다.' });
 
     } catch (error) {
         if (connection) await connection.rollback();
-        console.error('Cancel Reservation Error:', error);
-        res.status(500).json({ error: '예약 취소 처리 중 오류가 발생했습니다.' });
+        console.error('Complex Cancel Error:', error);
+        res.status(500).json({ error: '취소 처리 중 시스템 오류가 발생했습니다.' });
     } finally {
         if (connection) connection.release();
     }
@@ -1677,6 +1757,197 @@ app.post('/api/auction/cancel-reservation', async (req, res) => {
 
 // API: 예약 확정 처리 (지금 예약하기)
 // POST /api/auction/confirm
+
+// 버스 변경 API (POST /api/auction/bus-change)
+
+// 버스 재등록 API (변경 후 새로운 버스 추가)
+app.post('/api/auction/re-register-bus', async (req, res) => {
+    let connection;
+    try {
+        const { reqId, vehicles } = req.body;
+        
+        if (!reqId || !vehicles || !Array.isArray(vehicles) || vehicles.length === 0) {
+            return res.status(400).json({ error: 'reqId and vehicles array are required' });
+        }
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        // 1. 기존 버스 상태 확인 및 요청 존재 여부 체크
+        const [reqRows] = await connection.execute(
+            'SELECT DATA_STAT FROM TB_AUCTION_REQ WHERE REQ_ID = ? FOR UPDATE',
+            [reqId]
+        );
+
+        if (reqRows.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ error: '해당 예약 요청을 찾을 수 없습니다.' });
+        }
+
+        // 2. 새로운 버스들 등록 (TB_AUCTION_REQ_BUS)
+        for (const bus of vehicles) {
+            // 시퀀스 번호 따기 (현재 최대값 + 1)
+            const [seqRows] = await connection.execute(
+                'SELECT IFNULL(MAX(REQ_BUS_SEQ), 0) + 1 as nextSeq FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ?',
+                [reqId]
+            );
+            const nextSeq = seqRows[0].nextSeq;
+
+            await connection.execute(
+                `INSERT INTO TB_AUCTION_REQ_BUS 
+                (REQ_ID, REQ_BUS_SEQ, BUS_TYPE_CD, DATA_STAT, RES_BUS_AMT, REG_ID) 
+                VALUES (?, ?, ?, 'AUCTION', ?, ?)`,
+                [reqId, nextSeq, bus.type, bus.price, 'SYSTEM']
+            );
+        }
+
+        // 3. 새로운 버스들의 총 금액 합산
+        const totalNewAmt = vehicles.reduce((sum, v) => sum + (Number(v.price) * (Number(v.qty) || 1)), 0);
+
+        // 4. TB_AUCTION_REQ 상태 복구 및 금액 합산
+        const [reRegUpdate] = await connection.execute(
+            "UPDATE TB_AUCTION_REQ SET DATA_STAT = 'AUCTION', REQ_AMT = REQ_AMT + ? WHERE REQ_ID = ?",
+            [totalNewAmt, reqId]
+        );
+        console.log(`[DEBUG] Master recovery (re-register): affectedRows=${reRegUpdate.affectedRows}, addedAmt=${totalNewAmt}`);
+
+        await connection.commit();
+        res.status(200).json({ message: '버스가 성공적으로 재등록되었습니다. 이제 다시 입찰을 받으실 수 있습니다.' });
+
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('Bus Re-registration Error:', error);
+        res.status(500).json({ error: '버스 재등록 처리 중 서버 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+app.post('/api/auction/bus-change', async (req, res) => {
+    let connection;
+    try {
+        const { reqId, reqBusSeq } = req.body;
+        
+        if (!reqId || !reqBusSeq) {
+            return res.status(400).json({ error: 'reqId and reqBusSeq are required' });
+        }
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        // 1. 현재 변경 횟수 확인
+        const [rows] = await connection.execute(
+            'SELECT BUS_CHANG_CNT FROM TB_AUCTION_REQ WHERE REQ_ID = ? FOR UPDATE',
+            [reqId]
+        );
+
+        if (rows.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ error: '해당 예약 요청을 찾을 수 없습니다.' });
+        }
+
+        const currentCnt = rows[0].BUS_CHANG_CNT || 0;
+        if (currentCnt >= 3) {
+            await connection.rollback();
+            return res.status(400).json({ error: '버스 변경은 최대 3회까지만 가능합니다.' });
+        }
+
+        // 2. 변경하려는 버스의 기존 금액 확인
+        const [busRows] = await connection.execute(
+            'SELECT RES_BUS_AMT FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?',
+            [reqId, reqBusSeq]
+        );
+        const oldBusAmt = busRows[0]?.RES_BUS_AMT || 0;
+
+        // 3. TB_AUCTION_REQ 업데이트 (카운트 증가, 상태 변경, 금액 차감)
+        const [masterUpdate] = await connection.execute(
+            'UPDATE TB_AUCTION_REQ SET BUS_CHANG_CNT = BUS_CHANG_CNT + 1, DATA_STAT = \'BUS_CHANGE\', REQ_AMT = REQ_AMT - ? WHERE REQ_ID = ?',
+            [oldBusAmt, reqId]
+        );
+        console.log(`[DEBUG] Master update (bus-change): affectedRows=${masterUpdate.affectedRows}, subtractedAmt=${oldBusAmt}`);
+
+        // 4. TB_AUCTION_REQ_BUS 업데이트 (상태 변경)
+        const [busUpdate] = await connection.execute(
+            'UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'BUS_CHANGE\' WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?',
+            [reqId, reqBusSeq]
+        );
+        console.log(`[DEBUG] Bus update (bus-change): affectedRows=${busUpdate.affectedRows}`);
+
+        await connection.commit();
+        res.status(200).json({ 
+            message: '버스 변경 요청이 성공적으로 처리되었습니다.',
+            newCount: currentCnt + 1 
+        });
+
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('Bus Change Error:', error);
+        res.status(500).json({ error: '버스 변경 처리 중 서버 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+app.post('/api/auction/bus-cancel', async (req, res) => {
+    let connection;
+    try {
+        const { reqId, reqBusSeq } = req.body;
+        
+        if (!reqId || !reqBusSeq) {
+            return res.status(400).json({ error: 'reqId and reqBusSeq are required' });
+        }
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        // 1. 취소하려는 버스의 금액 확인
+        const [busRows] = await connection.execute(
+            'SELECT RES_BUS_AMT, DATA_STAT FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? FOR UPDATE',
+            [reqId, reqBusSeq]
+        );
+
+        if (busRows.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ error: '해당 버스 요청을 찾을 수 없습니다.' });
+        }
+
+        const bus = busRows[0];
+        if (bus.DATA_STAT === 'BUS_CANCEL') {
+            await connection.rollback();
+            return res.status(400).json({ error: '이미 취소된 버스입니다.' });
+        }
+
+        const cancelAmt = bus.RES_BUS_AMT || 0;
+
+        // 2. TB_AUCTION_REQ 업데이트 (상태 변경 및 금액 차감)
+        const [masterUpdate] = await connection.execute(
+            'UPDATE TB_AUCTION_REQ SET DATA_STAT = \'BUS_CANCEL\', REQ_AMT = REQ_AMT - ? WHERE REQ_ID = ?',
+            [cancelAmt, reqId]
+        );
+        console.log(`[DEBUG] Master update (bus-cancel): affectedRows=${masterUpdate.affectedRows}, subtractedAmt=${cancelAmt}`);
+
+        // 3. TB_AUCTION_REQ_BUS 상태 변경
+        const [busUpdate] = await connection.execute(
+            'UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'BUS_CANCEL\' WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?',
+            [reqId, reqBusSeq]
+        );
+        console.log(`[DEBUG] Bus update (bus-cancel): affectedRows=${busUpdate.affectedRows}`);
+
+        await connection.commit();
+        res.status(200).json({ 
+            message: '버스가 성공적으로 취소되었습니다.',
+            cancelledAmt: cancelAmt
+        });
+
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('Bus Cancel Error:', error);
+        res.status(500).json({ error: '버스 취소 처리 중 서버 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
 app.post('/api/auction/confirm', async (req, res) => {
     let connection;
     try {
@@ -1745,7 +2016,6 @@ app.get('/api/auction/bids/:reqId', async (req, res) => {
                 res.DRIVER_ID,
                 res.BUS_ID,
                 res.DRIVER_BIDDING_PRICE,
-                res.BID_SEQ,
                 res.DATA_STAT as RES_STAT,
                 u.USER_NM as driverName,
                 di.BIO_DESC as driverBio,
@@ -1807,29 +2077,34 @@ app.get('/api/auction/history/:custId', async (req, res) => {
 
         connection = await pool.getConnection();
         
-        // 사용자의 모든 여정 기록 조회 (차량별로 분리하여 조회)
+        console.log(`[DEBUG] Fetching history for custId: [${custId}]`);
+        
         const query = `
             SELECT 
-                r.REQ_ID as REQ_ID_STR, 
-                ab.REQ_BUS_ID as REQ_BUS_ID_STR,
-                r.TRIP_TITLE, r.START_ADDR, r.END_ADDR, 
+                r.REQ_ID as REQ_UUID_STR, 
+                ab.REQ_BUS_SEQ as REQ_BUS_UUID_STR,
+                r.TRIP_TITLE, r.START_ADDR, r.END_ADDR, r.TRAVELER_ID,
                 r.START_DT, r.END_DT, r.PASSENGER_CNT, r.DATA_STAT, r.REG_DT,
                 ab.BUS_TYPE_CD,
                 ab.RES_BUS_AMT as UNIT_REQ_AMT,
+                ab.DATA_STAT as BUS_STAT,
                 (
                     SELECT res.DRIVER_BIDDING_PRICE 
                     FROM TB_BUS_RESERVATION res 
-                    WHERE res.REQ_ID = r.REQ_ID 
+                    WHERE res.REQ_ID COLLATE utf8mb4_0900_ai_ci = r.REQ_ID 
                       AND res.DATA_STAT IN ('CONFIRM', 'COMPLETED')
                     LIMIT 1
                 ) as FINAL_CONFIRM_AMT
             FROM TB_AUCTION_REQ r
             INNER JOIN TB_AUCTION_REQ_BUS ab ON r.REQ_ID = ab.REQ_ID
             WHERE r.TRAVELER_ID = ?
-            ORDER BY r.REG_DT DESC, ab.REQ_BUS_ID ASC
+              AND r.DATA_STAT NOT IN ('TRAVELER_CANCEL', 'BUS_CHANGE')
+              AND ab.DATA_STAT NOT IN ('BUS_CHANGE')
+            ORDER BY r.REG_DT DESC, ab.REQ_BUS_SEQ ASC
         `;
 
         const [rows] = await connection.execute(query, [custId]);
+        console.log(`[DEBUG] History rows found: ${rows.length}`);
         res.status(200).json(rows);
 
     } catch (error) {
@@ -1854,7 +2129,6 @@ app.get('/api/auction/bid-detail/:bidId', async (req, res) => {
             SELECT 
                 res.RES_ID as bidId,
                 res.DRIVER_BIDDING_PRICE as bidPrice,
-                res.BID_SEQ as bidSeq,
                 res.DRIVER_ID as driverId,
                 u.USER_NM as driverName,
                 di.BIO_DESC as driverBio,
@@ -3190,6 +3464,24 @@ app.use('/api/user/device-token', createUserDeviceTokenRouter(pool));
     } finally {
         if (connection) connection.release();
     }
+
+// API: 공통 코드 조회
+app.get('/api/common/codes/:grpCd', async (req, res) => {
+    try {
+        const { grpCd } = req.params;
+        const [rows] = await pool.execute(`
+            SELECT GRP_CD, DTL_CD, CD_NM_KO AS DTL_NM, CD_DESC, DISP_ORD AS SORT_SEQ 
+            FROM TB_COMMON_CODE 
+            WHERE GRP_CD = ? 
+            AND USE_YN = 'Y' 
+            ORDER BY DISP_ORD ASC
+        `, [grpCd]);
+        res.json(rows);
+    } catch (error) {
+        console.error('Fetch Codes Error:', error);
+        res.status(500).json({ error: '코드 조회 중 오류가 발생했습니다.' });
+    }
+});
 
     app.listen(PORT, () => {
         console.log(`🚀 busTaams REST API Server is running beautifully on http://localhost:${PORT}`);

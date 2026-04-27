@@ -74,30 +74,11 @@ async function fetchCancelManageForUser(pool, user) {
             );
             if (row) return row;
         } catch (e) {
-            if (e.code !== 'ER_BAD_FIELD_ERROR' && e.errno !== 1054) {
-                if (e.code === 'ER_NO_SUCH_TABLE') return null;
-                throw e;
+            // CUST_ID 컬럼이 없는 구형 스키마 대응 (필요 시)
+            if (e.code === 'ER_BAD_FIELD_ERROR' || e.errno === 1054) {
+                // 운영 환경이 CUST_ID 체계이므로 여기서는 더 이상 USER_ID로 시도하지 않고 종료
+                return null;
             }
-        }
-        try {
-            const row = await tryQ(
-                `SELECT ${cols} FROM TB_USER_CANCEL_MANAGE WHERE USER_ID = ? LIMIT 1`,
-                [cust]
-            );
-            if (row) return row;
-        } catch (e) {
-            if (e.code === 'ER_NO_SUCH_TABLE') return null;
-            throw e;
-        }
-    }
-    if (loginId) {
-        try {
-            const row = await tryQ(
-                `SELECT ${cols} FROM TB_USER_CANCEL_MANAGE WHERE USER_ID = ? LIMIT 1`,
-                [loginId]
-            );
-            if (row) return row;
-        } catch (e) {
             if (e.code === 'ER_NO_SUCH_TABLE') return null;
             throw e;
         }

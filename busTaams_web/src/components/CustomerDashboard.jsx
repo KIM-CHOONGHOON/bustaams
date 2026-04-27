@@ -9,7 +9,8 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
 
   useEffect(() => {
     if (user && user.custId) {
-      fetch(`http://localhost:8080/api/auction/user/${user.custId}`)
+      const apiPath = `/api/auction/user/${encodeURIComponent(user.custId)}`;
+      fetch(apiPath)
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) {
@@ -47,9 +48,9 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
     const getVehicleLabel = (type) => {
       if (!type) return '';
       const map = {
-        'STANDARD_28': '일반 고속 (45인승)', // 기존 데이터 매핑 오류 대응
+        'STANDARD_28': '일반 고속 (28인승)',
         'STANDARD_45': '일반 고속 (45인승)',
-        'PREMIUM_45': '우등 고속 (28인승)',  // 기존 데이터 매핑 오류 대응
+        'PREMIUM_45': '우등 고속 (45인승)',
         'PREMIUM_28': '우등 고속 (28인승)',
         'GOLD_21': '프리미엄 골드 (21인승)',
         'VVIP_16': 'V-VIP (16인승)',
@@ -59,18 +60,23 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
       return map[type] || type;
     };
     
-    // api/auction/user/ 로 받아오는 경우 BUS_TYPE_CD, REQ_BUS_CNT 가 바로 존재할 수 있습니다.
-    if (req.BUS_TYPE_CD) {
-       return `${req.PASSENGER_CNT}명 (${getVehicleLabel(req.BUS_TYPE_CD)} ${req.REQ_BUS_CNT || 1}대)`;
+    // [수정] 서버 API 필드명 대응 (ALL_BUS_TYPES, TOTAL_BUS_CNT)
+    if (req.ALL_BUS_TYPES) {
+      // "TYPE:PRICE,TYPE:PRICE" 형식을 파싱
+      const rawTypes = req.ALL_BUS_TYPES.split(',');
+      const typesOnly = rawTypes.map(item => item.split(':')[0]);
+      const uniqueTypes = [...new Set(typesOnly)];
+      const typeLabel = uniqueTypes.map(t => getVehicleLabel(t)).join(', ');
+      return `${typeLabel} ${req.TOTAL_BUS_CNT || 1}대`;
     }
 
-    if (!req.vehicles || req.vehicles.length === 0) return `${req.PASSENGER_CNT || 0}명`;
+    if (!req.vehicles || req.vehicles.length === 0) return '차량 정보 없음';
     
     const vehicleStr = req.vehicles
-      .map(v => `${getVehicleLabel(v.BUS_TYPE_CD)} ${v.REQ_BUS_CNT}대`)
+      .map(v => `${getVehicleLabel(v.BUS_TYPE_CD || v.busTypeCd)} ${v.REQ_BUS_CNT || v.qty}대`)
       .join(', ');
     
-    return `${req.PASSENGER_CNT}명 (${vehicleStr})`;
+    return vehicleStr;
   };
 
   return (
@@ -82,198 +88,229 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
       */}
       
       <main className="max-w-[1440px] mx-auto px-8 py-12">
-        {/* Hero Section: Active Requests */}
-        <section className="mb-16 space-y-6">
+        {/* Hero Section: Active Requests — Editorial High-End Approach */}
+        <section className="mb-20 relative">
           {recentRequests.length === 0 ? (
-             <div className="hero-gradient rounded-3xl p-12 text-white flex flex-col items-center justify-center relative overflow-hidden tonal-stacking text-center">
-               <h1 className="text-3xl font-headline font-extrabold mb-4 mt-8">현재 진행 중인 요청이 없습니다.</h1>
-               <p className="text-primary-fixed mb-8">새로운 여정을 등록하고 최적의 견적을 받아보세요.</p>
-             </div>
+            <div className="bg-surface-container-low rounded-[3rem] p-20 text-center flex flex-col items-center justify-center min-h-[500px] border border-outline-variant/5 shadow-inner">
+              <div className="w-24 h-24 bg-surface-container-lowest rounded-full flex items-center justify-center mb-8 shadow-sm">
+                <span className="material-symbols-outlined text-5xl text-primary/30">explore</span>
+              </div>
+              <h1 className="text-4xl font-headline font-extrabold text-teal-950 mb-4 tracking-tighter italic">새로운 여정을 시작해 보세요</h1>
+              <p className="text-outline max-w-md text-lg leading-relaxed">아직 등록된 견적 요청이 없습니다.<br/>지금 바로 최적의 프리미엄 버스를 예약해 보세요.</p>
+              <button 
+                onClick={() => {
+                  const cancelCnt = user?.cancelManage?.cancelTravelerAllCnt || 0;
+                  if (cancelCnt >= 3) {
+                    alert(`안내: 취소 건수가 ${cancelCnt}회 누적되어, 새로운 여행 등록을 하실 수 없습니다.`);
+                    return;
+                  }
+                  onBusRegister();
+                }}
+                className="mt-10 bg-primary text-white px-10 py-4 rounded-full font-bold shadow-lg hover:scale-105 transition-transform flex items-center gap-3"
+              >
+                <span className="material-symbols-outlined">add_circle</span>
+                버스 예약하기
+              </button>
+            </div>
           ) : (
-            recentRequests.map((req, idx) => {
-              const startAddrDisplay = trimAddress(req.VIA_START_ADDR || req.START_ADDR) || '출발지 미정';
-              const endAddrDisplay = trimAddress(req.VIA_END_ADDR || req.END_ADDR) || '도착지 미정';
-              const tripTitleDisplay = req.TRIP_TITLE || '대형 전세버스 패키지';
-              const startDtDisplay = formatDate(req.START_DT) || '2024년 10월 24일 09:00';
-              const passengerCntDisplay = getVehicleDisplay(req);
+            <div className="space-y-12">
+              {recentRequests.map((req, idx) => {
+                const startAddrDisplay = trimAddress(req.VIA_START_ADDR || req.START_ADDR) || '출발지 미정';
+                const endAddrDisplay = trimAddress(req.VIA_END_ADDR || req.END_ADDR) || '도착지 미정';
+                const tripTitleDisplay = req.TRIP_TITLE || '대형 전세버스 패키지';
+                const startDtDisplay = formatDate(req.START_DT);
+                const isActive = selectedRequestId === req.REQ_ID;
 
-              return (
-                <div key={req.REQ_ID || idx} className="hero-gradient rounded-3xl p-12 text-white flex flex-col md:flex-row items-center justify-between relative overflow-hidden tonal-stacking">
-                  <div className="relative z-10 max-w-2xl pt-4">
-                    <h1 className="text-5xl font-headline font-extrabold mb-8 leading-tight tracking-tighter">
-                      {startAddrDisplay} → {endAddrDisplay}<br/>
-                      <span className="text-primary-fixed">{tripTitleDisplay}</span>
-                    </h1>
-                    <div className="grid grid-cols-2 gap-8 mb-10">
-                      <div>
-                        <p className="text-primary-fixed/60 text-xs uppercase font-bold tracking-widest mb-1">출발 일시</p>
-                        <p className="text-xl font-semibold">{startDtDisplay}</p>
+                return (
+                  <div 
+                    key={req.REQ_ID || idx} 
+                    className={`relative overflow-hidden rounded-[3.5rem] transition-all duration-700 ${
+                      isActive 
+                        ? 'bg-teal-950 text-white min-h-[600px] shadow-2xl scale-[1.02]' 
+                        : 'bg-surface-container-low text-on-surface min-h-[480px] shadow-sm hover:shadow-xl'
+                    }`}
+                  >
+                    {/* Background Decorative Element */}
+                    <div className={`absolute top-[-10%] right-[-10%] w-[800px] h-[800px] rounded-full blur-[120px] transition-all duration-1000 ${
+                      isActive ? 'bg-primary/20 opacity-100' : 'bg-primary/5 opacity-0'
+                    }`} />
+
+                    <div className="relative z-10 p-16 flex flex-col lg:flex-row items-center justify-between h-full gap-12">
+                      <div className="flex-1 space-y-10">
+                        <header className="space-y-4">
+                          <div className="flex items-center gap-4">
+                            <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] ${
+                              isActive ? 'bg-primary text-white' : 'bg-primary-container/20 text-primary'
+                            }`}>
+                              {req.DATA_STAT === 'AUCTION' ? '입찰중' : 
+                               req.DATA_STAT === 'BIDDING' ? '견적중' : 
+                               req.DATA_STAT === 'CONFIRM' ? '예약확정' : 
+                               req.DATA_STAT === 'BUS_CANCEL' ? '버스취소' : 
+                               req.DATA_STAT || '진행중'}
+                            </span>
+                          </div>
+                          <h1 className="text-6xl font-headline font-black leading-[1.1] tracking-tight mb-4">
+                            {req.START_ADDR_CITY || startAddrDisplay} 
+                            <span className="material-symbols-outlined text-4xl align-middle mx-4 text-outline/30">arrow_forward</span>
+                            {req.END_ADDR_CITY || endAddrDisplay}
+                          </h1>
+                          <p className={`text-xl font-medium mt-2 mb-10 ${isActive ? 'text-white/70' : 'text-outline/80'}`}>
+                            {tripTitleDisplay}
+                          </p>
+                        </header>
+
+                        <div className="grid grid-cols-2 gap-12 max-w-xl">
+                          <div className="space-y-2">
+                            <p className={`text-[10px] font-black uppercase tracking-[0.2em] ${isActive ? 'text-white/40' : 'text-outline/60'}`}>출발 일시</p>
+                            <p className="text-xl font-bold font-headline">{startDtDisplay}</p>
+                          </div>
+                          <div className="space-y-2">
+                             <p className={`text-[10px] font-black uppercase tracking-[0.2em] ${isActive ? 'text-white/40' : 'text-outline/60'}`}>차량 정보</p>
+                            <p className="text-xl font-bold font-headline">{getVehicleDisplay(req)}</p>
+                          </div>
+                        </div>
+
+                        <div className="pt-4 flex gap-4">
+                          <button 
+                            onClick={() => setSelectedRequestId(isActive ? null : req.REQ_ID)}
+                            className={`px-10 py-5 rounded-full font-bold transition-all duration-300 flex items-center gap-3 ${
+                              isActive 
+                                ? 'bg-white text-teal-950 hover:bg-primary-container hover:text-white' 
+                                : 'bg-primary text-white shadow-lg hover:shadow-primary/20 hover:-translate-y-1'
+                            }`}
+                          >
+                            <span className="material-symbols-outlined">{isActive ? 'close' : 'receipt_long'}</span>
+                            {isActive ? '상세 정보 닫기' : '견적서 상세보기'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Asymmetric Visual Element */}
+                      <div className="relative w-full lg:w-[45%] h-[400px] group">
+                        <div className={`absolute inset-0 bg-gradient-to-tr from-primary/20 to-transparent rounded-[3rem] transition-opacity duration-700 ${isActive ? 'opacity-100' : 'opacity-0'}`} />
+                        <img 
+                          alt="Premium Bus" 
+                          className={`w-full h-full object-contain transition-all duration-1000 ${
+                            isActive ? 'scale-125 rotate-[-5deg] drop-shadow-[0_35px_35px_rgba(0,0,0,0.5)]' : 'scale-100 opacity-80 group-hover:scale-110'
+                          }`} 
+                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnB-qy8bgCj68b05tkEWLpYiY4ZwW78YbL6_ihG9UV2iKi91YT8DInWGGQPzO8hqj_oE3V7tLKiRBDwtBsvZd0IEjssiPTCBonMM8MLCDhEVK1aQRkjr7oF3QPUpb2SQ4BGc4OCC3xmZM6w9wz-9r2AVBOidU8Zqt-f9oLAlKp17FRpveMs5Pmt7QZ6vF-vhEMPIk4SjEUJQFSe4wCMRy5_3l8fE36gm_83HigLyeQTf8DRLh2vFSnxs0i8uMGZXQpU_B3bH6Rweo" 
+                        />
                       </div>
                     </div>
                   </div>
-                  <button 
-                    className={`hidden lg:block absolute right-[-10%] bottom-[-20%] w-[600px] h-[600px] transition-all duration-300 group/btn cursor-pointer ${selectedRequestId === req.REQ_ID ? 'opacity-100 z-20' : 'opacity-40 hover:opacity-80 z-10'}`}
-                    onClick={() => setSelectedRequestId(req.REQ_ID === selectedRequestId ? null : req.REQ_ID)}
-                  >
-                    <img 
-                      alt="Premium Bus" 
-                      className={`w-full h-full object-contain transition-transform duration-700 ${selectedRequestId === req.REQ_ID ? 'scale-110 drop-shadow-2xl' : 'group-hover/btn:scale-105 drop-shadow-lg'}`} 
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnB-qy8bgCj68b05tkEWLpYiY4ZwW78YbL6_ihG9UV2iKi91YT8DInWGGQPzO8hqj_oE3V7tLKiRBDwtBsvZd0IEjssiPTCBonMM8MLCDhEVK1aQRkjr7oF3QPUpb2SQ4BGc4OCC3xmZM6w9wz-9r2AVBOidU8Zqt-f9oLAlKp17FRpveMs5Pmt7QZ6vF-vhEMPIk4SjEUJQFSe4wCMRy5_3l8fE36gm_83HigLyeQTf8DRLh2vFSnxs0i8uMGZXQpU_B3bH6Rweo" 
-                    />
-                    <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${selectedRequestId === req.REQ_ID ? 'opacity-100' : 'opacity-0 group-hover/btn:opacity-100'}`}>
-                      <span className={`font-bold px-6 py-3 rounded-full shadow-lg transition-all duration-300 flex items-center gap-2 ${selectedRequestId === req.REQ_ID ? 'bg-primary text-white scale-110' : 'bg-white text-primary transform translate-y-4 group-hover/btn:translate-y-0'}`}>
-                        <span className="material-symbols-outlined">
-                          {selectedRequestId === req.REQ_ID ? 'check_circle' : 'receipt_long'}
-                        </span>
-                        {selectedRequestId === req.REQ_ID ? '열기' : '견적서 상세'}
-                      </span>
-                    </div>
-                  </button>
-                </div>
-              );
-            })
+                );
+              })}
+            </div>
           )}
         </section>
 
-        {/* Middle Section: Service Grid */}
+        {/* Middle Section: Service Grid — Radiant Traveler 스타일 적용 */}
         <section className="mb-24">
-          <h3 className="font-headline text-3xl font-extrabold text-teal-900 mb-10 tracking-tight">주요 서비스</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-            {/* Register Bus */}
-            <div 
-              onClick={onBusRegister}
-              className="bg-surface-container-lowest p-8 rounded-2xl tonal-stacking flex flex-col items-center text-center group cursor-pointer hover:bg-primary hover:text-on-primary transition-all duration-300 no-line-rule"
-            >
-              <div className="w-14 h-14 bg-surface-container-high rounded-full flex items-center justify-center mb-6 group-hover:bg-primary-container">
-                <span className="material-symbols-outlined text-primary group-hover:text-on-primary-container">directions_bus</span>
+          <header className="mb-12">
+            <span className="text-secondary font-bold tracking-[0.2em] uppercase text-xs mb-3 block">Elevated Travel</span>
+            <h3 className="font-headline text-4xl font-extrabold text-teal-900 tracking-tight italic">주요 서비스</h3>
+          </header>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8">
+            {[
+              { id: 'onBusRegister',       icon: 'directions_bus',   label: '여행버스 예약 등록', action: onBusRegister },
+              { id: 'onViewReservationList', icon: 'event_available', label: '예약 목록 조회',     action: onViewReservationList },
+              { id: 'onViewConfirmedList',   icon: 'task_alt',         label: '확정 예약 목록',     action: onViewConfirmedList },
+              { id: 'onShowTripHistory',     icon: 'history',          label: '이용 내역 확인',     action: () => setShowTripHistory(true) },
+              { id: 'onReviewManage',        icon: 'rate_review',      label: '리뷰 관리',          action: null },
+              { id: 'onOpenLiveChat',        icon: 'forum',            label: '실시간 채팅',        action: onOpenLiveChat },
+            ].map((srv) => (
+              <div 
+                key={srv.id}
+                onClick={() => {
+                  if (srv.id === 'onBusRegister') {
+                    const cancelCnt = user?.cancelManage?.cancelTravelerAllCnt || 0;
+                    if (cancelCnt >= 3) {
+                      alert(`안내: 취소 건수가 ${cancelCnt}회 누적되어, 새로운 여행 등록을 하실 수 없습니다.`);
+                      return;
+                    }
+                  }
+                  srv.action?.();
+                }}
+                className="bg-surface-container-low p-8 rounded-[2rem] flex flex-col items-center text-center group cursor-pointer hover:bg-primary transition-all duration-500 shadow-sm hover:shadow-xl hover:-translate-y-2 no-line-rule"
+              >
+                <div className="w-16 h-16 bg-surface-container-lowest rounded-2xl flex items-center justify-center mb-6 group-hover:bg-primary-container transition-colors duration-500 shadow-inner">
+                  <span className="material-symbols-outlined text-3xl text-primary group-hover:text-on-primary-container">{srv.icon}</span>
+                </div>
+                <span className="font-bold text-sm tracking-tight group-hover:text-white transition-colors duration-500">{srv.label}</span>
               </div>
-              <span className="font-bold text-sm">여행버스 예약 등록</span>
-            </div>
-            {/* Reservation List (Moved to 2nd position) */}
-            <div 
-              onClick={onViewReservationList}
-              className="bg-surface-container-lowest p-8 rounded-2xl tonal-stacking flex flex-col items-center text-center group cursor-pointer hover:bg-primary hover:text-on-primary transition-all duration-300 no-line-rule"
-            >
-              <div className="w-14 h-14 bg-surface-container-high rounded-full flex items-center justify-center mb-6 group-hover:bg-primary-container">
-                <span className="material-symbols-outlined text-primary group-hover:text-on-primary-container">event_available</span>
-              </div>
-              <span className="font-bold text-sm">예약 목록</span>
-            </div>
-            {/* Trip History (Moved to 4th position or similar) */}
-            <div 
-              onClick={onViewConfirmedList}
-              className="bg-surface-container-lowest p-8 rounded-2xl tonal-stacking flex flex-col items-center text-center group cursor-pointer hover:bg-primary hover:text-on-primary transition-all duration-300 no-line-rule"
-            >
-              <div className="w-14 h-14 bg-surface-container-high rounded-full flex items-center justify-center mb-6 group-hover:bg-primary-container">
-                <span className="material-symbols-outlined text-primary group-hover:text-on-primary-container">task_alt</span>
-              </div>
-              <span className="font-bold text-sm">확정 예약 목록</span>
-            </div>
-            {/* Trip History */}
-            <div 
-              onClick={() => setShowTripHistory(true)}
-              className="bg-surface-container-lowest p-8 rounded-2xl tonal-stacking flex flex-col items-center text-center group cursor-pointer hover:bg-primary hover:text-on-primary transition-all duration-300 no-line-rule"
-            >
-              <div className="w-14 h-14 bg-surface-container-high rounded-full flex items-center justify-center mb-6 group-hover:bg-primary-container">
-                <span className="material-symbols-outlined text-primary group-hover:text-on-primary-container">history</span>
-              </div>
-              <span className="font-bold text-sm">이용 내역</span>
-            </div>
-            {/* Reviews */}
-            <div className="bg-surface-container-lowest p-8 rounded-2xl tonal-stacking flex flex-col items-center text-center group cursor-pointer hover:bg-primary hover:text-on-primary transition-all duration-300 no-line-rule">
-              <div className="w-14 h-14 bg-surface-container-high rounded-full flex items-center justify-center mb-6 group-hover:bg-primary-container">
-                <span className="material-symbols-outlined text-primary group-hover:text-on-primary-container">rate_review</span>
-              </div>
-              <span className="font-bold text-sm">리뷰 관리</span>
-            </div>
-            {/* 실시간 채팅 (기사와 동일 견적 스레드) */}
-            <div
-              onClick={() => onOpenLiveChat?.()}
-              className="bg-surface-container-lowest p-8 rounded-2xl tonal-stacking flex flex-col items-center text-center group cursor-pointer hover:bg-primary hover:text-on-primary transition-all duration-300 no-line-rule"
-            >
-              <div className="w-14 h-14 bg-surface-container-high rounded-full flex items-center justify-center mb-6 group-hover:bg-primary-container">
-                <span className="material-symbols-outlined text-primary group-hover:text-on-primary-container">chat</span>
-              </div>
-              <span className="font-bold text-sm">실시간 채팅</span>
-            </div>
-            {/* Member Info */}
-            <div 
-              onClick={() => setShowAccountSettings(true)}
-              className="bg-surface-container-lowest p-8 rounded-2xl tonal-stacking flex flex-col items-center text-center group cursor-pointer hover:bg-primary hover:text-on-primary transition-all duration-300 no-line-rule"
-            >
-              <div className="w-14 h-14 bg-surface-container-high rounded-full flex items-center justify-center mb-6 group-hover:bg-primary-container">
-                <span className="material-symbols-outlined text-primary group-hover:text-on-primary-container">person</span>
-              </div>
-              <span className="font-bold text-sm">회원 정보</span>
-            </div>
+            ))}
           </div>
         </section>
 
-        {/* Bottom Section: Recommended Banners */}
-        <section>
-          <h3 className="font-headline text-3xl font-extrabold text-teal-900 mb-10 tracking-tight">추천 서비스</h3>
+        {/* Bottom Section: Recommended Banners — Immersive Design */}
+        <section className="mb-32">
+          <header className="mb-12">
+            <span className="text-secondary font-bold tracking-[0.2em] uppercase text-xs mb-3 block">Specially Curated</span>
+            <h3 className="font-headline text-4xl font-extrabold text-teal-900 tracking-tight italic">추천 서비스</h3>
+          </header>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
             {/* Banner 1 */}
-            <div className="group relative h-[450px] rounded-3xl overflow-hidden tonal-stacking cursor-pointer">
+            <div className="group relative h-[500px] rounded-[3.5rem] overflow-hidden tonal-stacking cursor-pointer shadow-xl transition-all duration-700 hover:-translate-y-2">
               <img 
                 alt="VIP Service" 
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                className="w-full h-full object-cover transition-transform duration-[1.5s] group-hover:scale-110" 
                 src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZ8ns1S5rBu3lNocUMReeJvuLjuv8XE2XFY_2gQGdDmos2bcCnUZ1vn7GWHkvlxG0IR08q-9KMxVNQ8eBmst0OU1F2kcXcJ9hF59lNu3qQMTIs0Ums7QAgnI8MaYcny1xxg8Vy3qvz12i09bLRdqm-iT8bV7fr7s2Vs1xOjvPKhdgRoWwmJuyEK8H_taMIVSobYKbJpsXCRFr6mzxh_e6LxhDfSu4lByBfYRJ3Ju5Bb0g1-Z3UEKWTxUvuhO1IIfKW7brDB5YyBKA" 
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-teal-950/90 via-teal-900/20 to-transparent p-12 flex flex-col justify-end">
-                <p className="text-primary-fixed font-bold tracking-widest text-xs uppercase mb-4">VIP 컨시어지</p>
-                <h4 className="text-white text-4xl font-headline font-bold mb-6 leading-tight">의전 및 기업 행사 전용<br/>프리미엄 라운지 서비스</h4>
-                <div className="w-12 h-1 bg-secondary transition-all duration-300 group-hover:w-24"></div>
+              <div className="absolute inset-0 bg-gradient-to-t from-teal-950 via-teal-900/40 to-transparent p-16 flex flex-col justify-end">
+                <p className="text-primary-fixed font-black tracking-[0.3em] text-[10px] uppercase mb-4 opacity-80">VIP Concierge</p>
+                <h4 className="text-white text-4xl font-headline font-black mb-8 leading-[1.2] tracking-tighter">의전 및 기업 행사 전용<br/>프리미엄 라운지 서비스</h4>
+                <div className="w-16 h-1.5 bg-primary transition-all duration-500 group-hover:w-32 rounded-full"></div>
               </div>
             </div>
             {/* Banner 2 */}
-            <div className="group relative h-[450px] rounded-3xl overflow-hidden tonal-stacking cursor-pointer">
+            <div className="group relative h-[500px] rounded-[3.5rem] overflow-hidden tonal-stacking cursor-pointer shadow-xl transition-all duration-700 hover:-translate-y-2">
               <img 
                 alt="Group Travel" 
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                className="w-full h-full object-cover transition-transform duration-[1.5s] group-hover:scale-110" 
                 src="https://lh3.googleusercontent.com/aida-public/AB6AXuCegHMQz24j1T0iMs83q3v5FRDlxeQcpigVdcybtaYznVi4igtArIBtwG-ecXg8_FK3rfLdthmpK4iCXjWYz0kH-KFKZfR2-a1xcqIB_Zq0R1C6dFjhcK6BuDIqOlw0zwAlnbGKiptNWnH7F5ZTgf4wb4aAS1lTyzWRNRJ79EfqcKzfYXOw_S5urwh7Rhcq22bijvlBfF1Oi3HG2DYE30vnOBqbE0aUP644NnlEcIYXT0raVl96CVKPKz9vQNJrsBn1AAdMlj5alpU" 
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-teal-950/90 via-teal-900/20 to-transparent p-12 flex flex-col justify-end">
-                <p className="text-primary-fixed font-bold tracking-widest text-xs uppercase mb-4">단체 패키지</p>
-                <h4 className="text-white text-4xl font-headline font-bold mb-6 leading-tight">단체 관광 및 워크숍<br/>맞춤형 올인원 패키지</h4>
-                <div className="w-12 h-1 bg-secondary transition-all duration-300 group-hover:w-24"></div>
+              <div className="absolute inset-0 bg-gradient-to-t from-teal-950 via-teal-900/40 to-transparent p-16 flex flex-col justify-end">
+                <p className="text-primary-fixed font-black tracking-[0.3em] text-[10px] uppercase mb-4 opacity-80">Group Package</p>
+                <h4 className="text-white text-4xl font-headline font-black mb-8 leading-[1.2] tracking-tighter">단체 관광 및 워크숍<br/>맞춤형 올인원 패키지</h4>
+                <div className="w-16 h-1.5 bg-primary transition-all duration-500 group-hover:w-32 rounded-full"></div>
               </div>
             </div>
           </div>
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-slate-200/50 w-full py-16 mt-32">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 px-12 max-w-[1440px] mx-auto">
-          <div className="space-y-6">
-            <div className="text-xl font-bold text-teal-800 font-headline italic">busTaams</div>
-            <p className="text-slate-400 text-xs leading-relaxed max-w-xs">국내 최대 규모의 버스 입찰 플랫폼으로, 투명하고 효율적인 예약 경험을 제공합니다.</p>
+      {/* Footer — Radiant Traveler Theme */}
+      <footer className="bg-white border-t border-slate-100 w-full py-24 mt-40">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-16 px-12 max-w-[1440px] mx-auto">
+          <div className="space-y-8">
+            <div className="text-3xl font-black text-primary font-headline italic tracking-tighter">busTaams</div>
+            <p className="text-slate-400 text-sm leading-relaxed max-w-xs font-medium">
+              국내 최대 규모의 프리미엄 버스 예약 플랫폼.<br/>격이 다른 여행의 시작, busTaams와 함께하세요.
+            </p>
           </div>
           <div>
-            <h5 className="text-xs uppercase tracking-widest font-bold text-teal-700 mb-6">서비스</h5>
-            <ul className="space-y-4 text-xs uppercase tracking-widest text-slate-400">
-              <li><a className="hover:text-secondary transition-all" href="#">이용약관</a></li>
-              <li><a className="hover:text-secondary transition-all" href="#">개인정보 처리방침</a></li>
-              <li><a className="hover:text-secondary transition-all" href="#">탁송 서비스</a></li>
+            <h5 className="text-[10px] uppercase tracking-[0.3em] font-black text-teal-900 mb-8">Navigation</h5>
+            <ul className="space-y-5 text-sm font-bold text-slate-400">
+              <li><a className="hover:text-primary transition-all flex items-center gap-2" href="#"><span className="w-1 h-1 rounded-full bg-primary/20"></span>이용약관</a></li>
+              <li><a className="hover:text-primary transition-all flex items-center gap-2" href="#"><span className="w-1 h-1 rounded-full bg-primary/20"></span>개인정보 처리방침</a></li>
+              <li><a className="hover:text-primary transition-all flex items-center gap-2" href="#"><span className="w-1 h-1 rounded-full bg-primary/20"></span>기업 제휴 문의</a></li>
             </ul>
           </div>
           <div>
-            <h5 className="text-xs uppercase tracking-widest font-bold text-teal-700 mb-6">고객 지원</h5>
-            <ul className="space-y-4 text-xs uppercase tracking-widest text-slate-400">
-              <li><a className="hover:text-secondary transition-all" href="#">고객센터 문의</a></li>
-              <li><a className="hover:text-secondary transition-all" href="#">프레스 킷</a></li>
+            <h5 className="text-[10px] uppercase tracking-[0.3em] font-black text-teal-900 mb-8">Support</h5>
+            <ul className="space-y-5 text-sm font-bold text-slate-400">
+              <li><a className="hover:text-primary transition-all flex items-center gap-2" href="#"><span className="w-1 h-1 rounded-full bg-primary/20"></span>고객센터 1588-0000</a></li>
+              <li><a className="hover:text-primary transition-all flex items-center gap-2" href="#"><span className="w-1 h-1 rounded-full bg-primary/20"></span>자주 묻는 질문</a></li>
             </ul>
           </div>
           <div className="flex flex-col justify-between">
-            <p className="text-slate-400 text-[10px] leading-relaxed">© 2024 busTaams. All rights reserved.</p>
-            <div className="flex space-x-4 mt-6">
-              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer hover:bg-primary hover:text-white transition-colors">
-                <span className="material-symbols-outlined text-lg">share</span>
-              </div>
-              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center cursor-pointer hover:bg-primary hover:text-white transition-colors">
-                <span className="material-symbols-outlined text-lg">mail</span>
-              </div>
+            <p className="text-slate-400 text-[10px] font-bold tracking-widest uppercase">© 2024 busTaams. Luxury Redefined.</p>
+            <div className="flex space-x-4 mt-8">
+              {[ {i: 'share', l: 'Share'}, {i: 'mail', l: 'Contact'} ].map(s => (
+                <div key={s.i} className="w-12 h-12 rounded-2xl bg-surface-container-low flex items-center justify-center cursor-pointer hover:bg-primary hover:text-white transition-all duration-300 group">
+                  <span className="material-symbols-outlined text-xl group-hover:scale-110 transition-transform">{s.i}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>

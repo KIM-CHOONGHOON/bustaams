@@ -11,6 +11,20 @@ const DetailBusRequestModal = ({ reqData, onClose }) => {
 
   if (!reqData) return null;
 
+  const getVehicleLabel = (type) => {
+    const labels = {
+      'PREMIUM_28': '우등 고속 (28석)',
+      'STANDARD_28': '우등 고속 (28석)', // 호환성 추가
+      'STANDARD_45': '일반 고속 (45석)',
+      'PREMIUM_45': '일반 고속 (45석)',  // 호환성 추가
+      'GOLD_21': '프리미엄 골드 (21석)',
+      'VVIP_16': 'V-VIP 리무진 (16석)',
+      'MINI_25': '중형 미니버스 (25석)',
+      'VAN_11': '대형 밴 (11석)'
+    };
+    return labels[type] || type;
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
     try {
@@ -21,11 +35,11 @@ const DetailBusRequestModal = ({ reqData, onClose }) => {
     }
   };
 
-  const startAddr = reqData.START_ADDR || '서울 서초구';
-  const endAddr = reqData.END_ADDR || '부산 해운대구';
-  const tripTitle = reqData.TRIP_TITLE || '대형 전세버스 패키지';
-  const startDt = formatDate(reqData.START_DT) || '2024년 10월 24일 09:00';
-  const endDt = formatDate(reqData.END_DT) || '2024년 10월 27일 18:00';
+  const startAddr = reqData.VIA_START_ADDR || reqData.START_ADDR || '출발지 미정';
+  const endAddr = reqData.VIA_END_ADDR || reqData.END_ADDR || '도착지 미정';
+  const tripTitle = reqData.TRIP_TITLE || '프리미엄 전세버스 여정';
+  const startDt = formatDate(reqData.START_DT);
+  const endDt = formatDate(reqData.END_DT);
   const passengerCnt = reqData.PASSENGER_CNT || 0;
   
   // 비용 정보 하드코딩 또는 reqData 매핑
@@ -35,7 +49,26 @@ const DetailBusRequestModal = ({ reqData, onClose }) => {
   const extra = reqAmt - baseFare - surge;
 
   // 버스 타입 처리
-  const isPremium = reqData.BUS_TYPE_CD === '우등 고속' || (reqData.vehicles && reqData.vehicles.some(v => v.BUS_TYPE_CD.includes('우등')));
+  // 버스 타입 처리 - 명칭 정규화 및 다중 타입 대응
+  const [allBuses, setAllBuses] = React.useState([]);
+
+  React.useEffect(() => {
+    if (reqData && reqData.REQ_ID) {
+      fetch(`/api/auction/req-buses/${reqData.REQ_ID}`)
+        .then(res => res.json())
+        .then(data => {
+           if (Array.isArray(data)) setAllBuses(data);
+        })
+        .catch(err => console.error('Error fetching buses:', err));
+    }
+  }, [reqData]);
+  const uniqueBusTypes = [...new Set(allBuses.map(b => getVehicleLabel(b.BUS_TYPE_CD)))];
+  const busTypeLabel = uniqueBusTypes.length > 0 ? uniqueBusTypes.join(', ') : (getVehicleLabel(reqData.BUS_TYPE_CD) || '일반 고속 (45인승)');
+  
+  const isPremium = allBuses.some(b => {
+    const t = b.BUS_TYPE_CD || '';
+    return t.includes('우등') || t.includes('PREMIUM') || t.includes('GOLD') || t.includes('VVIP') || t.includes('21') || t.includes('16') || t.includes('28');
+  }) || (reqData.BUS_TYPE_CD && (reqData.BUS_TYPE_CD.includes('우등') || reqData.BUS_TYPE_CD.includes('PREMIUM')));
 
   return (
     <div 
@@ -61,10 +94,10 @@ const DetailBusRequestModal = ({ reqData, onClose }) => {
         </div>
 
         {/* Scrollable Content */}
-        <div className="p-8 space-y-12">
+        <div className="p-8 pt-28 space-y-12">
           
           {/* 01: Journey Identity */}
-          <section>
+          <section className="mt-4">
             <span className="text-secondary font-bold uppercase tracking-widest text-[10px] mb-3 block">여정 정보</span>
             <div className="bg-surface-container-low p-6 rounded-2xl flex items-center gap-5 border border-surface-variant/20">
                <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
@@ -148,40 +181,29 @@ const DetailBusRequestModal = ({ reqData, onClose }) => {
             </div>
           </section>
 
-          {/* 04: Bus Information */}
+          {/* 04: Bus Information List */}
           <section>
-             <span className="text-secondary font-bold uppercase tracking-widest text-[10px] mb-3 block">예약 인원 및 차량</span>
-             <div className="bg-surface-container-lowest border border-surface-variant/20 p-2 rounded-3xl flex flex-col sm:flex-row gap-6 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)]">
-                 <div className="sm:w-2/5 h-40 relative overflow-hidden rounded-2xl">
-                    <img 
-                        alt="Bus Type" 
-                        className="w-full h-full object-cover" 
-                        src={isPremium 
-                            ? "https://lh3.googleusercontent.com/aida-public/AB6AXuAGncAn9mwP0CppdRcVNcRyyp7BM0Fwr-7IAo-UukujgT7dSh2z_8Ba0-8jHE15cYFNL1CW_lTPzVeSOiKP9OvIwyPH7sUwITsY_pZIwfEo8Us4ucyhl70uOHt6njBNLkODWl9T37DIWWsUWRerSxgzmhYBw7L-a45ye0ewYfPS9sY9Dj9O2wx2Q62XKSoHR7t0ol0eOTUQGqVGpnA0hqylsq4zJc6AmqSUSV_9IzmJGprI0TaVm5kP2ih028fYvHDVfAjM1oqvTLE" 
-                            : "https://lh3.googleusercontent.com/aida-public/AB6AXuAfK78k5ZUsYSniO-ql0ZmiRyc1AoDCtW69CIjw1G3fTvwXaM1WWnx61DQshz68pgzkuOrTbpW-B4_scGSd1XIdySNfhJkSxYFdvur9B5KpmX3CYtQox2eqsSZz0jRCDYbDnLr6cuy_GAOlx3wl7CJW_h2BtJGU-zroRQYQy35IvU5-eweGfcCFLRdaOkScLoUdn4B3rdiS4Mb-7xWuAHQKFhKLuIBuk654T5MMPKbt2cIwMoS1KcLILRtEGlFw4wBHN2o_oisl0go"
-                        }
-                    />
-                    <div className={`absolute top-3 left-3 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase shadow-lg ${isPremium ? 'bg-primary' : 'bg-slate-600'}`}>
-                        {isPremium ? 'Premium' : 'Standard'}
+             <span className="text-secondary font-bold uppercase tracking-widest text-[10px] mb-4 block">요청 차량 정보</span>
+             <div className="space-y-4">
+                {allBuses.map((bus, idx) => {
+                  const vehicleLabel = getVehicleLabel(bus.BUS_TYPE_CD);
+                  const price = bus.UNIT_REQ_AMT;
+                  
+                  return (
+                    <div key={idx} className="bg-white rounded-[2rem] p-8 flex items-center justify-between border border-slate-100 shadow-sm hover:shadow-md hover:border-primary/20 transition-all group/bus">
+                       <div className="flex items-center gap-6 text-left">
+                          <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 group-hover/bus:bg-primary group-hover/bus:text-white transition-all transform group-hover/bus:rotate-3">
+                             <span className="material-symbols-outlined text-2xl">commute</span>
+                          </div>
+                          <div>
+                             <p className="text-lg font-black text-on-surface tracking-tight mb-1.5">{vehicleLabel}</p>
+                             <p className="text-xs text-outline font-bold">견적가: <span className="text-primary">{price ? Number(price).toLocaleString() : '0'}원</span></p>
+                          </div>
+                       </div>
                     </div>
-                 </div>
-                 <div className="p-4 sm:p-6 sm:pl-0 flex-1 flex flex-col justify-center">
-                    <h3 className="text-xl font-bold font-headline mb-2">{reqData.BUS_TYPE_CD || (isPremium ? '우등 고속 (28인승)' : '일반 고속 (45인승)')}</h3>
-                    <p className="text-xs text-outline mb-6 leading-relaxed">{isPremium ? '넓은 좌석, 개인 모니터, USB 포트 등 최고급 편의시설 제공' : '경제적인 단체 이동, 쾌적하고 안전한 운행 환경'}</p>
-                    
-                    <div className="flex gap-8 items-center bg-surface-container-low p-4 rounded-xl">
-                        <div>
-                            <p className="text-[10px] text-outline uppercase tracking-widest font-bold mb-1">탑승 인원</p>
-                            <p className="text-base font-extrabold text-on-surface">{passengerCnt}명</p>
-                        </div>
-                        <div className="w-[1px] h-8 bg-surface-variant/50"></div>
-                        <div>
-                            <p className="text-[10px] text-outline uppercase tracking-widest font-bold mb-1">배차 대수</p>
-                            <p className="text-base font-extrabold text-on-surface">{reqData.REQ_BUS_CNT || 1}대</p>
-                        </div>
-                    </div>
-                 </div>
-             </div>
+                  );
+                })}
+              </div>
           </section>
 
         </div>

@@ -276,9 +276,19 @@ function LoginModal({ close, onLoginSuccess, setCurrentView }) {
       const result = await response.json();
 
       if (response.ok) {
-        setMessage({ text: `${result.user.userName}님, 환영합니다!`, type: 'success' });
+        const loggedInUser = result.user;
+        const cancelData = loggedInUser.cancelManage || {};
+        
+        // [페널티 체크] 취소 건수가 3회 이상인 경우 경고 메시지 출력
+        if (loggedInUser.userType === 'TRAVELER' && cancelData.cancelTravelerAllCnt >= 3) {
+          alert(`안내: ${loggedInUser.userName}님은 취소 건수가 ${cancelData.cancelTravelerAllCnt}회 누적되어, 현재 더 이상의 신규 여행 등록을 할 수 없습니다.`);
+        } else if (loggedInUser.userType === 'DRIVER' && cancelData.cancelBusDriverCnt >= 3) {
+          alert(`안내: ${loggedInUser.userName}님은 취소 건수가 ${cancelData.cancelBusDriverCnt}회 누적되어, 현재 더 이상의 버스 입찰에 참여할 수 없습니다.`);
+        }
+
+        setMessage({ text: `${loggedInUser.userName}님, 환영합니다!`, type: 'success' });
         setTimeout(() => {
-          onLoginSuccess(result.user);
+          onLoginSuccess(loggedInUser);
           close();
         }, 1500);
       } else {
@@ -760,6 +770,7 @@ function App() {
   const [showBusRegisterModal, setShowBusRegisterModal] = React.useState(false);
   const [showLiveChatTraveler, setShowLiveChatTraveler] = React.useState(false);
   const [showReservationListModal, setShowReservationListModal] = React.useState(false);
+  const [showConfirmedListModal, setShowConfirmedListModal] = React.useState(false);
   const [dashboardRefreshKey, setDashboardRefreshKey] = React.useState(0);
 
   // Load user from localStorage on mount
@@ -799,7 +810,9 @@ function App() {
     setShowBusInfoModal(false);
     setShowProfileSetupModal(false);
     setTravelerQuoteReqId(null);
+    setTravelerQuoteReqId(null);
     setShowLiveChatTraveler(false);
+    setShowConfirmedListModal(false);
     setCurrentView('home');
     if (user?.userType === 'DRIVER') {
       setDriverView('dashboard');
@@ -839,19 +852,15 @@ function App() {
             }} />
           ) : currentView === 'home' && user ? (
             user.userType === 'CONSUMER' || user.userType === 'TRAVELER' || user.userType === 'CUSTOMER' ? (
-              customerView === 'confirmedList' ? (
-                <ReservationCompletedList user={user} onBack={() => setCustomerView('dashboard')} />
-              ) : (
                 <CustomerDashboard 
                   user={user} 
                   setShowAccountSettings={setShowAccountSettings} 
                   onBusRegister={() => setShowBusRegisterModal(true)}
                   onViewReservationList={() => setShowReservationListModal(true)}
-                  onViewConfirmedList={() => setCustomerView('confirmedList')}
+                  onViewConfirmedList={() => setShowConfirmedListModal(true)}
                   onOpenLiveChat={() => setShowLiveChatTraveler(true)}
                   refreshTrigger={dashboardRefreshKey}
                 />
-              )
             ) : user.userType === 'DRIVER' ? (
                 <DriverDashboard 
                   currentUser={user} 
@@ -926,6 +935,23 @@ function App() {
             <ReservationList
               user={user}
               onBack={() => setShowReservationListModal(false)}
+            />
+          </div>
+        </div>
+      )}
+      {showConfirmedListModal && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="w-full max-w-[1240px] h-[95vh] bg-white rounded-[40px] shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-300">
+            <button
+              onClick={() => setShowConfirmedListModal(false)}
+              className="absolute top-5 right-5 z-50 w-11 h-11 flex items-center justify-center bg-white/90 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-full shadow-md transition-all active:scale-90"
+              title="닫기"
+            >
+              <span className="material-symbols-outlined font-bold">close</span>
+            </button>
+            <ReservationCompletedList
+              user={user}
+              onBack={() => setShowConfirmedListModal(false)}
             />
           </div>
         </div>
