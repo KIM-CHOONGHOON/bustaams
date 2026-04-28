@@ -409,36 +409,37 @@ CREATE TABLE `TB_DRIVER_DETAIL` (
 
 ### `TB_DRIVER_DOCS`
 
-- **기사 키:** `CUST_ID` varchar(10) = `TB_USER.CUST_ID` (§1 `TB_USER` PK와 동일 정책). 구 `USER_ID`(255) PK 일부는 **이관 시 컬럼·FK 교체**를 전제로 한다.
-- **`DOC_TYPE`:** `ENUM` 리터럴은 **`TB_COMMON_CODE` `GRP_CD='DOC_TYPE'`** 의 `DTL_CD`와 **동일**하게 둔다(코드명·한글명·정렬: `busTaams_server/sql/tb_common_code_doc_type.sql` 시드 참고). 컬럼 `COMMENT`에 값별 의미를 병기.
-- **`FILE_ID`:** `TB_FILE_MASTER` FK — 값은 **0패딩 순번** `varchar(20)` (예: `00000000000000000001`).
+- **기사 키:** `CUST_ID` varchar(10) = `TB_USER.CUST_ID` (§1 `TB_USER` PK와 동일 정책).
+- **`DOC_TYPE`:** `ENUM` 리터럴은 **`TB_COMMON_CODE` `GRP_CD='DOC_TYPE'`** 의 `DTL_CD`와 **동일**하게 둔다.
+- **`GCS_PATH`:** 실제 파일이 저장된 GCS 경로. 파일명 규칙은 `{CUST_ID}_{DOC_TYPE}_{DOC_TYPE_SEQ}.png`.
 
 ```sql
 -- bustaams.TB_DRIVER_DOCS definition
 
 CREATE TABLE `TB_DRIVER_DOCS` (
   `CUST_ID` varchar(10) NOT NULL COMMENT '기사 TB_USER.CUST_ID',
-  `DOC_TYPE` enum('LICENSE','QUALIFICATION','APTITUDE','BIZ_REG','TRANSPORT_PERMIT','INSURANCE') NOT NULL COMMENT '서류 구분 — TB_COMMON_CODE(GRP_CD=DOC_TYPE)의 DTL_CD와 동일. LICENSE:운전면허증, QUALIFICATION:버스운전자격증, APTITUDE:운전적성정밀검사, BIZ_REG:사업자등록증, TRANSPORT_PERMIT:여객자동차운송사업허가증, INSURANCE:보험가입증명서',
-  `FILE_ID` varchar(20) DEFAULT NULL COMMENT '첨부 파일 TB_FILE_MASTER.FILE_ID (0패딩 순번)',
-  `FILE_PATH` varchar(512) DEFAULT NULL COMMENT '레거시/직접 경로 URL (선택, FILE_ID 우선)',
-  `LICENSE_TYPE_CD` varchar(30) DEFAULT NULL COMMENT '면허 종류 코드 (TB_COMMON_CODE 등, DOC_TYPE=LICENSE일 때)',
-  `DOC_NO_ENC` varchar(255) DEFAULT NULL COMMENT '면허·자격 등 문서 번호 (양방향 암호화)',
-  `ISSUE_DT` date DEFAULT NULL COMMENT '발급 일자',
-  `EXP_DT` date DEFAULT NULL COMMENT '만료일',
-  `INFO_STAT_CD` varchar(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '유효·자격 유지 상세 코드',
-  `APPROVE_STAT` enum('WAIT','APPROVE','REJECT') DEFAULT 'WAIT' COMMENT '본사 승인 상태',
-  `REJECT_REASON` text COMMENT '반려 사유',
-  `APPROVER_ID` varchar(10) DEFAULT NULL COMMENT '본사 승인자 TB_USER.CUST_ID(선택)',
-  `APPROVE_DT` datetime DEFAULT NULL COMMENT '본사 최종 승인 일시',
+  `DOC_TYPE` varchar(50) NOT NULL COMMENT '서류 구분 — TERMS_INTEGRATED, PRIVACY_CONSENT 등',
+  `DOC_TYPE_SEQ` int unsigned NOT NULL COMMENT '유형별 순번 (Primary Key)',
+  `GCS_BUCKET_NM` varchar(100) DEFAULT 'bustaams-secure-data' COMMENT 'GCS 버킷명',
+  `GCS_PATH` varchar(255) NOT NULL COMMENT 'GCS 저장 경로 및 파일명',
+  `ORG_FILE_NM` varchar(255) DEFAULT NULL COMMENT '파일명 (경로/확장자 제외)',
+  `ORG_FILE_EXT` varchar(10) DEFAULT 'png' COMMENT '확장자',
+  `LICENSE_TYPE_CD` varchar(30) DEFAULT NULL COMMENT '면허 종류 코드',
+  `DOC_NO_ENC` varchar(255) DEFAULT NULL COMMENT '문서 번호 (암호화)',
+  `ISSUE_DT` date DEFAULT NULL,
+  `EXP_DT` date DEFAULT NULL,
+  `INFO_STAT_CD` varchar(300) DEFAULT NULL,
+  `APPROVE_STAT` enum('WAIT','APPROVE','REJECT') DEFAULT 'WAIT',
+  `REJECT_REASON` text,
+  `APPROVER_ID` varchar(10) DEFAULT NULL,
+  `APPROVE_DT` datetime DEFAULT NULL,
   `REG_DT` datetime DEFAULT CURRENT_TIMESTAMP,
-  `REG_ID` varchar(30) DEFAULT NULL COMMENT '등록자 ID',
-  `MOD_DT` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '수정 일시',
-  `MOD_ID` varchar(30) DEFAULT NULL COMMENT '수정자 ID',
-  PRIMARY KEY (`CUST_ID`,`DOC_TYPE`),
-  KEY `FK_DOCS_FILE` (`FILE_ID`),
-  CONSTRAINT `FK_DOCS_FILE` FOREIGN KEY (`FILE_ID`) REFERENCES `TB_FILE_MASTER` (`FILE_ID`),
+  `REG_ID` varchar(30) DEFAULT NULL,
+  `MOD_DT` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `MOD_ID` varchar(30) DEFAULT NULL,
+  PRIMARY KEY (`CUST_ID`,`DOC_TYPE`,`DOC_TYPE_SEQ`),
   CONSTRAINT `FK_DOCS_USER` FOREIGN KEY (`CUST_ID`) REFERENCES `TB_USER` (`CUST_ID`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='기사 자격 증빙 및 본사 심사 이력';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='기사 자격 증빙 및 약관 동의 서명 통합 관리';
 ```
 
 ### `TB_FILE_MASTER`

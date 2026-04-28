@@ -151,15 +151,17 @@ const ReservationList = ({ user, onBack }) => {
   };
 
   const getVehicleLabel = (type) => {
-    if (!type) return '';
+    if (!type) return '일반 버스 (45석)';
     const map = {
-      'STANDARD_28': '우등 고속 (28인승)',
-      'STANDARD_45': '일반 고속 (45인승)',
-      'PREMIUM_28': '우등 고속 (28인승)',
-      'GOLD_21': '프리미엄 골드 (21인승)',
-      'VVIP_16': 'V-VIP (16인승)',
-      'MINI_25': '중형/미니 (25인승)',
-      'VAN_11': '대형 밴 (11인승)'
+      'NORMAL_45': '일반 버스 (45석)',
+      'PRESTIGE_28': '우등 버스 (28석)',
+      'PREMIUM_21': '프리미엄 골드 (21석)',
+      'VVIP_16': 'V-VIP (16석)',
+      'MINI_25': '중형/미니 버스 (25석)',
+      'VAN_11': '대형 밴 (11석)',
+      'STANDARD_45': '일반 버스 (45석)',
+      'STANDARD_28': '우등 버스 (28석)',
+      'GOLD_21': '프리미엄 골드 (21석)'
     };
     return map[type] || type;
   };
@@ -232,15 +234,17 @@ const ReservationList = ({ user, onBack }) => {
                       <div className="flex-1 p-12 flex flex-col justify-center relative bg-white">
                          <div className="flex justify-between items-start mb-6">
                             <div className="flex items-center gap-2">
-                               <span className="w-2 h-2 rounded-full bg-primary"></span>
-                               <span className="text-primary text-[10px] font-black uppercase tracking-[0.3em]">확정된 여정</span>
+                               <span className={`w-2 h-2 rounded-full ${trip.DATA_STAT === 'CONFIRM' ? 'bg-primary' : 'bg-amber-400 animate-pulse'}`}></span>
+                               <span className={`${trip.DATA_STAT === 'CONFIRM' ? 'text-primary' : 'text-amber-500'} text-[10px] font-black uppercase tracking-[0.3em]`}>
+                                  {trip.DATA_STAT === 'CONFIRM' ? '확정된 여정' : '견적 입찰 진행 중'}
+                               </span>
                             </div>
                             <button 
                               onClick={() => handleCancelTrip(trip)}
                               className="px-4 py-2 text-[10px] font-black text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-all flex items-center gap-2 uppercase tracking-widest border border-red-50"
                             >
                                <span className="material-symbols-outlined text-sm">cancel</span>
-                               여행취소
+                               전체 예약취소
                             </button>
                          </div>
                          <h3 className="text-4xl font-black font-headline text-on-surface tracking-tightest mb-2 leading-tight">
@@ -250,7 +254,7 @@ const ReservationList = ({ user, onBack }) => {
                          <div className="flex items-center gap-6">
                             <p className="text-xs text-outline font-bold uppercase tracking-widest">테마: <span className="text-on-surface ml-1">{trip.TRIP_TITLE || '프리미엄 투어'}</span></p>
                             <div className="w-[1px] h-3 bg-slate-200"></div>
-                            <p className="text-[10px] text-outline font-bold uppercase tracking-widest">ID: {trip.REQ_UUID_STR.substring(0,8).toUpperCase()}</p>
+                            <p className="text-[10px] text-outline font-bold uppercase tracking-widest">예약번호: {trip.REQ_UUID_STR?.toUpperCase()}</p>
                          </div>
                       </div>
                     </div>

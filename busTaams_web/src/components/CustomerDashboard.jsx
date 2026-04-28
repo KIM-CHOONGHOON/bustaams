@@ -10,7 +10,7 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
   useEffect(() => {
     if (user && user.custId) {
       const apiPath = `/api/auction/user/${encodeURIComponent(user.custId)}`;
-      fetch(apiPath)
+      fetch(`http://localhost:8080${apiPath}`)
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) {

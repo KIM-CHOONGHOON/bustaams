@@ -55,7 +55,7 @@ const QuotationList = ({ user, reqId, onBack, onViewDetail, isModal = false, onC
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           reqId: reqId,
-          driverUuid: bid.DRIVER_UUID,
+          driverId: bid.DRIVER_ID,
           bidSeq: bid.BID_SEQ
         })
       });
@@ -271,27 +271,23 @@ const QuotationList = ({ user, reqId, onBack, onViewDetail, isModal = false, onC
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-2 gap-4 mt-6">
                       <button 
-                        onClick={() => onViewDetail(bid.bidUuid)}
-                        className="border border-slate-200 text-slate-600 py-3.5 rounded-xl font-bold hover:bg-slate-50 transition-all active:scale-95 text-xs flex items-center justify-center gap-1.5"
+                        onClick={() => onViewDetail(bid.bidUuid || bid.RES_ID)}
+                        className="bg-slate-100 text-slate-600 py-4 rounded-xl font-bold hover:bg-slate-200 transition-all active:scale-95 text-sm flex items-center justify-center gap-2"
                       >
-                        <span className="material-symbols-outlined text-[18px]">person_check</span>
-                        기사정보
+                        <span className="material-symbols-outlined text-[20px]">person_check</span>
+                        기사 상세 정보
                       </button>
                       <button 
-                        className="border border-slate-200 text-slate-600 py-3.5 rounded-xl font-bold hover:bg-slate-50 transition-all active:scale-95 text-xs flex items-center justify-center gap-1.5"
+                        onClick={() => handleConfirm(bid)}
+                        className="bg-gradient-to-r from-primary to-primary-container text-white py-4 rounded-xl font-bold hover:opacity-90 transition-all active:scale-95 shadow-lg shadow-primary/20 text-sm flex items-center justify-center gap-2"
                       >
-                        <span className="material-symbols-outlined text-[18px]">reviews</span>
-                        기사평가정보
-                      </button>
-                      <button 
-                        className="border border-red-100 text-red-500 py-3.5 rounded-xl font-bold hover:bg-red-50 transition-all active:scale-95 text-xs flex items-center justify-center gap-1.5"
-                      >
-                        <span className="material-symbols-outlined text-[18px]">cancel</span>
-                        버스취소
+                        <span className="material-symbols-outlined text-[20px]">check_circle</span>
+                        예약 확정하기
                       </button>
                     </div>
+
                   </div>
                 );
               })}

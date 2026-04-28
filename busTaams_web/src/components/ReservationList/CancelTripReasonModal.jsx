@@ -38,19 +38,25 @@ const CancelTripReasonModal = ({ tripData, currentCustId, onClose, onSuccess }) 
   };
 
   const handleSubmit = async () => {
-    if (reasonCode === 'C99' && !reasonText.trim()) {
-      alert('기타 사유를 상세히 입력해 주세요.');
+    console.info('[CRITICAL] handleSubmit Triggered - Bypassing dialogs');
+    console.log('[DEBUG] tripData:', tripData);
+
+    if (!tripData) {
+      console.error('[ERROR] No tripData found');
       return;
     }
-
-    if (!window.confirm('입력하신 사유로 여행 예약을 취소하시겠습니까?\n취소 후에는 복구가 불가능합니다.')) return;
 
     setIsSubmitting(true);
 
     try {
+      console.info('[STEP 1] Extracting IDs');
+      const finalReqId = tripData.REQ_ID || tripData.REQ_UUID_STR || tripData.reqId;
+      const finalCustId = currentCustId || tripData.TRAVELER_ID || tripData.custId || tripData.travelerId;
+      console.log('[DEBUG] Target IDs:', { finalReqId, finalCustId });
+
       let fileData = null;
       if (selectedFile) {
-        // 파일을 Base64로 변환 (기존 서버 처리 패턴 대응)
+        console.info('[STEP 2] Converting file');
         fileData = await new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result);
@@ -59,40 +65,36 @@ const CancelTripReasonModal = ({ tripData, currentCustId, onClose, onSuccess }) 
         });
       }
 
-      // 데이터 누락 방지를 위한 강건한 추출 로직
-      const finalReqUuid = tripData.REQ_UUID_STR || tripData.REQ_ID || tripData.reqId;
-      const finalCustId = currentCustId || tripData.TRAVELER_ID || tripData.custId || tripData.travelerId;
-
-      console.log('[DEBUG] Cancellation Payload Source Data:', tripData);
-      console.log('[DEBUG] Final Extracted IDs:', { finalReqUuid, finalCustId });
-
+      console.info('[STEP 3] Preparing Payload');
       const payload = {
-        reqUuid: finalReqUuid,
+        reqId: finalReqId,
         custId: finalCustId,
-        reasonCode,
-        reasonText,
+        reasonCode: reasonCode || '09',
+        reasonText: reasonText || '고객 요청 취소',
         fileData: fileData,
         fileName: selectedFile ? selectedFile.name : null
       };
 
+      console.info('[STEP 4] Fetching Server...', payload);
       const response = await fetch('http://localhost:8080/api/auction/complex-cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
+      console.info('[STEP 5] Response Received:', response.status);
+
       if (response.ok) {
-        alert('예약이 취소되었습니다.');
+        console.info('[SUCCESS] Cancellation Complete');
         if (onSuccess) onSuccess();
         onClose();
-        window.location.reload(); // 확실한 상태 반영을 위해 페이지 새로고침
+        window.location.reload(); 
       } else {
         const errorData = await response.json();
-        alert(errorData.error || '취소 처리 중 오류가 발생했습니다.');
+        console.error('[SERVER ERROR]', errorData);
       }
     } catch (err) {
-      console.error('Complex cancel error:', err);
-      alert('서버와 통신 중 오류가 발생했습니다.');
+      console.error('[RUNTIME ERROR]', err);
     } finally {
       setIsSubmitting(false);
     }

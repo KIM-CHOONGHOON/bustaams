@@ -451,9 +451,9 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
             totalAmount: totalAmount,
             waypoints: enrichedWaypoints,
             vehicles: [
-                { type: 'STANDARD_28', qty: formData.standardQty, price: Number(String(formData.standardPrice || 0).replace(/[^0-9]/g, '')) || 0 },
-                { type: 'PREMIUM_45', qty: formData.premiumQty, price: Number(String(formData.premiumPrice || 0).replace(/[^0-9]/g, '')) || 0 },
-                { type: 'GOLD_21', qty: formData.premiumGoldQty, price: Number(String(formData.premiumGoldPrice || 0).replace(/[^0-9]/g, '')) || 0 },
+                { type: 'NORMAL_45', qty: formData.standardQty, price: Number(String(formData.standardPrice || 0).replace(/[^0-9]/g, '')) || 0 },
+                { type: 'PRESTIGE_28', qty: formData.premiumQty, price: Number(String(formData.premiumPrice || 0).replace(/[^0-9]/g, '')) || 0 },
+                { type: 'PREMIUM_21', qty: formData.premiumGoldQty, price: Number(String(formData.premiumGoldPrice || 0).replace(/[^0-9]/g, '')) || 0 },
                 { type: 'VVIP_16', qty: formData.vvipQty, price: Number(String(formData.vvipPrice || 0).replace(/[^0-9]/g, '')) || 0 },
                 { type: 'MINI_25', qty: formData.miniBusQty, price: Number(String(formData.miniBusPrice || 0).replace(/[^0-9]/g, '')) || 0 },
                 { type: 'VAN_11', qty: formData.largeVanQty, price: Number(String(formData.largeVanPrice || 0).replace(/[^0-9]/g, '')) || 0 }
@@ -645,11 +645,11 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
                  </button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 <BusCard title="프리미엄 골드 (21석)" img="/images/buses/premium_gold.png" type="premiumGold" qty={formData.premiumGoldQty} price={formData.premiumGoldPrice} color="[#D4AF37]" fuelCost={getFuelCost('GOLD_21')} desc="최고급 전용 좌석" adjustQty={adjustQty} handleChange={handleChange} />
-                 <BusCard title="V-VIP 리무진 (16석)" img="/images/buses/v_vip.png" type="vvip" qty={formData.vvipQty} price={formData.vvipPrice} color="black" fuelCost={getFuelCost('VVIP_16')} desc="최상위 의전용 차량" adjustQty={adjustQty} handleChange={handleChange} />
-                 <BusCard title="우등 고속 (28석)" img="https://lh3.googleusercontent.com/aida-public/AB6AXuAGncAn9mwP0CppdRcVNcRyyp7BM0Fwr-7IAo-UukujgT7dSh2z_8Ba0-8jHE15cYFNL1CW_lTPzVeSOiKP9OvIwyPH7sUwITsY_pZIwfEo8Us4ucyhl70uOHt6njBNLkODWl9T37DIWWsUWRerSxgzmhYBw7L-a45ye0ewYfPS9sY9Dj9O2wx2Q62XKSoHR7t0ol0eOTUQGqVGpnA0hqylsq4zJc6AmqSUSV_9IzmJGprI0TaVm5kP2ih028fYvHDVfAjM1oqvTLE" type="premium" qty={formData.premiumQty} price={formData.premiumPrice} color="primary" fuelCost={getFuelCost('STANDARD_28')} desc="안락한 우등 버스" adjustQty={adjustQty} handleChange={handleChange} />
-                 <BusCard title="일반 고속 (45석)" img="https://lh3.googleusercontent.com/aida-public/AB6AXuAfK78k5ZUsYSniO-ql0ZmiRyc1AoDCtW69CIjw1G3fTvwXaM1WWnx61DQshz68pgzkuOrTbpW-B4_scGSd1XIdySNfhJkSxYFdvur9B5KpmX3CYtQox2eqsSZz0jRCDYbDnLr6cuy_GAOlx3wl7CJW_h2BtJGU-zroRQYQy35IvU5-eweGfcCFLRdaOkScLoUdn4B3rdiS4Mb-7xWuAHQKFhKLuIBuk654T5MMPKbt2cIwMoS1KcLILRtEGlFw4wBHN2o_oisl0go" type="standard" qty={formData.standardQty} price={formData.standardPrice} color="slate-400" fuelCost={getFuelCost('PREMIUM_45')} desc="합리적인 단체 이동" adjustQty={adjustQty} handleChange={handleChange} />
-                 <BusCard title="중형 미니버스 (25석)" img="/images/buses/mini_bus.png" type="miniBus" qty={formData.miniBusQty} price={formData.miniBusPrice} color="secondary" fuelCost={getFuelCost('MINI_25')} desc="소규모 실속 여정" adjustQty={adjustQty} handleChange={handleChange} />
+                 <BusCard title="프리미엄 골드 (21석)" img="/images/buses/premium_gold.png" type="premiumGold" qty={formData.premiumGoldQty} price={formData.premiumGoldPrice} color="[#D4AF37]" fuelCost={getFuelCost('PREMIUM_21')} desc="최고급 전용 좌석" adjustQty={adjustQty} handleChange={handleChange} />
+                 <BusCard title="V-VIP (16석)" img="/images/buses/v_vip.png" type="vvip" qty={formData.vvipQty} price={formData.vvipPrice} color="black" fuelCost={getFuelCost('VVIP_16')} desc="최상위 의전용 차량" adjustQty={adjustQty} handleChange={handleChange} />
+                 <BusCard title="우등 버스 (28석)" img="https://lh3.googleusercontent.com/aida-public/AB6AXuAGncAn9mwP0CppdRcVNcRyyp7BM0Fwr-7IAo-UukujgT7dSh2z_8Ba0-8jHE15cYFNL1CW_lTPzVeSOiKP9OvIwyPH7sUwITsY_pZIwfEo8Us4ucyhl70uOHt6njBNLkODWl9T37DIWWsUWRerSxgzmhYBw7L-a45ye0ewYfPS9sY9Dj9O2wx2Q62XKSoHR7t0ol0eOTUQGqVGpnA0hqylsq4zJc6AmqSUSV_9IzmJGprI0TaVm5kP2ih028fYvHDVfAjM1oqvTLE" type="premium" qty={formData.premiumQty} price={formData.premiumPrice} color="primary" fuelCost={getFuelCost('PRESTIGE_28')} desc="안락한 우등 버스" adjustQty={adjustQty} handleChange={handleChange} />
+                 <BusCard title="일반 버스 (45석)" img="https://lh3.googleusercontent.com/aida-public/AB6AXuAfK78k5ZUsYSniO-ql0ZmiRyc1AoDCtW69CIjw1G3fTvwXaM1WWnx61DQshz68pgzkuOrTbpW-B4_scGSd1XIdySNfhJkSxYFdvur9B5KpmX3CYtQox2eqsSZz0jRCDYbDnLr6cuy_GAOlx3wl7CJW_h2BtJGU-zroRQYQy35IvU5-eweGfcCFLRdaOkScLoUdn4B3rdiS4Mb-7xWuAHQKFhKLuIBuk654T5MMPKbt2cIwMoS1KcLILRtEGlFw4wBHN2o_oisl0go" type="standard" qty={formData.standardQty} price={formData.standardPrice} color="slate-400" fuelCost={getFuelCost('NORMAL_45')} desc="합리적인 단체 이동" adjustQty={adjustQty} handleChange={handleChange} />
+                 <BusCard title="중형/미니 버스 (25석)" img="/images/buses/mini_bus.png" type="miniBus" qty={formData.miniBusQty} price={formData.miniBusPrice} color="secondary" fuelCost={getFuelCost('MINI_25')} desc="소규모 실속 여정" adjustQty={adjustQty} handleChange={handleChange} />
                  <BusCard title="대형 밴 (11석)" img="/images/buses/large_van.png" type="largeVan" qty={formData.largeVanQty} price={formData.largeVanPrice} color="primary" fuelCost={getFuelCost('VAN_11')} desc="소수 VIP 전문 차량" adjustQty={adjustQty} handleChange={handleChange} />
               </div>
             </section>

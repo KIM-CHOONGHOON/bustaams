@@ -1,21 +1,43 @@
 import React, { useState, useEffect } from 'react';
 
 const AccountSettings = ({ user, onBack, onLogout }) => {
-  const [userName, setUserName] = useState(user?.userNm || user?.userName || '');
-  const [email, setEmail] = useState(user?.userId || '');
-  const [phoneNo, setPhoneNo] = useState(user?.hpNo || user?.phoneNo || '');
+  const [userName, setUserName] = useState(user?.userName || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [phoneNo, setPhoneNo] = useState(user?.phoneNo || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState({ text: '', type: '' });
+
+  // 휴대폰 인증 관련 상태
+  const [isPhoneVerified, setIsPhoneVerified] = useState(true); // 초기에는 이미 인증된 상태로 간주
+  const [isSmsSent, setIsSmsSent] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [timer, setTimer] = useState(0);
+  const [originalPhoneNo, setOriginalPhoneNo] = useState('');
+
   // user 정보가 변경될 때마다 state 동기화
   useEffect(() => {
     if (user) {
-      setUserName(user.userNm || user.userName || '');
-      setEmail(user.email || user.userId || '');
-      setPhoneNo(user.hpNo || user.phoneNo || user.phoneNumber || '');
+      setUserName(user.userName || '');
+      setEmail(user.email || '');
+      const phone = user.phoneNo || '';
+      setPhoneNo(phone);
+      setOriginalPhoneNo(phone);
+      setIsPhoneVerified(true);
     }
   }, [user]);
+
+  // 타이머 관리
+  useEffect(() => {
+    let interval;
+    if (timer > 0) {
+      interval = setInterval(() => setTimer(prev => prev - 1), 1000);
+    }
+    return () => clearInterval(interval);
+  }, [timer]);
 
   // 뒷배경 스크롤 방지
   useEffect(() => {
@@ -25,292 +47,338 @@ const AccountSettings = ({ user, onBack, onLogout }) => {
     };
   }, []);
 
+  // 휴대폰 번호 수정 시 인증 상태 초기화
+  const handlePhoneChange = (e) => {
+    const val = e.target.value.replace(/[^0-9]/g, '');
+    setPhoneNo(val);
+    if (val !== originalPhoneNo) {
+      setIsPhoneVerified(false);
+      setIsSmsSent(false);
+      setVerificationCode('');
+    } else {
+      setIsPhoneVerified(true);
+    }
+  };
+
+  const handleSendSms = async () => {
+    if (!phoneNo || phoneNo.length < 10) {
+      alert('올바른 휴대폰 번호를 입력해주세요.');
+      return;
+    }
+    
+    // 전송 시작 시 기존 인증 상태 해제 (입력창을 보여주기 위함)
+    setIsPhoneVerified(false);
+    setIsSmsSent(false);
+
+    try {
+      const res = await fetch('http://localhost:8080/api/auth/send-sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: phoneNo })
+      });
+      if (res.ok) {
+        setIsSmsSent(true);
+        setTimer(180); // 3분
+        // alert 제거: 회원가입 화면처럼 인풋박스가 바로 보이게 함
+      } else {
+        alert('인증번호 발송에 실패했습니다.');
+      }
+    } catch (err) {
+      alert('서버 오류가 발생했습니다.');
+    }
+  };
+
+  const handleVerifySms = async () => {
+    try {
+      const res = await fetch('http://localhost:8080/api/auth/verify-sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: phoneNo, code: verificationCode })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setIsPhoneVerified(true);
+        setTimer(0);
+        alert('인증이 완료되었습니다.');
+      } else {
+        alert(data.error || '인증번호가 일치하지 않습니다.');
+      }
+    } catch (err) {
+      alert('인증 확인 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleSave = async () => {
+    if (!currentPassword) {
+      alert('변경을 위해 현재 비밀번호를 입력해주세요.');
+      return;
+    }
+
+    if (!isPhoneVerified) {
+      alert('휴대폰 번호 변경을 위해 인증을 완료해주세요.');
+      return;
+    }
+
+    if (newPassword && newPassword !== confirmPassword) {
+      alert('새 비밀번호와 확인 비밀번호가 일치하지 않습니다.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch('http://localhost:8080/api/user/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          custId: user.custId,
+          email,
+          phoneNo,
+          currentPassword,
+          newPassword
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert(result.message || '정보가 성공적으로 수정되었습니다.');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        if (onBack) onBack(); 
+      } else {
+        alert(result.error || '정보 수정에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('Update error:', error);
+      alert('서버와 통신 중 오류가 발생했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-[60] bg-surface font-body text-on-surface overflow-hidden flex flex-col">
-      {/* TopNavBar */}
-      <nav className="shrink-0 w-full z-50 glass-nav shadow-[0_20px_40px_rgba(0,104,95,0.05)] h-20">
-        <div className="flex items-center justify-between px-8 h-full max-w-[1920px] mx-auto">
-          <div className="flex items-center gap-12">
-            <span 
-              className="text-2xl font-bold italic text-teal-800 font-headline tracking-tight cursor-pointer"
-              onClick={onBack}
-            >
-              busTaams
-            </span>
-            <div className="hidden md:flex gap-8 items-center text-sm font-bold">
-              {user?.userType === 'DRIVER' ? (
-                <>
-                  <a className="text-slate-600 hover:text-primary transition-all duration-300" href="#">경매 입찰</a>
-                  <a className="text-slate-600 hover:text-primary transition-all duration-300" href="#">운행 일정</a>
-                  <a className="text-slate-600 hover:text-primary transition-all duration-300" href="#">차량 관리</a>
-                </>
-              ) : (
-                <>
-                  <a className="text-slate-600 hover:text-primary transition-all duration-300" href="#">진행중 경매</a>
-                  <a className="text-slate-600 hover:text-primary transition-all duration-300" href="#">예약 내역</a>
-                  <a className="text-slate-600 hover:text-primary transition-all duration-300" href="#">고객 센터</a>
-                </>
-              )}
-            </div>
+    <div className="fixed inset-0 z-[100] bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-300">
+      <div className="absolute inset-0 cursor-pointer" onClick={onBack}></div>
+      
+      <div className="relative w-full max-w-[1000px] h-[90vh] bg-surface rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
+        {/* Header Section */}
+        <header className="shrink-0 px-10 py-8 border-b border-slate-100 flex items-center justify-between bg-white/50 backdrop-blur-sm sticky top-0 z-10">
+          <div>
+            <h1 className="font-headline text-3xl font-black text-teal-950 tracking-tighter">회원 정보 관리</h1>
+            <p className="text-slate-500 text-sm font-medium mt-1">계정 보안과 개인정보를 최신 상태로 유지하세요.</p>
           </div>
-          <div className="flex items-center gap-6">
-            <button className="material-symbols-outlined text-slate-600 hover:bg-slate-50/50 p-2 rounded-full transition-all">notifications</button>
-            <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-full">
-              <span className="material-symbols-outlined text-teal-700" style={{ fontVariationSettings: "'FILL' 1" }}>account_circle</span>
-              <span className="text-sm font-semibold">{userName} 님</span>
-            </div>
-          </div>
-        </div>
-      </nav>
+          <button 
+            onClick={onBack}
+            className="w-12 h-12 flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-full transition-all active:scale-90"
+          >
+            <span className="material-symbols-outlined font-bold">close</span>
+          </button>
+        </header>
 
-      <div className="flex-1 flex max-w-[1920px] mx-auto overflow-hidden w-full">
-        {/* SideNavBar */}
-        <aside className="w-72 bg-slate-50 flex flex-col py-12 gap-2 shrink-0 border-r border-slate-200/50 overflow-y-auto">
-          <div className="px-8 mb-10">
-            <h2 className="font-headline text-lg font-bold text-teal-800">고객 포털</h2>
-            <p className="text-xs text-slate-500 uppercase tracking-widest mt-1 font-body">여정의 시작과 끝을 함께합니다</p>
-          </div>
-          <nav className="flex flex-col gap-1 pr-4">
-            <a className="flex items-center gap-4 px-8 py-3 text-slate-500 hover:text-orange-600 hover:pl-10 transition-all font-medium text-sm" href="#">
-              <span className="material-symbols-outlined">chat_bubble</span> 1:1 문의하기
-            </a>
-            <a className="flex items-center gap-4 px-8 py-3 text-slate-500 hover:text-orange-600 hover:pl-10 transition-all font-medium text-sm" href="#">
-              <span className="material-symbols-outlined">history</span> 문의 내역
-            </a>
-            <a className="flex items-center gap-4 px-8 py-3 bg-white text-teal-700 shadow-sm rounded-r-full font-bold text-sm" href="#">
-              <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>person_check</span> 회원 정보 관리
-            </a>
-            <a className="flex items-center gap-4 px-8 py-3 text-slate-500 hover:text-orange-600 hover:pl-10 transition-all font-medium text-sm" href="#">
-              <span className="material-symbols-outlined">event_available</span> 예약 내역
-            </a>
-            <a className="flex items-center gap-4 px-8 py-3 text-slate-500 hover:text-orange-600 hover:pl-10 transition-all font-medium text-sm" href="#">
-              <span className="material-symbols-outlined">event_busy</span> 취소 내역
-            </a>
-            <a className="flex items-center gap-4 px-8 py-3 text-slate-500 hover:text-orange-600 hover:pl-10 transition-all font-medium text-sm" href="#">
-              <span className="material-symbols-outlined">request_quote</span> 견적 요청 내역
-            </a>
-            <a className="flex items-center gap-4 px-8 py-3 text-slate-500 hover:text-orange-600 hover:pl-10 transition-all font-medium text-sm" href="#">
-              <span className="material-symbols-outlined">rate_review</span> 이용 후기
-            </a>
-            <a className="flex items-center gap-4 px-8 py-3 text-slate-500 hover:text-orange-600 hover:pl-10 transition-all font-medium text-sm" href="#">
-              <span className="material-symbols-outlined">settings</span> 설정
-            </a>
-            <div className="mt-12 border-t border-slate-200/50 pt-4">
-              <button 
-                onClick={onLogout}
-                className="w-full flex items-center gap-4 px-8 py-3 text-slate-400 hover:text-red-500 transition-all font-medium text-sm"
-              >
-                <span className="material-symbols-outlined">logout</span> 로그아웃
-              </button>
-            </div>
-          </nav>
-        </aside>
-
-        {/* Main Content */}
-        <main className="flex-1 bg-surface px-12 py-16 overflow-y-auto custom-scrollbar">
-          <header className="mb-16">
-            <h1 className="font-headline text-5xl font-extrabold text-on-surface tracking-tighter mb-4">회원 정보 관리</h1>
-            <p className="text-slate-500 text-lg max-w-2xl leading-relaxed font-body">계정 보안과 개인정보를 최신 상태로 유지하세요. busTaams는 고객님의 개인정보 보호를 최우선으로 합니다.</p>
-          </header>
-
-          <div className="grid grid-cols-12 gap-12">
-            {/* Section: Personal Information */}
-            <section className="col-span-12 lg:col-span-8">
-              <div className="bg-surface-container-lowest rounded-xl p-10 shadow-[0_20px_40px_rgba(0,104,95,0.04)] relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-1 h-full bg-secondary"></div>
-                <h3 className="font-headline text-2xl font-bold mb-8 flex items-center gap-3">
-                  <span className="material-symbols-outlined text-primary">person</span>
+        {/* Scrollable Content */}
+        <main className="flex-1 overflow-y-auto px-10 py-12 custom-scrollbar space-y-12">
+          <div className="grid grid-cols-12 gap-10">
+            {/* Left: Basic Info */}
+            <section className="col-span-12 lg:col-span-7 space-y-8">
+              <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100 relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-1.5 h-full bg-primary"></div>
+                <h3 className="font-headline text-xl font-bold mb-8 flex items-center gap-3 text-teal-900">
+                  <span className="material-symbols-outlined">person</span>
                   기본 인적 사항
                 </h3>
-                <div className="space-y-8">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-bold uppercase tracking-widest text-slate-400 font-label">이름</label>
+                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">이름</label>
                       <input 
-                        className="bg-surface-container-high border-none rounded-lg p-4 focus:ring-2 focus:ring-primary/20 transition-all font-body" 
+                        className="bg-slate-50 border-none rounded-2xl p-4 focus:ring-2 focus:ring-primary/20 transition-all font-bold text-slate-500" 
                         readOnly 
                         type="text" 
                         value={userName}
                       />
                     </div>
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-bold uppercase tracking-widest text-slate-400 font-label">이메일 주소</label>
+                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">이메일 주소</label>
                       <input 
-                        className="bg-surface-container-high border-none rounded-lg p-4 focus:ring-2 focus:ring-primary/20 transition-all font-body" 
+                        className="bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:bg-white focus:ring-2 focus:ring-primary/20 transition-all font-bold text-slate-800" 
                         type="email" 
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                       />
                     </div>
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-slate-400 font-label">휴대폰 번호</label>
-                    <div className="flex gap-4">
+                  {/* 휴대폰 번호 인증 섹션 (회원가입 화면 스타일 적용) */}
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-center justify-between ml-1">
+                      <label className="text-[12px] font-black uppercase tracking-[0.2em] text-slate-500">휴대폰 번호 인증</label>
+                      {isPhoneVerified && (
+                        <span className="text-[12px] font-bold text-teal-600 flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                          인증 완료
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 번호 입력 및 전송 버튼 */}
+                    <div className="flex gap-2">
                       <input 
-                        className="flex-1 bg-surface-container-high border-none rounded-lg p-4 focus:ring-2 focus:ring-primary/20 transition-all font-body" 
+                        className={`flex-1 bg-slate-100/50 border border-slate-200 rounded-2xl p-4 focus:bg-white focus:ring-2 focus:ring-orange-500/20 transition-all font-bold text-slate-800 ${isPhoneVerified ? 'border-teal-500/30' : ''}`}
                         type="tel" 
                         value={phoneNo}
-                        onChange={(e) => setPhoneNo(e.target.value)}
+                        onChange={handlePhoneChange}
+                        placeholder="휴대폰 번호 (- 없이 입력)"
                       />
-                      <button className="kinetic-gradient-primary text-white px-8 py-4 rounded-full font-bold text-sm transition-transform active:scale-95 shadow-lg shadow-primary/20 whitespace-nowrap">
-                        인증번호 발송
+                      <button 
+                        onClick={handleSendSms}
+                        disabled={timer > 0 && isSmsSent}
+                        className={`px-6 rounded-2xl font-bold text-white transition-all shadow-lg whitespace-nowrap ${timer > 0 && isSmsSent ? 'bg-slate-300 cursor-not-allowed shadow-none' : 'bg-gradient-to-br from-orange-500 to-rose-600 hover:shadow-orange-500/30 active:scale-95'}`}
+                      >
+                        {isSmsSent ? '인증번호 재전송' : '인증번호 전송'}
                       </button>
                     </div>
+                    
+                    {/* 인증번호 입력란 (회원가입 화면과 동일한 스타일) */}
+                    {isSmsSent && !isPhoneVerified && (
+                      <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <input 
+                              className="w-full bg-slate-100/50 border border-slate-200 rounded-2xl p-4 focus:bg-white focus:ring-2 focus:ring-orange-500/20 transition-all font-bold text-slate-800"
+                              type="text" 
+                              placeholder="인증번호 6자리"
+                              value={verificationCode}
+                              onChange={(e) => setVerificationCode(e.target.value)}
+                            />
+                            {timer > 0 && (
+                              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-rose-500 font-bold text-sm">
+                                {Math.floor(timer / 60)}:{String(timer % 60).padStart(2, '0')}
+                              </span>
+                            )}
+                          </div>
+                          <button 
+                            onClick={handleVerifySms}
+                            className="px-8 bg-white border border-slate-200 text-slate-800 rounded-2xl font-bold hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+                          >
+                            확인
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-teal-600 font-medium ml-1">
+                          인증번호가 전송되었습니다. (개발모드: 123456)
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-            </section>
 
-            {/* Section: Sidebar Info Card */}
-            <section className="col-span-12 lg:col-span-4 space-y-8">
-              <div className="bg-primary text-white p-8 rounded-xl shadow-xl relative overflow-hidden group">
-                <div className="relative z-10">
-                  <h4 className="font-headline text-xl font-bold mb-4">보안 등급: 높음</h4>
-                  <p className="text-primary-fixed text-sm leading-relaxed mb-6 opacity-80 font-body">현재 계정은 2단계 인증이 활성화되어 안전하게 보호되고 있습니다.</p>
-                  <div className="w-full bg-primary-container h-2 rounded-full overflow-hidden">
-                    <div className="bg-primary-fixed w-[85%] h-full"></div>
-                  </div>
-                </div>
-                <span className="material-symbols-outlined absolute -bottom-4 -right-4 text-9xl opacity-10 rotate-12 group-hover:rotate-0 transition-transform duration-700">security</span>
-              </div>
-              <div className="bg-surface-container-high p-8 rounded-xl">
-                <h4 className="font-headline text-sm font-bold text-slate-600 mb-4 uppercase tracking-widest font-label">계정 활동 내역</h4>
-                <ul className="space-y-4 font-body">
-                  <li className="flex items-center gap-3 text-sm text-slate-500">
-                    <span className="w-2 h-2 rounded-full bg-teal-500"></span>
-                    최근 로그인: 오늘 14:22 (서울)
-                  </li>
-                  <li className="flex items-center gap-3 text-sm text-slate-500">
-                    <span className="w-2 h-2 rounded-full bg-slate-300"></span>
-                    정보 수정: 3개월 전
-                  </li>
-                </ul>
-              </div>
-            </section>
-
-            {/* Section: Password Change */}
-            <section className="col-span-12 lg:col-span-6">
-              <div className="bg-surface-container-lowest rounded-xl p-10 shadow-[0_20px_40px_rgba(0,104,95,0.04)] h-full">
-                <h3 className="font-headline text-2xl font-bold mb-8 flex items-center gap-3">
-                  <span className="material-symbols-outlined text-primary">lock_reset</span>
+              {/* Password Change */}
+              <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
+                <h3 className="font-headline text-xl font-bold mb-8 flex items-center gap-3 text-teal-900">
+                  <span className="material-symbols-outlined">lock_reset</span>
                   비밀번호 변경
                 </h3>
                 <div className="space-y-6">
                   <div className="flex flex-col gap-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-slate-400 font-label">현재 비밀번호</label>
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">현재 비밀번호</label>
                     <input 
-                      className="bg-surface-container-high border-none rounded-lg p-4 focus:ring-2 focus:ring-primary/20 transition-all font-body" 
+                      className="bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:bg-white focus:ring-2 focus:ring-primary/20 transition-all" 
                       placeholder="••••••••" 
                       type="password"
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
                     />
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-slate-400 font-label">새 비밀번호</label>
-                    <input 
-                      className="bg-surface-container-high border-none rounded-lg p-4 focus:ring-2 focus:ring-primary/20 transition-all font-body" 
-                      placeholder="새 비밀번호 입력" 
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-slate-400 font-label">새 비밀번호 확인</label>
-                    <input 
-                      className="bg-surface-container-high border-none rounded-lg p-4 focus:ring-2 focus:ring-primary/20 transition-all font-body" 
-                      placeholder="다시 한번 입력" 
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                    />
-                  </div>
-                  <div className="pt-4">
-                    <button className="w-full bg-slate-100 text-slate-400 py-4 rounded-full font-bold hover:bg-slate-200 transition-colors font-body">
-                      비밀번호 업데이트
-                    </button>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">새 비밀번호</label>
+                      <input 
+                        className="bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:bg-white focus:ring-2 focus:ring-primary/20 transition-all" 
+                        placeholder="새 비밀번호" 
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">비밀번호 확인</label>
+                      <input 
+                        className="bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:bg-white focus:ring-2 focus:ring-primary/20 transition-all" 
+                        placeholder="한번 더 입력" 
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* Section: SNS Account Linking */}
-            <section className="col-span-12 lg:col-span-6">
-              <div className="bg-surface-container-lowest rounded-xl p-10 shadow-[0_20px_40px_rgba(0,104,95,0.04)] h-full">
-                <h3 className="font-headline text-2xl font-bold mb-8 flex items-center gap-3">
-                  <span className="material-symbols-outlined text-primary">link</span>
+            {/* Right: Security & SNS */}
+            <section className="col-span-12 lg:col-span-5 space-y-8">
+              <div className="bg-teal-950 text-white p-8 rounded-[2rem] shadow-xl relative overflow-hidden group min-h-[220px] flex flex-col justify-end">
+                <div className="relative z-10">
+                  <span className="inline-block px-3 py-1 bg-primary text-[10px] font-black uppercase tracking-[0.2em] rounded-full mb-4">Secured</span>
+                  <h4 className="font-headline text-2xl font-bold mb-2">보안 등급: 높음</h4>
+                  <p className="text-white/60 text-sm font-medium leading-relaxed">계정 정보가 안전하게 암호화되어 관리되고 있습니다.</p>
+                </div>
+                <span className="material-symbols-outlined absolute -top-4 -right-4 text-9xl opacity-5 rotate-12 group-hover:rotate-0 transition-transform duration-700">security</span>
+              </div>
+
+              <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
+                <h3 className="font-headline text-xl font-bold mb-8 flex items-center gap-3 text-teal-900">
+                  <span className="material-symbols-outlined">link</span>
                   SNS 계정 연동
                 </h3>
-                <p className="text-slate-500 text-sm mb-10 font-body">간편 로그인을 위해 외부 서비스 계정을 연동할 수 있습니다. 연동된 계정으로도 busTaams 서비스를 이용하실 수 있습니다.</p>
                 <div className="space-y-4">
-                  {/* Kakao */}
-                  <div className="flex items-center justify-between p-6 bg-[#FEE500]/10 rounded-xl">
-                    <div className="flex items-center gap-4">
-                      <div className="shrink-0 w-10 h-10 bg-[#FEE500] rounded-full flex items-center justify-center font-bold text-[#3C1E1E]">K</div>
-                      <div>
-                        <div className="font-bold text-slate-800 font-body">카카오톡</div>
-                        <div className="text-xs text-slate-500 font-body">연동되지 않음</div>
+                  {[
+                    { name: '카카오톡', color: 'bg-[#FEE500]', initial: 'K', status: '연동되지 않음', action: '연동하기' },
+                    { name: '네이버', color: 'bg-[#03C75A]', initial: 'N', status: '연동 완료 (minsu***)', action: '연동 해제' },
+                    { name: '구글', color: 'bg-white', initial: 'G', status: '연동되지 않음', action: '연동하기' }
+                  ].map((sns) => (
+                    <div key={sns.name} className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 ${sns.color} rounded-full flex items-center justify-center font-black text-sm shadow-sm`}>{sns.initial}</div>
+                        <div>
+                          <div className="font-bold text-slate-800 text-sm">{sns.name}</div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{sns.status}</div>
+                        </div>
                       </div>
+                      <button className="text-[11px] font-black text-teal-800 hover:text-orange-600 transition-colors uppercase tracking-widest">{sns.action}</button>
                     </div>
-                    <button className="bg-white px-6 py-2 rounded-full text-sm font-bold shadow-sm hover:shadow-md transition-shadow font-body">연동하기</button>
-                  </div>
-                  {/* Naver */}
-                  <div className="flex items-center justify-between p-6 bg-[#03C75A]/10 rounded-xl">
-                    <div className="flex items-center gap-4">
-                      <div className="shrink-0 w-10 h-10 bg-[#03C75A] rounded-full flex items-center justify-center font-bold text-white">N</div>
-                      <div>
-                        <div className="font-bold text-slate-800 font-body">네이버</div>
-                        <div className="text-xs text-[#03C75A] font-bold font-body">연동 완료 (minsu***)</div>
-                      </div>
-                    </div>
-                    <button className="text-slate-400 px-6 py-2 rounded-full text-sm font-bold hover:text-red-500 transition-colors font-body">연동 해제</button>
-                  </div>
-                  {/* Google */}
-                  <div className="flex items-center justify-between p-6 bg-slate-100 rounded-xl">
-                    <div className="flex items-center gap-4">
-                      <div className="shrink-0 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm">
-                        <img alt="Google Logo" className="w-6 h-6" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBjrj_Om43e8z-HkzuC-v4qWqMSkx42ZYoA7-JG4bEvLgTPWGeuRaG0uAMopUSWyRx8JANIy0p3zLLrUJWK3a_cbYhs6LmIyX9cPP17a7RUyvulByiu4Cf__pd9x1J8vaEaa3-XDYIAClNlnR67QKlDMK_jmEi76C-WiXCkEzr9n6oSmrqakktLVjerp-fil1mapPvM4_Go0ZTBhq1uRDyIFZT-Gv4kGOTdNYlrDQ7_CQaNFPzFGGgQxSkGDXh4FnFJgs3JDFjCJAg"/>
-                      </div>
-                      <div>
-                        <div className="font-bold text-slate-800 font-body">구글</div>
-                        <div className="text-xs text-slate-500 font-body">연동되지 않음</div>
-                      </div>
-                    </div>
-                    <button className="bg-white px-6 py-2 rounded-full text-sm font-bold shadow-sm hover:shadow-md transition-shadow font-body">연동하기</button>
-                  </div>
+                  ))}
                 </div>
               </div>
+
+              <button 
+                onClick={onLogout}
+                className="w-full flex items-center justify-center gap-3 p-6 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-[2rem] transition-all font-bold text-sm border-2 border-dashed border-slate-200 hover:border-red-100"
+              >
+                <span className="material-symbols-outlined">logout</span> 
+                계정 로그아웃
+              </button>
             </section>
           </div>
-
-          {/* Global Action Bar */}
-          <div className="mt-16 flex justify-end gap-6 items-center">
-            <button 
-              onClick={onBack}
-              className="text-slate-400 font-bold hover:text-on-surface transition-colors font-body"
-            >
-              취소
-            </button>
-            <button className="kinetic-gradient-primary text-white px-12 py-5 rounded-full font-headline text-lg font-bold shadow-2xl shadow-primary/30 transition-transform active:scale-95">
-              모든 변경사항 저장하기
-            </button>
-          </div>
         </main>
-      </div>
 
-      {/* Footer */}
-      <footer className="shrink-0 w-full py-8 px-8 bg-slate-50 border-t border-slate-200/50">
-        <div className="flex flex-col md:flex-row justify-between items-center max-w-[1920px] mx-auto">
-          <span className="text-sm font-black text-slate-300 font-headline uppercase tracking-widest">busTaams Kinetic Gallery</span>
-          <div className="flex gap-8 my-4 md:my-0">
-            <a className="text-slate-400 hover:text-teal-600 transition-colors text-[10px] font-headline uppercase tracking-widest" href="#">개인정보 처리방침</a>
-            <a className="text-slate-400 hover:text-teal-600 transition-colors text-[10px] font-headline uppercase tracking-widest" href="#">이용 약관</a>
-            <a className="text-slate-400 hover:text-teal-600 transition-colors text-[10px] font-headline uppercase tracking-widest" href="#">쿠키 설정</a>
-          </div>
-          <p className="text-slate-400 text-[10px] font-headline uppercase tracking-widest">© 2024 busTaams Kinetic Gallery. 모든 권리 보유.</p>
-        </div>
-      </footer>
+        {/* Footer Action Bar */}
+        <footer className="shrink-0 px-10 py-8 bg-slate-50 border-t border-slate-100 flex justify-end gap-6 items-center sticky bottom-0">
+          <button 
+            onClick={onBack}
+            className="text-slate-400 font-bold hover:text-teal-950 transition-colors text-sm"
+          >
+            취소
+          </button>
+          <button 
+            onClick={handleSave}
+            disabled={isLoading}
+            className={`bg-primary text-white px-12 py-4 rounded-full font-headline text-lg font-bold shadow-xl shadow-primary/20 transition-all hover:scale-105 active:scale-95 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+          >
+            {isLoading ? '저장 중...' : '변경사항 저장하기'}
+          </button>
+        </footer>
+      </div>
     </div>
   );
 };

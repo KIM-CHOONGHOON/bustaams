@@ -33,7 +33,11 @@ const SignupPage = ({ onBack }) => {
   const [formError, setFormError] = useState('');
 
   const [agreements, setAgreements] = useState({
-    all: false, term1: false, term2: false, marketing: false
+    all: false, 
+    term1: false,     // 통합 이용약관
+    term2: false,     // 개인정보 수집·이용 동의
+    marketing: false, // 마케팅 수신 동의
+    contract: false   // 가입 계약서 (여행자/기사/영업)
   });
 
   // Timer
@@ -59,17 +63,21 @@ const SignupPage = ({ onBack }) => {
 
   const handleAllAgree = (e) => {
     const c = e.target.checked;
-    setAgreements({ all: c, term1: c, term2: c, marketing: c });
+    setAgreements({ all: c, term1: c, term2: c, marketing: c, contract: c });
   };
 
   const handleAgreeChange = (key) => (e) => {
     const c = e.target.checked;
     setAgreements(prev => {
       const next = { ...prev, [key]: c };
-      next.all = next.term1 && next.term2 && next.marketing;
+      // 필수 약관들 + 선택 약관이 모두 체크되었을 때만 '전체 동의' true
+      next.all = next.term1 && next.term2 && next.marketing && next.contract;
       return next;
     });
   };
+
+  // 필수 약관 동의 여부 확인 (서명 패드 활성화용)
+  const isRequiredAgreed = agreements.term1 && agreements.term2 && agreements.contract;
 
   const handleIdCheck = async () => {
     if (!userId.trim()) { setIdError('아이디를 입력해주세요.'); return; }
@@ -178,6 +186,7 @@ const SignupPage = ({ onBack }) => {
       if (agreements.term1) agreedTerms.push(1);
       if (agreements.term2) agreedTerms.push(2);
       if (agreements.marketing) agreedTerms.push(3);
+      if (agreements.contract) agreedTerms.push(4); // 가입 계약서
 
       const res = await fetch(`${API_BASE}/api/auth/register`, {
         method: 'POST',
@@ -201,7 +210,8 @@ const SignupPage = ({ onBack }) => {
       } else {
         setFormError(data.error || '회원가입에 실패했습니다.');
       }
-    } catch {
+    } catch (err) {
+      console.error(err);
       setFormError('서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     } finally {
       setIsLoading(false);
@@ -398,12 +408,24 @@ const SignupPage = ({ onBack }) => {
             </div>
 
             {/* ── Section 3: E-Signature ── */}
-            <div style={{ paddingTop: '0.25rem' }}>
-              <label style={labelStyle}>전자 서명</label>
-              <div style={{ position: 'relative', width: '100%', height: '10rem', background: '#eceef0', borderRadius: '0.75rem', border: '2px dashed rgba(110,121,119,0.3)', overflow: 'hidden', marginTop: '0.5rem' }}>
+            <div style={{ paddingTop: '0.25rem', opacity: isRequiredAgreed ? 1 : 0.5 }}>
+              <label style={labelStyle}>
+                전자 서명 {!isRequiredAgreed && <span style={{ fontSize: '0.65rem', color: '#ba1a1a', fontWeight: 500 }}>(필수 약관에 먼저 동의해 주세요)</span>}
+              </label>
+              <div style={{ 
+                position: 'relative', 
+                width: '100%', 
+                height: '10rem', 
+                background: isRequiredAgreed ? '#eceef0' : '#f2f2f2', 
+                borderRadius: '0.75rem', 
+                border: isRequiredAgreed ? '2px dashed rgba(0,78,71,0.3)' : '2px dashed rgba(110,121,119,0.2)', 
+                overflow: 'hidden', 
+                marginTop: '0.5rem',
+                pointerEvents: isRequiredAgreed ? 'auto' : 'none'
+              }}>
                 {!hasSignature && (
                   <span style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'rgba(25,28,30,0.3)', fontSize: '0.875rem', pointerEvents: 'none' }}>
-                    이곳에 서명해 주세요
+                    {isRequiredAgreed ? '이곳에 서명해 주세요' : '약관 동의 후 서명이 가능합니다'}
                   </span>
                 )}
                 <SignatureCanvas
@@ -412,13 +434,15 @@ const SignupPage = ({ onBack }) => {
                   canvasProps={{ width: 600, height: 160, style: { width: '100%', height: '100%' } }}
                   penColor="#004e47"
                 />
-                <button
-                  type="button"
-                  onClick={handleSignatureClear}
-                  style={{ position: 'absolute', top: '0.625rem', right: '0.625rem', padding: '0.375rem', background: 'transparent', border: 'none', color: '#3e4947', cursor: 'pointer', fontSize: '1rem' }}
-                >
-                  ↺
-                </button>
+                {isRequiredAgreed && (
+                  <button
+                    type="button"
+                    onClick={handleSignatureClear}
+                    style={{ position: 'absolute', top: '0.625rem', right: '0.625rem', padding: '0.375rem', background: 'transparent', border: 'none', color: '#3e4947', cursor: 'pointer', fontSize: '1rem' }}
+                  >
+                    ↺
+                  </button>
+                )}
               </div>
             </div>
 
@@ -430,9 +454,13 @@ const SignupPage = ({ onBack }) => {
               </label>
               <div style={{ paddingLeft: '1.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                 {[
-                  { key: 'term1', label: '이용약관 동의 (필수)' },
+                  { key: 'term1', label: '통합 이용약관 (필수)' },
                   { key: 'term2', label: '개인정보 수집 및 이용 동의 (필수)' },
-                  { key: 'marketing', label: '마케팅 정보 수신 동의 (선택)' }
+                  { key: 'marketing', label: '마케팅 정보 수신 동의 (선택)' },
+                  { 
+                    key: 'contract', 
+                    label: userRole === 'salesperson' ? '영업 회원 계약서 (필수)' : '여행자 가입 계약서 (필수)' 
+                  }
                 ].map(({ key, label }) => (
                   <label key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>

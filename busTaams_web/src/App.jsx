@@ -67,13 +67,22 @@ function normalizeUserSession(raw) {
     delete u.userUuid;
   }
 
-  // USER_ID (로그인 ID/이메일) 표준화
+  // USER_ID (로그인 ID) 표준화
   const uid = clipBizVarcharId(
     (u.userId != null && String(u.userId).trim()) ||
     (u.USER_ID != null && String(u.USER_ID).trim()) ||
     ''
   );
   if (uid) u.userId = uid;
+
+  // EMAIL 표준화
+  u.email = (u.email || u.EMAIL || '').trim();
+
+  // USER_NM (이름) 표준화
+  u.userName = (u.userName || u.userNm || u.USER_NM || '').trim();
+
+  // HP_NO (전화번호) 표준화
+  u.phoneNo = (u.phoneNo || u.hpNo || u.HP_NO || u.phoneNumber || '').trim();
 
   return u;
 }

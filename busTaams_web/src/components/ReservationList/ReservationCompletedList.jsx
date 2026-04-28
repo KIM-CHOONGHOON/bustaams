@@ -42,18 +42,27 @@ const ReservationCompletedList = ({ user, onBack }) => {
   };
 
   const getVehicleLabel = (type) => {
-    if (!type) return '미지정 차량';
+    if (!type) return '일반 버스 (45석)';
     const map = {
-      'STANDARD_28': '일반 고속 (45인승)',
-      'STANDARD_45': '일반 고속 (45인승)',
-      'PREMIUM_45': '우등 고속 (28인승)',
-      'PREMIUM_28': '우등 고속 (28인승)',
-      'GOLD_21': '프리미엄 골드 (21인승)',
-      'VVIP_16': 'V-VIP (16인승)',
-      'MINI_25': '중형/미니 (25인승)',
-      'VAN_11': '대형 밴 (11인승)'
+      'NORMAL_45': '일반 버스 (45석)',
+      'PRESTIGE_28': '우등 버스 (28석)',
+      'PREMIUM_21': '프리미엄 골드 (21석)',
+      'VVIP_16': 'V-VIP (16석)',
+      'MINI_25': '중형/미니 버스 (25석)',
+      'VAN_11': '대형 밴 (11석)',
+      'STANDARD_45': '일반 버스 (45석)',
+      'STANDARD_28': '우등 버스 (28석)',
+      'GOLD_21': '프리미엄 골드 (21석)'
     };
     return map[type] || type;
+  };
+
+  const handlePayment = (trip, bus) => {
+    window.alert(`[결제] ${trip.TRIP_TITLE} - ${getVehicleLabel(bus.BUS_TYPE_CD)} 결제 페이지로 이동합니다.`);
+  };
+
+  const handleChat = (bus) => {
+    window.alert(`[채팅] ${bus.DRIVER_NAME} 기사님과 대화를 시작합니다.`);
   };
 
   return (
@@ -69,7 +78,7 @@ const ReservationCompletedList = ({ user, onBack }) => {
           </button>
           <div>
             <h1 className="text-3xl font-black text-slate-900 tracking-tighter">나의 예약 완료 목록</h1>
-            <p className="text-sm text-slate-400 font-bold mt-1 uppercase tracking-widest flex items-center gap-2">
+            <p className="text-sm text-slate-400 font-bold mt-1 tracking-widest flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
               성공적으로 확정된 프리미엄 여정
             </p>
@@ -78,8 +87,8 @@ const ReservationCompletedList = ({ user, onBack }) => {
         
         <div className="flex items-center gap-4">
            <div className="text-right mr-4">
-              <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] mb-0.5">Account Type</p>
-              <p className="text-xs font-black text-primary">PREMIUM TRAVELER</p>
+              <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-0.5">회원 등급</p>
+              <p className="text-xs font-black text-primary">프리미엄 고객</p>
            </div>
            <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
               <span className="material-symbols-outlined">verified_user</span>
@@ -119,7 +128,7 @@ const ReservationCompletedList = ({ user, onBack }) => {
                          확정 완료
                       </span>
                       <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
-                         ID: {trip.REQ_ID?.substring(0, 8).toUpperCase()}
+                         예약번호: {trip.REQ_ID?.toUpperCase()}
                       </span>
                     </div>
                     <h2 className="text-4xl font-black text-slate-900 tracking-tighter mb-4 leading-tight group-hover/card:text-primary transition-colors">
@@ -139,7 +148,7 @@ const ReservationCompletedList = ({ user, onBack }) => {
                   
                   <div className="flex flex-col items-end gap-6">
                     <div className="text-right">
-                       <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] mb-2">Total Confirmed Amount</p>
+                       <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-2">총 확정 금액</p>
                        <p className="text-4xl font-black text-primary tracking-tighter">
                          {trip.REQ_AMT ? Number(trip.REQ_AMT).toLocaleString() : '0'}
                          <span className="text-xl ml-1">원</span>
@@ -149,7 +158,7 @@ const ReservationCompletedList = ({ user, onBack }) => {
                       onClick={() => setSelectedReqForCancel(trip)}
                       className="px-10 py-4 bg-slate-900 text-white font-black text-xs rounded-full hover:bg-rose-600 transition-all shadow-lg shadow-slate-900/10"
                     >
-                      여행취소
+                      전체 예약취소
                     </button>
                   </div>
                 </div>
@@ -160,20 +169,25 @@ const ReservationCompletedList = ({ user, onBack }) => {
                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
                         <span className="material-symbols-outlined text-lg">verified</span>
                      </div>
-                     <h4 className="text-xs font-black text-on-surface-variant uppercase tracking-[0.2em]">배차 확정된 차량</h4>
+                     <h4 className="text-xs font-black text-on-surface-variant uppercase tracking-widest">배차 확정된 차량 상세</h4>
                   </div>
                   
                   <div className="grid grid-cols-1 gap-6">
                     {trip.vehicles && trip.vehicles.map((bus, bIdx) => (
-                      <div key={bIdx} className="bg-white rounded-[2.5rem] p-8 flex flex-col md:flex-row md:items-center justify-between border border-slate-100 shadow-sm hover:shadow-md transition-all group/bus">
+                      <div key={bIdx} className={`bg-white rounded-[2.5rem] p-8 flex flex-col md:flex-row md:items-center justify-between border border-slate-100 shadow-sm hover:shadow-md transition-all group/bus relative overflow-hidden ${bus.RES_STAT === 'TRAVELER_CANCEL' ? 'opacity-60 grayscale-[0.5]' : ''}`}>
+                        {bus.RES_STAT === 'TRAVELER_CANCEL' && (
+                          <div className="absolute top-0 right-0">
+                            <span className="bg-rose-600 text-white px-6 py-1.5 rounded-bl-3xl text-[10px] font-black uppercase tracking-widest shadow-lg">취소됨</span>
+                          </div>
+                        )}
                         <div className="flex items-center gap-8">
-                           <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 group-hover/bus:bg-primary group-hover/bus:text-white transition-all transform group-hover/bus:rotate-3 shrink-0">
+                           <div className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all transform shrink-0 ${bus.RES_STAT === 'TRAVELER_CANCEL' ? 'bg-slate-100 text-slate-300' : 'bg-slate-50 text-slate-300 group-hover/bus:bg-primary group-hover/bus:text-white group-hover/bus:rotate-3'}`}>
                               <span className="material-symbols-outlined text-3xl">directions_bus</span>
                            </div>
                            <div>
                               <p className="text-xl font-black text-on-surface tracking-tight mb-2">{getVehicleLabel(bus.BUS_TYPE_CD)}</p>
                               <div className="flex items-center gap-4 text-xs font-bold">
-                                 <span className="text-slate-400">차량번호: <span className="text-slate-900">{bus.BUS_NO || '데이터 없음'}</span></span>
+                                 <span className="text-slate-400">차량번호: <span className="text-slate-900">{bus.BUS_NO || '배차 전'}</span></span>
                                  <span className="w-1 h-1 rounded-full bg-slate-200"></span>
                                  <span className="text-slate-400">기사님: <span className="text-primary">{bus.DRIVER_NAME || '정보 없음'}</span></span>
                               </div>
@@ -181,13 +195,29 @@ const ReservationCompletedList = ({ user, onBack }) => {
                         </div>
                         
                         <div className="mt-6 md:mt-0 flex items-center gap-6">
-                           <div className="text-right">
+                           <div className="text-right hidden md:block">
                               <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">기사님 연락처</p>
                               <p className="text-sm font-black text-slate-800 tracking-widest">{bus.DRIVER_PHONE || '준비 중'}</p>
                            </div>
-                           <button className="w-12 h-12 rounded-2xl bg-slate-50 text-slate-400 hover:text-primary hover:bg-primary/10 flex items-center justify-center transition-all group/chat">
-                              <span className="material-symbols-outlined group-hover/chat:scale-110 transition-transform">forum</span>
-                           </button>
+                           
+                           <div className="flex items-center gap-3">
+                              <button 
+                                onClick={() => handleChat(bus)}
+                                disabled={bus.RES_STAT === 'TRAVELER_CANCEL'}
+                                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all group/chat ${bus.RES_STAT === 'TRAVELER_CANCEL' ? 'bg-slate-50 text-slate-200' : 'bg-slate-50 text-slate-400 hover:text-primary hover:bg-primary/10'}`}
+                                title="기사님과 채팅"
+                              >
+                                 <span className="material-symbols-outlined group-hover/chat:scale-110 transition-transform">forum</span>
+                              </button>
+                              
+                              <button 
+                                onClick={() => handlePayment(trip, bus)}
+                                disabled={bus.RES_STAT === 'TRAVELER_CANCEL'}
+                                className={`px-8 h-12 rounded-2xl font-black text-sm transition-all ${bus.RES_STAT === 'TRAVELER_CANCEL' ? 'bg-slate-100 text-slate-300' : 'bg-primary text-white shadow-lg shadow-primary/20 hover:scale-105 active:scale-95'}`}
+                              >
+                                결제하기
+                              </button>
+                           </div>
                         </div>
                       </div>
                     ))}
