@@ -86,6 +86,7 @@ const CancelTripReasonModal = ({ tripData, currentCustId, onClose, onSuccess }) 
 
       if (response.ok) {
         console.info('[SUCCESS] Cancellation Complete');
+        alert('예약이 성공적으로 취소되었습니다.');
         if (onSuccess) onSuccess();
         onClose();
         window.location.reload(); 

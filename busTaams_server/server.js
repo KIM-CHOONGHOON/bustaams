@@ -870,74 +870,72 @@ app.post(['/api/auth/login', '/api/users/login'], async (req, res) => {
 app.put('/api/user/profile', async (req, res) => {
     try {
         const { custId, email, phoneNo, currentPassword, newPassword } = req.body;
-        console.log(`[DEBUG] Update Profile Request: CUST_ID=${custId}, Email=${email}`);
+        console.log(`\n[STEP 1] Update Request Received: CUST_ID=${custId}`);
 
         if (!custId || !currentPassword) {
-            return res.status(400).json({ error: '필수 정보(CUST_ID, 현재 비밀번호)가 누락되었습니다.' });
+            console.log('[STEP 2] Validation Failed: Missing custId or currentPassword');
+            return res.status(400).json({ error: '필수 정보가 누락되었습니다.' });
         }
 
-        // 1. 현재 비밀번호 확인 (본인 확인 필수)
-        console.log(`[DEBUG] Attempting to find user with CUST_ID: ${custId}`);
+        // 1. 사용자 확인
+        console.log('[STEP 3] Fetching user from DB...');
         let [userRows] = await pool.execute('SELECT * FROM TB_USER WHERE CUST_ID = ?', [custId]);
-        
-        // [보안/호환성] CUST_ID로 못 찾을 경우 USER_ID(로그인ID)로 재시도
         if (userRows.length === 0) {
-            console.log(`[DEBUG] User not found by CUST_ID, trying USER_ID: ${custId}`);
+            console.log('[STEP 3-ALT] Trying USER_ID search...');
             [userRows] = await pool.execute('SELECT * FROM TB_USER WHERE USER_ID = ?', [custId]);
         }
         
         if (userRows.length === 0) {
-            console.error(`[DEBUG] User NOT FOUND in DB for identifier: ${custId}`);
-            return res.status(404).json({ error: '사용자를 찾을 수 없습니다. 로그인을 다시 해주세요.' });
+            console.log('[STEP 4] User Not Found');
+            return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
         }
 
         const user = userRows[0];
-        console.log(`[DEBUG] User found: ${user.USER_NM} (${user.CUST_ID})`);
-
-        // 비밀번호 비교
+        console.log(`[STEP 5] Comparing Password for ${user.USER_NM}...`);
         const isMatch = await bcrypt.compare(currentPassword, user.PASSWORD);
-        console.log(`[DEBUG] Password check for ${user.USER_ID}: ${isMatch ? 'SUCCESS' : 'FAILED'}`);
-
-        if (!isMatch) {
-            // [개발 편의] 만약 DB 비밀번호가 암호화되지 않은 평문인 경우 대비 (운영 비권장)
-            if (currentPassword === user.PASSWORD) {
-                console.log('[DEBUG] Plain text password match detected.');
-            } else {
-                return res.status(401).json({ error: '현재 비밀번호가 일치하지 않습니다.' });
-            }
+        if (!isMatch && currentPassword !== user.PASSWORD) {
+            console.log('[STEP 6] Password Mismatch');
+            return res.status(401).json({ error: '비밀번호가 일치하지 않습니다.' });
         }
 
-        // 2. 기본 정보(이메일, 휴대폰) 및 수정자 정보 업데이트
-        let query = 'UPDATE TB_USER SET EMAIL = ?, HP_NO = ?, MOD_DT = NOW(), MOD_ID = ?';
-        let queryParams = [email, phoneNo, custId];
+        // 2. 동적 쿼리 생성
+        console.log('[STEP 7] Building Dynamic Query...');
+        const updateParts = [];
+        const params = [];
 
-        // 3. 새 비밀번호가 제공된 경우 해싱 후 업데이트
-        if (newPassword && newPassword.trim() !== '') {
-            console.log('[DEBUG] Hashing new password for update...');
+        if (email !== undefined) { updateParts.push('EMAIL = ?'); params.push(email); }
+        if (phoneNo !== undefined) { updateParts.push('HP_NO = ?'); params.push(phoneNo); }
+
+        if (newPassword && String(newPassword).trim() !== '') {
+            console.log('[STEP 8] Hashing New Password...');
             const hashedPassword = await bcrypt.hash(newPassword, 10);
-            query = query.replace('HP_NO = ?', 'HP_NO = ?, PASSWORD = ?');
-            // queryParams 순서 주의: [email, phoneNo, hashedPassword, custId]
-            queryParams.splice(2, 0, hashedPassword);
+            updateParts.push('PASSWORD = ?');
+            params.push(hashedPassword);
         }
 
-        // WHERE 조건 (10자리 CUST_ID로 조회)
-        query += ' WHERE CUST_ID = ?';
-        queryParams.push(custId);
+        updateParts.push('MOD_DT = NOW()');
+        updateParts.push('MOD_ID = ?');
+        params.push(custId || user.CUST_ID);
 
-        const [result] = await pool.execute(query, queryParams);
-        console.log(`[DEBUG] Update result: affectedRows=${result.affectedRows}`);
+        const query = `UPDATE TB_USER SET ${updateParts.join(', ')} WHERE CUST_ID = ?`;
+        params.push(user.CUST_ID);
 
-        if (result.affectedRows === 0) {
-            console.error('[DEBUG] Update failed: No rows affected.');
-            return res.status(500).json({ error: '데이터를 저장하는 데 실패했습니다. 다시 시도해주세요.' });
-        }
+        console.log('[STEP 9] Executing Update Query...');
+        const [result] = await pool.execute(query, params);
+        console.log(`[STEP 10] Update Success: affectedRows=${result.affectedRows}`);
 
-        res.status(200).json({ 
-            message: newPassword ? '회원 정보와 비밀번호가 모두 성공적으로 변경되었습니다.' : '회원 정보가 성공적으로 업데이트되었습니다.' 
-        });
+        res.status(200).json({ message: '성공적으로 처리되었습니다.' });
     } catch (error) {
-        console.error('[DEBUG] Update Profile Error:', error);
-        res.status(500).json({ error: '정보 업데이트 중 서버 오류가 발생했습니다.' });
+        const errorDetail = `
+[${new Date().toISOString()}] Update Profile Error:
+Message: ${error.message}
+Stack: ${error.stack}
+Payload: ${JSON.stringify(req.body)}
+--------------------------------------------------
+`;
+        fs.appendFileSync(path.join(__dirname, 'server_error.log'), errorDetail);
+        console.error('[DEBUG] Update Profile Error (logged to file):', error.message);
+        res.status(500).json({ error: '정보 업데이트 중 서버 오류가 발생했습니다.', details: error.message });
     }
 });
 
@@ -1738,7 +1736,25 @@ app.post('/api/auction/complex-cancel', async (req, res) => {
             }
         }
 
-        // 2. TB_AUCTION_REQ 상태 변경
+        // 2. TB_AUCTION_REQ 상태 확인 및 변경
+        const [statusRows] = await connection.execute(
+            'SELECT DATA_STAT FROM TB_AUCTION_REQ WHERE REQ_ID = ? FOR UPDATE',
+            [reqUuid]
+        );
+
+        if (statusRows.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ error: '취소할 여정 요청을 찾을 수 없습니다.' });
+        }
+
+        const currentStatus = statusRows[0].DATA_STAT;
+        if (!['AUCTION', 'BIDDING'].includes(currentStatus)) {
+            await connection.rollback();
+            return res.status(400).json({ 
+                error: `현재 상태(${currentStatus})에서는 전체 취소가 불가능합니다. (경매 중 또는 응찰 중인 경우만 가능)` 
+            });
+        }
+
         await connection.execute(`
             UPDATE TB_AUCTION_REQ 
             SET DATA_STAT = 'TRAVELER_CANCEL',
@@ -1875,43 +1891,43 @@ app.post('/api/auction/bus-change', async (req, res) => {
         connection = await pool.getConnection();
         await connection.beginTransaction();
 
-        // 1. 현재 변경 횟수 확인
-        const [rows] = await connection.execute(
-            'SELECT BUS_CHANG_CNT FROM TB_AUCTION_REQ WHERE REQ_ID = ? FOR UPDATE',
+        // 1. 활성 버스 대수 확인 (취소되지 않은 버스)
+        const [activeBuses] = await connection.execute(
+            'SELECT REQ_BUS_SEQ, RES_BUS_AMT FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ? AND DATA_STAT NOT IN (\'TRAVELER_CANCEL\', \'BUS_CANCEL\') FOR UPDATE',
             [reqId]
         );
 
-        if (rows.length === 0) {
+        if (activeBuses.length === 0) {
             await connection.rollback();
-            return res.status(404).json({ error: '해당 예약 요청을 찾을 수 없습니다.' });
+            return res.status(404).json({ error: '활성화된 버스 요청을 찾을 수 없습니다.' });
         }
 
-        const currentCnt = rows[0].BUS_CHANG_CNT || 0;
-        if (currentCnt >= 3) {
+        // 취소하려는 버스 찾기
+        const busToCancel = activeBuses.find(b => b.REQ_BUS_SEQ === Number(reqBusSeq));
+        if (!busToCancel) {
             await connection.rollback();
-            return res.status(400).json({ error: '버스 변경은 최대 3회까지만 가능합니다.' });
+            return res.status(404).json({ error: '취소할 버스 정보를 찾을 수 없거나 이미 취소되었습니다.' });
         }
 
-        // 2. 변경하려는 버스의 기존 금액 확인
-        const [busRows] = await connection.execute(
-            'SELECT RES_BUS_AMT FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?',
-            [reqId, reqBusSeq]
-        );
-        const oldBusAmt = busRows[0]?.RES_BUS_AMT || 0;
+        const oldBusAmt = busToCancel.RES_BUS_AMT || 0;
+        const remainingCount = activeBuses.length;
 
-        // 3. TB_AUCTION_REQ 업데이트 (카운트 증가, 상태 변경, 금액 차감)
-        const [masterUpdate] = await connection.execute(
-            'UPDATE TB_AUCTION_REQ SET BUS_CHANG_CNT = BUS_CHANG_CNT + 1, DATA_STAT = \'BUS_CHANGE\', REQ_AMT = REQ_AMT - ? WHERE REQ_ID = ?',
+        // 2. TB_AUCTION_REQ 업데이트 (금액 차감 및 조건부 상태 변경)
+        let masterStatusUpdate = '';
+        if (remainingCount === 1) {
+            masterStatusUpdate = ', DATA_STAT = \'TRAVELER_CANCEL\'';
+        }
+
+        await connection.execute(
+            `UPDATE TB_AUCTION_REQ SET BUS_CHANG_CNT = BUS_CHANG_CNT + 1, REQ_AMT = REQ_AMT - ? ${masterStatusUpdate} WHERE REQ_ID = ?`,
             [oldBusAmt, reqId]
         );
-        console.log(`[DEBUG] Master update (bus-change): affectedRows=${masterUpdate.affectedRows}, subtractedAmt=${oldBusAmt}`);
 
-        // 4. TB_AUCTION_REQ_BUS 업데이트 (상태 변경)
-        const [busUpdate] = await connection.execute(
-            'UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'BUS_CHANGE\' WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?',
+        // 3. TB_AUCTION_REQ_BUS 업데이트 (상태를 TRAVELER_CANCEL로 변경)
+        await connection.execute(
+            'UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'TRAVELER_CANCEL\' WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?',
             [reqId, reqBusSeq]
         );
-        console.log(`[DEBUG] Bus update (bus-change): affectedRows=${busUpdate.affectedRows}`);
 
         await connection.commit();
         res.status(200).json({ 
@@ -1940,50 +1956,69 @@ app.post('/api/auction/bus-cancel', async (req, res) => {
         connection = await pool.getConnection();
         await connection.beginTransaction();
 
-        // 1. 취소하려는 버스의 금액 확인
-        const [busRows] = await connection.execute(
-            'SELECT RES_BUS_AMT, DATA_STAT FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? FOR UPDATE',
-            [reqId, reqBusSeq]
+        // 1. 마스터 정보 조회 (기사 변경 횟수 확인)
+        const [masterRows] = await connection.execute(
+            'SELECT BUS_CHANG_CNT FROM TB_AUCTION_REQ WHERE REQ_ID = ? FOR UPDATE',
+            [reqId]
         );
 
-        if (busRows.length === 0) {
+        if (masterRows.length === 0) {
             await connection.rollback();
-            return res.status(404).json({ error: '해당 버스 요청을 찾을 수 없습니다.' });
+            return res.status(404).json({ error: '해당 여정 요청을 찾을 수 없습니다.' });
         }
 
-        const bus = busRows[0];
-        if (bus.DATA_STAT === 'BUS_CANCEL') {
+        const master = masterRows[0];
+        if (master.BUS_CHANG_CNT > 0) {
             await connection.rollback();
-            return res.status(400).json({ error: '이미 취소된 버스입니다.' });
+            return res.status(400).json({ error: '기사 변경은 이미 1회 수행되었습니다. 더 이상 변경할 수 없습니다.' });
         }
 
-        const cancelAmt = bus.RES_BUS_AMT || 0;
-
-        // 2. TB_AUCTION_REQ 업데이트 (상태 변경 및 금액 차감)
-        const [masterUpdate] = await connection.execute(
-            'UPDATE TB_AUCTION_REQ SET DATA_STAT = \'BUS_CANCEL\', REQ_AMT = REQ_AMT - ? WHERE REQ_ID = ?',
-            [cancelAmt, reqId]
-        );
-        console.log(`[DEBUG] Master update (bus-cancel): affectedRows=${masterUpdate.affectedRows}, subtractedAmt=${cancelAmt}`);
-
-        // 3. TB_AUCTION_REQ_BUS 상태 변경
-        const [busUpdate] = await connection.execute(
-            'UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'TRAVELER_CANCEL\' WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?',
-            [reqId, reqBusSeq]
-        );
-        console.log(`[DEBUG] Bus update (bus-cancel): affectedRows=${busUpdate.affectedRows}`);
-
-        // 4. TB_BUS_RESERVATION 상태 변경 (해당 슬롯에 배정된 기사가 있다면 취소)
+        // 2. TB_AUCTION_REQ 업데이트 (상태를 AUCTION으로 되돌리고 횟수 증가, 금액 유지)
         await connection.execute(
-            'UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_ID = ?',
+            'UPDATE TB_AUCTION_REQ SET DATA_STAT = \'AUCTION\', BUS_CHANG_CNT = BUS_CHANG_CNT + 1 WHERE REQ_ID = ?',
+            [reqId]
+        );
+
+        // 3. TB_AUCTION_REQ_BUS 업데이트 (재응찰을 위해 상태를 AUCTION으로 변경)
+        await connection.execute(
+            'UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'AUCTION\' WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?',
+            [reqId, reqBusSeq]
+        );
+
+        // 4. TB_BUS_RESERVATION 무효화 (기존 확정 데이터를 BUS_CHANGE로 변경)
+        // 무효화 하기 전에 기사 정보를 가져와서 알림 발송 준비
+        const [driverInfoRows] = await connection.execute(
+            `SELECT r.DRIVER_ID, d.DRIVER_HP, d.DRIVER_NM 
+             FROM TB_BUS_RESERVATION r
+             JOIN TB_DRIVER_INFO d ON r.DRIVER_ID = d.DRIVER_ID
+             WHERE r.REQ_ID = ? AND r.REQ_BUS_ID = ? AND r.DATA_STAT NOT IN ('BUS_CHANGE', 'TRAVELER_CANCEL')`,
+            [reqId, String(reqBusSeq)]
+        );
+
+        await connection.execute(
+            'UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'BUS_CHANGE\', MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_ID = ? AND DATA_STAT NOT IN (\'BUS_CHANGE\', \'TRAVELER_CANCEL\')',
             [reqId, String(reqBusSeq)]
         );
 
         await connection.commit();
-        res.status(200).json({ 
-            message: '버스가 성공적으로 취소되었습니다.',
-            cancelledAmt: cancelAmt
-        });
+
+        // 5. 알림톡 발송 (트랜잭션 완료 후 비동기 처리)
+        if (driverInfoRows.length > 0) {
+            const driver = driverInfoRows[0];
+            try {
+                await sendAlimTalkAndLog({
+                    reqId: reqId,
+                    receiverId: driver.DRIVER_ID,
+                    receiverPhone: driver.DRIVER_HP,
+                    content: `[busTaams] 예약 취소 안내\n\n기사님, 예약된 여정(요청번호: ${reqId})이 고객님의 요청으로 취소되었습니다.`,
+                    category: 'DRIVER_CHANGE_NOTICE'
+                });
+                console.log(`[ALIMTALK] Driver Change notification sent to ${driver.DRIVER_NM}(${driver.DRIVER_HP})`);
+            } catch (alimError) {
+                console.error('[ALIMTALK ERROR] Failed to send driver change notice:', alimError.message);
+            }
+        }
+        res.status(200).json({ message: '기사 변경 요청이 완료되었습니다. 다시 경매가 진행됩니다.' });
 
 
     } catch (error) {
@@ -2160,6 +2195,13 @@ app.get('/api/auction/history/:custId', async (req, res) => {
                 ab.BUS_TYPE_CD,
                 ab.RES_BUS_AMT as UNIT_REQ_AMT,
                 ab.DATA_STAT as BUS_STAT,
+                (
+                    SELECT res.DATA_STAT 
+                    FROM TB_BUS_RESERVATION res 
+                    WHERE res.REQ_ID = r.REQ_ID 
+                      AND res.REQ_BUS_ID = CAST(ab.REQ_BUS_SEQ AS CHAR)
+                    LIMIT 1
+                ) as RES_STAT,
                 (
                     SELECT res.DRIVER_BIDDING_PRICE 
                     FROM TB_BUS_RESERVATION res 
@@ -3514,7 +3556,7 @@ app.use('/api/user/device-token', createUserDeviceTokenRouter(pool));
 
         await ensureTbUserTable(connection);
         await ensureTbUserColumns(connection);
-        await ensureTbUserTermsHistTable(connection);
+        // await ensureTbUserTermsHistTable(connection); // Deleted table
         await ensureTbUserDeviceTokenTable(connection);
         await ensureTbFileMasterTable(connection);
         await ensureTbBusDriverVehicleSchema(connection);

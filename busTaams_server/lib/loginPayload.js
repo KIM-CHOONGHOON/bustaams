@@ -141,7 +141,7 @@ function buildPostLoginUserDto({ user, cancelRow, subscriptionRow }, opts = {}) 
         userType,
         userNm,
         hpNo,
-        email: user.EMAIL,
+        email: user.email || user.EMAIL || '',
         snsType: user.SNS_TYPE || 'NONE',
         profileFileId: user.PROFILE_FILE_ID != null ? String(user.PROFILE_FILE_ID) : null,
         profileImgPath: user.PROFILE_IMG_PATH || null,

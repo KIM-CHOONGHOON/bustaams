@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const AccountSettings = ({ user, onBack, onLogout }) => {
+const AccountSettings = ({ user, onBack, onLogout, onUpdateUser }) => {
   const [userName, setUserName] = useState(user?.userName || '');
   const [email, setEmail] = useState(user?.email || '');
   const [phoneNo, setPhoneNo] = useState(user?.phoneNo || '');
@@ -21,6 +21,7 @@ const AccountSettings = ({ user, onBack, onLogout }) => {
   // user 정보가 변경될 때마다 state 동기화
   useEffect(() => {
     if (user) {
+      console.log('[DEBUG] AccountSettings User Prop:', user);
       setUserName(user.userName || '');
       setEmail(user.email || '');
       const phone = user.phoneNo || '';
@@ -108,44 +109,47 @@ const AccountSettings = ({ user, onBack, onLogout }) => {
     }
   };
 
+  // 모달 상태
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+
   const handleSave = async () => {
     if (!currentPassword) {
-      alert('변경을 위해 현재 비밀번호를 입력해주세요.');
+      alert('본인 확인을 위해 현재 비밀번호를 입력해주세요.');
       return;
     }
 
     if (!isPhoneVerified) {
-      alert('휴대폰 번호 변경을 위해 인증을 완료해주세요.');
-      return;
-    }
-
-    if (newPassword && newPassword !== confirmPassword) {
-      alert('새 비밀번호와 확인 비밀번호가 일치하지 않습니다.');
+      alert('휴대폰 번호 인증을 완료해주세요.');
       return;
     }
 
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:8080/api/user/profile', {
+      const response = await fetch('/api/user/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           custId: user.custId,
           email,
           phoneNo,
-          currentPassword,
-          newPassword
+          currentPassword, // 정보 수정을 위한 인증용
         }),
       });
 
       const result = await response.json();
 
       if (response.ok) {
-        alert(result.message || '정보가 성공적으로 수정되었습니다.');
+        alert(result.message || '회원 정보가 성공적으로 수정되었습니다.');
+        
+        if (onUpdateUser) {
+          const updatedUser = {
+            ...user,
+            email,
+            phoneNo
+          };
+          onUpdateUser(updatedUser);
+        }
         setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
-        if (onBack) onBack(); 
       } else {
         alert(result.error || '정보 수정에 실패했습니다.');
       }
@@ -156,6 +160,47 @@ const AccountSettings = ({ user, onBack, onLogout }) => {
       setIsLoading(false);
     }
   };
+
+  const handlePasswordChangeSubmit = async () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      alert('모든 항목을 입력해주세요.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      alert('새 비밀번호와 확인 비밀번호가 일치하지 않습니다.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/user/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          custId: user.custId,
+          currentPassword,
+          newPassword // 비밀번호 변경 요청
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert('비밀번호가 변경되었습니다. 보안을 위해 다시 로그인해주세요.');
+        setShowPasswordModal(false); // 모달 닫기
+        if (onBack) onBack(); // 내 정보 관리 화면도 닫기
+        onLogout(); // 로그아웃 처리
+      } else {
+        alert(result.error || '비밀번호 변경에 실패했습니다.');
+      }
+    } catch (error) {
+      alert('서버 오류가 발생했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   return (
     <div className="fixed inset-0 z-[100] bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-300">
@@ -272,58 +317,54 @@ const AccountSettings = ({ user, onBack, onLogout }) => {
                 </div>
               </div>
 
-              {/* Password Change */}
-              <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
-                <h3 className="font-headline text-xl font-bold mb-8 flex items-center gap-3 text-teal-900">
-                  <span className="material-symbols-outlined">lock_reset</span>
-                  비밀번호 변경
-                </h3>
+              {/* Security Section (Password Change) */}
+              <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100 relative overflow-hidden group">
+                <div className="absolute top-0 left-0 w-1.5 h-full bg-teal-600"></div>
+                <div className="flex items-center justify-between mb-8">
+                  <h3 className="font-headline text-xl font-bold flex items-center gap-3 text-teal-900">
+                    <span className="material-symbols-outlined">security</span>
+                    보안 설정
+                  </h3>
+                  <span className="px-3 py-1 bg-teal-50 text-teal-700 text-[10px] font-black uppercase tracking-widest rounded-full">Secure</span>
+                </div>
+                
                 <div className="space-y-6">
                   <div className="flex flex-col gap-2">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">현재 비밀번호</label>
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">본인 확인 (현재 비밀번호)</label>
                     <input 
-                      className="bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:bg-white focus:ring-2 focus:ring-primary/20 transition-all" 
-                      placeholder="••••••••" 
+                      className="bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:bg-white focus:ring-2 focus:ring-primary/20 transition-all font-bold" 
+                      placeholder="정보 수정을 위해 입력하세요" 
                       type="password"
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
                     />
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">새 비밀번호</label>
-                      <input 
-                        className="bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:bg-white focus:ring-2 focus:ring-primary/20 transition-all" 
-                        placeholder="새 비밀번호" 
-                        type="password"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                      />
+                  
+                  <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between group-hover:bg-slate-100/50 transition-colors">
+                    <div className="space-y-1">
+                      <h4 className="font-bold text-slate-800">비밀번호 변경</h4>
+                      <p className="text-xs text-slate-500">주기적인 비밀번호 변경으로 계정을 안전하게 보호하세요.</p>
                     </div>
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">비밀번호 확인</label>
-                      <input 
-                        className="bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:bg-white focus:ring-2 focus:ring-primary/20 transition-all" 
-                        placeholder="한번 더 입력" 
-                        type="password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                      />
-                    </div>
+                    <button 
+                      onClick={() => setShowPasswordModal(true)}
+                      className="px-6 py-3 bg-white border border-slate-200 text-slate-800 rounded-xl font-bold text-sm hover:border-primary hover:text-primary transition-all shadow-sm active:scale-95"
+                    >
+                      변경하기
+                    </button>
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* Right: Security & SNS */}
+            {/* Right: Security Branding & SNS */}
             <section className="col-span-12 lg:col-span-5 space-y-8">
               <div className="bg-teal-950 text-white p-8 rounded-[2rem] shadow-xl relative overflow-hidden group min-h-[220px] flex flex-col justify-end">
                 <div className="relative z-10">
-                  <span className="inline-block px-3 py-1 bg-primary text-[10px] font-black uppercase tracking-[0.2em] rounded-full mb-4">Secured</span>
-                  <h4 className="font-headline text-2xl font-bold mb-2">보안 등급: 높음</h4>
-                  <p className="text-white/60 text-sm font-medium leading-relaxed">계정 정보가 안전하게 암호화되어 관리되고 있습니다.</p>
+                  <span className="inline-block px-3 py-1 bg-primary text-[10px] font-black uppercase tracking-[0.2em] rounded-full mb-4">Protected</span>
+                  <h4 className="font-headline text-2xl font-bold mb-2">데이터 보안 보장</h4>
+                  <p className="text-white/60 text-sm font-medium leading-relaxed">모든 개인정보는 AES-256 규격으로 안전하게 암호화되어 보호받고 있습니다.</p>
                 </div>
-                <span className="material-symbols-outlined absolute -top-4 -right-4 text-9xl opacity-5 rotate-12 group-hover:rotate-0 transition-transform duration-700">security</span>
+                <span className="material-symbols-outlined absolute -top-4 -right-4 text-9xl opacity-5 rotate-12 group-hover:rotate-0 transition-transform duration-700">verified_user</span>
               </div>
 
               <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
@@ -362,23 +403,85 @@ const AccountSettings = ({ user, onBack, onLogout }) => {
           </div>
         </main>
 
-        {/* Footer Action Bar */}
-        <footer className="shrink-0 px-10 py-8 bg-slate-50 border-t border-slate-100 flex justify-end gap-6 items-center sticky bottom-0">
+        {/* Footer Actions */}
+        <footer className="shrink-0 px-10 py-8 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
           <button 
             onClick={onBack}
-            className="text-slate-400 font-bold hover:text-teal-950 transition-colors text-sm"
+            className="px-8 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-100 transition-all"
           >
             취소
           </button>
           <button 
             onClick={handleSave}
             disabled={isLoading}
-            className={`bg-primary text-white px-12 py-4 rounded-full font-headline text-lg font-bold shadow-xl shadow-primary/20 transition-all hover:scale-105 active:scale-95 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+            className="px-10 py-4 bg-primary text-white rounded-2xl font-bold hover:shadow-lg hover:shadow-primary/30 transition-all active:scale-95 disabled:bg-slate-300 disabled:shadow-none"
           >
             {isLoading ? '저장 중...' : '변경사항 저장하기'}
           </button>
         </footer>
       </div>
+
+      {/* Password Change Modal (Sub-Modal) */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-[110] bg-teal-950/40 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-8 space-y-6">
+              <div className="flex items-center justify-between">
+                <h4 className="text-2xl font-black text-teal-900 tracking-tighter">비밀번호 변경</h4>
+                <button onClick={() => setShowPasswordModal(false)} className="text-slate-400 hover:text-slate-600">
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">현재 비밀번호</label>
+                  <input 
+                    className="bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:bg-white focus:ring-2 focus:ring-primary/20 transition-all" 
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">새 비밀번호</label>
+                  <input 
+                    className="bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:bg-white focus:ring-2 focus:ring-primary/20 transition-all" 
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">새 비밀번호 확인</label>
+                  <input 
+                    className="bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:bg-white focus:ring-2 focus:ring-primary/20 transition-all" 
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 flex flex-col gap-3">
+                <button 
+                  onClick={handlePasswordChangeSubmit}
+                  disabled={isLoading}
+                  className="w-full py-4 bg-teal-900 text-white rounded-2xl font-bold hover:bg-teal-800 transition-all active:scale-95 shadow-lg shadow-teal-900/20"
+                >
+                  {isLoading ? '변경 중...' : '비밀번호 변경 및 다시 로그인'}
+                </button>
+                <button 
+                  onClick={() => setShowPasswordModal(false)}
+                  className="w-full py-4 bg-slate-100 text-slate-500 rounded-2xl font-bold hover:bg-slate-200 transition-all"
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

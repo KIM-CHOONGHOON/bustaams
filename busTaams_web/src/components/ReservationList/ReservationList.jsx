@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import QuotationList from '../QuotationList/QuotationList';
+import QuotationDetail from '../QuotationDetail/QuotationDetail';
 import CancelTripReasonModal from './CancelTripReasonModal';
 import BusReRegistrationModal from './BusReRegistrationModal';
 
@@ -8,6 +9,7 @@ const ReservationList = ({ user, onBack }) => {
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedReqId, setSelectedReqId] = useState(null);
+  const [selectedBidId, setSelectedBidId] = useState(null);
   const [showQuotationList, setShowQuotationList] = useState(false);
   const [showCancelReasonModal, setShowCancelReasonModal] = useState(false);
   const [cancelTripData, setCancelTripData] = useState(null);
@@ -63,7 +65,7 @@ const ReservationList = ({ user, onBack }) => {
   };
 
   const handleBusChange = async (bus) => {
-    if (!window.confirm(`${getVehicleLabel(bus.BUS_TYPE_CD)} 차량 정보를 변경하시겠습니까? (최대 3회 가능)`)) return;
+    if (!window.confirm(`선택하신 ${getVehicleLabel(bus.BUS_TYPE_CD)} 차량을 예약 목록에서 취소(삭제)하시겠습니까?`)) return;
 
     try {
       const response = await fetch('http://localhost:8080/api/auction/bus-change', {
@@ -93,7 +95,7 @@ const ReservationList = ({ user, onBack }) => {
   };
 
   const handleBusCancel = async (bus) => {
-    if (window.confirm(`${getVehicleLabel(bus.BUS_TYPE_CD)} 차량 한 대만 취소하시겠습니까?`)) {
+    if (window.confirm(`선택하신 ${getVehicleLabel(bus.BUS_TYPE_CD)}의 기사를 변경하시겠습니까?\n(기사 변경은 여정당 최대 1회만 가능합니다.)`)) {
       try {
         const response = await fetch('http://localhost:8080/api/auction/bus-cancel', {
           method: 'POST',
@@ -128,9 +130,8 @@ const ReservationList = ({ user, onBack }) => {
     setSelectedReqId(null);
   };
 
-  const handleViewDetail = (bidUuid) => {
-    console.log('Viewing Bid Detail:', bidUuid);
-    alert(`견적 상세보기 기능 준비중입니다. (Bid UUID: ${bidUuid})`);
+  const handleViewDetail = (bidId) => {
+    setSelectedBidId(bidId);
   };
 
   const trimAddress = (addr) => {
@@ -239,13 +240,6 @@ const ReservationList = ({ user, onBack }) => {
                                   {trip.DATA_STAT === 'CONFIRM' ? '확정된 여정' : '견적 입찰 진행 중'}
                                </span>
                             </div>
-                            <button 
-                              onClick={() => handleCancelTrip(trip)}
-                              className="px-4 py-2 text-[10px] font-black text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-all flex items-center gap-2 uppercase tracking-widest border border-red-50"
-                            >
-                               <span className="material-symbols-outlined text-sm">cancel</span>
-                               전체 예약취소
-                            </button>
                          </div>
                          <h3 className="text-4xl font-black font-headline text-on-surface tracking-tightest mb-2 leading-tight">
                            {trimAddress(trip.START_ADDR)} → {trimAddress(trip.END_ADDR)}
@@ -253,8 +247,6 @@ const ReservationList = ({ user, onBack }) => {
                          <p className="text-xl font-bold text-slate-400 mb-6">{dateStr}</p>
                          <div className="flex items-center gap-6">
                             <p className="text-xs text-outline font-bold uppercase tracking-widest">테마: <span className="text-on-surface ml-1">{trip.TRIP_TITLE || '프리미엄 투어'}</span></p>
-                            <div className="w-[1px] h-3 bg-slate-200"></div>
-                            <p className="text-[10px] text-outline font-bold uppercase tracking-widest">예약번호: {trip.REQ_UUID_STR?.toUpperCase()}</p>
                          </div>
                       </div>
                     </div>
@@ -266,6 +258,21 @@ const ReservationList = ({ user, onBack }) => {
                                <span className="material-symbols-outlined text-lg">directions_bus</span>
                             </div>
                             <h4 className="text-xs font-black text-on-surface-variant uppercase tracking-[0.2em]">요청 차량 ({trip.buses.length}대)</h4>
+                         </div>
+                         <div className="flex items-center gap-3">
+                            <button 
+                              className="px-5 py-2.5 bg-primary text-white text-[10px] font-black rounded-full hover:shadow-lg hover:shadow-primary/30 transition-all active:scale-95 flex items-center gap-2 uppercase tracking-widest"
+                            >
+                               <span className="material-symbols-outlined text-sm">verified</span>
+                               예약확정
+                            </button>
+                            <button 
+                              onClick={() => handleCancelTrip(trip)}
+                              className="px-5 py-2.5 text-[10px] font-black text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all flex items-center gap-2 uppercase tracking-widest border border-slate-100 hover:border-red-100"
+                            >
+                               <span className="material-symbols-outlined text-sm">cancel</span>
+                               전체 예약취소
+                            </button>
                          </div>
                       </div>
                       <div className="grid grid-cols-1 gap-6">
@@ -287,14 +294,16 @@ const ReservationList = ({ user, onBack }) => {
                                     onClick={() => handleBusChange(bus)}
                                     className="px-5 py-2.5 bg-slate-100 text-slate-600 text-[11px] font-black rounded-full hover:bg-slate-200 transition-all shadow-sm border border-slate-200 whitespace-nowrap" 
                                   >
-                                     버스변경
-                                  </button>
-                                  <button 
-                                    onClick={() => handleBusCancel(bus)}
-                                    className="px-5 py-2.5 bg-red-50 text-red-400 text-[11px] font-black rounded-full hover:bg-red-500 hover:text-white transition-all shadow-sm border border-red-100 whitespace-nowrap" 
-                                  >
                                      버스취소
                                   </button>
+                                  {bus.RES_STAT && (
+                                    <button 
+                                      onClick={() => handleBusCancel(bus)}
+                                      className="px-5 py-2.5 bg-red-50 text-red-400 text-[11px] font-black rounded-full hover:bg-red-500 hover:text-white transition-all shadow-sm border border-red-100 whitespace-nowrap" 
+                                    >
+                                       기사변경
+                                    </button>
+                                  )}
                                </div>
                             </div>
                           );
@@ -358,6 +367,28 @@ const ReservationList = ({ user, onBack }) => {
             fetchReservations();
           }}
         />
+      )}
+
+      {/* 기사 상세 정보 모달 */}
+      {selectedBidId && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-gray-900/60 backdrop-blur-lg p-4">
+          <div className="relative w-full max-w-5xl max-h-[90vh] bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col">
+            <div className="absolute top-6 right-8 z-50">
+               <button 
+                 onClick={() => setSelectedBidId(null)} 
+                 className="w-12 h-12 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 transition-all shadow-sm"
+               >
+                 <span className="material-symbols-outlined font-bold">close</span>
+               </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <QuotationDetail 
+                bidUuid={selectedBidUuid} 
+                onBack={() => setSelectedBidUuid(null)} 
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -45,8 +45,6 @@ function normalizeUserSession(raw) {
   // CUST_ID (내부 식별자) 표준화
   let cidCandidate = (u.custId != null && String(u.custId).trim()) ||
     (u.CUST_ID != null && String(u.CUST_ID).trim()) ||
-    (u.userUuid != null && String(u.userUuid).trim()) ||
-    (u.uuid != null && String(u.uuid).trim()) ||
     '';
 
   // [추가] 레거시 UUID 형식(하이픈 포함)인 경우 무시 (10자리 숫자 ID 체계 준수)
@@ -58,13 +56,9 @@ function normalizeUserSession(raw) {
   
   if (cid) {
     u.custId = cid;
-    u.uuid = cid; // 하위 호환성 유지
-    u.userUuid = cid; // 하위 호환성 유지
   } else {
     // ID가 없거나 레거시인 경우 식별자 제거
     delete u.custId;
-    delete u.uuid;
-    delete u.userUuid;
   }
 
   // USER_ID (로그인 ID) 표준화
@@ -594,7 +588,11 @@ function SignUpModal({ close }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: email, password, userName, phoneNo: phoneNumber || "01000000000",
+          userId: email, 
+          email: email,
+          password, 
+          userName, 
+          phoneNo: phoneNumber || "01000000000",
           userType: userRole === 'customer' ? 'CONSUMER' : 'DRIVER',
           firebaseIdToken: firebaseIdToken || "DEV_SKIP",
           mktAgreeYn: agreements.termMarketing ? 'Y' : 'N',
@@ -806,6 +804,7 @@ function App() {
     setUser(null);
     setCustomerView('dashboard');
     setShowBusRegisterModal(false);
+    setShowAccountSettings(false); // 내 정보 창 닫기 추가
     setDriverView('dashboard');
     setTravelerQuoteReqId(null);
     setShowLiveChatTraveler(false);
@@ -912,7 +911,11 @@ function App() {
           user={user} 
           onBack={() => setShowAccountSettings(false)} 
           onLogout={handleLogout}
-          onUpdateUser={(updatedUser) => setUser(updatedUser)}
+          onUpdateUser={(updatedUser) => {
+            const normalized = normalizeUserSession(updatedUser);
+            localStorage.setItem('user', JSON.stringify(normalized));
+            setUser(normalized);
+          }}
         />
       )}
       {showSignUpModal && <SignUpModal close={() => setShowSignUpModal(false)} />}
