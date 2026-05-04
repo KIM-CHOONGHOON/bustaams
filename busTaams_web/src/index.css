@@ -15,4 +15,28 @@
   .hero-overlay {
     background: linear-gradient(rgba(0,0,0,0.1), rgba(0,0,0,0.3));
   }
+
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+  .tonal-stacking {
+    box-shadow: 0 20px 40px -15px rgba(0, 104, 95, 0.1);
+  }
+  .kinetic-gradient-primary, .hero-gradient {
+    background: linear-gradient(135deg, #004e47 0%, #00685f 100%);
+  }
+  .kinetic-gradient-secondary, .accent-gradient {
+    background: linear-gradient(135deg, #9d4300 0%, #ff8d4b 100%);
+  }
+  .glass-nav {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px);
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }

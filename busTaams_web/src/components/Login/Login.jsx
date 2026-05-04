@@ -20,7 +20,7 @@ const Login = ({ onToggle, onLoginSuccess }) => {
     setError('');
 
     try {
-      const response = await fetch(`${API_BASE}/api/auth/login`, {
+      const response = await fetch(`${API_BASE}/api/users/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, password, snsType: 'NONE' }),
@@ -29,7 +29,7 @@ const Login = ({ onToggle, onLoginSuccess }) => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || '로그인에 실패했습니다.');
+        throw new Error((data.error || '로그인에 실패했습니다.') + (data.details ? ' [상세: ' + data.details + ']' : ''));
       }
 
       // Success
