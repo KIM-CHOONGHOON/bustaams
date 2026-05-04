@@ -57,7 +57,7 @@ const BusCard = ({ title, img, type, qty, price, desc, color, adjustQty, handleC
   </div>
 );
 
-const BusReRegistrationModal = ({ reqId, onClose, onSuccess }) => {
+const BusReRegistrationModal = ({ reqId, user, onClose, onSuccess }) => {
   const [qtys, setQtys] = React.useState({
     premiumQty: 0,
     standardQty: 0,
@@ -113,7 +113,7 @@ const BusReRegistrationModal = ({ reqId, onClose, onSuccess }) => {
       const response = await fetch('http://localhost:8080/api/auction/re-register-bus', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reqId, vehicles })
+        body: JSON.stringify({ reqId, vehicles, custId: user?.custId })
       });
 
       if (response.ok) {

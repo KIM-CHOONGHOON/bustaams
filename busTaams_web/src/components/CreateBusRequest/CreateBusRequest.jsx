@@ -451,12 +451,12 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
             totalAmount: totalAmount,
             waypoints: enrichedWaypoints,
             vehicles: [
-                { type: 'NORMAL_45', qty: formData.standardQty, price: Number(String(formData.standardPrice || 0).replace(/[^0-9]/g, '')) || 0 },
-                { type: 'PRESTIGE_28', qty: formData.premiumQty, price: Number(String(formData.premiumPrice || 0).replace(/[^0-9]/g, '')) || 0 },
-                { type: 'PREMIUM_21', qty: formData.premiumGoldQty, price: Number(String(formData.premiumGoldPrice || 0).replace(/[^0-9]/g, '')) || 0 },
-                { type: 'VVIP_16', qty: formData.vvipQty, price: Number(String(formData.vvipPrice || 0).replace(/[^0-9]/g, '')) || 0 },
-                { type: 'MINI_25', qty: formData.miniBusQty, price: Number(String(formData.miniBusPrice || 0).replace(/[^0-9]/g, '')) || 0 },
-                { type: 'VAN_11', qty: formData.largeVanQty, price: Number(String(formData.largeVanPrice || 0).replace(/[^0-9]/g, '')) || 0 }
+                { type: 'NORMAL_45', qty: formData.standardQty, price: Number(String(formData.standardPrice || 0).replace(/[^0-9]/g, '')) || 0, fuelCost: getFuelCost('NORMAL_45') },
+                { type: 'PRESTIGE_28', qty: formData.premiumQty, price: Number(String(formData.premiumPrice || 0).replace(/[^0-9]/g, '')) || 0, fuelCost: getFuelCost('PRESTIGE_28') },
+                { type: 'PREMIUM_21', qty: formData.premiumGoldQty, price: Number(String(formData.premiumGoldPrice || 0).replace(/[^0-9]/g, '')) || 0, fuelCost: getFuelCost('PREMIUM_21') },
+                { type: 'VVIP_16', qty: formData.vvipQty, price: Number(String(formData.vvipPrice || 0).replace(/[^0-9]/g, '')) || 0, fuelCost: getFuelCost('VVIP_16') },
+                { type: 'MINI_25', qty: formData.miniBusQty, price: Number(String(formData.miniBusPrice || 0).replace(/[^0-9]/g, '')) || 0, fuelCost: getFuelCost('MINI_25') },
+                { type: 'VAN_11', qty: formData.largeVanQty, price: Number(String(formData.largeVanPrice || 0).replace(/[^0-9]/g, '')) || 0, fuelCost: getFuelCost('VAN_11') }
             ].filter(v => v.qty > 0)
         };
 

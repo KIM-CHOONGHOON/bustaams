@@ -1077,32 +1077,36 @@ app.post('/api/auction/request', async (req, res) => {
                 const busQuery = `
                     INSERT INTO TB_AUCTION_REQ_BUS (
                         REQ_ID, REQ_BUS_SEQ, BUS_TYPE_CD, 
+                        FUEL_COST, TOLLS_AMT, RES_BUS_AMT,
                         RES_FEE_TOTAL_AMT, RES_FEE_REFUND_AMT, RES_FEE_ATTRIBUTION_AMT,
-                        REG_DT, REG_ID, MOD_DT, MOD_ID, DATA_STAT, RES_BUS_AMT
-                    ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?, 'AUCTION', ?)
+                        REG_DT, REG_ID, MOD_DT, MOD_ID, DATA_STAT
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?, 'AUCTION')
                 `;
                 
                 let busSeq = 1;
                 for (const bus of vehicles) {
                     const qty = bus.qty || 0;
-                    const rawPrice = bus.price || 0;
-                    const finalPrice = Number(String(rawPrice).replace(/[^0-9]/g, '')) || 0;
+                    const finalPrice = Number(bus.price) || 0;
+                    const fuelCost = Number(bus.fuelCost) || 0;
+                    const tollsAmt = 0; // 향후 자동계산 로직 추가 가능
 
                     for (let i = 0; i < qty; i++) {
-                        const totalFee = finalPrice * 0.066;
-                        const refundFee = finalPrice * 0.055;
-                        const attributionFee = finalPrice * 0.011;
+                        const totalFee = Math.floor(finalPrice * 0.066);
+                        const refundFee = Math.floor(finalPrice * 0.055);
+                        const attributionFee = totalFee - refundFee;
 
                         await connection.execute(busQuery, [
                             reqId, 
                             busSeq++, 
                             bus.type, 
+                            fuelCost,
+                            tollsAmt,
+                            finalPrice,
                             totalFee, 
                             refundFee, 
                             attributionFee, 
                             secureRegId,
-                            secureRegId, // MOD_ID
-                            finalPrice
+                            secureRegId
                         ]);
                     }
                 }
@@ -1541,24 +1545,27 @@ app.post('/api/auction/complex-cancel', async (req, res) => {
         await connection.execute(`
             UPDATE TB_AUCTION_REQ 
             SET DATA_STAT = 'TRAVELER_CANCEL',
+                MOD_ID = ?,
                 MOD_DT = NOW()
             WHERE REQ_ID = ?
-        `, [reqId]);
+        `, [custId, reqId]);
 
         // 3. 연결된 모든 입찰 건(TB_BUS_RESERVATION) 및 차량 상세(TB_AUCTION_REQ_BUS) 상태 변경
         await connection.execute(`
             UPDATE TB_BUS_RESERVATION 
             SET DATA_STAT = 'TRAVELER_CANCEL',
+                MOD_ID = ?,
                 MOD_DT = NOW()
             WHERE REQ_ID = ?
-        `, [reqId]);
+        `, [custId, reqId]);
 
         await connection.execute(`
             UPDATE TB_AUCTION_REQ_BUS
             SET DATA_STAT = 'TRAVELER_CANCEL',
+                MOD_ID = ?,
                 MOD_DT = NOW()
             WHERE REQ_ID = ?
-        `, [reqId]);
+        `, [custId, reqId]);
 
         // 4. TB_USER_CANCEL_HIST 이력 삽입
         const [maxHistRows] = await connection.execute('SELECT MAX(HIST_SEQ) as maxSeq FROM TB_USER_CANCEL_HIST WHERE CUST_ID = ?', [custId]);
@@ -1603,11 +1610,13 @@ app.post('/api/auction/complex-cancel', async (req, res) => {
 app.post('/api/auction/re-register-bus', async (req, res) => {
     let connection;
     try {
-        const { reqId, vehicles } = req.body;
+        const { reqId, vehicles, custId } = req.body;
         
         if (!reqId || !vehicles || !Array.isArray(vehicles) || vehicles.length === 0) {
             return res.status(400).json({ error: 'reqId and vehicles array are required' });
         }
+
+        const secureModId = String(custId || 'SYSTEM').substring(0, 10);
 
         connection = await pool.getConnection();
         await connection.beginTransaction();
@@ -1634,9 +1643,9 @@ app.post('/api/auction/re-register-bus', async (req, res) => {
 
             await connection.execute(
                 `INSERT INTO TB_AUCTION_REQ_BUS 
-                (REQ_ID, REQ_BUS_SEQ, BUS_TYPE_CD, DATA_STAT, RES_BUS_AMT, REG_ID) 
-                VALUES (?, ?, ?, 'AUCTION', ?, ?)`,
-                [reqId, nextSeq, bus.type, bus.price, 'SYSTEM']
+                (REQ_ID, REQ_BUS_SEQ, BUS_TYPE_CD, DATA_STAT, RES_BUS_AMT, REG_ID, MOD_ID) 
+                VALUES (?, ?, ?, 'AUCTION', ?, ?, ?)`,
+                [reqId, nextSeq, bus.type, bus.price, secureModId, secureModId]
             );
         }
 
@@ -1645,8 +1654,8 @@ app.post('/api/auction/re-register-bus', async (req, res) => {
 
         // 4. TB_AUCTION_REQ 상태 복구 및 금액 합산
         const [reRegUpdate] = await connection.execute(
-            "UPDATE TB_AUCTION_REQ SET DATA_STAT = 'AUCTION', REQ_AMT = REQ_AMT + ? WHERE REQ_ID = ?",
-            [totalNewAmt, reqId]
+            "UPDATE TB_AUCTION_REQ SET DATA_STAT = 'AUCTION', REQ_AMT = REQ_AMT + ?, MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?",
+            [totalNewAmt, secureModId, reqId]
         );
         console.log(`[DEBUG] Master recovery (re-register): affectedRows=${reRegUpdate.affectedRows}, addedAmt=${totalNewAmt}`);
 
@@ -1665,11 +1674,13 @@ app.post('/api/auction/re-register-bus', async (req, res) => {
 app.post('/api/auction/bus-change', async (req, res) => {
     let connection;
     try {
-        const { reqId, reqBusSeq } = req.body;
+        const { reqId, reqBusSeq, custId } = req.body;
         
         if (!reqId || !reqBusSeq) {
             return res.status(400).json({ error: 'reqId and reqBusSeq are required' });
         }
+
+        const secureModId = String(custId || 'SYSTEM').substring(0, 10);
 
         connection = await pool.getConnection();
         await connection.beginTransaction();
@@ -1702,14 +1713,14 @@ app.post('/api/auction/bus-change', async (req, res) => {
         }
 
         await connection.execute(
-            `UPDATE TB_AUCTION_REQ SET BUS_CHANG_CNT = BUS_CHANG_CNT + 1, REQ_AMT = REQ_AMT - ? ${masterStatusUpdate} WHERE REQ_ID = ?`,
-            [oldBusAmt, reqId]
+            `UPDATE TB_AUCTION_REQ SET BUS_CHANG_CNT = BUS_CHANG_CNT + 1, REQ_AMT = REQ_AMT - ?, MOD_ID = ?, MOD_DT = NOW() ${masterStatusUpdate} WHERE REQ_ID = ?`,
+            [oldBusAmt, secureModId, reqId]
         );
 
         // 3. TB_AUCTION_REQ_BUS 업데이트 (상태를 TRAVELER_CANCEL로 변경)
         await connection.execute(
-            'UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'TRAVELER_CANCEL\' WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?',
-            [reqId, reqBusSeq]
+            'UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?',
+            [secureModId, reqId, reqBusSeq]
         );
         
         // 4. 연관된 확정 예약(TB_BUS_RESERVATION)이 있다면 함께 취소 처리
@@ -1735,11 +1746,13 @@ app.post('/api/auction/bus-change', async (req, res) => {
 app.post('/api/auction/bus-cancel', async (req, res) => {
     let connection;
     try {
-        const { reqId, reqBusSeq } = req.body;
+        const { reqId, reqBusSeq, custId } = req.body;
         
         if (!reqId || !reqBusSeq) {
             return res.status(400).json({ error: 'reqId and reqBusSeq are required' });
         }
+
+        const secureModId = String(custId || 'SYSTEM').substring(0, 10);
 
         connection = await pool.getConnection();
         await connection.beginTransaction();
@@ -1763,14 +1776,14 @@ app.post('/api/auction/bus-cancel', async (req, res) => {
 
         // 2. TB_AUCTION_REQ 업데이트 (상태를 AUCTION으로 되돌리고 횟수 증가, 금액 유지)
         await connection.execute(
-            'UPDATE TB_AUCTION_REQ SET DATA_STAT = \'AUCTION\', BUS_CHANG_CNT = BUS_CHANG_CNT + 1 WHERE REQ_ID = ?',
-            [reqId]
+            'UPDATE TB_AUCTION_REQ SET DATA_STAT = \'AUCTION\', BUS_CHANG_CNT = BUS_CHANG_CNT + 1, MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?',
+            [secureModId, reqId]
         );
 
         // 3. TB_AUCTION_REQ_BUS 업데이트 (재응찰을 위해 상태를 AUCTION으로 변경)
         await connection.execute(
-            'UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'AUCTION\' WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?',
-            [reqId, reqBusSeq]
+            'UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'AUCTION\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?',
+            [secureModId, reqId, reqBusSeq]
         );
 
         // 4. TB_BUS_RESERVATION 무효화 (기존 확정 데이터를 BUS_CHANGE로 변경)
@@ -2002,7 +2015,7 @@ app.get('/api/auction/history/:custId', async (req, res) => {
             INNER JOIN TB_AUCTION_REQ_BUS ab ON r.REQ_ID = ab.REQ_ID
             WHERE r.TRAVELER_ID = ?
               AND r.DATA_STAT NOT IN ('TRAVELER_CANCEL', 'BUS_CHANGE')
-              AND ab.DATA_STAT NOT IN ('BUS_CHANGE')
+              AND ab.DATA_STAT NOT IN ('BUS_CHANGE', 'TRAVELER_CANCEL', 'BUS_CANCEL')
             ORDER BY r.REG_DT DESC, ab.REQ_BUS_SEQ ASC
         `;
 

@@ -66,7 +66,8 @@ const ReservationList = ({ user, onBack }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           reqId: bus.REQ_ID,
-          reqBusSeq: bus.REQ_BUS_SEQ 
+          reqBusSeq: bus.REQ_BUS_SEQ,
+          custId: user?.custId 
         }),
       });
 
@@ -95,7 +96,8 @@ const ReservationList = ({ user, onBack }) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             reqId: bus.REQ_ID, 
-            reqBusSeq: bus.REQ_BUS_SEQ 
+            reqBusSeq: bus.REQ_BUS_SEQ,
+            custId: user?.custId
           })
         });
 
@@ -178,16 +180,16 @@ const ReservationList = ({ user, onBack }) => {
             </div>
           </nav>
 
-          <section className="mb-24 text-center">
-            <div className="flex items-center justify-center gap-3 mb-8">
+          <section className="mb-12 text-center">
+            <div className="flex items-center justify-center gap-3 mb-6">
                <div className="w-8 h-[1px] bg-primary/20"></div>
-               <span className="text-primary font-black tracking-[0.4em] uppercase text-[9px]">나의 예약 포트폴리오</span>
+               <span className="text-primary font-black tracking-[0.4em] uppercase text-[8px]">나의 예약 포트폴리오</span>
                <div className="w-8 h-[1px] bg-primary/20"></div>
             </div>
-            <h1 className="font-headline text-7xl font-black text-on-surface tracking-tightest leading-none mb-10">
+            <h1 className="font-headline text-4xl font-black text-on-surface tracking-tightest leading-none mb-6">
               나의 <span className="text-primary/10 italic">예약</span> 내역
             </h1>
-            <p className="text-on-surface-variant max-w-2xl mx-auto text-xl leading-relaxed font-medium">
+            <p className="text-on-surface-variant max-w-2xl mx-auto text-base leading-relaxed font-medium">
               프리미엄 버스 서비스 예약 현황을 한눈에 확인하고 여정을 관리하세요.<br/> 
               각 여정 카드를 통해 실시간 견적 확인 및 차량별 제어가 가능합니다.
             </p>
@@ -202,8 +204,13 @@ const ReservationList = ({ user, onBack }) => {
               <p className="text-sm mt-2 text-slate-300">새로운 프리미엄 버스 여정을 등록해보세요.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-16">
+            <div className="grid grid-cols-1 gap-8">
               {Object.values(reservations.reduce((acc, curr) => {
+                // 취소된 버스는 목록에서 제외 (BUS_STAT 기준)
+                if (curr.BUS_STAT === 'TRAVELER_CANCEL' || curr.BUS_STAT === 'BUS_CANCEL') {
+                  return acc;
+                }
+                
                 if (!acc[curr.REQ_ID]) {
                   acc[curr.REQ_ID] = { ...curr, buses: [] };
                 }
@@ -216,41 +223,41 @@ const ReservationList = ({ user, onBack }) => {
                   : "https://lh3.googleusercontent.com/aida-public/AB6AXuD1A-gP1H5XqL3rv3CYdw9jJtEPpIeRuQkZpT9r-9MxBPZPTcHZXH5iddUvv_4M-j9nQr5dthrcTl50VB7qbfT_U03lWPpqVW4CcBqJqLXA97Gdq5t7lg82hAKFEL1vjvDt5iTOuw24PCYX-O32c2InmJvzXBAItblQriopcPN4zPMAqk6ra6n_FzjBXbb3YTyCLTPh-E_e8gs1pBu-QNIxL85sQQDsSnBLUnFG-V1sq7IGkbIbAt3GXXfPuNATRFpEY9kabf7fzDQ";
 
                 return (
-                  <div key={trip.REQ_ID} className="group relative flex flex-col bg-surface-container-lowest rounded-[3rem] overflow-hidden shadow-[0_50px_100px_-20px_rgba(0,40,35,0.06)] border border-surface-variant/10 text-left transition-all hover:shadow-[0_70px_120px_-25px_rgba(0,40,35,0.1)]">
+                  <div key={trip.REQ_ID} className="group relative flex flex-col bg-surface-container-lowest rounded-2xl overflow-hidden shadow-[0_30px_60px_-15px_rgba(0,40,35,0.06)] border border-surface-variant/10 text-left transition-all hover:shadow-[0_50px_80px_-20px_rgba(0,40,35,0.08)]">
                     <div className="flex flex-col md:flex-row border-b border-surface-variant/5">
-                      <div className="md:w-96 h-64 md:h-auto overflow-hidden">
+                      <div className="md:w-64 h-48 md:h-auto overflow-hidden">
                         <img 
                           alt="trip thumb" 
                           className="w-full h-full object-cover grayscale-[0.5] group-hover:grayscale-0 transition-all duration-1000 group-hover:scale-105" 
                           src={imageSrc}
                         />
                       </div>
-                      <div className="flex-1 p-12 flex flex-col justify-center relative bg-white">
-                         <div className="flex justify-between items-start mb-6">
+                      <div className="flex-1 p-6 flex flex-col justify-center relative bg-white">
+                         <div className="flex justify-between items-start mb-3">
                             <div className="flex items-center gap-2">
-                               <span className={`w-2 h-2 rounded-full ${trip.DATA_STAT === 'CONFIRM' ? 'bg-primary' : 'bg-amber-400 animate-pulse'}`}></span>
-                               <span className={`${trip.DATA_STAT === 'CONFIRM' ? 'text-primary' : 'text-amber-500'} text-[10px] font-black uppercase tracking-[0.3em]`}>
+                               <span className={`w-1.5 h-1.5 rounded-full ${trip.DATA_STAT === 'CONFIRM' ? 'bg-primary' : 'bg-amber-400 animate-pulse'}`}></span>
+                               <span className={`${trip.DATA_STAT === 'CONFIRM' ? 'text-primary' : 'text-amber-500'} text-[9px] font-black uppercase tracking-[0.3em]`}>
                                   {trip.DATA_STAT === 'CONFIRM' ? '확정된 여정' : '견적 입찰 진행 중'}
                                </span>
                             </div>
                          </div>
-                         <h3 className="text-4xl font-black font-headline text-on-surface tracking-tightest mb-2 leading-tight">
+                         <h3 className="text-2xl font-black font-headline text-on-surface tracking-tightest mb-1.5 leading-tight">
                            {trimAddress(trip.START_ADDR)} → {trimAddress(trip.END_ADDR)}
                          </h3>
-                         <p className="text-xl font-bold text-slate-400 mb-6">{dateStr}</p>
-                         <div className="flex items-center gap-6">
-                            <p className="text-xs text-outline font-bold uppercase tracking-widest">테마: <span className="text-on-surface ml-1">{trip.TRIP_TITLE || '프리미엄 투어'}</span></p>
+                         <p className="text-base font-bold text-slate-400 mb-4">{dateStr}</p>
+                         <div className="flex items-center gap-4">
+                            <p className="text-[10px] text-outline font-bold uppercase tracking-widest">테마: <span className="text-on-surface ml-1">{trip.TRIP_TITLE || '프리미엄 투어'}</span></p>
                          </div>
                       </div>
                     </div>
 
-                    <div className="p-12 bg-slate-50/30">
-                      <div className="flex items-center justify-between mb-8">
-                         <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                               <span className="material-symbols-outlined text-lg">directions_bus</span>
+                    <div className="p-6 bg-slate-50/30">
+                      <div className="flex items-center justify-between mb-4">
+                         <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                               <span className="material-symbols-outlined text-base">directions_bus</span>
                             </div>
-                            <h4 className="text-xs font-black text-on-surface-variant uppercase tracking-[0.2em]">요청 차량 ({trip.buses.length}대)</h4>
+                            <h4 className="text-[10px] font-black text-on-surface-variant uppercase tracking-[0.2em]">요청 차량 ({trip.buses.length}대)</h4>
                          </div>
                          <div className="flex items-center gap-3">
                             <button 
@@ -273,14 +280,14 @@ const ReservationList = ({ user, onBack }) => {
                         {trip.buses.map((bus, bIdx) => {
                           const vehicleLabel = getVehicleLabel(bus.BUS_TYPE_CD);
                           return (
-                            <div key={bus.REQ_BUS_SEQ || bIdx} className="bg-white rounded-[2rem] p-8 flex items-center justify-between border border-slate-100 shadow-sm hover:shadow-md hover:border-primary/20 transition-all group/bus">
-                               <div className="flex items-center gap-6">
-                                  <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 group-hover/bus:bg-primary group-hover/bus:text-white transition-all transform group-hover/bus:rotate-3">
-                                     <span className="material-symbols-outlined text-2xl">commute</span>
+                            <div key={bus.REQ_BUS_SEQ || bIdx} className="bg-white rounded-xl p-4 flex items-center justify-between border border-slate-100 shadow-sm hover:shadow-md hover:border-primary/20 transition-all group/bus">
+                               <div className="flex items-center gap-4">
+                                  <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-300 group-hover/bus:bg-primary group-hover/bus:text-white transition-all transform group-hover/bus:rotate-3">
+                                     <span className="material-symbols-outlined text-xl">commute</span>
                                   </div>
                                   <div>
-                                     <p className="text-lg font-black text-on-surface tracking-tight mb-1.5">{vehicleLabel}</p>
-                                     <p className="text-xs text-outline font-bold">금액: <span className="text-primary">{Number(bus.FINAL_CONFIRM_AMT || bus.UNIT_REQ_AMT || 0).toLocaleString()}원</span></p>
+                                     <p className="text-sm font-black text-on-surface tracking-tight mb-0.5">{vehicleLabel}</p>
+                                     <p className="text-[10px] text-outline font-bold">금액: <span className="text-primary">{Number(bus.FINAL_CONFIRM_AMT || bus.UNIT_REQ_AMT || 0).toLocaleString()}원</span></p>
                                   </div>
                                </div>
                                <div className="flex items-center gap-2 shrink-0 ml-4">
@@ -355,6 +362,7 @@ const ReservationList = ({ user, onBack }) => {
       {showBusReRegModal && (
         <BusReRegistrationModal
           reqId={reRegReqId}
+          user={user}
           onClose={() => setShowBusReRegModal(false)}
           onSuccess={() => {
             setShowBusReRegModal(false);
