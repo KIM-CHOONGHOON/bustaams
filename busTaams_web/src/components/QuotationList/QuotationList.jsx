@@ -13,14 +13,14 @@ const QuotationList = ({ user, reqId, onBack, onViewDetail, isModal = false, onC
       setLoading(true);
       try {
         // 1. 선택된 요청 정보 가져오기 (마스터 데이터)
-        const reqUrl = `http://localhost:8080/api/auction/user/${user.userUuid}`;
+        const reqUrl = `http://localhost:8080/api/auction/user/${user.custId}`;
         console.log('[DEBUG] Fetching reqInfo from:', reqUrl);
         const reqRes = await fetch(reqUrl);
         console.log('[DEBUG] reqInfo response status:', reqRes.status);
         const reqData = await reqRes.json();
         if (Array.isArray(reqData)) {
           const found = reqData.find(
-            (r) => r.REQ_ID === reqId || r.REQ_UUID_STR === reqId
+            (r) => r.REQ_ID === reqId
           );
           setReqInfo(found || null);
           console.log('[DEBUG] reqInfo found:', found ? 'Yes' : 'No');
@@ -218,7 +218,7 @@ const QuotationList = ({ user, reqId, onBack, onViewDetail, isModal = false, onC
               {sortedBids.map((bid, idx) => {
                 return (
                   <div
-                    key={bid.bidUuid}
+                    key={bid.RES_ID}
                     className="bg-white rounded-2xl p-8 relative overflow-hidden group hover:-translate-y-1 transition-all duration-300 text-left"
                     style={{ boxShadow: '0 40px 60px -15px rgba(0, 104, 95, 0.06)' }}
                   >
@@ -273,7 +273,7 @@ const QuotationList = ({ user, reqId, onBack, onViewDetail, isModal = false, onC
 
                     <div className="grid grid-cols-2 gap-4 mt-6">
                       <button 
-                        onClick={() => onViewDetail(bid.bidUuid || bid.RES_ID)}
+                        onClick={() => onViewDetail(bid.RES_ID)}
                         className="bg-slate-100 text-slate-600 py-4 rounded-xl font-bold hover:bg-slate-200 transition-all active:scale-95 text-sm flex items-center justify-center gap-2"
                       >
                         <span className="material-symbols-outlined text-[20px]">person_check</span>

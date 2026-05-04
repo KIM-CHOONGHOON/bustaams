@@ -12,6 +12,7 @@ const SignupPage = ({ onBack }) => {
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [recomCode, setRecomCode] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [isPhoneVerified, setIsPhoneVerified] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -200,7 +201,8 @@ const SignupPage = ({ onBack }) => {
           smsAuthYn: 'Y',
           userType: userRole === 'driver' ? 'DRIVER' : userRole === 'salesperson' ? 'SALESPERSON' : 'TRAVELER',
           agreedTerms,
-          signatureBase64
+          signatureBase64,
+          recomCode
         })
       });
       const data = await res.json();
@@ -336,6 +338,20 @@ const SignupPage = ({ onBack }) => {
                   {passwordConfirmError && <p style={errorTextStyle}>{passwordConfirmError}</p>}
                 </div>
               </div>
+
+              {/* 추천인 코드 (버스기사 전용) */}
+              {userRole === 'driver' && (
+                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                  <label style={labelStyle}>추천인 아이디 (선택)</label>
+                  <input
+                    type="text"
+                    value={recomCode}
+                    onChange={e => setRecomCode(e.target.value)}
+                    placeholder="추천인 아이디를 입력해주세요"
+                    style={inputStyle}
+                  />
+                </div>
+              )}
             </div>
 
             {/* ── Section 2: Phone Verification ── */}

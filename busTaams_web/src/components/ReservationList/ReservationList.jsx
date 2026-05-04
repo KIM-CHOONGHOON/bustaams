@@ -16,13 +16,6 @@ const ReservationList = ({ user, onBack }) => {
   const [showBusReRegModal, setShowBusReRegModal] = useState(false);
   const [reRegReqId, setReRegReqId] = useState(null);
 
-  // 모달 열림 시 배경 스크롤 잠금
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, []);
 
   const fetchReservations = () => {
     // [수정] prop으로 넘어온 user가 없으면 localStorage에서 시도
@@ -72,8 +65,8 @@ const ReservationList = ({ user, onBack }) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          reqId: bus.REQ_UUID_STR,
-          reqBusSeq: bus.REQ_BUS_UUID_STR 
+          reqId: bus.REQ_ID,
+          reqBusSeq: bus.REQ_BUS_SEQ 
         }),
       });
 
@@ -83,7 +76,7 @@ const ReservationList = ({ user, onBack }) => {
         alert('이전 버스가 취소되었습니다. 새로운 버스를 선택해주세요.');
         fetchReservations(); // 목록 갱신
         
-        setReRegReqId(bus.REQ_UUID_STR);
+        setReRegReqId(bus.REQ_ID);
         setShowBusReRegModal(true);
       } else {
         alert(result.error || '버스 변경 처리 중 오류가 발생했습니다.');
@@ -101,8 +94,8 @@ const ReservationList = ({ user, onBack }) => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            reqId: bus.REQ_UUID_STR, 
-            reqBusSeq: bus.REQ_BUS_UUID_STR 
+            reqId: bus.REQ_ID, 
+            reqBusSeq: bus.REQ_BUS_SEQ 
           })
         });
 
@@ -211,10 +204,10 @@ const ReservationList = ({ user, onBack }) => {
           ) : (
             <div className="grid grid-cols-1 gap-16">
               {Object.values(reservations.reduce((acc, curr) => {
-                if (!acc[curr.REQ_UUID_STR]) {
-                  acc[curr.REQ_UUID_STR] = { ...curr, buses: [] };
+                if (!acc[curr.REQ_ID]) {
+                  acc[curr.REQ_ID] = { ...curr, buses: [] };
                 }
-                acc[curr.REQ_UUID_STR].buses.push(curr);
+                acc[curr.REQ_ID].buses.push(curr);
                 return acc;
               }, {})).map((trip, idx) => {
                 const dateStr = formatDate(trip.START_DT);
@@ -223,7 +216,7 @@ const ReservationList = ({ user, onBack }) => {
                   : "https://lh3.googleusercontent.com/aida-public/AB6AXuD1A-gP1H5XqL3rv3CYdw9jJtEPpIeRuQkZpT9r-9MxBPZPTcHZXH5iddUvv_4M-j9nQr5dthrcTl50VB7qbfT_U03lWPpqVW4CcBqJqLXA97Gdq5t7lg82hAKFEL1vjvDt5iTOuw24PCYX-O32c2InmJvzXBAItblQriopcPN4zPMAqk6ra6n_FzjBXbb3YTyCLTPh-E_e8gs1pBu-QNIxL85sQQDsSnBLUnFG-V1sq7IGkbIbAt3GXXfPuNATRFpEY9kabf7fzDQ";
 
                 return (
-                  <div key={trip.REQ_UUID_STR} className="group relative flex flex-col bg-surface-container-lowest rounded-[3rem] overflow-hidden shadow-[0_50px_100px_-20px_rgba(0,40,35,0.06)] border border-surface-variant/10 text-left transition-all hover:shadow-[0_70px_120px_-25px_rgba(0,40,35,0.1)]">
+                  <div key={trip.REQ_ID} className="group relative flex flex-col bg-surface-container-lowest rounded-[3rem] overflow-hidden shadow-[0_50px_100px_-20px_rgba(0,40,35,0.06)] border border-surface-variant/10 text-left transition-all hover:shadow-[0_70px_120px_-25px_rgba(0,40,35,0.1)]">
                     <div className="flex flex-col md:flex-row border-b border-surface-variant/5">
                       <div className="md:w-96 h-64 md:h-auto overflow-hidden">
                         <img 
@@ -261,6 +254,7 @@ const ReservationList = ({ user, onBack }) => {
                          </div>
                          <div className="flex items-center gap-3">
                             <button 
+                              onClick={() => handleOpenQuotations(trip.REQ_ID)}
                               className="px-5 py-2.5 bg-primary text-white text-[10px] font-black rounded-full hover:shadow-lg hover:shadow-primary/30 transition-all active:scale-95 flex items-center gap-2 uppercase tracking-widest"
                             >
                                <span className="material-symbols-outlined text-sm">verified</span>
@@ -279,14 +273,14 @@ const ReservationList = ({ user, onBack }) => {
                         {trip.buses.map((bus, bIdx) => {
                           const vehicleLabel = getVehicleLabel(bus.BUS_TYPE_CD);
                           return (
-                            <div key={bus.REQ_BUS_UUID_STR || bIdx} className="bg-white rounded-[2rem] p-8 flex items-center justify-between border border-slate-100 shadow-sm hover:shadow-md hover:border-primary/20 transition-all group/bus">
+                            <div key={bus.REQ_BUS_SEQ || bIdx} className="bg-white rounded-[2rem] p-8 flex items-center justify-between border border-slate-100 shadow-sm hover:shadow-md hover:border-primary/20 transition-all group/bus">
                                <div className="flex items-center gap-6">
                                   <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 group-hover/bus:bg-primary group-hover/bus:text-white transition-all transform group-hover/bus:rotate-3">
                                      <span className="material-symbols-outlined text-2xl">commute</span>
                                   </div>
                                   <div>
                                      <p className="text-lg font-black text-on-surface tracking-tight mb-1.5">{vehicleLabel}</p>
-                                     <p className="text-xs text-outline font-bold">견적가: <span className="text-primary">{Number(bus.UNIT_REQ_AMT).toLocaleString()}원</span></p>
+                                     <p className="text-xs text-outline font-bold">금액: <span className="text-primary">{Number(bus.FINAL_CONFIRM_AMT || bus.UNIT_REQ_AMT || 0).toLocaleString()}원</span></p>
                                   </div>
                                </div>
                                <div className="flex items-center gap-2 shrink-0 ml-4">
@@ -383,8 +377,8 @@ const ReservationList = ({ user, onBack }) => {
             </div>
             <div className="flex-1 overflow-y-auto">
               <QuotationDetail 
-                bidUuid={selectedBidUuid} 
-                onBack={() => setSelectedBidUuid(null)} 
+                bidId={selectedBidId} 
+                onBack={() => setSelectedBidId(null)} 
               />
             </div>
           </div>

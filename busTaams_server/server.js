@@ -7,7 +7,6 @@ const path = require('path');
 const admin = require('firebase-admin');
 const { Storage } = require('@google-cloud/storage');
 const bcrypt = require('bcrypt');
-const { randomUUID } = require('crypto');
 const { encrypt, decrypt } = require('./crypto');
 
 /**
@@ -25,7 +24,6 @@ const fs = require('fs');
 const createLiveChatBusDriverRouter = require('./routes/liveChatBusDriver');
 const createLiveChatTravelerRouter = require('./routes/liveChatTraveler');
 const createUserDeviceTokenRouter = require('./routes/userDeviceToken');
-const { migrateTbChatLogColumns } = require('./migrations/tbChatLogMigrate');
 const { 
     buildPostLoginUserDto, 
     fetchCancelManageForUser, 
@@ -33,6 +31,12 @@ const {
 } = require('./lib/loginPayload');
 
 const app = express();
+
+// Global Request Logger
+app.use((req, res, next) => {
+    console.log(`[REQ] ${req.method} ${req.url}`);
+    next();
+});
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -128,143 +132,6 @@ async function verifyFirebasePhoneIdTokenIfRequired(idToken, options = {}) {
 
 
 
-/** TB_FILE_MASTER — 프로필/자격증 파일 메타 저장용 (없으면 INSERT 실패) */
-async function ensureTbFileMasterTable(connection) {
-    await connection.execute(`
-        CREATE TABLE IF NOT EXISTS TB_FILE_MASTER (
-            FILE_ID VARCHAR(20) NOT NULL COMMENT '20자리 숫자 ID',
-            FILE_CATEGORY VARCHAR(50) NOT NULL,
-            GCS_BUCKET_NM VARCHAR(100) DEFAULT 'bustaams-secure-data',
-            GCS_PATH VARCHAR(255) NOT NULL,
-            ORG_FILE_NM VARCHAR(255) NULL,
-            FILE_EXT VARCHAR(10) NULL,
-            FILE_SIZE BIGINT NULL,
-            REG_DT DATETIME DEFAULT CURRENT_TIMESTAMP,
-            REG_ID VARCHAR(256) NULL,
-            PRIMARY KEY (FILE_ID)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-}
-
-
-
-
-/** TB_DRIVER_DOCS — 기사 자격 증빙 및 본사 심사 이력 */
-async function ensureTbDriverDocsTable(connection) {
-    await connection.execute(`
-        CREATE TABLE IF NOT EXISTS TB_DRIVER_DOCS (
-            CUST_ID VARCHAR(10) NOT NULL COMMENT '기사 TB_USER.CUST_ID',
-            DOC_TYPE ENUM('LICENSE','QUALIFICATION','APTITUDE','BIZ_REG','TRANSPORT_PERMIT','INSURANCE') NOT NULL,
-            FILE_ID VARCHAR(20) DEFAULT NULL COMMENT '첨부 파일 TB_FILE_MASTER.FILE_ID',
-            FILE_PATH VARCHAR(512) DEFAULT NULL,
-            LICENSE_TYPE_CD VARCHAR(30) DEFAULT NULL,
-            DOC_NO_ENC VARCHAR(255) DEFAULT NULL,
-            ISSUE_DT DATE DEFAULT NULL,
-            EXP_DT DATE DEFAULT NULL,
-            APPROVE_STAT ENUM('WAIT','APPROVE','REJECT') DEFAULT 'WAIT',
-            REJECT_REASON TEXT,
-            APPROVER_ID VARCHAR(10) DEFAULT NULL,
-            APPROVE_DT DATETIME DEFAULT NULL,
-            REG_DT DATETIME DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (CUST_ID, DOC_TYPE)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='기사 자격 증빙 및 심사'
-    `);
-}
-
-/** TB_USER_CANCEL_MANAGE — 사용자 취소/환불 관리 설정 */
-async function ensureTbUserCancelManageTable(connection) {
-    await connection.execute(`
-        CREATE TABLE IF NOT EXISTS TB_USER_CANCEL_MANAGE (
-            CUST_ID VARCHAR(10) NOT NULL PRIMARY KEY COMMENT 'TB_USER.CUST_ID',
-            CANCEL_YN CHAR(1) DEFAULT 'N',
-            CANCEL_CNT INT DEFAULT 0,
-            REFUND_BANK_CD VARCHAR(20),
-            REFUND_ACCT_NO_ENC VARCHAR(255),
-            REFUND_ACCT_NM VARCHAR(100),
-            MOD_DT DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='사용자 취소/환불 관리'
-    `);
-}
-
-/** TB_SUBSCRIPTION — 기사 멤버십 구독 정보 */
-async function ensureTbSubscriptionTable(connection) {
-    await connection.execute(`
-        CREATE TABLE IF NOT EXISTS TB_SUBSCRIPTION (
-            CUST_ID VARCHAR(10) NOT NULL PRIMARY KEY COMMENT '기사 CUST_ID',
-            SUB_TYPE VARCHAR(20) NOT NULL COMMENT 'FREE, PREMIUM 등',
-            START_DT DATE NOT NULL,
-            END_DT DATE NOT NULL,
-            AUTO_PAY_YN CHAR(1) DEFAULT 'N',
-            STAT_CD VARCHAR(20) DEFAULT 'ACTIVE',
-            REG_DT DATETIME DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='기사 멤버십 구독'
-    `);
-}
-
-/** TB_USER 스키마 마이그레이션: 구버전 테이블에 USER_ID(평문) 컬럼 추가 및 레거시 제거 */
-async function ensureTbUserColumns(connection) {
-    try {
-        // 1. USER_ID 추가
-        try {
-            await connection.execute(`ALTER TABLE TB_USER ADD COLUMN USER_ID VARCHAR(256) NULL AFTER CUST_ID`);
-            console.log('✅ TB_USER: USER_ID 컬럼 추가 완료');
-        } catch (e) {
-            if (e.errno !== 1060 && e.code !== 'ER_DUP_FIELDNAME') throw e;
-        }
-        // 2. 레거시 USER_ID_ENC 제거
-        try {
-            await connection.execute(`ALTER TABLE TB_USER DROP COLUMN USER_ID_ENC`);
-            console.log('✅ TB_USER: 레거시 USER_ID_ENC 컬럼 제거 완료');
-        } catch (e) { /* ignore */ }
-        // 3. UNIQUE 인덱스
-        try {
-            await connection.execute(`ALTER TABLE TB_USER ADD UNIQUE KEY UK_USER_LOGIN_ID (USER_ID)`);
-        } catch (e) { /* ignore */ }
-    } catch (err) {
-        console.error('❌ TB_USER 마이그레이션 실패:', err.message);
-    }
-}
-async function ensureTbUserTable(connection) {
-    await connection.execute(`
-        CREATE TABLE IF NOT EXISTS TB_USER (
-            CUST_ID VARCHAR(10) NOT NULL PRIMARY KEY COMMENT '10자리 숫자 ID (0000000001)',
-            USER_ID VARCHAR(256) NOT NULL COMMENT '로그인 이메일 (평문)',
-            PASSWORD VARCHAR(255) NOT NULL,
-            USER_NM VARCHAR(255) NOT NULL,
-            HP_NO VARCHAR(255) NOT NULL,
-            SNS_TYPE VARCHAR(20) NOT NULL DEFAULT 'NONE',
-            SMS_AUTH_YN CHAR(1) NOT NULL DEFAULT 'N',
-            USER_TYPE VARCHAR(20) NOT NULL,
-            JOIN_DT DATETIME DEFAULT CURRENT_TIMESTAMP,
-            USER_STAT VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
-            PROFILE_IMG_PATH VARCHAR(512) NULL,
-            PROFILE_FILE_ID VARCHAR(20) NULL,
-            UNIQUE KEY UK_USER_LOGIN_ID (USER_ID)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-}
-
-/** FCM 등 푸시 토큰 (앱·웹) — 사용자별 다중 기기 */
-async function ensureTbUserDeviceTokenTable(connection) {
-    await connection.execute(`
-        CREATE TABLE IF NOT EXISTS TB_USER_DEVICE_TOKEN (
-            ROW_ID BIGINT NOT NULL AUTO_INCREMENT,
-            CUST_ID VARCHAR(10) NOT NULL COMMENT 'FK TB_USER.CUST_ID',
-            FCM_TOKEN VARCHAR(512) NOT NULL,
-            CLIENT_KIND VARCHAR(20) NOT NULL DEFAULT 'web',
-            UPD_DT DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            PRIMARY KEY (ROW_ID),
-            UNIQUE KEY UK_USER_FCM_TOKEN (CUST_ID, FCM_TOKEN(256)),
-            KEY IDX_USER_DEVICE_UPD (CUST_ID, UPD_DT)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-}
-
-/** [폐기] TB_USER_TERMS_HIST 테이블 생성 및 마이그레이션 (사용 안함)
-async function ensureTbUserTermsHistTable(connection) {
-    // 더 이상 사용하지 않으므로 로직 생략
-}
-*/
 
 function formatDateYmd(v) {
     if (v == null || v === undefined || v === '') return '';
@@ -291,21 +158,6 @@ async function fetchDriverInfoRow(custId) {
     }
 }
 
-/** TB_COMMON_CODE — 버스 종류 등 */
-async function ensureTbCommonCodeTable(connection) {
-    await connection.execute(`
-        CREATE TABLE IF NOT EXISTS TB_COMMON_CODE (
-            GRP_CD VARCHAR(50) NOT NULL,
-            DTL_CD VARCHAR(50) NOT NULL,
-            CD_NM_KO VARCHAR(200) NOT NULL DEFAULT '',
-            CD_DESC VARCHAR(500) NULL,
-            USE_YN CHAR(1) NOT NULL DEFAULT 'Y',
-            DISP_ORD INT NOT NULL DEFAULT 0,
-            PRIMARY KEY (GRP_CD, DTL_CD),
-            KEY IDX_COMMON_GRP_USE_ORD (GRP_CD, USE_YN, DISP_ORD)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-}
 
 async function seedBusTypeCodesIfEmpty(connection) {
     const [rows] = await connection.execute(
@@ -327,72 +179,7 @@ async function seedBusTypeCodesIfEmpty(connection) {
     }
 }
 
-async function ensureTbBusDriverVehicleFileHistTable(connection) {
-    await connection.execute(`
-        CREATE TABLE IF NOT EXISTS TB_BUS_DRIVER_VEHICLE_FILE_HIST (
-            HIST_ID VARCHAR(255) NOT NULL PRIMARY KEY,
-            BUS_ID VARCHAR(255) NOT NULL COMMENT 'FK TB_BUS_DRIVER_VEHICLE.BUS_ID',
-            FILE_ID VARCHAR(255) NOT NULL,
-            FILE_CATEGORY VARCHAR(50) NOT NULL,
-            REG_DT DATETIME DEFAULT CURRENT_TIMESTAMP,
-            KEY IDX_BUS_FILE (BUS_ID, FILE_ID),
-            KEY IDX_FILE_ID (FILE_ID)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-}
 
-/** 기사 보유 버스 마스터 — ADAS(HAS_ADAS) 포함. 구명칭 TB_DRIVER_BUS 대체 */
-async function ensureTbBusDriverVehicleSchema(connection) {
-    await connection.execute(`
-        CREATE TABLE IF NOT EXISTS TB_BUS_DRIVER_VEHICLE (
-            BUS_ID VARCHAR(10) NOT NULL PRIMARY KEY COMMENT '버스 고유 ID (10자리 숫자)',
-            CUST_ID VARCHAR(10) NOT NULL COMMENT '소유 기사 (TB_USER.CUST_ID)',
-            VEHICLE_NO VARCHAR(20) NOT NULL,
-            MODEL_NM VARCHAR(100) NOT NULL,
-            MANUFACTURE_YEAR VARCHAR(20),
-            MILEAGE INT DEFAULT 0,
-            SERVICE_CLASS VARCHAR(50) NOT NULL,
-            AMENITIES JSON,
-            HAS_ADAS CHAR(1) NOT NULL DEFAULT 'N' COMMENT 'ADAS Y/N',
-            LAST_INSPECT_DT DATE,
-            INSURANCE_EXP_DT DATE,
-            BIZ_REG_FILE_ID VARCHAR(255),
-            TRANS_LIC_FILE_ID VARCHAR(255),
-            INS_CERT_FILE_ID VARCHAR(255),
-            VEHICLE_PHOTOS_JSON JSON NULL,
-            REG_DT DATETIME DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE KEY UK_VEHICLE_NO (VEHICLE_NO),
-            KEY IDX_BUS_DRIVER_USER (CUST_ID)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        COMMENT='기사 보유 차량·ADAS·서류 FK'
-    `);
-}
-
-/** 레거시 TB_DRIVER_BUS / TB_DRIVER_BUS_FILE_HIST 가 있으면 신규 테이블로 INSERT IGNORE 복사 */
-async function migrateLegacyTbDriverBusToBusDriverVehicle(connection) {
-    try {
-        const [t] = await connection.execute(
-            `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'TB_DRIVER_BUS'`
-        );
-        if (t.length === 0) return;
-        try {
-            // [수정] 신규 스키마 컬럼명(CUST_ID, BIZ_REG_FILE_ID 등)에 맞춰 매핑
-            await connection.execute(`
-                INSERT IGNORE INTO TB_BUS_DRIVER_VEHICLE (
-                    BUS_ID, CUST_ID, VEHICLE_NO, MODEL_NM, MANUFACTURE_YEAR, MILEAGE, SERVICE_CLASS, AMENITIES, HAS_ADAS,
-                    LAST_INSPECT_DT, INSURANCE_EXP_DT, BIZ_REG_FILE_ID, TRANS_LIC_FILE_ID, INS_CERT_FILE_ID, VEHICLE_PHOTOS_JSON, REG_DT
-                )
-                SELECT BUS_UUID, USER_UUID, VEHICLE_NO, MODEL_NM, MANUFACTURE_YEAR, MILEAGE, SERVICE_CLASS, AMENITIES,
-                    COALESCE(HAS_ADAS, 'N'), LAST_INSPECT_DT, INSURANCE_EXP_DT, BIZ_REG_FILE_UUID, TRANS_LIC_FILE_UUID, INS_CERT_FILE_UUID, VEHICLE_PHOTOS_JSON, REG_DT
-                FROM TB_DRIVER_BUS
-            `);
-        } catch (e) {
-            console.warn('migrateLegacy bus master failed, attempting fallbacks:', e.message);
-        }
-    } catch (e) {
-        if (e.code !== 'ER_NO_SUCH_TABLE') console.warn('migrateLegacy bus master outer:', e.message);
-    }
-}
 
 function parseDataUrlPayload(dataUrl, fileNameHint = 'file') {
     if (!dataUrl || typeof dataUrl !== 'string') return null;
@@ -428,34 +215,6 @@ async function insertBusFileAndHist(connection, {
     );
 }
 
-/** [신규] TB_DRIVER_DOCS 테이블 보완 및 유연성 확보 */
-async function ensureTbDriverDocsTable(connection) {
-    await connection.execute(`
-        CREATE TABLE IF NOT EXISTS TB_DRIVER_DOCS (
-            CUST_ID VARCHAR(10) NOT NULL COMMENT '기사/사용자 TB_USER.CUST_ID',
-            DOC_TYPE VARCHAR(50) NOT NULL COMMENT '서류/약관 구분 코드',
-            DOC_TYPE_SEQ INT NOT NULL DEFAULT 1 COMMENT '유형별 순번',
-            FILE_ID VARCHAR(20) DEFAULT NULL COMMENT 'TB_FILE_MASTER.FILE_ID',
-            FILE_PATH VARCHAR(512) DEFAULT NULL,
-            LICENSE_TYPE_CD VARCHAR(30) DEFAULT NULL,
-            DOC_NO_ENC VARCHAR(255) DEFAULT NULL,
-            ISSUE_DT DATE DEFAULT NULL,
-            EXP_DT DATE DEFAULT NULL,
-            INFO_STAT_CD VARCHAR(300) DEFAULT NULL,
-            APPROVE_STAT ENUM('WAIT','APPROVE','REJECT') DEFAULT 'WAIT',
-            REJECT_REASON TEXT,
-            APPROVER_ID VARCHAR(10) DEFAULT NULL,
-            APPROVE_DT DATETIME DEFAULT NULL,
-            REG_DT DATETIME DEFAULT CURRENT_TIMESTAMP,
-            REG_ID VARCHAR(30) DEFAULT NULL,
-            MOD_DT DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            MOD_ID VARCHAR(30) DEFAULT NULL,
-            PRIMARY KEY (CUST_ID, DOC_TYPE, DOC_TYPE_SEQ),
-            KEY FK_DOCS_FILE (FILE_ID)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        COMMENT='기사 자격 증빙 및 약관 동의 서명 통합 관리'
-    `);
-}
 
 async function fetchBusRowForUser(connection, custId) {
     const [rows] = await connection.execute(
@@ -557,8 +316,7 @@ app.get('/api/auth/check-phone', async (req, res) => {
         if (!phoneNo) return res.status(400).json({ error: 'phoneNo query parameter is required' });
 
         connection = await pool.getConnection();
-        await ensureTbUserTable(connection);
-
+        
         // [보안] 휴대폰 번호는 DB에 암호화된 상태로 저장되므로, 전체 스캔 후 복호화 비교
         const [rows] = await connection.execute('SELECT HP_NO FROM TB_USER');
         const isDuplicate = rows.some((row) => {
@@ -687,7 +445,8 @@ app.post('/api/auth/register', async (req, res) => {
     try {
         const {
             userId, email, password, userName, phoneNo, userType,
-            firebaseIdToken, mktAgreeYn, signatureBase64, agreedTerms
+            firebaseIdToken, mktAgreeYn, signatureBase64, agreedTerms,
+            recomCode
         } = req.body;
 
         if (!userId || !password || !userName || !phoneNo || !signatureBase64 || !agreedTerms || !userType) {
@@ -710,14 +469,16 @@ app.post('/api/auth/register', async (req, res) => {
 
         // 3. DB 트랜잭션 준비
         connection = await pool.getConnection();
-        await ensureTbUserTable(connection);
-        await ensureTbDriverDocsTable(connection);
         await connection.beginTransaction();
 
         try {
             // 3-1. [ID 생성] 10자리 숫자 ID (CUST_ID)
             const [maxUserRows] = await connection.execute('SELECT MAX(CUST_ID) as maxId FROM TB_USER');
-            const nextCustId = generateNextNumericId(maxUserRows[0].maxId, 10);
+            const nextCustId = generateNextNumericId(maxUserRows[0].maxId || '0', 10);
+
+            // 3-2. [ID 생성] 20자리 숫자 ID (FILE_ID for Signature)
+            const [maxFileRows] = await connection.execute("SELECT MAX(FILE_ID) as maxFileId FROM TB_FILE_MASTER WHERE FILE_ID REGEXP '^[0-9]+$'");
+            const nextFileId = generateNextNumericId(maxFileRows[0].maxFileId || '0', 20);
 
             // UserType Mapping
             let mappedUserType = 'TRAVELER';
@@ -729,51 +490,70 @@ app.post('/api/auth/register', async (req, res) => {
             const userQuery = `
                 INSERT INTO TB_USER (
                     CUST_ID, USER_ID, EMAIL, PASSWORD, USER_NM, HP_NO, SNS_TYPE, 
-                    SMS_AUTH_YN, USER_TYPE, JOIN_DT, USER_STAT,
-                    PROFILE_IMG_PATH, PROFILE_FILE_ID, REG_DT, REG_ID
-                ) VALUES (?, ?, ?, ?, ?, ?, 'NONE', ?, ?, NOW(), 'ACTIVE', NULL, NULL, NOW(), ?)
+                    SMS_AUTH_YN, USER_TYPE, RECOM_CODE, SIGNATURE_FILE_ID,
+                    JOIN_DT, USER_STAT, MOD_DT, MOD_ID
+                ) VALUES (?, ?, ?, ?, ?, ?, 'NONE', 'Y', ?, ?, ?, NOW(), 'ACTIVE', NOW(), ?)
             `;
             await connection.execute(userQuery, [
-                nextCustId, userId, email, hashedPassword, userName, phoneNo,
-                smsAuthYn, mappedUserType, nextCustId // REG_ID에 nextCustId 할당
+                nextCustId, 
+                userId, 
+                email, 
+                hashedPassword, 
+                userName, 
+                phoneNo,
+                mappedUserType, 
+                mappedUserType === 'DRIVER' ? recomCode : null,
+                nextFileId,
+                nextCustId
             ]);
 
-            // 4. 약관/계약서 서명 이미지 처리 (TB_DRIVER_DOCS)
+            // 4. 전자 서명 이미지 처리 (GCS & TB_FILE_MASTER)
             const base64Data = signatureBase64.replace(/^data:image\/png;base64,/, "");
             const buffer = Buffer.from(base64Data, 'base64');
-            const yyyymmdd = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            const fileNameWithoutExt = nextFileId; // 파일ID명을 파일명으로 사용
+            const fileExt = 'png';
+            const fileName = `${fileNameWithoutExt}.${fileExt}`;
+            const gcsPathForDB = `https://storage.googleapis.com/${bucketName}/signatures/${nextFileId}`;
+            const actualGcsPath = `signatures/${fileName}`;
+            const gcsFile = bucket.file(actualGcsPath);
+            
+            // GCS 업로드
+            await gcsFile.save(buffer, { metadata: { contentType: 'image/png' }, resumable: false });
+            uploadedFiles.push(gcsFile);
 
+            // [DB] TB_FILE_MASTER INSERT
+            await connection.execute(`
+                INSERT INTO TB_FILE_MASTER (
+                    FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, 
+                    ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT, REG_ID, MOD_DT, MOD_ID
+                ) VALUES (?, 'SIGNATURE', ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)
+            `, [nextFileId, bucketName, gcsPathForDB, fileNameWithoutExt, fileExt, buffer.length, nextCustId, nextCustId]);
+
+            // 5. 약관 동의 이력 저장 (TB_USER_TERMS_HIST)
             const termsMapping = {
-                1: 'TERMS_INTEGRATED',
-                2: 'PRIVACY_CONSENT',
-                3: 'MARKETING_CONSENT',
-                4: mappedUserType === 'DRIVER' ? 'DRIVER_CONTRACT' : 
-                   mappedUserType === 'PARTNER' ? 'PARTNER_CONTRACT' : 'TRAVELER_CONTRACT'
+                1: 'SERVICE',
+                2: 'PRIVACY',
+                3: 'MARKETING',
+                4: mappedUserType === 'DRIVER' ? 'DRIVER_SERVICE' : 
+                   mappedUserType === 'PARTNER' ? 'PARTNER_CONTRACT' : 'TRAVELER_SERVICE'
             };
 
+            let termSeq = 1;
             for (const termId of agreedTerms) {
-                const docType = termsMapping[termId];
-                if (!docType) continue;
+                const termsType = termsMapping[termId];
+                if (!termsType) continue;
 
-                // [변경] 파일명 규칙: CUST_ID + "_" + DOC_TYPE + "_" + DOC_TYPE_SEQ + 확장자
-                const docTypeSeq = 1;
-                const fileNameWithoutExt = `${nextCustId}_${docType}_${docTypeSeq}`;
-                const fileExt = 'png';
-                const fileName = `${fileNameWithoutExt}.${fileExt}`;
-                const gcsPath = `CONSENT/${docType}/${yyyymmdd}/${fileName}`;
-                const gcsFile = bucket.file(gcsPath);
-                
-                // GCS 업로드
-                await gcsFile.save(buffer, { metadata: { contentType: 'image/png' }, resumable: false });
-                uploadedFiles.push(gcsFile);
+                // 마케팅 동의일 경우 관련 플래그들을 'Y'로 설정
+                const isMarketing = (termsType === 'MARKETING');
+                const mktVal = isMarketing ? 'Y' : 'N';
 
-                // [DB] TB_DRIVER_DOCS INSERT (파일명 및 확장자 분리 저장)
                 await connection.execute(`
-                    INSERT INTO TB_DRIVER_DOCS (
-                        CUST_ID, DOC_TYPE, DOC_TYPE_SEQ, GCS_BUCKET_NM, GCS_PATH, 
-                        ORG_FILE_NM, ORG_FILE_EXT, REG_DT, REG_ID
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?)
-                `, [nextCustId, docType, docTypeSeq, bucketName, gcsPath, fileNameWithoutExt, fileExt, nextCustId]);
+                    INSERT INTO TB_USER_TERMS_HIST (
+                        CUST_ID, TERMS_HIST_SEQ, TERMS_TYPE, TERMS_VER, 
+                        AGREE_YN, MKT_SMS_YN, MKT_PUSH_YN, MKT_EMAIL_YN, MKT_TEL_YN,
+                        SIGN_FILE_ID, AGREE_DT
+                    ) VALUES (?, ?, ?, '1.0', 'Y', ?, ?, ?, ?, ?, NOW())
+                `, [nextCustId, termSeq++, termsType, mktVal, mktVal, mktVal, mktVal, nextFileId]);
             }
 
             await connection.commit();
@@ -1189,7 +969,7 @@ app.get('/api/driver/profile-setup', async (req, res) => {
     }
 });
 
-/** 프로필 사진 스트리밍 — TB_DRIVER_INFO.PROFILE_PHOTO_UUID로 본인 소유 확인 후 GCS에서 반환 */
+/** GCS 파일 ID를 통한 이미지 데이터 확인 */
 app.get('/api/driver/profile-photo', async (req, res) => {
     try {
         const { custId, fileId } = req.query;
@@ -1269,11 +1049,11 @@ app.post('/api/auction/request', async (req, res) => {
                 INSERT INTO TB_AUCTION_REQ (
                     REQ_ID, TRAVELER_ID, TRIP_TITLE, START_ADDR, END_ADDR, 
                     START_DT, END_DT, PASSENGER_CNT, DATA_STAT, EXPIRE_DT, 
-                    REQ_AMT, REG_DT, REG_ID
+                    REQ_AMT, REG_DT, REG_ID, MOD_DT, MOD_ID
                 ) VALUES (
                     ?, ?, ?, ?, ?, 
                     ?, ?, ?, 'AUCTION', DATE_SUB(?, INTERVAL 1 DAY), 
-                    ?, NOW(), ?
+                    ?, NOW(), ?, NOW(), ?
                 )
             `;
             
@@ -1288,7 +1068,8 @@ app.post('/api/auction/request', async (req, res) => {
                 passengerCnt || 0, 
                 startDt,
                 totalAmount || 0, 
-                secureRegId
+                secureRegId,
+                secureRegId // MOD_ID
             ]);
 
             // 2. TB_AUCTION_REQ_BUS (Vehicles) Insert
@@ -1297,8 +1078,8 @@ app.post('/api/auction/request', async (req, res) => {
                     INSERT INTO TB_AUCTION_REQ_BUS (
                         REQ_ID, REQ_BUS_SEQ, BUS_TYPE_CD, 
                         RES_FEE_TOTAL_AMT, RES_FEE_REFUND_AMT, RES_FEE_ATTRIBUTION_AMT,
-                        REG_DT, REG_ID, DATA_STAT, RES_BUS_AMT
-                    ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, 'AUCTION', ?)
+                        REG_DT, REG_ID, MOD_DT, MOD_ID, DATA_STAT, RES_BUS_AMT
+                    ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?, 'AUCTION', ?)
                 `;
                 
                 let busSeq = 1;
@@ -1320,6 +1101,7 @@ app.post('/api/auction/request', async (req, res) => {
                             refundFee, 
                             attributionFee, 
                             secureRegId,
+                            secureRegId, // MOD_ID
                             finalPrice
                         ]);
                     }
@@ -1329,8 +1111,8 @@ app.post('/api/auction/request', async (req, res) => {
             // 3. TB_AUCTION_REQ_VIA (Unified Path) Insert
             const viaQuery = `
                 INSERT INTO TB_AUCTION_REQ_VIA (
-                    REQ_ID, VIA_SEQ, VIA_ORD, VIA_ADDR, VIA_TYPE, STOP_TIME_MIN, REG_DT, REG_ID
-                ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)
+                    REQ_ID, VIA_SEQ, VIA_ADDR, VIA_TYPE, STOP_TIME_MIN, REG_DT, REG_ID, MOD_DT, MOD_ID
+                ) VALUES (?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)
             `;
             
             let viaSeq = 1;
@@ -1350,12 +1132,13 @@ app.post('/api/auction/request', async (req, res) => {
                     await connection.execute(viaQuery, [
                         reqId, 
                         viaSeq++, 
-                        currentOrd++, 
                         addr, 
                         forcedType, 
                         wp.stopTime || 0, 
-                        secureRegId
+                        secureRegId,
+                        secureRegId // MOD_ID
                     ]);
+                    currentOrd++;
                 }
             }
 
@@ -1456,10 +1239,10 @@ app.get('/api/auction/recent/:custId', async (req, res) => {
 
         // 경유지 정보 가져오기
         const viaQuery = `
-            SELECT VIA_ADDR as address, VIA_ORD 
+            SELECT VIA_ADDR as address, VIA_SEQ 
             FROM TB_AUCTION_REQ_VIA 
             WHERE REQ_ID = ? 
-            ORDER BY VIA_ORD ASC
+            ORDER BY VIA_SEQ ASC
         `;
         const [vias] = await pool.execute(viaQuery, [recent.REQ_ID]);
         recent.waypoints = vias;
@@ -1487,8 +1270,8 @@ app.get('/api/auction/user/:custId', async (req, res) => {
                 r.START_DT, r.END_DT, r.PASSENGER_CNT, r.DATA_STAT, r.REQ_AMT,
                 (SELECT GROUP_CONCAT(CONCAT(BUS_TYPE_CD, ':', CAST(COALESCE(RES_BUS_AMT, RES_FEE_TOTAL_AMT, 0) AS CHAR))) FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT IN ('AUCTION', 'BIDDING', 'CONFIRM')) as ALL_BUS_TYPES,
                 (SELECT COUNT(*) FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT IN ('AUCTION', 'BIDDING', 'CONFIRM')) as TOTAL_BUS_CNT,
-                (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'START_WAY' ORDER BY VIA_ORD ASC LIMIT 1) as VIA_START_ADDR,
-                (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' ORDER BY VIA_ORD ASC LIMIT 1) as VIA_END_ADDR
+                (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'START_WAY' ORDER BY VIA_SEQ ASC LIMIT 1) as VIA_START_ADDR,
+                (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' ORDER BY VIA_SEQ ASC LIMIT 1) as VIA_END_ADDR
             FROM TB_AUCTION_REQ r
             WHERE r.TRAVELER_ID = ? 
               AND r.DATA_STAT NOT IN ('DONE', 'TRAVELER_CANCEL')
@@ -1506,10 +1289,10 @@ app.get('/api/auction/user/:custId', async (req, res) => {
         // 각 예약 건의 경유지 정보 추가
         for (let row of rows) {
             const viaQuery = `
-                SELECT VIA_ADDR as address, VIA_ORD 
+                SELECT VIA_ADDR as address, VIA_SEQ 
                 FROM TB_AUCTION_REQ_VIA 
                 WHERE REQ_ID = ? 
-                ORDER BY VIA_ORD ASC
+                ORDER BY VIA_SEQ ASC
             `;
             const [vias] = await pool.execute(viaQuery, [row.REQ_ID]);
             row.waypoints = vias;
@@ -1583,7 +1366,7 @@ app.get('/api/auction/confirmed/:custId', async (req, res) => {
                     u.HP_NO as DRIVER_PHONE
                 FROM TB_AUCTION_REQ_BUS ab
                 LEFT JOIN TB_BUS_RESERVATION res ON ab.REQ_ID = res.REQ_ID 
-                    AND LPAD(ab.REQ_BUS_SEQ, 10, '0') = res.REQ_BUS_ID
+                    AND LPAD(ab.REQ_BUS_SEQ, 10, '0') = res.REQ_BUS_SEQ
                     AND res.DATA_STAT IN ('CONFIRM', 'TRAVELER_CANCEL')
                 LEFT JOIN TB_BUS_DRIVER_VEHICLE v ON res.BUS_ID = v.BUS_ID
                 LEFT JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID
@@ -1602,10 +1385,10 @@ app.get('/api/auction/confirmed/:custId', async (req, res) => {
 
             // 경유지 정보도 함께 가져오기
             const viaQuery = `
-                SELECT VIA_ADDR as address, VIA_ORD 
+                SELECT VIA_ADDR as address, VIA_SEQ 
                 FROM TB_AUCTION_REQ_VIA 
                 WHERE REQ_ID = ? 
-                ORDER BY VIA_ORD ASC
+                ORDER BY VIA_SEQ ASC
             `;
             const [vias] = await connection.execute(viaQuery, [master.REQ_ID]);
             master.waypoints = vias;
@@ -1629,13 +1412,13 @@ app.post('/api/auction/cancel-bus', async (req, res) => {
         connection = await pool.getConnection();
         
         // 1. TB_BUS_RESERVATION 테이블의 상태만 'TRAVELER_CANCEL'로 변경
-        // REQ_ID와 REQ_BUS_ID(Sequence)를 통해 해당 차량과 매칭되는 확정된 입찰 건을 찾아 업데이트합니다.
+        // REQ_ID와 REQ_BUS_SEQ(Sequence)를 통해 해당 차량과 매칭되는 확정된 입찰 건을 찾아 업데이트합니다.
         const [result] = await connection.execute(`
             UPDATE TB_BUS_RESERVATION 
             SET DATA_STAT = 'TRAVELER_CANCEL',
                 MOD_DT = NOW()
             WHERE REQ_ID = ?
-              AND REQ_BUS_ID = LPAD(?, 10, '0')
+              AND REQ_BUS_SEQ = LPAD(?, 10, '0')
               AND DATA_STAT = 'CONFIRM' 
         `, [reqId, reqBusSeq]);
 
@@ -1695,15 +1478,15 @@ app.post('/api/auction/complex-cancel', async (req, res) => {
     try {
         // 유연한 파라미터 수신을 위해 여러 키 확인
         const { reasonCode, reasonText, fileData, fileName } = req.body;
-        const reqUuid = req.body.reqUuid || req.body.reqId || req.body.REQ_ID;
+        const reqId = req.body.reqId || req.body.REQ_ID;
         const custId = req.body.custId || req.body.travelerId || req.body.TRAVELER_ID;
         
-        console.log('[DEBUG] Complex Cancel Request Body:', { reqUuid, custId, reasonCode });
+        console.log('[DEBUG] Complex Cancel Request Body:', { reqId, custId, reasonCode });
 
-        if (!reqUuid || !custId) {
+        if (!reqId || !custId) {
             return res.status(400).json({ 
-                error: 'reqUuid and custId are required', 
-                received: { reqUuid, custId } 
+                error: 'reqId and custId are required', 
+                received: { reqId, custId } 
             });
         }
 
@@ -1739,7 +1522,7 @@ app.post('/api/auction/complex-cancel', async (req, res) => {
         // 2. TB_AUCTION_REQ 상태 확인 및 변경
         const [statusRows] = await connection.execute(
             'SELECT DATA_STAT FROM TB_AUCTION_REQ WHERE REQ_ID = ? FOR UPDATE',
-            [reqUuid]
+            [reqId]
         );
 
         if (statusRows.length === 0) {
@@ -1760,7 +1543,7 @@ app.post('/api/auction/complex-cancel', async (req, res) => {
             SET DATA_STAT = 'TRAVELER_CANCEL',
                 MOD_DT = NOW()
             WHERE REQ_ID = ?
-        `, [reqUuid]);
+        `, [reqId]);
 
         // 3. 연결된 모든 입찰 건(TB_BUS_RESERVATION) 및 차량 상세(TB_AUCTION_REQ_BUS) 상태 변경
         await connection.execute(`
@@ -1768,14 +1551,14 @@ app.post('/api/auction/complex-cancel', async (req, res) => {
             SET DATA_STAT = 'TRAVELER_CANCEL',
                 MOD_DT = NOW()
             WHERE REQ_ID = ?
-        `, [reqUuid]);
+        `, [reqId]);
 
         await connection.execute(`
             UPDATE TB_AUCTION_REQ_BUS
             SET DATA_STAT = 'TRAVELER_CANCEL',
                 MOD_DT = NOW()
             WHERE REQ_ID = ?
-        `, [reqUuid]);
+        `, [reqId]);
 
         // 4. TB_USER_CANCEL_HIST 이력 삽입
         const [maxHistRows] = await connection.execute('SELECT MAX(HIST_SEQ) as maxSeq FROM TB_USER_CANCEL_HIST WHERE CUST_ID = ?', [custId]);
@@ -1928,11 +1711,16 @@ app.post('/api/auction/bus-change', async (req, res) => {
             'UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'TRAVELER_CANCEL\' WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?',
             [reqId, reqBusSeq]
         );
+        
+        // 4. 연관된 확정 예약(TB_BUS_RESERVATION)이 있다면 함께 취소 처리
+        await connection.execute(
+            'UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT = \'CONFIRM\'',
+            [reqId, reqBusSeq]
+        );
 
         await connection.commit();
         res.status(200).json({ 
-            message: '버스 변경 요청이 성공적으로 처리되었습니다.',
-            newCount: currentCnt + 1 
+            message: '버스 변경 요청이 성공적으로 처리되었습니다.'
         });
 
     } catch (error) {
@@ -1991,12 +1779,12 @@ app.post('/api/auction/bus-cancel', async (req, res) => {
             `SELECT r.DRIVER_ID, d.DRIVER_HP, d.DRIVER_NM 
              FROM TB_BUS_RESERVATION r
              JOIN TB_DRIVER_INFO d ON r.DRIVER_ID = d.DRIVER_ID
-             WHERE r.REQ_ID = ? AND r.REQ_BUS_ID = ? AND r.DATA_STAT NOT IN ('BUS_CHANGE', 'TRAVELER_CANCEL')`,
+             WHERE r.REQ_ID = ? AND r.REQ_BUS_SEQ = ? AND r.DATA_STAT NOT IN ('BUS_CHANGE', 'TRAVELER_CANCEL')`,
             [reqId, String(reqBusSeq)]
         );
 
         await connection.execute(
-            'UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'BUS_CHANGE\', MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_ID = ? AND DATA_STAT NOT IN (\'BUS_CHANGE\', \'TRAVELER_CANCEL\')',
+            'UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'BUS_CHANGE\', MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT NOT IN (\'BUS_CHANGE\', \'TRAVELER_CANCEL\')',
             [reqId, String(reqBusSeq)]
         );
 
@@ -2051,7 +1839,7 @@ app.post('/api/auction/confirm', async (req, res) => {
             SELECT ab.REQ_BUS_SEQ
             FROM TB_AUCTION_REQ_BUS ab
             LEFT JOIN TB_BUS_RESERVATION res ON ab.REQ_ID = res.REQ_ID 
-                AND LPAD(ab.REQ_BUS_SEQ, 10, '0') = res.REQ_BUS_ID
+                AND LPAD(ab.REQ_BUS_SEQ, 10, '0') = res.REQ_BUS_SEQ
                 AND res.DATA_STAT = 'CONFIRM'
             WHERE ab.REQ_ID = ? 
               AND (ab.BUS_TYPE_CD = ? OR ? IS NULL)
@@ -2061,11 +1849,11 @@ app.post('/api/auction/confirm', async (req, res) => {
 
         const targetBusSeq = slots.length > 0 ? slots[0].REQ_BUS_SEQ : null;
 
-        // 3. 해당 기사의 특정 입찰(bidSeq)을 'CONFIRM'으로 변경하고 슬롯(REQ_BUS_ID) 할당
+        // 3. 해당 기사의 특정 입찰(bidSeq)을 'CONFIRM'으로 변경하고 슬롯(REQ_BUS_SEQ) 할당
         const [resUpdate] = await connection.execute(`
             UPDATE TB_BUS_RESERVATION 
             SET DATA_STAT = 'CONFIRM',
-                REQ_BUS_ID = LPAD(?, 10, '0'),
+                REQ_BUS_SEQ = LPAD(?, 10, '0'),
                 MOD_DT = NOW()
             WHERE REQ_ID = ? 
               AND DRIVER_ID = ?
@@ -2188,8 +1976,8 @@ app.get('/api/auction/history/:custId', async (req, res) => {
         
         const query = `
             SELECT 
-                r.REQ_ID as REQ_UUID_STR, 
-                ab.REQ_BUS_SEQ as REQ_BUS_UUID_STR,
+                r.REQ_ID, 
+                ab.REQ_BUS_SEQ,
                 r.TRIP_TITLE, r.START_ADDR, r.END_ADDR, r.TRAVELER_ID,
                 r.START_DT, r.END_DT, r.PASSENGER_CNT, r.DATA_STAT, r.REG_DT,
                 ab.BUS_TYPE_CD,
@@ -2199,13 +1987,14 @@ app.get('/api/auction/history/:custId', async (req, res) => {
                     SELECT res.DATA_STAT 
                     FROM TB_BUS_RESERVATION res 
                     WHERE res.REQ_ID = r.REQ_ID 
-                      AND res.REQ_BUS_ID = CAST(ab.REQ_BUS_SEQ AS CHAR)
+                      AND res.REQ_BUS_SEQ = LPAD(ab.REQ_BUS_SEQ, 10, '0')
                     LIMIT 1
                 ) as RES_STAT,
                 (
                     SELECT res.DRIVER_BIDDING_PRICE 
                     FROM TB_BUS_RESERVATION res 
-                    WHERE res.REQ_ID COLLATE utf8mb4_0900_ai_ci = r.REQ_ID 
+                    WHERE res.REQ_ID = r.REQ_ID 
+                      AND res.REQ_BUS_SEQ = LPAD(ab.REQ_BUS_SEQ, 10, '0')
                       AND res.DATA_STAT IN ('CONFIRM', 'COMPLETED')
                     LIMIT 1
                 ) as FINAL_CONFIRM_AMT
@@ -2246,7 +2035,7 @@ app.get('/api/auction/bid-detail/:bidId', async (req, res) => {
                 res.DRIVER_ID as driverId,
                 u.USER_NM as driverName,
                 di.BIO_DESC as driverBio,
-                u.PROFILE_FILE_ID as driverProfilePhotoUuid,
+                u.PROFILE_FILE_ID as driverProfilePhotoId,
                 v.MODEL_NM as busModel,
                 v.SERVICE_CLASS as busClass,
                 v.VEHICLE_NO as busNo,
@@ -2433,7 +2222,7 @@ app.post('/api/driver/profile-setup', async (req, res) => {
 
             await connection.execute(driverQuery, params);
 
-            // 방금 저장된 QUAL_CERT_FILE_UUID 조회 (문서 보기 버튼용)
+            // 방금 저장된 QUAL_CERT_FILE_ID 조회 (문서 보기 버튼용)
             const [savedRows] = await connection.execute(
                 `SELECT QUAL_CERT_FILE_ID FROM TB_DRIVER_INFO WHERE USER_ID = ?`,
                 [custId]
@@ -2729,11 +2518,11 @@ app.get('/api/driver/bus', async (req, res) => {
         if (!row) return res.json({ bus: null });
 
         const amenities = typeof row.AMENITIES === 'string' ? JSON.parse(row.AMENITIES || '{}') : (row.AMENITIES || {});
-        let photoUuids = row.VEHICLE_PHOTOS_JSON;
-        if (typeof photoUuids === 'string') {
-            try { photoUuids = JSON.parse(photoUuids); } catch (e) { photoUuids = []; }
+        let photoFileIds = row.VEHICLE_PHOTOS_JSON;
+        if (typeof photoFileIds === 'string') {
+            try { photoFileIds = JSON.parse(photoFileIds); } catch (e) { photoFileIds = []; }
         }
-        if (!Array.isArray(photoUuids)) photoUuids = [];
+        if (!Array.isArray(photoFileIds)) photoFileIds = [];
 
         const bizRegFile = await fileMetaById(connection, row.bizRegId);
         const transLicFile = await fileMetaById(connection, row.transLicId);
@@ -2754,7 +2543,7 @@ app.get('/api/driver/bus', async (req, res) => {
                 bizRegFile: bizRegFile ? { fileId: bizRegFile.fileId, orgFileNm: bizRegFile.ORG_FILE_NM, fileExt: bizRegFile.FILE_EXT } : null,
                 transLicFile: transLicFile ? { fileId: transLicFile.fileId, orgFileNm: transLicFile.ORG_FILE_NM, fileExt: transLicFile.FILE_EXT } : null,
                 insCertFile: insCertFile ? { fileId: insCertFile.fileId, orgFileNm: insCertFile.ORG_FILE_NM, fileExt: insCertFile.FILE_EXT } : null,
-                vehiclePhotoFileIds: photoUuids
+                vehiclePhotoFileIds: photoFileIds
             }
         });
     } catch (e) {
@@ -3261,159 +3050,13 @@ app.get('/api/auction-list', async (req, res) => {
 });
 
 
-async function ensureAuctionTables(connection) {
-    // 1. TB_AUCTION_REQ (Master)
-    await connection.execute(`
-        CREATE TABLE IF NOT EXISTS TB_AUCTION_REQ (
-            REQ_ID VARCHAR(10) NOT NULL PRIMARY KEY,
-            TRAVELER_ID VARCHAR(10) NOT NULL,
-            TRIP_TITLE VARCHAR(255),
-            START_ADDR VARCHAR(255) NOT NULL,
-            END_ADDR VARCHAR(255) NOT NULL,
-            START_DT DATETIME NOT NULL,
-            END_DT DATETIME NOT NULL,
-            PASSENGER_CNT INT NOT NULL,
-            REQ_AMT DECIMAL(13,0) NOT NULL DEFAULT 0,
-            DATA_STAT ENUM('AUCTION','BIDDING','CONFIRM','DONE','TRAVELER_CANCEL','DRIVER_CANCEL','BUS_CHANGE','BUS_CANCEL') DEFAULT 'AUCTION',
-            EXPIRE_DT DATETIME NOT NULL,
-            REG_DT DATETIME DEFAULT CURRENT_TIMESTAMP,
-            REG_ID VARCHAR(30),
-            MOD_DT DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            MOD_ID VARCHAR(30),
-            KEY IDX_TRAV_ID (TRAVELER_ID)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-
-    // 2. TB_AUCTION_REQ_BUS (Vehicles)
-    await connection.execute(`
-        CREATE TABLE IF NOT EXISTS TB_AUCTION_REQ_BUS (
-            REQ_BUS_ID VARCHAR(10) NOT NULL PRIMARY KEY,
-            REQ_ID VARCHAR(10) NOT NULL,
-            BUS_TYPE_CD VARCHAR(30) NOT NULL,
-            DATA_STAT ENUM('AUCTION','BIDDING','CONFIRM','DONE','TRAVELER_CANCEL','DRIVER_CANCEL','BUS_CHANGE','BUS_CANCEL') DEFAULT 'AUCTION',
-            TOLLS_AMT DECIMAL(13,0),
-            FUEL_COST DECIMAL(13,0),
-            RES_FEE_TOTAL_AMT DECIMAL(13,0),
-            RES_FEE_REFUND_AMT DECIMAL(13,0),
-            RES_FEE_ATTRIBUTION_AMT DECIMAL(18,3),
-            REG_DT DATETIME DEFAULT CURRENT_TIMESTAMP,
-            REG_ID VARCHAR(30),
-            MOD_DT DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            MOD_ID VARCHAR(30),
-            KEY IDX_REQ_ID (REQ_ID)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-
-    // 3. TB_AUCTION_REQ_VIA (Waypoints)
-    await connection.execute(`
-        CREATE TABLE IF NOT EXISTS TB_AUCTION_REQ_VIA (
-            VIA_ID VARCHAR(10) NOT NULL PRIMARY KEY,
-            REQ_ID VARCHAR(10) NOT NULL,
-            VIA_TYPE ENUM('START_NODE','START_WAY','ROUND_TRIP','END_WAY','END_NODE') NOT NULL DEFAULT 'START_WAY',
-            VIA_ORD INT NOT NULL,
-            VIA_ADDR VARCHAR(255) NOT NULL,
-            LAT DECIMAL(10,8),
-            LNG DECIMAL(11,8),
-            DIST_FROM_PREV DECIMAL(10,2) DEFAULT 0.00,
-            TIME_FROM_PREV INT DEFAULT 0,
-            STOP_TIME_MIN INT DEFAULT 0,
-            REG_DT DATETIME DEFAULT CURRENT_TIMESTAMP,
-            REG_ID VARCHAR(30),
-            MOD_DT DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            MOD_ID VARCHAR(30),
-            KEY IDX_REQ_ID (REQ_ID)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-
-    // [Migration] Ensure VIA_ORD exists in TB_AUCTION_REQ_VIA
-    try {
-        await connection.execute(`ALTER TABLE TB_AUCTION_REQ_VIA ADD COLUMN VIA_ORD INT NOT NULL DEFAULT 1 COMMENT '방문 순서'`);
-    } catch (e) {
-        if (e.errno !== 1060 && e.code !== 'ER_DUP_FIELDNAME') console.warn('VIA_ORD migration:', e.message);
-    }
-
-    // 4. TB_BUS_RESERVATION (Reservations/Bids) - using existing DATA_STAT pattern
-    await connection.execute(`
-        CREATE TABLE IF NOT EXISTS TB_BUS_RESERVATION (
-            RES_ID VARCHAR(10) NOT NULL PRIMARY KEY,
-            REQ_ID VARCHAR(10) NOT NULL,
-            REQ_BUS_ID VARCHAR(10) NOT NULL,
-            TRAVELER_ID VARCHAR(10),
-            DRIVER_ID VARCHAR(10),
-            BUS_ID VARCHAR(10),
-            DRIVER_BIDDING_PRICE DECIMAL(13,0) NOT NULL,
-            RES_FEE_TOTAL_AMT DECIMAL(13,0),
-            RES_FEE_REFUND_AMT DECIMAL(13,0),
-            RES_FEE_ATTRIBUTION_AMT DECIMAL(13,0),
-            DATA_STAT ENUM('AUCTION','BIDDING','CONFIRM','DONE','TRAVELER_CANCEL','DRIVER_CANCEL','BUS_CHANGE','BUS_CANCEL') DEFAULT 'BIDDING',
-            CONFIRM_DT DATETIME,
-            REG_DT DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            REG_ID VARCHAR(30),
-            MOD_DT DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            MOD_ID VARCHAR(30)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-}
 
 
 
-/** TB_CHAT_LOG — 대화(방) 마스터 (BusTaams 테이블.md §3 기준) */
-async function ensureTbChatLogTable(connection) {
-    await connection.execute(`
-        CREATE TABLE IF NOT EXISTS TB_CHAT_LOG (
-            CHAT_SEQ INT NOT NULL AUTO_INCREMENT COMMENT '대화(방) 일련 — INT, 자동채번',
-            ROOM_KIND ENUM('TRAVELER','DRIVER','PARTNER','EMPL','OTHER') NOT NULL COMMENT '방 종류',
-            CHAT_TITLE VARCHAR(200) DEFAULT NULL COMMENT '방 제목',
-            CHAT_COVER_FILE_ID VARCHAR(20) DEFAULT NULL COMMENT '방 썸네일 파일ID',
-            REQ_ID VARCHAR(10) DEFAULT NULL COMMENT 'TB_AUCTION_REQ.REQ_ID',
-            RES_ID VARCHAR(10) DEFAULT NULL COMMENT 'TB_BUS_RESERVATION.RES_ID',
-            CREATED_BY_CUST_ID VARCHAR(10) NOT NULL COMMENT '개설자 CUST_ID',
-            LAST_MSG_DT DATETIME DEFAULT NULL,
-            REG_DT DATETIME DEFAULT CURRENT_TIMESTAMP,
-            REG_ID VARCHAR(10) DEFAULT NULL,
-            MOD_DT DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            MOD_ID VARCHAR(10) DEFAULT NULL,
-            PRIMARY KEY (CHAT_SEQ),
-            UNIQUE KEY UK_CHAT_LOG_RES (REQ_ID, RES_ID)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='채팅 대화(방) 마스터'
-    `);
-}
-
-/** TB_CHAT_LOG_PART — 채팅방 참가자 (1:N) */
-async function ensureTbChatLogPartTable(connection) {
-    await connection.execute(`
-        CREATE TABLE IF NOT EXISTS TB_CHAT_LOG_PART (
-            CHAT_SEQ INT NOT NULL COMMENT 'TB_CHAT_LOG PK',
-            CUST_ID VARCHAR(10) NOT NULL COMMENT 'TB_USER.CUST_ID',
-            PART_TYPE ENUM('TRAVELER','DRIVER','PARTNER','EMPL') NOT NULL COMMENT '역할',
-            JOINED_DT DATETIME DEFAULT CURRENT_TIMESTAMP,
-            INVITER_CUST_ID VARCHAR(10) DEFAULT NULL,
-            PRIMARY KEY (CHAT_SEQ, CUST_ID),
-            KEY IDX_PART_CUST (CUST_ID, CHAT_SEQ)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='채팅방 참가자(1:N)'
-    `);
-}
-
-/** TB_CHAT_LOG_HIST — 채팅 메시지 이력 */
-async function ensureTbChatLogHistTable(connection) {
-    await connection.execute(`
-        CREATE TABLE IF NOT EXISTS TB_CHAT_LOG_HIST (
-            HIST_SEQ INT NOT NULL AUTO_INCREMENT COMMENT '메시지 고유번호',
-            CHAT_SEQ INT NOT NULL COMMENT 'TB_CHAT_LOG PK',
-            SENDER_CUST_ID VARCHAR(10) NOT NULL COMMENT '발신자 CUST_ID',
-            MSG_KIND VARCHAR(20) NOT NULL DEFAULT 'TEXT' COMMENT 'TEXT, IMAGE, FILE, SYSTEM',
-            MSG_BODY TEXT NULL,
-            FILE_ID VARCHAR(20) DEFAULT NULL,
-            REG_DT DATETIME DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (HIST_SEQ),
-            KEY IDX_HIST_CHAT (CHAT_SEQ, REG_DT)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='채팅 메시지 이력'
-    `);
-}
 
 /**
  * 여행자 견적 요청 상세 조회
- * GET /api/traveler-quote-request-details?reqUuid=&driverUuid=
+ * GET /api/traveler-quote-request-details?reqId=&driverId=
  * - TB_AUCTION_REQ (마스터) + TB_AUCTION_REQ_BUS (차량) + TB_AUCTION_REQ_VIA (경유지) 조회
  * - TB_BUS_RESERVATION — 기사 입찰가 / 상태 / 회차 별도 조회
  * - 데이터 없을 경우 개발용 더미 데이터 반환
@@ -3497,12 +3140,12 @@ app.get('/api/traveler-quote-request-details', async (req, res) => {
         // 4. TB_AUCTION_REQ_VIA 경유지 조회
         const [viaRows] = await connection.execute(
             `SELECT
-                VIA_ORD       AS sortOrder,
+                VIA_SEQ       AS sortOrder,
                 VIA_ADDR      AS waypointAddr,
                 STOP_TIME_MIN AS stopTimeMin
              FROM TB_AUCTION_REQ_VIA
              WHERE REQ_ID = ?
-             ORDER BY VIA_ORD`,
+             ORDER BY VIA_SEQ`,
             [reqId]
         );
 
@@ -3532,9 +3175,9 @@ app.get('/api/traveler-quote-request-details', async (req, res) => {
 /**
  * 기사 입찰가 수정 / 신규 등록
  * PUT /api/traveler-quote-request-details/bid
- * Body: { resUuid?, reqUuid?, driverUuid?, bidPrice }
- * - resStat = 'REQ' 일 때만 DRIVER_BIDDING_PRICE 갱신 허용
- * - resUuid 또는 (reqUuid + driverUuid) 중 하나 필수
+ * Body: { resId?, reqId?, driverId?, bidPrice }
+ * - resId 또는 (reqId + driverId) 중 하나 필수
+ * - DRIVER_BIDDING_PRICE 갱신 허용
  */
 const RES_STAT_LABEL = { CONFIRM: '확정', DONE: '완료', TRAVELER_CANCEL: '여행자 취소', DRIVER_CANCEL: '버스기사 취소' };
 
@@ -3553,28 +3196,9 @@ app.use('/api/user/device-token', createUserDeviceTokenRouter(pool));
         console.log('📡 [1/3] 데이터베이스 연결 시도 중...');
         connection = await pool.getConnection();
         console.log('✅ [1/3] DB 연결 성공!');
-
-        await ensureTbUserTable(connection);
-        await ensureTbUserColumns(connection);
-        // await ensureTbUserTermsHistTable(connection); // Deleted table
-        await ensureTbUserDeviceTokenTable(connection);
-        await ensureTbFileMasterTable(connection);
-        await ensureTbBusDriverVehicleSchema(connection);
-        await ensureTbBusDriverVehicleFileHistTable(connection);
-        await ensureTbCommonCodeTable(connection);
-        await ensureTbDriverDocsTable(connection);
-        await ensureTbUserCancelManageTable(connection);
-        await ensureTbSubscriptionTable(connection);
-        await ensureAuctionTables(connection);
-
-        await ensureTbChatLogTable(connection);
-        await ensureTbChatLogPartTable(connection);
-        await ensureTbChatLogHistTable(connection);
-        await migrateTbChatLogColumns(connection);
-        console.log('✅ 모든 운영 테이블 (22개 중 주요 테이블) 및 마이그레이션 확인 완료');
-
+        // DDL 권한 제한으로 인해 테이블 생성/관리 로직 제거됨
     } catch (e) {
-        console.error('⚠️ DB 부트스트랩 실패 (DB 연결·권한 확인):', e.message);
+        console.error('⚠️ DB 연결 확인 실패:', e.message);
     } finally {
         if (connection) connection.release();
     }

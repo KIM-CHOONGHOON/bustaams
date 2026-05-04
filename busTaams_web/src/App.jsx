@@ -799,6 +799,16 @@ function App() {
     registerWebFcmTokenIfPossible(cid).catch(() => {});
   }, [user]);
 
+  // [추가] 모달 오픈 시 배경 스크롤 차단 (Scroll Lock)
+  React.useEffect(() => {
+    const isAnyModalOpen = showReservationListModal || showConfirmedListModal || showBusRegisterModal || showAccountSettings || showLiveChatTraveler;
+    if (isAnyModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+  }, [showReservationListModal, showConfirmedListModal, showBusRegisterModal, showAccountSettings, showLiveChatTraveler]);
+
   const handleLogout = () => {
     localStorage.removeItem('user');
     setUser(null);

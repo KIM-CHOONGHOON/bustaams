@@ -23,6 +23,18 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
     }
   }, [user, refreshTrigger]); // [수정] refreshTrigger 추가
 
+  // [추가] 서브 모달 오픈 시 배경 스크롤 차단
+  useEffect(() => {
+    if (selectedRequestId || showTripHistory) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [selectedRequestId, showTripHistory]);
+
   // 주소에서 시/도 + 시군구만 추출 (앞 두 단어)
   const trimAddress = (addr) => {
     if (!addr || typeof addr !== 'string') return '';

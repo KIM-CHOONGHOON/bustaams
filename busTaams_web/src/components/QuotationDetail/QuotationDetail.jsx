@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const QuotationDetail = ({ bidUuid, onBack }) => {
+const QuotationDetail = ({ bidId, onBack }) => {
     const [bid, setBid] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -13,7 +13,7 @@ const QuotationDetail = ({ bidUuid, onBack }) => {
 
         try {
             const response = await axios.post(`${API_BASE}/api/auction/confirm`, {
-                bidUuid: bid.bidUuid
+                bidId: bid.bidId
             });
 
             if (response.status === 200) {
@@ -27,11 +27,11 @@ const QuotationDetail = ({ bidUuid, onBack }) => {
     };
 
     useEffect(() => {
-        if (!bidUuid) return;
+        if (!bidId) return;
         const fetchDetail = async () => {
             setLoading(true);
             try {
-                const response = await axios.get(`${API_BASE}/api/auction/bid-detail/${bidUuid}`);
+                const response = await axios.get(`${API_BASE}/api/auction/bid-detail/${bidId}`);
                 setBid(response.data);
             } catch (err) {
                 console.error('Fetch detail error:', err);
@@ -41,7 +41,7 @@ const QuotationDetail = ({ bidUuid, onBack }) => {
             }
         };
         fetchDetail();
-    }, [bidUuid]);
+    }, [bidId]);
 
     if (loading) return (
         <div className="min-h-screen flex items-center justify-center bg-[#f7f9fb]">
