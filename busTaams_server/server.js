@@ -507,6 +507,15 @@ app.post('/api/auth/register', async (req, res) => {
                 nextCustId
             ]);
 
+            // 3-3. [DB] TB_USER_CANCEL_MANAGE INSERT (초기 취소 관리 레코드 생성)
+            await connection.execute(`
+                INSERT INTO TB_USER_CANCEL_MANAGE (
+                    CUST_ID, CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, 
+                    CANCEL_TRAVELER_ALL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, 
+                    TRADE_RESTRICT_YN, REG_DT, REG_ID, MOD_DT, MOD_ID
+                ) VALUES (?, 0, 0, 0, 0, 'N', NOW(), ?, NOW(), ?)
+            `, [nextCustId, nextCustId, nextCustId]);
+
             // 4. 전자 서명 이미지 처리 (GCS & TB_FILE_MASTER)
             const base64Data = signatureBase64.replace(/^data:image\/png;base64,/, "");
             const buffer = Buffer.from(base64Data, 'base64');
@@ -627,6 +636,14 @@ app.post(['/api/auth/login', '/api/users/login'], async (req, res) => {
             fetchCancelManageForUser(pool, user),
             user.USER_TYPE === 'DRIVER' ? fetchSubscriptionForDriver(pool, custId) : Promise.resolve(null)
         ]);
+
+        // [체크] 거래 제한 여부 확인
+        if (cancelRow && (cancelRow.TRADE_RESTRICT_YN === 'Y' || cancelRow.tradeRestrictYn === 'Y')) {
+            return res.status(403).json({ 
+                error: '거래가 제한된 사용자입니다. 취소 건수 초과 등으로 인해 서비스 이용이 일시적으로 중지되었습니다. 고객센터에 문의해주세요.',
+                type: 'TRADE_RESTRICTED'
+            });
+        }
 
         // [신규] DTO 생성 (복호화 및 구조화된 데이터 포함)
         const userDto = buildPostLoginUserDto({

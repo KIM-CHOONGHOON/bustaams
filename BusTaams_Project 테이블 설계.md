@@ -405,6 +405,11 @@
 | **MOD_DT** | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP | 수정 일시 |
 | **MOD_ID** | varchar(10) | YES |  | NULL |  | 수정자 ID |
 
+### 정책 및 로직
+- **데이터 생성**: 회원가입 완료 시 `CUST_ID`별로 초기 레코드를 생성함 (모든 카운트 0, `TRADE_RESTRICT_YN = 'N'`).
+- **카운트 증가**: '나의 예약목록'에서 여정 전체 취소(`complex-cancel`) 시 `CANCEL_CNT` 및 `CANCEL_TRAVELER_ALL_CNT`를 각각 1씩 증가시킴.
+- **거래 제한**: 로그인 시 이 테이블을 조회하여 `TRADE_RESTRICT_YN`이 'Y'인 경우 로그인을 차단함.
+
 ## TB_USER_DEVICE_TOKEN
 
 | 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
