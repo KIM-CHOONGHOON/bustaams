@@ -4,10 +4,11 @@ import Swal from 'sweetalert2';
 import { 
     checkIdDuplicate, 
     checkEmailDuplicate, 
-    sendAuthCode, 
-    verifyAuthCode, 
     registerUser 
 } from '../api';
+import { auth } from '../firebase-config';
+import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
+
 import { notify } from '../utils/toast';
 
 const SignaturePad = ({ onSave, onClear }) => {
@@ -97,6 +98,8 @@ const Signup = () => {
     const [isEmailChecked, setIsEmailChecked] = useState(false);
     const [isCodeSent, setIsCodeSent] = useState(false);
     const [isPhoneVerified, setIsPhoneVerified] = useState(false);
+    const [confirmationResult, setConfirmationResult] = useState(null);
+    const [idToken, setIdToken] = useState(null); // Firebase ID Token 저장
 
     // 약관 4가지
     const [terms, setTerms] = useState({
@@ -178,32 +181,83 @@ const Signup = () => {
         } catch (err) {}
     };
 
+    // reCAPTCHA 초기화
+    const setupRecaptcha = () => {
+        if (window.recaptchaVerifier) {
+            try {
+                window.recaptchaVerifier.clear();
+            } catch (e) {
+                console.log('reCAPTCHA clear error:', e);
+            }
+            window.recaptchaVerifier = null;
+        }
+
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+            'size': 'invisible',
+            'callback': (response) => {
+                // reCAPTCHA solved
+            },
+            'expired-callback': () => {
+                notify.warn('인증 만료', 'reCAPTCHA 인증이 만료되었습니다. 다시 시도해주세요.');
+            }
+        });
+    };
+
     const handleSendCode = async () => {
         if (!phoneNo) return notify.warn('번호를 입력하세요.');
+        
+        // 국가번호(+82) 추가 및 숫자만 추출
+        let cleanPhone = phoneNo.replace(/[^0-9]/g, '');
+        let formattedPhone = cleanPhone;
+        if (formattedPhone.startsWith('0')) {
+            formattedPhone = '+82' + formattedPhone.substring(1);
+        } else if (!formattedPhone.startsWith('+')) {
+            formattedPhone = '+82' + formattedPhone;
+        }
+
         try {
-            const res = await sendAuthCode(phoneNo);
-            if (res.success) {
-                notify.success('인증번호 발송', res.debugCode ? `테스트 번호: ${res.debugCode}` : '번호가 발송되었습니다.');
-                setIsCodeSent(true);
-            } else {
-                notify.error('발송 실패', res.error || '인증번호 발송에 실패했습니다.');
-            }
+            setupRecaptcha();
+            const appVerifier = window.recaptchaVerifier;
+            const confirmation = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
+            setConfirmationResult(confirmation);
+            setIsCodeSent(true);
+            notify.success('인증번호 발송', 'Firebase를 통해 인증번호가 발송되었습니다.');
         } catch (err) {
-            notify.error('오류', '인증번호 발송 중 문제가 발생했습니다.');
+            console.error('Firebase Auth Detailed Error:', err);
+            
+            let errorMsg = '인증번호 발송 중 오류가 발생했습니다.';
+            if (err.code === 'auth/invalid-app-credential') {
+                errorMsg = '앱 인증 설정이 올바르지 않습니다. (Firebase 콘솔 확인 필요)';
+            } else if (err.code === 'auth/invalid-phone-number') {
+                errorMsg = '유효하지 않은 전화번호 형식입니다.';
+            } else if (err.code === 'auth/quota-exceeded') {
+                errorMsg = 'SMS 발송 한도를 초과했습니다.';
+            }
+
+            notify.error('발송 실패', errorMsg);
+            
+            if (window.recaptchaVerifier) {
+                window.recaptchaVerifier.clear();
+                window.recaptchaVerifier = null;
+            }
         }
     };
 
     const handleVerifyCode = async () => {
         if (!authCode) return notify.warn('인증번호를 입력하세요.');
+        if (!confirmationResult) return notify.error('인증 오류', '발송된 인증 정보가 없습니다.');
+
         try {
-            const res = await verifyAuthCode(phoneNo, authCode);
-            if (res.success) {
-                notify.success('인증 성공');
-                setIsPhoneVerified(true);
-            } else {
-                notify.error('인증 실패');
-            }
-        } catch (err) {}
+            const result = await confirmationResult.confirm(authCode);
+            const user = result.user;
+            const token = await user.getIdToken();
+            setIdToken(token);
+            setIsPhoneVerified(true);
+            notify.success('인증 성공', '휴대폰 인증이 완료되었습니다.');
+        } catch (err) {
+            console.error('Verify Code Error:', err);
+            notify.error('인증 실패', '인증번호가 올바르지 않거나 만료되었습니다.');
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -230,7 +284,8 @@ const Signup = () => {
                 userId, email, userName, password, phoneNo, 
                 userType: userType === 'customer' ? 'TRAVELER' : 'DRIVER',
                 signatureBase64: signature,
-                termsData
+                termsData,
+                firebaseToken: idToken // Firebase 인증 토큰 추가
             });
 
             if (res.success) {
@@ -346,17 +401,50 @@ const Signup = () => {
                             <div className="flex gap-2">
                                 <div className="flex-grow relative">
                                     <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-lg">smartphone</span>
-                                    <input value={phoneNo} onChange={e=>setPhoneNo(e.target.value.replace(/[^0-9]/g, ''))} type="tel" placeholder="휴대폰 번호" className="w-full bg-slate-100 rounded-xl py-4 pl-12 pr-4 outline-none font-medium" />
+                                    <input 
+                                        value={phoneNo} 
+                                        onChange={e=>setPhoneNo(e.target.value.replace(/[^0-9]/g, ''))} 
+                                        type="tel" 
+                                        placeholder="휴대폰 번호" 
+                                        disabled={isPhoneVerified}
+                                        className="w-full bg-slate-100 rounded-xl py-4 pl-12 pr-4 outline-none font-medium disabled:opacity-50" 
+                                    />
                                 </div>
-                                <button type="button" onClick={handleSendCode} className="px-6 bg-white border border-primary text-primary rounded-xl font-bold text-sm">인증요청</button>
+                                <button 
+                                    type="button" 
+                                    onClick={handleSendCode} 
+                                    disabled={isPhoneVerified}
+                                    className="px-6 bg-white border border-primary text-primary rounded-xl font-bold text-sm disabled:opacity-50"
+                                >
+                                    {isCodeSent ? '재발송' : '인증요청'}
+                                </button>
                             </div>
-                            <div className="flex gap-2">
-                                <div className="flex-grow relative">
-                                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-lg">verified_user</span>
-                                    <input value={authCode} onChange={e=>setAuthCode(e.target.value)} type="text" placeholder="6자리 인증번호" className="w-full bg-slate-100 rounded-xl py-4 pl-12 pr-4 outline-none font-medium" />
+                            <div id="recaptcha-container"></div> {/* Firebase reCAPTCHA 컨테이너 */}
+
+                            {isCodeSent && !isPhoneVerified && (
+                                <div className="flex gap-2">
+                                    <div className="flex-grow relative">
+                                        <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-lg">verified_user</span>
+                                        <input 
+                                            value={authCode} 
+                                            onChange={e=>setAuthCode(e.target.value)} 
+                                            type="text" 
+                                            placeholder="6자리 인증번호" 
+                                            className="w-full bg-slate-100 rounded-xl py-4 pl-12 pr-4 outline-none font-medium" 
+                                        />
+                                    </div>
+                                    <button 
+                                        type="button" 
+                                        onClick={handleVerifyCode} 
+                                        className="px-6 bg-primary text-white rounded-xl font-bold text-sm hover:bg-primary-dark transition-all"
+                                    >
+                                        인증확인
+                                    </button>
                                 </div>
-                                <button type="button" onClick={handleVerifyCode} className="px-6 bg-white border border-primary text-primary rounded-xl font-bold text-sm">인증확인</button>
-                            </div>
+                            )}
+                            {isPhoneVerified && (
+                                <p className="text-xs text-green-600 font-bold ml-1">✔ 휴대폰 인증이 완료되었습니다.</p>
+                            )}
                         </div>
 
                         {/* 약관 동의 */}

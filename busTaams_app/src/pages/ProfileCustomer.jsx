@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getCustomerProfile, updateCustomerProfile, changePassword, uploadProfileImage, sendVerificationCode, verifyCode } from '../api';
+import { getCustomerProfile, updateCustomerProfile, changePassword, uploadProfileImage } from '../api';
+import { auth } from '../firebase-config';
+import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { notify } from '../utils/toast';
 import BottomNavCustomer from '../components/BottomNavCustomer';
 
@@ -29,9 +31,10 @@ const ProfileCustomer = () => {
     // 인증 관련 상태
     const [verificationSent, setVerificationSent] = useState(false);
     const [verificationCode, setVerificationCode] = useState('');
-    const [sentCode, setSentCode] = useState(''); // 서버에서 받은 인증코드 (데모용)
     const [isVerified, setIsVerified] = useState(true); // 초기에는 인증된 상태로 간주
     const [originalPhone, setOriginalPhone] = useState('');
+    const [confirmationResult, setConfirmationResult] = useState(null);
+    const [idToken, setIdToken] = useState(null);
     const [imageVersion, setImageVersion] = useState(Date.now()); // 이미지 캐시 버스팅용 상태
 
     const validatePassword = (pw) => {
@@ -79,7 +82,8 @@ const ProfileCustomer = () => {
             const response = await updateCustomerProfile({
                 name: userData.name,
                 phone: userData.phone,
-                email: userData.email
+                email: userData.email,
+                firebaseToken: userData.phone !== originalPhone ? idToken : null
             });
             notify.success('정보 수정 완료', response.message || '정보가 성공적으로 수정되었습니다.');
             setOriginalPhone(userData.phone);
@@ -90,44 +94,86 @@ const ProfileCustomer = () => {
         }
     };
 
-    // SMS 인증번호 전송
+    // reCAPTCHA 초기화
+    const setupRecaptcha = () => {
+        if (window.recaptchaVerifier) {
+            try {
+                window.recaptchaVerifier.clear();
+            } catch (e) {
+                console.log('reCAPTCHA clear error:', e);
+            }
+            window.recaptchaVerifier = null;
+        }
+
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+            'size': 'invisible',
+            'callback': (response) => {
+                // reCAPTCHA solved
+            },
+            'expired-callback': () => {
+                notify.warn('인증 만료', 'reCAPTCHA 인증이 만료되었습니다. 다시 시도해주세요.');
+            }
+        });
+    };
+
+    // SMS 인증번호 전송 (Firebase)
     const handleSendSMS = async () => {
         if (!userData.phone) {
             notify.warn('번호 입력', '휴대폰 번호를 입력해주세요.');
             return;
         }
+
+        let formattedPhone = userData.phone.replace(/-/g, '');
+        if (formattedPhone.startsWith('0')) {
+            formattedPhone = '+82' + formattedPhone.substring(1);
+        }
+
         try {
-            const response = await sendVerificationCode(userData.phone);
-            if (response.success) {
-                setVerificationSent(true);
-                setSentCode(response.code); // 데모용
-                notify.success('인증번호 발송', '인증번호가 발송되었습니다.');
-            } else {
-                notify.error('발송 실패', response.error || '인증번호 발송에 실패했습니다.');
-            }
+            setupRecaptcha();
+            const appVerifier = window.recaptchaVerifier;
+            const confirmation = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
+            setConfirmationResult(confirmation);
+            setVerificationSent(true);
+            notify.success('인증번호 발송', 'Firebase를 통해 인증번호가 발송되었습니다.');
         } catch (error) {
-            notify.error('오류', error.message || '인증번호 발송 중 오류가 발생했습니다.');
+            console.error('Firebase Auth Detailed Error:', error);
+            
+            let errorMsg = '인증번호 발송 중 오류가 발생했습니다.';
+            if (error.code === 'auth/invalid-app-credential') {
+                errorMsg = '앱 인증 설정이 올바르지 않습니다. (Firebase 콘솔 확인 필요)';
+            } else if (error.code === 'auth/invalid-phone-number') {
+                errorMsg = '유효하지 않은 전화번호 형식입니다.';
+            } else if (error.code === 'auth/quota-exceeded') {
+                errorMsg = 'SMS 발송 한도를 초과했습니다.';
+            }
+
+            notify.error('발송 실패', errorMsg);
+            
+            if (window.recaptchaVerifier) {
+                window.recaptchaVerifier.clear();
+                window.recaptchaVerifier = null;
+            }
         }
     };
 
-    // 인증번호 확인
+    // 인증번호 확인 (Firebase)
     const handleVerifyCode = async () => {
         if (!verificationCode) {
             notify.warn('입력 필요', '인증번호를 입력해주세요.');
             return;
         }
+        if (!confirmationResult) return notify.error('인증 오류', '발송된 인증 정보가 없습니다.');
 
         try {
-            const response = await verifyCode(userData.phone, verificationCode);
-            if (response.success) {
-                setIsVerified(true);
-                setVerificationSent(false);
-                notify.success('인증 성공', '휴대폰 인증이 완료되었습니다.');
-            } else {
-                notify.error('인증 실패', response.error || '인증번호가 일치하지 않습니다.');
-            }
+            const result = await confirmationResult.confirm(verificationCode);
+            const user = result.user;
+            const token = await user.getIdToken();
+            setIdToken(token);
+            setIsVerified(true);
+            setVerificationSent(false);
+            notify.success('인증 성공', '휴대폰 인증이 완료되었습니다.');
         } catch (error) {
-            notify.error('오류', '인증 확인 중 오류가 발생했습니다.');
+            notify.error('인증 실패', '인증번호가 일치하지 않습니다.');
         }
     };
 
@@ -279,6 +325,7 @@ const ProfileCustomer = () => {
                                     {verificationSent ? '재발송' : '인증번호 전송'}
                                 </button>
                             </div>
+                            <div id="recaptcha-container"></div>
                         </div>
 
                         {verificationSent && (
@@ -299,7 +346,6 @@ const ProfileCustomer = () => {
                                         확인
                                     </button>
                                 </div>
-                                <p className="text-[10px] text-primary/60 px-1">* 테스트용 코드: {sentCode}</p>
                             </div>
                         )}
 

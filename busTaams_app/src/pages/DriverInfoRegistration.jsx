@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DaumPostcodeEmbed from 'react-daum-postcode';
 import { getDriverProfile, updateDriverProfile, request } from '../api';
+import { auth } from '../firebase-config';
+import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { validateRRN } from '../utils/validation';
 import { notify } from '../utils/toast';
 import BottomNavDriver from '../components/BottomNavDriver';
@@ -38,6 +40,13 @@ const DriverInfoRegistration = () => {
         qualStatus: 'ACTIVE',
         qualApproveStat: ''
     });
+
+    const [verificationSent, setVerificationSent] = useState(false);
+    const [verificationCode, setVerificationCode] = useState('');
+    const [isVerified, setIsVerified] = useState(false);
+    const [confirmationResult, setConfirmationResult] = useState(null);
+    const [idToken, setIdToken] = useState(null);
+    const [originalPhone, setOriginalPhone] = useState('');
 
     const [previews, setPreviews] = useState({
         profileImg: '',
@@ -96,6 +105,8 @@ const DriverInfoRegistration = () => {
                         qualStatus: driver?.qualStatus || 'ACTIVE',
                         qualApproveStat: driver?.qualApproveStat || ''
                     }));
+                    setOriginalPhone(user?.phone || '');
+                    if (user?.phone) setIsVerified(true); // 이미 번호가 있으면 인증된 것으로 간주 (변경 시 재인증 필요)
                     setPreviews({
                         profileImg: driver?.profileImg || '',
                         licenseImg: driver?.licenseImg || '',
@@ -108,6 +119,100 @@ const DriverInfoRegistration = () => {
             }
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Firebase reCAPTCHA 설정
+    const setupRecaptcha = () => {
+        if (window.recaptchaVerifier) {
+            try {
+                window.recaptchaVerifier.clear();
+            } catch (e) {
+                console.log('reCAPTCHA clear error:', e);
+            }
+            window.recaptchaVerifier = null;
+        }
+        
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+            'size': 'invisible',
+            'callback': (response) => {
+                // reCAPTCHA solved, allow signInWithPhoneNumber.
+            },
+            'expired-callback': () => {
+                // Response expired. Ask user to solve reCAPTCHA again.
+                notify.warn('인증 만료', 'reCAPTCHA 인증이 만료되었습니다. 다시 시도해주세요.');
+            }
+        });
+    };
+
+    // SMS 인증번호 전송
+    const handleSendSMS = async () => {
+        if (!formData.hpNo) {
+            notify.warn('번호 입력', '휴대폰 번호를 입력해주세요.');
+            return;
+        }
+
+        // 전화번호 형식 정규화 (숫자만 추출)
+        let cleanPhone = formData.hpNo.replace(/[^0-9]/g, '');
+        
+        // 한국 번호 형식 체크 및 변환 (010... -> +8210...)
+        let formattedPhone = cleanPhone;
+        if (formattedPhone.startsWith('0')) {
+            formattedPhone = '+82' + formattedPhone.substring(1);
+        } else if (!formattedPhone.startsWith('+')) {
+            // 국가 코드가 없는 경우 기본 한국으로 설정
+            formattedPhone = '+82' + formattedPhone;
+        }
+
+        try {
+            setupRecaptcha();
+            const appVerifier = window.recaptchaVerifier;
+            const confirmation = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
+            setConfirmationResult(confirmation);
+            setVerificationSent(true);
+            notify.success('인증번호 발송', 'Firebase를 통해 인증번호가 발송되었습니다.');
+        } catch (error) {
+            console.error('Firebase Auth Detailed Error:', error);
+            
+            let errorMsg = '인증번호 발송 중 오류가 발생했습니다.';
+            if (error.code === 'auth/invalid-phone-number') {
+                errorMsg = '유효하지 않은 전화번호 형식입니다.';
+            } else if (error.code === 'auth/quota-exceeded') {
+                errorMsg = 'SMS 발송 한도를 초과했습니다. 나중에 다시 시도해주세요.';
+            } else if (error.code === 'auth/too-many-requests') {
+                errorMsg = '너무 많은 요청이 발생했습니다. 잠시 후 다시 시도해주세요.';
+            } else if (error.code === 'auth/captcha-check-failed') {
+                errorMsg = 'reCAPTCHA 인증에 실패했습니다.';
+            }
+
+            notify.error('발송 실패', errorMsg);
+            
+            // 오류 발생 시 reCAPTCHA 초기화
+            if (window.recaptchaVerifier) {
+                window.recaptchaVerifier.clear();
+                window.recaptchaVerifier = null;
+            }
+        }
+    };
+
+    // 인증번호 확인
+    const handleVerifyCode = async () => {
+        if (!verificationCode) {
+            notify.warn('입력 필요', '인증번호를 입력해주세요.');
+            return;
+        }
+        if (!confirmationResult) return notify.error('인증 오류', '발송된 인증 정보가 없습니다.');
+
+        try {
+            const result = await confirmationResult.confirm(verificationCode);
+            const user = result.user;
+            const token = await user.getIdToken();
+            setIdToken(token);
+            setIsVerified(true);
+            setVerificationSent(false);
+            notify.success('인증 성공', '휴대폰 인증이 완료되었습니다.');
+        } catch (error) {
+            notify.error('인증 실패', '인증번호가 일치하지 않습니다.');
         }
     };
 
@@ -139,6 +244,11 @@ const DriverInfoRegistration = () => {
             return;
         }
 
+        if (formData.hpNo !== originalPhone && !isVerified) {
+            notify.warn('인증 필요', '휴대폰 번호 인증이 필요합니다.');
+            return;
+        }
+
         const today = new Date().toISOString().split('T')[0];
         if (formData.licenseIssueDt && formData.licenseIssueDt > today) {
             notify.error('입력 오류', '면허 발급일은 오늘 이전 날짜여야 합니다.');
@@ -163,6 +273,9 @@ const DriverInfoRegistration = () => {
             
             data.append('name', formData.userNm);
             data.append('phone', formData.hpNo);
+            if (formData.hpNo !== originalPhone) {
+                data.append('firebaseToken', idToken);
+            }
             data.append('residentNo', formData.residentNo);
             data.append('zipcode', formData.zipcode);
             data.append('address', formData.address);
@@ -314,12 +427,36 @@ const DriverInfoRegistration = () => {
                                     <div className="space-y-3">
                                         <div className="flex gap-3">
                                             <input name="hpNo" value={formData.hpNo} onChange={handleInputChange} className="flex-1 bg-[#e6e8ea] border-none rounded-xl px-6 py-4 text-[#191c1e]" placeholder="010-0000-0000" />
-                                            <button type="button" className="w-1/3 bg-[#004e47] text-white font-bold rounded-xl px-4 py-4 hover:bg-[#00685f] transition-all text-sm">인증요청</button>
+                                            <button 
+                                                type="button" 
+                                                onClick={handleSendSMS}
+                                                className="w-1/3 bg-[#004e47] text-white font-bold rounded-xl px-4 py-4 hover:bg-[#00685f] transition-all text-sm active:scale-95"
+                                            >
+                                                {verificationSent ? '재발송' : '인증요청'}
+                                            </button>
                                         </div>
-                                        <div className="flex gap-3">
-                                            <input className="flex-1 bg-[#e6e8ea] border-none rounded-xl px-6 py-4 text-[#191c1e]" maxLength="6" placeholder="6자리 인증번호" />
-                                            <button type="button" className="w-1/3 border-2 border-[#004e47] text-[#004e47] font-bold rounded-xl px-4 py-4 hover:bg-[#004e47]/5 transition-all text-sm">인증확인</button>
-                                        </div>
+                                        <div id="recaptcha-container"></div>
+                                        {verificationSent && (
+                                            <div className="flex gap-3">
+                                                <input 
+                                                    value={verificationCode} 
+                                                    onChange={(e) => setVerificationCode(e.target.value)}
+                                                    className="flex-1 bg-[#e6e8ea] border-none rounded-xl px-6 py-4 text-[#191c1e]" 
+                                                    maxLength="6" 
+                                                    placeholder="6자리 인증번호" 
+                                                />
+                                                <button 
+                                                    type="button" 
+                                                    onClick={handleVerifyCode}
+                                                    className="w-1/3 border-2 border-[#004e47] text-[#004e47] font-bold rounded-xl px-4 py-4 hover:bg-[#004e47]/5 transition-all text-sm active:scale-95"
+                                                >
+                                                    인증확인
+                                                </button>
+                                            </div>
+                                        )}
+                                        {isVerified && formData.hpNo !== originalPhone && (
+                                            <p className="text-xs text-teal-600 font-bold px-1">✓ 인증되었습니다.</p>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="space-y-2 md:col-span-2">

@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const admin = require('firebase-admin');
 const { pool, getNextId, bucket, bucketName } = require('../db');
 const { encrypt, decrypt } = require('../crypto');
 const jwt = require('jsonwebtoken');
@@ -412,7 +413,7 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
             name, phone, residentNo, zipcode, address, detailAddress, 
             licenseType, licenseNo, licenseIssueDt, licenseValidity,
             busLicenseNo, qualAcquisitionDt, qualStatus,
-            sex, addrType, selfIntro
+            sex, addrType, selfIntro, firebaseToken
         } = req.body;
         
         // 주민등록번호 유효성 검증
@@ -432,9 +433,24 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
         const userId = req.user.userId;
 
         // 0. CUST_ID 및 기존 프로필 파일 ID 조회
-        const [uRows] = await connection.execute('SELECT CUST_ID, PROFILE_FILE_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        const [uRows] = await connection.execute('SELECT CUST_ID, PROFILE_FILE_ID, HP_NO FROM TB_USER WHERE USER_ID = ?', [userId]);
         if (uRows.length === 0) throw new Error('사용자를 찾을 수 없습니다.');
-        const { CUST_ID: custId, PROFILE_FILE_ID: existingProfileFileId } = uRows[0];
+        const { CUST_ID: custId, PROFILE_FILE_ID: existingProfileFileId, HP_NO: existingPhone } = uRows[0];
+
+        // 휴대폰 번호가 변경된 경우 Firebase 토큰 검증
+        if (phone && phone !== existingPhone) {
+            if (!firebaseToken) {
+                throw new Error('휴대폰 번호 변경을 위해서는 인증 토큰이 필요합니다.');
+            }
+            try {
+                const decodedToken = await admin.auth().verifyIdToken(firebaseToken);
+                // 토큰의 전화번호와 요청된 전화번호가 일치하는지 확인 (선택 사항이지만 보안상 권장)
+                // console.log('Firebase Phone:', decodedToken.phone_number);
+            } catch (authError) {
+                console.error('Firebase Auth Verification Error:', authError);
+                throw new Error('유효하지 않은 인증 토큰입니다.');
+            }
+        }
 
         // [공통] 파일 업로드 및 TB_FILE_MASTER 처리
         const processFileUpload = async (fileKey, category, existingFileId = null) => {

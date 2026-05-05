@@ -7,6 +7,7 @@ const bcrypt = require('bcrypt');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const admin = require('firebase-admin');
 
 // 업로드 디렉토리 설정
 const uploadDir = path.join(__dirname, '../uploads/profiles');
@@ -147,7 +148,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
 
 // 2. 프로필 정보 업데이트
 router.post('/profile/update', authenticateToken, async (req, res) => {
-    const { name, phone, email } = req.body;
+    const { name, phone, email, firebaseToken } = req.body;
     try {
         const userId = req.user.userId;
 
@@ -163,6 +164,30 @@ router.post('/profile/update', authenticateToken, async (req, res) => {
             params.push(name);
         }
         if (phone) {
+            // 0-1. 휴대폰 번호 변경 시 Firebase Token 검증
+            const [currentRows] = await pool.execute('SELECT HP_NO FROM TB_USER WHERE USER_ID = ?', [userId]);
+            const currentPhone = currentRows.length > 0 ? currentRows[0].HP_NO : '';
+
+            if (phone !== currentPhone) {
+                if (!firebaseToken) {
+                    return res.status(400).json({ status: 400, message: '휴대폰 번호 변경 시 인증 토큰이 필요합니다.' });
+                }
+
+                try {
+                    const decodedToken = await admin.auth().verifyIdToken(firebaseToken);
+                    const firebasePhone = decodedToken.phone_number;
+                    const cleanFirebasePhone = firebasePhone.replace(/[^0-9]/g, '');
+                    const cleanRequestPhone = phone.replace(/[^0-9]/g, '');
+
+                    if (!cleanFirebasePhone.endsWith(cleanRequestPhone)) {
+                        return res.status(400).json({ status: 400, message: '인증된 휴대폰 번호와 입력된 번호가 일치하지 않습니다.' });
+                    }
+                } catch (tokenError) {
+                    console.error('Firebase Token Verification Error:', tokenError);
+                    return res.status(401).json({ status: 401, message: '유효하지 않은 인증 토큰입니다.' });
+                }
+            }
+
             updates.push('HP_NO = ?');
             params.push(phone);
         }

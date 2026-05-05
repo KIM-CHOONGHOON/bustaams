@@ -63,8 +63,10 @@ router.get('/check-phone', async (req, res) => {
     }
 });
 
+const admin = require('firebase-admin');
+
 /**
- * [App 전용] 회원가입 (약관 동의 이력 및 서명 파일 처리 포함)
+ * [App 전용] 회원가입 (Firebase Auth 휴대폰 인증 검증 포함)
  */
 router.post('/register', async (req, res) => {
     const connection = await pool.getConnection();
@@ -73,14 +75,41 @@ router.post('/register', async (req, res) => {
 
     const { 
         userId, password, userName, phoneNo, userType, 
-        signatureBase64, termsData, mktChannelYN, email, smsAuthYn 
+        signatureBase64, termsData, mktChannelYN, email, smsAuthYn,
+        firebaseToken // 클라이언트에서 보낸 Firebase ID Token
     } = req.body;
 
     console.log(`[Registration] Request received for user: ${userId}`);
-    // console.log('[Registration] req.body:', JSON.stringify(req.body, null, 2)); // 전체 바디 로그 (필요 시 주석 해제)
 
-    // ... (중략: 중복 체크 및 서명 처리 로직)
+    // 0. Firebase Token 검증 (휴대폰 인증 확인)
+    let verifiedPhoneNo = phoneNo;
+    if (firebaseToken) {
+        try {
+            const decodedToken = await admin.auth().verifyIdToken(firebaseToken);
+            // Firebase에 등록된 전화번호 가져오기 (+8210... 형식)
+            const firebasePhone = decodedToken.phone_number; 
+            
+            // 국가번호 제거하고 숫자만 추출하여 비교 (필요 시)
+            const cleanFirebasePhone = firebasePhone.replace(/[^0-9]/g, '');
+            const cleanRequestPhone = phoneNo.replace(/[^0-9]/g, '');
+            
+            // 뒤에서 10~11자리가 일치하는지 확인 (국가번호 차이 고려)
+            if (!cleanFirebasePhone.endsWith(cleanRequestPhone)) {
+                console.error(`[Registration] Phone mismatch: FB(${cleanFirebasePhone}) vs Req(${cleanRequestPhone})`);
+                await connection.rollback();
+                return res.status(400).json({ error: '인증된 휴대폰 번호와 입력된 번호가 일치하지 않습니다.' });
+            }
+            console.log(`[Registration] Firebase Phone Verified: ${firebasePhone}`);
+        } catch (error) {
+            console.error('[Registration] Firebase Token Verification Failed:', error);
+            await connection.rollback();
+            return res.status(401).json({ error: '휴대폰 인증 토큰이 유효하지 않습니다.' });
+        }
+    } else {
+        return res.status(400).json({ error: '휴대폰 인증이 필요합니다.' });
+    }
 
+    // ... (이후 기존 아이디 및 연락처 중복 체크 로직)
         // 아이디 및 연락처 중복 체크
         const [existing] = await connection.execute(
             'SELECT 1 FROM TB_USER WHERE USER_ID = ? OR HP_NO = ?', 
@@ -359,56 +388,69 @@ router.post('/find-id', async (req, res) => {
 });
 
 /**
- * [App 전용] 비밀번호 찾기 (임시 비밀번호 발급 및 SNS 발송)
+ * [App 전용] 비밀번호 재설정 (Firebase Auth 인증 후 호출)
  */
-router.post('/find-password', async (req, res) => {
+router.post('/reset-password', async (req, res) => {
+    const connection = await pool.getConnection();
     try {
-        let { userId, phoneNo } = req.body;
-        if (!userId || !phoneNo) return res.status(400).json({ error: '아이디와 휴대폰 번호를 모두 입력해주세요.' });
+        await connection.beginTransaction();
 
-        // 휴대폰 번호 정규화
-        phoneNo = phoneNo.replace(/[^0-9]/g, '');
+        const { userId, phoneNo, newPassword, firebaseToken } = req.body;
 
-        // 1. 아이디와 휴대폰 번호로 사용자 조회 (성함, CUST_ID 포함)
-        const [rows] = await pool.execute(
-            'SELECT USER_NM, CUST_ID FROM TB_USER WHERE USER_ID = ? AND HP_NO = ? AND USER_STAT = "ACTIVE"', 
-            [userId, phoneNo]
+        if (!userId || !phoneNo || !newPassword || !firebaseToken) {
+            return res.status(400).json({ error: '필수 정보가 누락되었습니다.' });
+        }
+
+        // 1. Firebase Token 검증
+        let verifiedPhoneNo = '';
+        try {
+            const decodedToken = await admin.auth().verifyIdToken(firebaseToken);
+            const firebasePhone = decodedToken.phone_number; // +8210... 형식
+            
+            const cleanFirebasePhone = firebasePhone.replace(/[^0-9]/g, '');
+            const cleanRequestPhone = phoneNo.replace(/[^0-9]/g, '');
+            
+            if (!cleanFirebasePhone.endsWith(cleanRequestPhone)) {
+                await connection.rollback();
+                return res.status(400).json({ error: '인증된 휴대폰 번호와 입력된 번호가 일치하지 않습니다.' });
+            }
+            verifiedPhoneNo = cleanRequestPhone;
+        } catch (error) {
+            console.error('[ResetPassword] Firebase Token Verification Failed:', error);
+            await connection.rollback();
+            return res.status(401).json({ error: '휴대폰 인증 토큰이 유효하지 않습니다.' });
+        }
+
+        // 2. 사용자 존재 및 번호 일치 확인
+        const [rows] = await connection.execute(
+            'SELECT CUST_ID FROM TB_USER WHERE USER_ID = ? AND HP_NO = ? AND USER_STAT = "ACTIVE"',
+            [userId, verifiedPhoneNo]
         );
-        
+
         if (rows.length === 0) {
+            await connection.rollback();
             return res.status(404).json({ error: '일치하는 사용자 정보를 찾을 수 없습니다.' });
         }
-        const userName = rows[0].USER_NM;
+
         const custId = rows[0].CUST_ID;
 
-        // 2. 임시 비밀번호 생성 (8자리 랜덤 영문+숫자)
-        const tempPassword = Math.random().toString(36).slice(-8);
-        const hashedPassword = await bcrypt.hash(tempPassword, 10);
-
-        // 3. DB 업데이트 (MOD_ID, MOD_DT 포함)
-        await pool.execute('UPDATE TB_USER SET PASSWORD = ?, MOD_ID = ?, MOD_DT = NOW() WHERE USER_ID = ?', [hashedPassword, custId, userId]);
-
-        // 4. TB_SMS_LOG에 발송 이력 저장 (요청 규격 준수, LOG_SEQ 채번)
-        const msgContent = `[busTaams] ${userName}님, 임시 비밀번호는 [${tempPassword}] 입니다. 로그인 후 변경해주세요.`;
-        const logSeq = await getNextId('TB_SMS_LOG', 'LOG_SEQ', 10);
-        
-        await pool.execute(
-            `INSERT INTO TB_SMS_LOG (
-                LOG_SEQ, SEND_CATEGORY, SENDER_ID, RECEIVER_ID, REG_ID, RECEIVER_PHONE, MSG_CONTENT, MSG_TYPE, SEND_STAT, REG_DT
-            ) VALUES (?, 'NEW_PASSWORD', 'SYSTEM', ?, ?, ?, ?, 'SMS', 'SUCCESS', NOW())`,
-            [logSeq, custId, custId, phoneNo, msgContent]
+        // 3. 새 비밀번호 해싱 및 업데이트
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await connection.execute(
+            'UPDATE TB_USER SET PASSWORD = ?, MOD_ID = ?, MOD_DT = NOW() WHERE CUST_ID = ?',
+            [hashedPassword, custId, custId]
         );
 
-        // 5. 서버 로그 확인용
-        console.log(`[SNS 발송 시뮬레이션] To: ${phoneNo}, Message: ${msgContent}`);
+        await connection.commit();
+        console.log(`✅ Password reset success for user: ${userId}`);
+        res.json({ success: true, message: '비밀번호가 성공적으로 재설정되었습니다.' });
 
-        res.json({ 
-            success: true, 
-            message: '임시 비밀번호가 휴대폰으로 발송되었습니다. (시뮬레이션: 서버 로그 확인)' 
-        });
     } catch (err) {
-        console.error('Find PW error:', err);
-        res.status(500).json({ error: '서버 오류' });
+        if (connection) await connection.rollback();
+        console.error('Reset Password Error:', err);
+        res.status(500).json({ error: '비밀번호 재설정 중 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release();
     }
 });
 
