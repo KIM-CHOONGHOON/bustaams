@@ -122,27 +122,36 @@ const DriverInfoRegistration = () => {
         }
     };
 
+    useEffect(() => {
+        return () => {
+            if (window.recaptchaVerifier) {
+                try {
+                    window.recaptchaVerifier.clear();
+                } catch (e) {}
+                window.recaptchaVerifier = null;
+            }
+        };
+    }, []);
+
     // Firebase reCAPTCHA 설정
     const setupRecaptcha = () => {
-        if (window.recaptchaVerifier) {
-            try {
-                window.recaptchaVerifier.clear();
-            } catch (e) {
-                console.log('reCAPTCHA clear error:', e);
-            }
-            window.recaptchaVerifier = null;
+        if (!window.recaptchaVerifier) {
+            window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+                'size': 'invisible',
+                'callback': (response) => {
+                    // reCAPTCHA solved, allow signInWithPhoneNumber.
+                },
+                'expired-callback': () => {
+                    notify.warn('인증 만료', 'reCAPTCHA 인증이 만료되었습니다. 다시 시도해주세요.');
+                    if (window.recaptchaVerifier) {
+                        try {
+                            window.recaptchaVerifier.clear();
+                        } catch (e) {}
+                        window.recaptchaVerifier = null;
+                    }
+                }
+            });
         }
-        
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-            'size': 'invisible',
-            'callback': (response) => {
-                // reCAPTCHA solved, allow signInWithPhoneNumber.
-            },
-            'expired-callback': () => {
-                // Response expired. Ask user to solve reCAPTCHA again.
-                notify.warn('인증 만료', 'reCAPTCHA 인증이 만료되었습니다. 다시 시도해주세요.');
-            }
-        });
     };
 
     // SMS 인증번호 전송
