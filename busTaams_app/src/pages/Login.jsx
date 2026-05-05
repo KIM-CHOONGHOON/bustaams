@@ -7,6 +7,8 @@ const Login = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({ userId: '', password: '' });
 
+  const [showPassword, setShowPassword] = useState(false);
+
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
@@ -16,7 +18,12 @@ const Login = () => {
             localStorage.setItem('user', JSON.stringify(response.user));
             notify.success('로그인 성공', '오늘도 탁월한 선택을 환영합니다.');
             setTimeout(() => {
-                navigate('/customer-dashboard');
+                const userType = response.user.userType;
+                if (userType === 'DRIVER') {
+                    navigate('/driver-dashboard');
+                } else {
+                    navigate('/customer-dashboard');
+                }
             }, 500);
         }
     } catch (error) {
@@ -82,11 +89,16 @@ const Login = () => {
                       className="w-full bg-surface-container-high border-none rounded-xl py-4 pl-12 pr-4 focus:ring-0 focus:bg-surface-container-highest transition-all text-on-surface placeholder:text-outline/50 font-medium" 
                       id="password" 
                       placeholder="••••••••••••" 
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       value={formData.password}
                       onChange={(e) => setFormData({...formData, password: e.target.value})}
                     />
-                    <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline cursor-pointer hover:text-primary">visibility</span>
+                    <span 
+                      className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline cursor-pointer hover:text-primary"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? 'visibility_off' : 'visibility'}
+                    </span>
                   </div>
                 </div>
                 <div className="flex items-center justify-between py-2">

@@ -1,7 +1,7 @@
 const API_BASE_URL = '/api';
 
-// 공통 fetch 래퍼 (내부용)
-const request = async (url, options = {}) => {
+// 공통 fetch 래퍼 (내부용 -> 외부 사용 가능하도록 export)
+export const request = async (url, options = {}) => {
     const token = localStorage.getItem('accessToken');
     const headers = {
         'Content-Type': 'application/json',
@@ -10,7 +10,16 @@ const request = async (url, options = {}) => {
     };
 
     const response = await fetch(`${API_BASE_URL}${url}`, { ...options, headers });
-    const data = await response.json();
+    
+    const text = await response.text();
+    let data;
+    try {
+        data = JSON.parse(text);
+    } catch (e) {
+        console.error(`[API] JSON Parse Error for ${url}:`, text);
+        throw new Error(`서버 응답 형식이 올바르지 않습니다. (URL: ${url})`);
+    }
+
     if (!response.ok) {
         throw new Error(data.error || '요청 처리에 실패했습니다.');
     }
@@ -22,19 +31,10 @@ export const getPendingRequestsFiltered = (type) => request(`/app/customer/pendi
 
 // 기존 명명된 내보내기 유지...
 export const login = async (userId, password) => {
-  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+  return request('/auth/login', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
     body: JSON.stringify({ userId, password }),
   });
-
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error || '로그인에 실패했습니다.');
-  }
-  return data;
 };
 
 export const logout = () => {
@@ -200,6 +200,40 @@ export const registerUser = async (data) => {
         body: JSON.stringify(data)
     });
     return await response.json();
+};
+
+export const getDriverProfile = () => request('/app/driver/profile');
+
+export const updateDriverProfile = async (formData) => {
+    const token = localStorage.getItem('accessToken');
+    const response = await fetch(`${API_BASE_URL}/app/driver/profile/update`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        },
+        body: formData // FormData 객체를 직접 전달
+    });
+
+    const resJson = await response.json();
+    if (!response.ok) throw new Error(resJson.error || '수정 실패');
+    return resJson;
+};
+
+export const getBusProfile = () => request('/app/driver/bus/profile');
+
+export const updateBusProfile = async (formData) => {
+    const token = localStorage.getItem('accessToken');
+    const response = await fetch(`${API_BASE_URL}/app/driver/bus/register`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        },
+        body: formData
+    });
+
+    const resJson = await response.json();
+    if (!response.ok) throw new Error(resJson.error || '버스 등록 실패');
+    return resJson;
 };
 
 // api.get() 같은 형식을 지원하기 위한 기본 내보내기

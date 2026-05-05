@@ -1,130 +1,215 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { request, getDriverProfile } from '../api';
+import Swal from 'sweetalert2';
+import BottomNavDriver from '../components/BottomNavDriver';
 
 const EstimateDetailDriver = () => {
     const navigate = useNavigate();
+    const { id } = useParams();
+    const [auction, setAuction] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [agreed, setAgreed] = useState(false);
+    const [userProfileImg, setUserProfileImg] = useState('');
+
+    useEffect(() => {
+        const fetchData = async () => {
+            setLoading(true);
+            try {
+                const profRes = await getDriverProfile();
+                if (profRes.success && profRes.data) {
+                    setUserProfileImg(profRes.data.driver?.profileImg || '');
+                }
+
+                const res = await request(`/app/driver/auctions/${id}`);
+                if (res.success) {
+                    setAuction(res.data);
+                }
+            } catch (err) {
+                console.error('Fetch auction detail error:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, [id]);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!agreed) {
+            Swal.fire({
+                icon: 'warning',
+                title: '확인 필요',
+                text: '디지털 서명 동의가 필요합니다.',
+                confirmButtonColor: '#004e47'
+            });
+            return;
+        }
+
+        try {
+            const res = await request(`/app/driver/auctions/${id}/bid`, {
+                method: 'POST'
+            });
+
+            if (res.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: '입찰 성공',
+                    text: '입찰이 정상적으로 제출되었습니다!',
+                    confirmButtonColor: '#004e47'
+                }).then(() => {
+                    navigate('/estimate-list-driver');
+                });
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: '입찰 실패',
+                    text: res.error || '입찰 제출 중 오류가 발생했습니다.',
+                    confirmButtonColor: '#004e47'
+                });
+            }
+        } catch (err) {
+            console.error('Bid submit error:', err);
+            Swal.fire({
+                icon: 'error',
+                title: '통신 오류',
+                text: '서버와 통신 중 오류가 발생했습니다.',
+                confirmButtonColor: '#004e47'
+            });
+        }
+    };
+
+    if (loading || !auction) return (
+        <div className="min-h-screen flex items-center justify-center bg-[#f7f9fb]">
+            <div className="w-12 h-12 border-4 border-[#004e47] border-t-transparent rounded-full animate-spin"></div>
+        </div>
+    );
 
     return (
-        <div className="bg-background text-on-surface min-h-[100dvh] pb-48 font-body text-left">
+        <div className="bg-[#f7f9fb] text-[#191c1e] min-h-screen pb-48 font-body text-left">
             {/* TopAppBar */}
-            <header className="fixed top-0 w-full z-50 bg-white/40 backdrop-blur-3xl border-b border-white/20 py-6">
+            <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl shadow-sm border-b border-slate-100 py-4">
                 <div className="flex justify-between items-center w-full px-6 max-w-7xl mx-auto">
-                    <div className="flex items-center gap-6 text-left">
-                        <button onClick={() => navigate(-1)} className="p-3 bg-white rounded-2xl text-teal-800 shadow-xl shadow-teal-900/5 active:scale-95 transition-all">
-                            <span className="material-symbols-outlined text-lg">arrow_back</span>
+                    <div className="flex items-center gap-4">
+                        <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-full transition-colors active:scale-95 duration-200">
+                            <span className="material-symbols-outlined text-2xl text-slate-600">arrow_back</span>
                         </button>
-                        <h1 className="font-headline font-black tracking-tighter text-3xl text-teal-900 italic uppercase">Submit Estimate</h1>
+                        <h1 className="font-headline font-extrabold tracking-tighter text-2xl text-[#004e47] italic">견적 상세 내역</h1>
                     </div>
-                    <div className="w-12 h-12 rounded-2xl overflow-hidden border-2 border-primary-fixed shadow-2xl rotate-3">
-                        <img alt="User profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD4vN2iJhYT28dqF3bXn1UtFElHnQDFzWTM9CdNaAeMcn5Y85HNmY9B2z1Nknl7_0LRROWW6Kp6ePpluuaaJm60f9fheJfiNCV-IjIldyuNn0rqoOsilL34BrGPY00oGI6qIOd2cKXQSsudhdeVbyanrHnuCqiifKuAoRcDX2pk1oO0TDo7Izx1aFfEP7T9ggFWTGdVNwsWWLAAqtiCftrqWM46536UPanJUNNd6GPoEFB-bpkobjeORZueHC5FbV1a-Z71vgICFjo" />
+                    <div className="w-10 h-10 rounded-full bg-slate-100 overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
+                        {userProfileImg ? (
+                            <img alt="User profile" src={userProfileImg} className="w-full h-full object-cover" />
+                        ) : (
+                            <span className="material-symbols-outlined text-slate-300">person</span>
+                        )}
                     </div>
                 </div>
             </header>
 
-            <main className="pt-48 px-6 max-w-7xl mx-auto space-y-20 animate-in fade-in slide-in-from-bottom duration-1000 text-left">
-                {/* Editorial Header Section */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-end text-left">
-                    <div className="md:col-span-8 space-y-4 text-left">
-                        <span className="font-headline text-secondary font-black tracking-[0.4em] uppercase text-[10px] block px-2 italic">Auction ID: #BT-88429</span>
-                        <h2 className="font-headline font-black text-6xl md:text-8xl text-primary leading-[0.9] tracking-tighter italic uppercase text-left">
-                            Submit <br/><span className="text-secondary underline decoration-secondary/20 underline-offset-[12px]">Estimate.</span>
-                        </h2>
-                    </div>
-                    <div className="md:col-span-4 text-left hidden md:block border-l-4 border-slate-50 pl-8">
-                        <p className="text-slate-400 text-lg font-bold italic tracking-tight leading-snug text-left">
-                            경쟁력 있는 견적으로 노선을 확보하세요. 프리미엄 운송을 위한 정밀한 가격 책정 제안.
-                        </p>
-                    </div>
+            <main className="pt-28 px-6 max-w-7xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom duration-700 text-left">
+                {/* Header Section */}
+                <div className="space-y-2 text-left">
+                    <span className="text-secondary font-black tracking-[0.4em] uppercase text-[11px] block px-1 italic">견적 ID: #BT-{auction.id}</span>
+                    <h2 className="font-headline text-5xl md:text-7xl font-black text-[#004e47] tracking-tighter italic uppercase">
+                        견적 상세 확인
+                    </h2>
                 </div>
 
-                {/* Content Canvas */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 text-left">
-                    {/* Left Column: Trip Details */}
-                    <aside className="lg:col-span-4 text-left">
-                        <div className="bg-slate-900 rounded-[3.5rem] p-12 space-y-12 shadow-2xl shadow-slate-900/40 sticky top-48 text-left">
-                            <h3 className="font-headline font-black text-2xl text-white italic border-l-8 border-secondary pl-6 text-left uppercase">Trip Protocol</h3>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 text-left">
+                    {/* Left: Trip Info (Matching Design) */}
+                    <aside className="lg:col-span-5 text-left">
+                        <div className="bg-white rounded-[2.5rem] p-10 space-y-10 shadow-xl shadow-teal-900/5 text-left border border-slate-100">
+                            <h3 className="font-headline font-black text-2xl text-[#004e47] italic border-l-4 border-secondary pl-4 text-left uppercase">운행 정보</h3>
                             
                             <div className="space-y-10 text-left">
-                                {[
-                                    { icon: 'location_on', label: 'Origin Base', value: '시애틀-타코마 국제공항 (SEA)' },
-                                    { icon: 'route', label: 'Waypoints Grid', value: ['1: 수원역', '2: 대전복합터미널', '3: 동대구역'], isList: true },
-                                    { icon: 'flag', label: 'Destination Point', value: '밴쿠버 워터프런트, BC' },
-                                    { icon: 'calendar_month', label: 'Departure Sync', value: '2024. 10. 24 • AM 09:00' },
-                                    { icon: 'group', label: 'Payload Capacity', value: '45-52 Passengers' }
-                                ].map((item, i) => (
-                                    <div key={i} className="flex items-start gap-6 text-left">
-                                        <div className="min-w-[48px] h-12 rounded-2xl bg-white/5 flex items-center justify-center text-secondary border border-white/10 shadow-inner">
-                                            <span className="material-symbols-outlined text-2xl">{item.icon}</span>
+                                {/* Route sequence in strict order */}
+                                <div className="space-y-8">
+                                    {auction.fullPath.map((item, idx) => (
+                                        <div key={idx} className="flex items-start gap-6 text-left relative">
+                                            {/* Vertical line between icons */}
+                                            {idx < auction.fullPath.length - 1 && (
+                                                <div className="absolute left-[19px] top-10 bottom-[-32px] w-0.5 bg-slate-100 dashed"></div>
+                                            )}
+                                            <div className={`min-w-[40px] h-10 rounded-xl flex items-center justify-center border ${
+                                                item.label === '출발지' ? 'bg-primary/10 text-primary border-primary/20' : 
+                                                item.label === '최종 도착지' ? 'bg-secondary/10 text-secondary border-secondary/20' : 
+                                                item.label === '회차지' ? 'bg-orange-100 text-orange-600 border-orange-200 shadow-sm shadow-orange-200' :
+                                                'bg-slate-50 text-slate-400 border-slate-100'
+                                            }`}>
+                                                <span className="material-symbols-outlined text-xl">
+                                                    {item.label === '출발지' ? 'location_on' : 
+                                                     item.label === '최종 도착지' ? 'flag' : 
+                                                     item.label === '회차지' ? 'sync_alt' : 'route'}
+                                                </span>
+                                            </div>
+                                            <div className="text-left">
+                                                <p className={`text-[10px] font-black uppercase tracking-[0.3em] mb-1 italic ${item.label === '회차지' ? 'text-orange-500' : 'text-slate-300'}`}>
+                                                    {item.label} {item.label === '회차지' && '★'}
+                                                </p>
+                                                <p className={`font-black text-xl leading-tight tracking-tight ${item.label === '회차지' ? 'text-orange-700' : 'text-[#191c1e]'}`}>{item.addr}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="pt-8 border-t border-slate-50 space-y-8">
+                                    <div className="flex items-start gap-6 text-left">
+                                        <div className="min-w-[40px] h-10 rounded-xl bg-slate-50 text-slate-400 border border-slate-100 flex items-center justify-center">
+                                            <span className="material-symbols-outlined text-xl">calendar_month</span>
                                         </div>
                                         <div className="text-left">
-                                            <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-500 mb-2 italic">{item.label}</p>
-                                            {item.isList ? (
-                                                <div className="space-y-1 text-left">
-                                                    {item.value.map((v, idx) => (
-                                                        <p key={idx} className="font-black text-white italic text-lg leading-none">{v}</p>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <p className="font-black text-white italic text-lg leading-tight text-left">{item.value}</p>
-                                            )}
+                                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300 mb-1 italic">출발 일시</p>
+                                            <p className="font-black text-[#191c1e] text-xl leading-tight">{auction.startDate}</p>
                                         </div>
                                     </div>
-                                ))}
+                                    <div className="flex items-start gap-6 text-left">
+                                        <div className="min-w-[40px] h-10 rounded-xl bg-slate-50 text-slate-400 border border-slate-100 flex items-center justify-center">
+                                            <span className="material-symbols-outlined text-xl">calendar_month</span>
+                                        </div>
+                                        <div className="text-left">
+                                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300 mb-1 italic">도착 일시</p>
+                                            <p className="font-black text-[#191c1e] text-xl leading-tight">{auction.endDate}</p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </aside>
 
-                    {/* Right Column: Form */}
-                    <section className="lg:col-span-8 text-left space-y-12 pb-20">
-                        <div className="bg-white/40 backdrop-blur-2xl p-10 md:p-16 rounded-[4.5rem] shadow-2xl shadow-teal-900/5 border border-white relative overflow-hidden text-left">
-                            <div className="absolute -top-32 -right-32 w-80 h-80 bg-primary/5 rounded-full blur-[100px]"></div>
-                            
-                            <form className="relative z-10 space-y-12 text-left">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 text-left">
-                                    <div className="space-y-4 text-left group">
-                                        <div className="flex justify-between items-center px-4 text-left">
-                                            <label className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-300 italic">Total Bid Amount</label>
-                                            <span className="text-[9px] font-black text-secondary uppercase tracking-[0.3em]">KRW Index</span>
-                                        </div>
-                                        <div className="relative text-left">
-                                            <span className="absolute left-8 top-1/2 -translate-y-1/2 font-black text-slate-300 text-2xl italic">₩</span>
-                                            <input className="w-full bg-white border-4 border-slate-50 group-focus-within:border-primary rounded-[2.5rem] py-8 pl-14 pr-8 font-headline text-4xl font-black text-on-surface focus:outline-none transition-all shadow-sm italic" placeholder="1,500,000" type="number" />
-                                        </div>
-                                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest leading-loose px-4">AI Rec Range: ₩1,200,000 - ₩1,550,000</p>
-                                    </div>
-
-                                    <div className="space-y-4 text-left group">
-                                        <label className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-300 px-4 block italic">Fleet Selection</label>
-                                        <div className="relative text-left">
-                                            <select className="w-full bg-white border-4 border-slate-50 group-focus-within:border-primary rounded-[2.5rem] py-8 px-8 font-black text-lg text-on-surface focus:outline-none transition-all shadow-sm appearance-none cursor-pointer italic">
-                                                <option>Choose Active Member...</option>
-                                                <option>코치 #402 (Setra S417)</option>
-                                                <option>코치 #509 (MCI J4500)</option>
-                                                <option>코치 #112 (Prevost H3-45)</option>
-                                            </select>
-                                            <span className="material-symbols-outlined absolute right-8 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">expand_more</span>
-                                        </div>
-                                    </div>
-                                </div>
-
+                    {/* Right: Bidding Form */}
+                    <section className="lg:col-span-7 text-left">
+                        <div className="bg-white p-8 md:p-12 rounded-[3.5rem] shadow-xl shadow-teal-900/5 border border-slate-50 text-left h-full">
+                            <form onSubmit={handleSubmit} className="space-y-12 text-left">
                                 <div className="space-y-4 text-left group">
-                                    <label className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-300 px-4 block italic">Service Ledger & Notes</label>
-                                    <textarea className="w-full bg-white border-4 border-slate-50 group-focus-within:border-primary rounded-[3rem] p-10 font-black text-lg text-on-surface focus:outline-none transition-all shadow-sm placeholder:text-slate-200" placeholder="Wi-Fi, 화장실 상태 또는 운전기사 경력과 같은 편의 시설을 언급해 주세요..." rows={5}></textarea>
+                                    <div className="flex justify-between items-center px-2 text-left">
+                                        <label className="text-[11px] font-black uppercase tracking-[0.4em] text-slate-400 italic">확정 입찰 금액</label>
+                                        <span className="text-[10px] font-black text-secondary uppercase tracking-[0.3em]">KRW</span>
+                                    </div>
+                                    <div className="relative text-left">
+                                        <span className="absolute left-8 top-1/2 -translate-y-1/2 font-black text-slate-300 text-3xl italic">₩</span>
+                                        <input 
+                                            className="w-full bg-slate-50 border-4 border-slate-100 rounded-[2rem] py-8 pl-16 pr-8 font-headline text-4xl font-black text-slate-500 focus:outline-none transition-all shadow-inner italic cursor-not-allowed" 
+                                            value={Number(auction.price).toLocaleString()} 
+                                            readOnly 
+                                        />
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest px-4">
+                                        고객이 제시한 고정 금액으로 입찰이 진행됩니다.
+                                    </p>
                                 </div>
 
-                                <div className="p-8 rounded-[2.5rem] bg-slate-50 border-2 border-white flex items-center gap-6 text-left">
-                                    <input className="w-8 h-8 rounded-xl border-4 border-white bg-white text-primary focus:ring-0 shadow-sm" type="checkbox" />
-                                    <label className="text-[11px] font-black text-slate-500 italic leading-snug text-left uppercase tracking-tighter">
-                                        선택한 차량이 모든 안전 요구 사항을 충족하며 이 노선에 대한 보험이 최신 상태임을 <span className="text-primary underline">디지털 서명</span>으로 인증합니다.
+                                <div className="p-10 rounded-[2.5rem] bg-slate-50 border border-slate-100 flex items-center gap-6 text-left cursor-pointer hover:bg-white transition-colors group" onClick={() => setAgreed(!agreed)}>
+                                    <div className={`w-10 h-10 rounded-xl border-2 flex items-center justify-center transition-all ${agreed ? 'bg-secondary border-secondary' : 'bg-white border-slate-200'}`}>
+                                        {agreed && <span className="material-symbols-outlined text-white text-2xl">check</span>}
+                                    </div>
+                                    <label className="flex-1 text-[13px] font-bold text-slate-500 italic leading-snug text-left uppercase tracking-tight">
+                                        선택한 차량이 모든 안전 요구 사항을 충족하며 이 노선에 대한 보험이 최신 상태임을 <span className="text-secondary underline underline-offset-4">디지털 서명</span>으로 인증합니다.
                                     </label>
                                 </div>
 
-                                <div className="pt-8 flex flex-col md:flex-row items-center gap-10 text-left">
-                                    <button className="w-full md:w-auto px-20 py-8 bg-gradient-to-br from-primary to-primary-container text-white font-black font-headline text-xl italic uppercase tracking-[0.2em] rounded-full shadow-2xl shadow-primary/30 hover:shadow-primary/50 active:scale-95 transition-all duration-500" type="submit">
-                                        Post Estimate
-                                    </button>
-                                    <button className="text-slate-300 font-black text-[10px] uppercase tracking-[0.4em] hover:text-secondary transition-all italic" type="button">
-                                        Store in Cache
+                                <div className="pt-8 text-left">
+                                    <button className="w-full py-8 bg-[#004e47] text-white font-black font-headline text-2xl italic uppercase tracking-[0.3em] rounded-full shadow-2xl shadow-teal-900/20 hover:shadow-secondary/40 hover:bg-secondary active:scale-95 transition-all duration-500" type="submit">
+                                        견적 제출하기
                                     </button>
                                 </div>
                             </form>
@@ -134,25 +219,7 @@ const EstimateDetailDriver = () => {
             </main>
 
             {/* Bottom Nav */}
-            <nav className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 flex justify-around items-center px-4 py-2 bg-slate-900 text-slate-500 w-[90%] max-w-lg mx-auto rounded-full shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] border border-white/10">
-                <button onClick={() => navigate('/driver-main')} className="flex flex-col items-center justify-center px-5 py-2 hover:text-white transition-all">
-                    <span className="material-symbols-outlined">dashboard</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1">Home</span>
-                </button>
-                <button onClick={() => navigate('/estimate-list-driver')} className="flex flex-col items-center justify-center px-5 py-2 hover:text-white transition-all">
-                    <span className="material-symbols-outlined">gavel</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1">Auction</span>
-                </button>
-                <button className="flex flex-col items-center justify-center px-5 py-2 text-primary relative">
-                    <div className="absolute inset-0 bg-primary/5 rounded-2xl blur-lg"></div>
-                    <span className="material-symbols-outlined relative z-10" style={{fontVariationSettings: "'FILL' 1"}}>payments</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1 relative z-10 underline decoration-2 underline-offset-4">Bid</span>
-                </button>
-                <button className="flex flex-col items-center justify-center px-5 py-2 hover:text-white transition-all">
-                    <span className="material-symbols-outlined">person</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1">Profile</span>
-                </button>
-            </nav>
+            <BottomNavDriver activeTab="estimate" />
         </div>
     );
 };

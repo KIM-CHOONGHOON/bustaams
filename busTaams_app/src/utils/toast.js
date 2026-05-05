@@ -55,45 +55,51 @@ const modalAlert = (options) => {
 };
 
 export const notify = {
-    // 성공 알림 (중앙 모달)
+    // 성공 알림 (중앙 모달) - 확인 버튼 추가 및 타이머 제거 (사용자 확인 유도)
     success: (title, text = '') => {
-        modalAlert({
+        return modalAlert({
             icon: 'success',
             title: title,
             text: text,
             iconColor: '#00685f',
-            timer: 2000,
-            showConfirmButton: false
+            showConfirmButton: true,
+            confirmButtonText: '확인'
         });
     },
     
     // 에러 알림 (중앙 모달)
     error: (title, text = '') => {
-        modalAlert({
+        return modalAlert({
             icon: 'error',
             title: title,
             text: text,
-            iconColor: '#ba1a1a'
+            iconColor: '#ba1a1a',
+            showConfirmButton: true,
+            confirmButtonText: '확인'
         });
     },
 
     // 경고 알림 (중앙 모달)
     warn: (title, text = '') => {
-        modalAlert({
+        return modalAlert({
             icon: 'warning',
             title: title,
             text: text,
-            iconColor: '#9d4300'
+            iconColor: '#9d4300',
+            showConfirmButton: true,
+            confirmButtonText: '확인'
         });
     },
 
     // 정보 알림 (중앙 모달)
     info: (title, text = '') => {
-        modalAlert({
+        return modalAlert({
             icon: 'info',
             title: title,
             text: text,
-            iconColor: '#004e47'
+            iconColor: '#004e47',
+            showConfirmButton: true,
+            confirmButtonText: '확인'
         });
     },
 

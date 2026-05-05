@@ -32,12 +32,17 @@ import RatingReplyDriver from './pages/RatingReplyDriver';
 import FailBidListDriver from './pages/FailBidListDriver';
 import FailBidDetailDriver from './pages/FailBidDetailDriver';
 import ChatListDriver from './pages/ChatListDriver';
-import PassPaymentListDriver from './pages/PassPaymentListDriver';
+import SettlementHistoryDriver from './pages/SettlementHistoryDriver';
 import PassSelectDriver from './pages/PassSelectDriver';
+import CardMembershipMgmtDriver from './pages/CardMembershipMgmtDriver';
+import CardRegisterDriver from './pages/CardRegisterDriver';
 
 // Customer Screens
 import EstimateListCustomer from './pages/EstimateListCustomer';
+import EstimateRequestListCustomer from './pages/EstimateRequestListCustomer';
 import EstimateDetailCustomer from './pages/EstimateDetailCustomer';
+import ApprovalListCustomer from './pages/ApprovalListCustomer';
+import ApprovalDetailCustomer from './pages/ApprovalDetailCustomer';
 import InquiryListCustomer from './pages/InquiryListCustomer';
 import InquiryDetailCustomer from './pages/InquiryDetailCustomer';
 import InquiryForm from './pages/InquiryForm';
@@ -74,19 +79,22 @@ function App() {
         <Route path="/order-detail/:id" element={<OrderDetailCustomer />} />
         <Route path="/review-pending-list" element={<ReviewPendingList />} />
         <Route path="/add-review/:id" element={<AddReview />} />
-        <Route path="/review-detail" element={<ReviewDetail />} />
+        <Route path="/review-detail/:id" element={<ReviewDetail />} />
         <Route path="/reservation-list" element={<ReservationList />} />
         <Route path="/reservation-detail/:id" element={<ReservationDetail />} />
         <Route path="/cancel-reservation" element={<CancelReservation />} />
         <Route path="/user-profile" element={<ProfileCustomer />} />
         <Route path="/estimate-list" element={<EstimateListCustomer />} />
+        <Route path="/estimate-request-list" element={<EstimateRequestListCustomer />} />
         <Route path="/estimate-detail/:id" element={<EstimateDetailCustomer />} />
+        <Route path="/approval-list" element={<ApprovalListCustomer />} />
+        <Route path="/approval-detail/:id" element={<ApprovalDetailCustomer />} />
         <Route path="/inquiry-list" element={<InquiryListCustomer />} />
         <Route path="/add-inquiry" element={<InquiryForm />} />
         <Route path="/inquiry-detail/:id" element={<InquiryDetailCustomer />} />
         
         {/* 기사님용 라우트 */}
-        <Route path="/driver-main" element={<DriverDashboard />} />
+        <Route path="/driver-dashboard" element={<DriverDashboard />} />
         <Route path="/driver-certification" element={<DriverInfoRegistration />} />
         <Route path="/bus-certification" element={<BusInfoRegistration />} />
         <Route path="/estimate-list-driver" element={<EstimateListDriver />} />
@@ -98,15 +106,17 @@ function App() {
         <Route path="/bid-detail-driver/:id" element={<BidDetailDriver />} />
         <Route path="/completed-trips-driver" element={<CompletedTripsDriver />} />
         <Route path="/completed-trip-detail-driver/:id" element={<CompletedTripDetailDriver />} />
-        <Route path="/rating-reply-driver" element={<RatingReplyDriver />} />
+        <Route path="/rating-reply-driver/:id" element={<RatingReplyDriver />} />
         <Route path="/failed-estimate-list-driver" element={<FailBidListDriver />} />
         <Route path="/fail-bid-detail-driver/:id" element={<FailBidDetailDriver />} />
         <Route path="/chat-list-driver" element={<ChatListDriver />} />
-        <Route path="/payment-history-driver" element={<PassPaymentListDriver />} />
+        <Route path="/payment-history-driver" element={<SettlementHistoryDriver />} />
         <Route path="/pass-select-driver" element={<PassSelectDriver />} />
+        <Route path="/membership-card-mgmt" element={<CardMembershipMgmtDriver />} />
+        <Route path="/card-register" element={<CardRegisterDriver />} />
 
         {/* 공통 라우트 */}
-        <Route path="/chat/:id" element={<Chat />} />
+        <Route path="/chat-room/:id" element={<Chat />} />
       </Routes>
     </Router>
   );

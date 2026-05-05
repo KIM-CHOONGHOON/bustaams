@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import BottomNavDriver from '../components/BottomNavDriver';
 
 const UpcomingTripListDriver = () => {
     const navigate = useNavigate();
@@ -142,26 +143,7 @@ const UpcomingTripListDriver = () => {
                 </div>
             </main>
 
-            {/* Bottom Nav */}
-            <nav className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 flex justify-around items-center px-4 py-2 bg-slate-900 text-slate-500 w-[90%] max-w-lg mx-auto rounded-full shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] border border-white/10">
-                <button onClick={() => navigate('/driver-dashboard')} className="flex flex-col items-center justify-center px-5 py-2 hover:text-white transition-all">
-                    <span className="material-symbols-outlined">dashboard</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1">Home</span>
-                </button>
-                <button onClick={() => navigate('/estimate-list-driver')} className="flex flex-col items-center justify-center px-5 py-2 hover:text-white transition-all">
-                    <span className="material-symbols-outlined">gavel</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1">Auction</span>
-                </button>
-                <button className="flex flex-col items-center justify-center px-5 py-2 text-primary relative">
-                    <div className="absolute inset-0 bg-primary/5 rounded-2xl blur-lg"></div>
-                    <span className="material-symbols-outlined relative z-10" style={{fontVariationSettings: "'FILL' 1"}}>local_shipping</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1 relative z-10 underline decoration-2 underline-offset-4">Mission</span>
-                </button>
-                <button onClick={() => navigate('/driver-info')} className="flex flex-col items-center justify-center px-5 py-2 hover:text-white transition-all">
-                    <span className="material-symbols-outlined font-variation-fill" style={{fontVariationSettings: "'FILL' 1"}}>payments</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1">Finance</span>
-                </button>
-            </nav>
+            <BottomNavDriver activeTab="trips" />
         </div>
     );
 };

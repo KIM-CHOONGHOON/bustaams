@@ -59,50 +59,45 @@ router.post('/request', authenticateToken, async (req, res) => {
         if (selectedBuses && selectedBuses.length > 0) {
             const busQuery = `
                 INSERT INTO TB_AUCTION_REQ_BUS (
-                    REQ_BUS_ID, REQ_ID, BUS_TYPE_CD, DATA_STAT, RES_BUS_AMT, REG_ID, MOD_ID
+                    REQ_BUS_SEQ, REQ_ID, BUS_TYPE_CD, DATA_STAT, RES_BUS_AMT, REG_ID, MOD_ID
                 ) VALUES (?, ?, ?, 'AUCTION', ?, ?, ?)
             `;
+            let busSeq = 1;
             for (const bus of selectedBuses) {
-                // 한 종류의 차량이 여러 대일 경우, 개별 레코드로 저장하거나 스키마에 CNT 필드를 추가해야 함.
-                // DB.md 기준으로는 CNT 필드가 없으므로, 일단 개별 레코드로 저장하는 방식 시도 (또는 유저 확인 필요)
-                // 여기서는 bus.count 만큼 루프를 돌려 저장합니다.
                 for (let i = 0; i < (bus.count || 1); i++) {
-                    const reqBusId = await getNextId('TB_AUCTION_REQ_BUS', 'REQ_BUS_ID', 10);
                     await connection.execute(busQuery, [
-                        reqBusId, reqId, bus.name, bus.price, custId, custId
+                        busSeq++, reqId, bus.name, bus.price, custId, custId
                     ]);
                 }
             }
         }
 
         // 3. 경유지 정보 저장 (TB_AUCTION_REQ_VIA)
-        const saveWaypoint = async (addr, type, ord) => {
+        const saveWaypoint = async (addr, type, seq) => {
             if (!addr) return;
-            const viaId = await getNextId('TB_AUCTION_REQ_VIA', 'VIA_ID', 10);
             await connection.execute(`
                 INSERT INTO TB_AUCTION_REQ_VIA (
-                    VIA_ID, REQ_ID, VIA_TYPE, VIA_ORD, VIA_ADDR, 
+                    REQ_ID, VIA_SEQ, VIA_TYPE, VIA_ADDR, 
                     LAT, LNG, DIST_FROM_PREV, TIME_FROM_PREV, REG_ID
-                ) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, ?)
-            `, [viaId, reqId, type, ord, addr, custId]);
+                ) VALUES (?, ?, ?, ?, 0, 0, 0, 0, ?)
+            `, [reqId, seq, type, addr, custId]);
         };
 
         // [A] 가는 길 경유지
+        let currentSeq = 1;
         if (goingWaypoints && Array.isArray(goingWaypoints)) {
-            let ord = 1;
             for (const addr of goingWaypoints) {
-                await saveWaypoint(addr, 'START_WAY', ord++);
+                await saveWaypoint(addr, 'START_WAY', currentSeq++);
             }
         }
 
-        // [B] 회차지 (Optional but in original code)
-        await saveWaypoint(destination, 'ROUND_TRIP', 99);
+        // [B] 회차지
+        await saveWaypoint(destination, 'ROUND_TRIP', currentSeq++);
 
         // [C] 오는 길 경유지
         if (returningWaypoints && Array.isArray(returningWaypoints)) {
-            let ord = 101;
             for (const addr of returningWaypoints) {
-                await saveWaypoint(addr, 'END_WAY', ord++);
+                await saveWaypoint(addr, 'END_WAY', currentSeq++);
             }
         }
 

@@ -25,6 +25,7 @@ const appAuthRouter = require('./routes/appAuth'); // 앱 전용 인증 라우�
 const appCustomerRouter = require('./routes/appCustomer'); // 앱 전용 고객 라우터 추가
 const appAuctionRouter = require('./routes/appAuction'); // 앱 전용 경매 라우터 추가
 const appDriverRouter = require('./routes/appDriver'); // 앱 전용 기사 라우터 추가
+const appChatRouter = require('./routes/appChat'); // 앱 전용 채팅 라우터 추가
 
 
 const app = express();
@@ -99,14 +100,27 @@ const authenticateToken = (req, res, next) => {
 
     if (!token) return res.status(401).json({ error: '인증 토큰이 누락되었습니다.' });
 
-    jwt.verify(token, JWT_SECRET_KEY, (err, user) => {
+    jwt.verify(token, JWT_SECRET_KEY, async (err, decoded) => {
         if (err) return res.status(403).json({ error: '유효하지 않거나 만료된 토큰입니다.' });
-        // user 객체에 userId와 custId가 있는지 확인
+        
+        // CUST_ID가 토큰에 없는 경우를 대비해 DB에서 확인 (하위 호환성)
+        let custId = decoded.custId;
+        if (!custId && decoded.userId) {
+            try {
+                const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [decoded.userId]);
+                if (uRows.length > 0) {
+                    custId = uRows[0].CUST_ID;
+                }
+            } catch (dbErr) {
+                console.error('[AuthToken] Failed to fetch CUST_ID:', dbErr);
+            }
+        }
+
         req.user = {
-            ...user,
-            userId: user.userId,
-            custId: user.custId,
-            userUuid: user.userId // 하위 호환성 유지
+            ...decoded,
+            userId: decoded.userId,
+            custId: custId,
+            userUuid: decoded.userId // 하위 호환성
         };
         next();
     });
@@ -115,7 +129,15 @@ const authenticateToken = (req, res, next) => {
 // --- 3. 공통 미들웨어 ---
 
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5174', 'http://127.0.0.1:5174', 'http://localhost:5177', 'http://127.0.0.1:5177'],
+    origin: [
+        'http://localhost:5173', 'http://127.0.0.1:5173', 
+        'http://localhost:5174', 'http://127.0.0.1:5174', 
+        'http://localhost:5175', 'http://127.0.0.1:5175',
+        'http://localhost:5176', 'http://127.0.0.1:5176',
+        'http://localhost:5177', 'http://127.0.0.1:5177',
+        'http://localhost:5178', 'http://127.0.0.1:5178',
+        'http://localhost:5179', 'http://127.0.0.1:5179'
+    ],
     credentials: true
 }));
 app.use(express.json({ limit: '50mb' }));
@@ -210,11 +232,13 @@ app.get('/api/app/customer/reservation/:id', authenticateToken, async (req, res)
             return res.status(403).json({ success: false, error: '본인의 예약 내역만 조회 가능합니다.' });
         }
 
-        const [viaRows] = await pool.execute(`SELECT VIA_ADDR as addr, VIA_TYPE as type FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = ? ORDER BY VIA_ORD ASC`, [reqId]);
+        const [viaRows] = await pool.execute(`SELECT VIA_ADDR as addr, VIA_TYPE as type FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = ? ORDER BY VIA_SEQ ASC`, [reqId]);
         const fullRoute = [{ type: 'START', addr: reservation.from_addr, title: '출발지', time: reservation.start_date }];
         
         let hasRoundTrip = false;
         viaRows.forEach(v => {
+            if (v.type === 'START_NODE' || v.type === 'END_NODE') return;
+
             let title = '경유지';
             if (v.type === 'START_WAY') title = '가는길 경유지';
             else if (v.type === 'ROUND_TRIP') {
@@ -239,7 +263,7 @@ app.get('/api/app/customer/reservation/:id', authenticateToken, async (req, res)
         reservation.route = fullRoute;
 
         const [busRows] = await pool.execute(`
-            SELECT REQ_BUS_ID as reqBusId, BUS_TYPE_CD as busType, REQ_BUS_CNT as count, TOLLS_AMT as price
+            SELECT REQ_BUS_SEQ as reqBusId, BUS_TYPE_CD as busType, REQ_BUS_CNT as count, TOLLS_AMT as price
             FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ?
         `, [reqId]);
         reservation.requestedBuses = busRows;
@@ -252,10 +276,17 @@ app.get('/api/app/customer/reservation/:id', authenticateToken, async (req, res)
 });
 
 // --- 분리된 라우터 등록 ---
+// Debug middleware
+app.use((req, res, next) => {
+    console.log(`[DEBUG] ${req.method} ${req.url}`);
+    next();
+});
+
 app.use('/api/app/customer', appCustomerRouter); 
 app.use('/api/app/auth', appAuthRouter); 
 app.use('/api/app/auction', appAuctionRouter); 
 app.use('/api/app/driver', appDriverRouter); // 앱 전용 기사 라우터 등록
+app.use('/api/app/chat', appChatRouter); // 앱 전용 채팅 라우터 등록
 app.use('/api/bid', bidRouter);
 
 // [App 호환성] 앱 대시보드에서 직접 호출하는 경로 지원
@@ -447,11 +478,11 @@ app.post('/api/auth/register', async (req, res) => {
             await connection.execute(fileQuery, [fileId, gcsPath, `${userId}_signature.png`, custId, custId]);
         }
 
-        // 3. TB_USER 삽입 (CUST_ID 추가)
+        // 3. TB_USER 삽입 (CUST_ID 추가, USER_IMAGE 대신 SIGNATURE_FILE_ID 사용)
         const userQuery = `
             INSERT INTO TB_USER (
                 CUST_ID, USER_ID, EMAIL, PASSWORD, USER_NM, HP_NO, SNS_TYPE, 
-                SMS_AUTH_YN, USER_TYPE, JOIN_DT, USER_STAT, USER_IMAGE
+                SMS_AUTH_YN, USER_TYPE, JOIN_DT, USER_STAT, SIGNATURE_FILE_ID
             ) VALUES (?, ?, ?, ?, ?, ?, 'NONE', 'Y', ?, NOW(), 'ACTIVE', ?)
         `;
         
@@ -463,8 +494,18 @@ app.post('/api/auth/register', async (req, res) => {
             userName, 
             phoneNo, 
             userType || 'TRAVELER',
-            signFileId ? `https://storage.googleapis.com/${bucketName}/signatures/web_${signFileId}.png` : null
+            signFileId
         ]);
+
+        // 3.5 TB_USER_CANCEL_MANAGE 초기화 (취소 건수 0으로 설정)
+        const cancelManageQuery = `
+            INSERT INTO TB_USER_CANCEL_MANAGE (
+                CUST_ID, CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, 
+                CANCEL_TRAVELER_ALL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, 
+                TRADE_RESTRICT_YN, REG_ID, MOD_ID
+            ) VALUES (?, 0, 0, 0, 0, 'N', ?, ?)
+        `;
+        await connection.execute(cancelManageQuery, [custId, custId, custId]);
 
         // 4. 약관 동의 이력 (TB_USER_TERMS_HIST - 키값을 CUST_ID로 변경)
         if (agreedTerms && Array.isArray(agreedTerms)) {
@@ -502,21 +543,19 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { userId, password } = req.body;
+        console.log(`[Login] Attempt: ${userId}`);
         
         const [rows] = await pool.execute('SELECT * FROM TB_USER WHERE USER_ID = ? AND USER_STAT = "ACTIVE"', [userId]);
         
         if (rows.length === 0) {
+            console.log(`[Login] Failed: User ${userId} not found`);
             return res.status(401).json({ error: '아이디 또는 비밀번호가 일치하지 않습니다.' });
         }
 
         const user = rows[0];
-
-        if (!user) {
-            return res.status(401).json({ error: '아이디 또는 비밀번호가 일치하지 않습니다.' });
-        }
-
         const match = await bcrypt.compare(password, user.PASSWORD);
         if (!match) {
+            console.log(`[Login] Failed: Password mismatch for ${userId}`);
             return res.status(401).json({ error: '아이디 또는 비밀번호가 일치하지 않습니다.' });
         }
 
@@ -525,13 +564,13 @@ app.post('/api/auth/login', async (req, res) => {
             { 
                 custId: user.CUST_ID,
                 userId: userId, 
-                userUuid: user.USER_UUID ? user.USER_UUID.toString('hex') : null,
                 userType: user.USER_TYPE 
             }, 
             JWT_SECRET_KEY, 
             { expiresIn: '24h' }
         );
 
+        console.log(`[Login] Success: ${userId} (${user.CUST_ID})`);
         res.json({ 
             success: true, 
             token, 
@@ -544,7 +583,7 @@ app.post('/api/auth/login', async (req, res) => {
             } 
         });
     } catch (err) {
-        console.error('Login Error:', err);
+        console.error('[Login] Critical Error:', err);
         res.status(500).json({ error: '로그인 중 오류가 발생했습니다.' });
     }
 });
@@ -605,8 +644,9 @@ app.get('/api/app/customer/pending-requests', authenticateToken, async (req, res
         const userId = req.user.userId;
         const [rows] = await pool.execute(
             `SELECT r.REQ_ID as reqUuid, r.TRIP_TITLE as tripTitle, r.START_ADDR as startAddr, r.END_ADDR as endAddr, 
+                    (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' LIMIT 1) as roundAddr,
                     DATE_FORMAT(r.START_DT, '%Y-%m-%d') as startDt, r.DATA_STAT as reqStat,
-                    (SELECT COUNT(*) FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID) as bidCount
+                    (SELECT COUNT(*) FROM TB_BUS_RESERVATION b WHERE b.REQ_ID COLLATE utf8mb4_unicode_ci = r.REQ_ID COLLATE utf8mb4_unicode_ci) as bidCount
              FROM TB_AUCTION_REQ r
              JOIN TB_USER u ON r.TRAVELER_ID = u.CUST_ID
              WHERE u.USER_ID = ? ORDER BY r.REG_DT DESC`,
@@ -672,14 +712,13 @@ app.get('/api/driver/available-estimates', authenticateToken, async (req, res) =
             AND rb.DATA_STAT = 'AUCTION'
             AND NOT EXISTS (
                 SELECT 1 FROM TB_BUS_RESERVATION b 
-                JOIN TB_USER du ON b.DRIVER_ID = du.USER_ID
-                WHERE b.REQ_ID = r.REQ_ID 
-                  AND du.USER_ID = ?
+                WHERE b.REQ_ID COLLATE utf8mb4_unicode_ci = r.REQ_ID COLLATE utf8mb4_unicode_ci 
+                  AND b.DRIVER_ID = ?
             )
             ORDER BY r.REG_DT DESC
         `;
 
-        const [rows] = await pool.execute(query, [driverBusImg, driverBusType, userId]);
+        const [rows] = await pool.execute(query, [driverBusImg, driverBusType, custId]);
         
         res.json({ 
             success: true, 
@@ -695,17 +734,16 @@ app.get('/api/driver/available-estimates', authenticateToken, async (req, res) =
 // 4. 기사: 유찰/입찰 실패 내역
 app.get('/api/driver/failed-estimates', authenticateToken, async (req, res) => {
     try {
-        const userId = req.user.userId;
+        const custId = req.user.custId;
         const [rows] = await pool.execute(
             `SELECT b.REQ_ID as resUuid, r.TRIP_TITLE as tripTitle, 
                     r.START_ADDR as startAddr, r.END_ADDR as endAddr, 
                     DATE_FORMAT(r.START_DT, '%Y.%m.%d') as startDate, '유찰' as status
              FROM TB_BUS_RESERVATION b
-             JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID
-             JOIN TB_USER u ON b.DRIVER_ID = u.USER_ID
-             WHERE u.USER_ID = ? AND b.DATA_STAT = 'FAILED'
+             JOIN TB_AUCTION_REQ r ON b.REQ_ID COLLATE utf8mb4_unicode_ci = r.REQ_ID COLLATE utf8mb4_unicode_ci
+             WHERE b.DRIVER_ID = ? AND b.DATA_STAT = 'FAILED'
              ORDER BY b.REG_DT DESC`,
-            [userId]
+            [custId]
         );
         res.json({ success: true, data: rows });
     } catch (err) {
@@ -717,7 +755,7 @@ app.get('/api/driver/failed-estimates', authenticateToken, async (req, res) => {
 // [App 호환성] 앱에서 호출하는 경로(/api/driver/pending-approvals)와 웹/서버 경로(/api/driver/approval-list) 통합 관리
 const getApprovalList = async (req, res) => {
     try {
-        const userId = req.user.userId;
+        const custId = req.user.custId;
         
         const [rows] = await pool.execute(
             `SELECT 
@@ -729,11 +767,11 @@ const getApprovalList = async (req, res) => {
                 COALESCE(db.SERVICE_CLASS, '차종 미정') as busTypeNm,
                 '승인대기' as status
              FROM TB_BUS_RESERVATION b
-             JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID
-             LEFT JOIN TB_BUS_DRIVER_VEHICLE db ON b.BUS_ID = db.BUS_ID
+             JOIN TB_AUCTION_REQ r ON b.REQ_ID COLLATE utf8mb4_unicode_ci = r.REQ_ID COLLATE utf8mb4_unicode_ci
+             LEFT JOIN TB_BUS_DRIVER_VEHICLE db ON b.BUS_ID COLLATE utf8mb4_unicode_ci = db.BUS_ID COLLATE utf8mb4_unicode_ci
              WHERE b.DRIVER_ID = ? AND b.DATA_STAT = 'BIDDING'
              ORDER BY b.REG_DT DESC`,
-            [userId]
+            [custId]
         );
         res.json({ success: true, data: rows });
     } catch (err) {
@@ -749,7 +787,7 @@ app.get('/api/driver/pending-approvals', authenticateToken, getApprovalList);
 app.get('/api/driver/bid-detail/:id', authenticateToken, async (req, res) => {
     try {
         const reqId = req.params.id;
-        const userId = req.user.userId;
+        const custId = req.user.custId;
         
         const [rows] = await pool.execute(
             `SELECT 
@@ -769,10 +807,10 @@ app.get('/api/driver/bid-detail/:id', authenticateToken, async (req, res) => {
                 '' as serviceMemo,
                 db.SERVICE_CLASS as busTypeNm
              FROM TB_BUS_RESERVATION b
-             JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID
-             LEFT JOIN TB_BUS_DRIVER_VEHICLE db ON b.BUS_ID = db.BUS_ID
-             WHERE b.REQ_ID = ? AND b.DRIVER_ID = ?`,
-            [reqId, userId]
+             JOIN TB_AUCTION_REQ r ON b.REQ_ID COLLATE utf8mb4_unicode_ci = r.REQ_ID COLLATE utf8mb4_unicode_ci
+             LEFT JOIN TB_BUS_DRIVER_VEHICLE db ON b.BUS_ID COLLATE utf8mb4_unicode_ci = db.BUS_ID COLLATE utf8mb4_unicode_ci
+             WHERE b.REQ_ID COLLATE utf8mb4_unicode_ci = ? AND b.DRIVER_ID = ?`,
+            [reqId, custId]
         );
 
         if (rows.length === 0) {
@@ -786,7 +824,7 @@ app.get('/api/driver/bid-detail/:id', authenticateToken, async (req, res) => {
             `SELECT VIA_ADDR, VIA_TYPE 
              FROM TB_AUCTION_REQ_VIA 
              WHERE REQ_ID = ? 
-             ORDER BY VIA_ORD ASC`,
+             ORDER BY VIA_SEQ ASC`,
             [reqId]
         );
 
@@ -859,10 +897,10 @@ app.get('/api/app/driver/estimate/:id', authenticateToken, async (req, res) => {
 
         // 2. 경유지 정보 조회 (Route)
         const [viaRows] = await pool.execute(
-            `SELECT VIA_ADDR as addr, VIA_TYPE as type, VIA_ORD as ord
+            `SELECT VIA_ADDR as addr, VIA_TYPE as type, VIA_SEQ as ord
              FROM TB_AUCTION_REQ_VIA
              WHERE REQ_ID = ?
-             ORDER BY VIA_ORD ASC`,
+             ORDER BY VIA_SEQ ASC`,
             [id]
         );
         
@@ -926,13 +964,13 @@ app.post('/api/driver/bid', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: '필수 항목(기본요금 등)이 누락되었습니다.' });
         }
 
-        const userId = req.user.userId;
+        const custId = req.user.custId;
 
         // 만약 busId가 제공되지 않았다면, 기사의 첫 번째 등록된 차량을 사용
         if (!busId) {
             const [busRows] = await pool.execute(
-                `SELECT v.BUS_ID as busId FROM TB_BUS_DRIVER_VEHICLE v JOIN TB_USER u ON v.CUST_ID = u.CUST_ID WHERE u.USER_ID = ? LIMIT 1`,
-                [userId]
+                `SELECT v.BUS_ID as busId FROM TB_BUS_DRIVER_VEHICLE v WHERE v.CUST_ID = ? LIMIT 1`,
+                [custId]
             );
             if (busRows.length > 0) {
                 busId = busRows[0].busId;
@@ -957,7 +995,7 @@ app.post('/api/driver/bid', authenticateToken, async (req, res) => {
         `;
 
         await pool.execute(sql, [
-            reqId, userId, busId,
+            reqId, custId, busId,
             totalBidAmt, userId, userId
         ]);
 
@@ -1037,16 +1075,43 @@ app.post('/api/submit-review', authenticateToken, async (req, res) => {
     try {
         const { resUuid, rating, comment } = req.body;
         const userId = req.user.userId;
-        const userUuidBuf = uuidToBuffer(req.user.userUuid);
-        const resUuidBuf = uuidToBuffer(resUuid);
+        const custId = req.user.custId;
+
+        console.log(`[SubmitReview] Request: resUuid=${resUuid}, userId=${userId}, custId=${custId}`);
+
+        if (!resUuid || !custId) {
+            console.error('[SubmitReview] Missing required info:', { resUuid, custId });
+            return res.status(400).json({ success: false, error: '필수 정보가 누락되었습니다.' });
+        }
+
+        // 먼저 예약 정보에서 기사 ID 가져오기
+        const [resRows] = await pool.execute('SELECT DRIVER_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [resUuid]);
+        
+        if (resRows.length === 0) {
+            console.error('[SubmitReview] Reservation not found for RES_ID:', resUuid);
+            return res.status(404).json({ success: false, error: '예약 정보를 찾을 수 없습니다.' });
+        }
+        
+        const driverId = resRows[0].DRIVER_ID;
+        console.log(`[SubmitReview] Found driverId: ${driverId}`);
+
+        // 다음 리뷰 시퀀스 계산
+        const [seqRows] = await pool.execute('SELECT COALESCE(MAX(REVIEW_SEQ), 0) + 1 as nextSeq FROM TB_TRIP_REVIEW WHERE RES_ID = ?', [resUuid]);
+        const nextSeq = seqRows[0].nextSeq;
+
+        console.log(`[SubmitReview] Calculated nextSeq: ${nextSeq}`);
 
         await pool.execute(
-            `INSERT INTO TB_TRIP_REVIEW (RES_UUID, WRITER_UUID, STAR_RATING, COMMENT_TEXT) VALUES (?, ?, ?, ?)`,
-            [resUuidBuf, userUuidBuf, rating, comment]
+            `INSERT INTO TB_TRIP_REVIEW (RES_ID, REVIEW_SEQ, WRITER_ID, DRIVER_ID, STAR_RATING, COMMENT_TEXT, REG_ID, MOD_ID) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [resUuid, nextSeq, custId, driverId, rating, comment, userId, userId]
         );
+
+        console.log(`[SubmitReview] Success: Review saved for RES_ID ${resUuid}`);
         res.json({ success: true, message: '리뷰가 등록되었습니다.' });
     } catch (err) {
-        res.status(500).json({ error: '리뷰 등록 실패' });
+        console.error('[SubmitReview] Critical Error:', err);
+        res.status(500).json({ success: false, error: '리뷰 등록 중 내부 오류가 발생했습니다.' });
     }
 });
 
@@ -1088,6 +1153,21 @@ app.get('/api/driver/profile', authenticateToken, async (req, res) => {
     }
 });
 
+// 공통 코드 조회 API
+app.get('/api/common/codes/:grpCd', async (req, res) => {
+    try {
+        const { grpCd } = req.params;
+        const [rows] = await pool.execute(
+            'SELECT DTL_CD as code, CD_NM_KO as name, CD_DESC as description FROM TB_COMMON_CODE WHERE GRP_CD = ? AND USE_YN = "Y" ORDER BY DISP_ORD ASC',
+            [grpCd]
+        );
+        res.json({ success: true, data: rows });
+    } catch (err) {
+        console.error('Common codes fetch error:', err);
+        res.status(500).json({ error: '코드 조회 실패' });
+    }
+});
+
 // --- 서버 시작 ---
 
 // 404 핸들러 (JSON 실효성 보장 - HTML 에러 페이지 방지)
@@ -1097,6 +1177,15 @@ app.use((req, res) => {
         success: false, 
         error: '요청하신 경로를 찾을 수 없습니다.',
         path: req.path 
+    });
+});
+
+// 글로벌 에러 핸들러 (Unexpected end of JSON input 방지)
+app.use((err, req, res, next) => {
+    console.error('🔥 [Global Error Handler]:', err);
+    res.status(err.status || 500).json({
+        success: false,
+        error: err.message || '서버 내부 오류가 발생했습니다.'
     });
 });
 

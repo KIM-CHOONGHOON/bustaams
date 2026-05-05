@@ -1,5 +1,5 @@
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import BottomNavDriver from '../components/BottomNavDriver';
 
 const FailBidListDriver = () => {
     const navigate = useNavigate();
@@ -48,9 +48,9 @@ const FailBidListDriver = () => {
                 {/* Editorial Header Section */}
                 <section className="grid grid-cols-1 md:grid-cols-12 gap-8 items-end text-left">
                     <div className="md:col-span-7 space-y-6 text-left">
-                        <span className="text-secondary font-black tracking-[0.4em] uppercase text-[10px] block px-2 italic">Auction Rejection Audit</span>
+                        <span className="text-secondary font-black tracking-[0.4em] uppercase text-[10px] block px-2 italic">유찰 내역 분석</span>
                         <h2 className="font-headline text-6xl md:text-8xl font-black text-primary leading-[0.85] tracking-tighter italic uppercase text-left">
-                            Bid <br/><span className="text-slate-200 underline decoration-slate-200/20 underline-offset-[12px]">Unfilled.</span>
+                            유찰된 <br/><span className="text-slate-200 underline decoration-slate-200/20 underline-offset-[12px]">견적들.</span>
                         </h2>
                     </div>
                     <div className="md:col-span-5 md:pl-12 text-left border-l-4 border-slate-50">
@@ -62,7 +62,7 @@ const FailBidListDriver = () => {
 
                 <nav className="flex gap-10 border-b-4 border-slate-50 pb-4 text-left justify-center">
                     <button className="text-primary font-black text-sm uppercase tracking-[0.3em] italic border-b-8 border-primary pb-4">
-                        Unsuccessful Entries (3)
+                        낙찰 실패 내역 (3)
                     </button>
                 </nav>
 
@@ -85,16 +85,16 @@ const FailBidListDriver = () => {
                                 </div>
                                 <div className="grid grid-cols-2 gap-6 text-left">
                                     <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 text-left group-hover:bg-white transition-colors">
-                                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-300 mb-2 italic">My Bid Value</p>
+                                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-300 mb-2 italic">나의 견적가</p>
                                         <p className="font-headline text-2xl font-black text-primary italic tracking-tighter">₩{failedBids[0].price}</p>
                                     </div>
                                     <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 text-left group-hover:bg-white transition-colors">
-                                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-300 mb-2 italic">Fleet Spec</p>
+                                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-300 mb-2 italic">차량 모델</p>
                                         <p className="font-black text-primary text-xs italic">{failedBids[0].model}</p>
                                     </div>
                                 </div>
                                 <button onClick={() => navigate(`/fail-bid-detail-driver/${failedBids[0].id}`)} className="bg-primary text-white px-12 py-6 rounded-[2.5rem] font-black text-[10px] uppercase tracking-[0.3em] shadow-2xl shadow-primary/30 hover:scale-105 active:scale-95 transition-all italic">
-                                    Analyze Details 사유 분석
+                                    상세 사유 분석
                                 </button>
                             </div>
                             <div className="w-full md:w-72 h-72 rounded-[3rem] overflow-hidden grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-1000 border-8 border-slate-50">
@@ -121,17 +121,17 @@ const FailBidListDriver = () => {
 
                                 <div className="space-y-4 text-left border-t border-slate-50 pt-8">
                                     <div className="flex justify-between items-center text-left">
-                                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-300 italic">Bid Amount</span>
+                                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-300 italic">견적 금액</span>
                                         <span className="font-black text-primary text-xs italic">₩{item.price}</span>
                                     </div>
                                     <div className="flex justify-between items-center text-left">
-                                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-300 italic">Fleet Unit</span>
+                                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-300 italic">차량 모델</span>
                                         <span className="font-black text-primary text-xs italic">{item.model}</span>
                                     </div>
                                 </div>
 
                                 <button onClick={() => navigate(`/fail-bid-detail-driver/${item.id}`)} className="w-full py-6 rounded-[2.5rem] bg-slate-50 text-primary font-black text-[10px] uppercase tracking-[0.3em] hover:bg-primary hover:text-white transition-all active:scale-95 italic">
-                                    Open Case 파일 열기
+                                    상세 보기
                                 </button>
                             </div>
                         </div>
@@ -140,25 +140,7 @@ const FailBidListDriver = () => {
             </main>
 
             {/* Bottom Nav */}
-            <nav className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 flex justify-around items-center px-4 py-2 bg-slate-900 text-slate-500 w-[90%] max-w-lg mx-auto rounded-full shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] border border-white/10">
-                <button onClick={() => navigate('/driver-main')} className="flex flex-col items-center justify-center px-5 py-2 hover:text-white transition-all">
-                    <span className="material-symbols-outlined">dashboard</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1">Home</span>
-                </button>
-                <button onClick={() => navigate('/estimate-list-driver')} className="flex flex-col items-center justify-center px-5 py-2 text-primary relative">
-                    <div className="absolute inset-0 bg-primary/5 rounded-2xl blur-lg"></div>
-                    <span className="material-symbols-outlined relative z-10" style={{fontVariationSettings: "'FILL' 1"}}>gavel</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1 relative z-10 underline decoration-2 underline-offset-4">Auction</span>
-                </button>
-                <button onClick={() => navigate('/completed-trips-driver')} className="flex flex-col items-center justify-center px-5 py-2 hover:text-white transition-all">
-                    <span className="material-symbols-outlined">history</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1">History</span>
-                </button>
-                <button onClick={() => navigate('/rating-reply-driver')} className="flex flex-col items-center justify-center px-5 py-2 hover:text-white transition-all">
-                    <span className="material-symbols-outlined">star</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1">Intel</span>
-                </button>
-            </nav>
+            <BottomNavDriver />
         </div>
     );
 };

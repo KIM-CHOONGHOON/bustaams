@@ -1,125 +1,191 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import api from '../api';
+import Swal from 'sweetalert2';
+import BottomNavCustomer from '../components/BottomNavCustomer';
 
 const ReviewDetailCustomer = () => {
     const navigate = useNavigate();
     const { id } = useParams();
+    const [review, setReview] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchReview = async () => {
+            try {
+                console.log('[ReviewDetail] Fetching for ID:', id);
+                // 백엔드 라우트 명시적 확인: /api/app/customer/review-detail/:id
+                const response = await api.get(`/app/customer/review-detail/${id}`);
+                console.log('[ReviewDetail] Response:', response);
+                if (response.success) {
+                    setReview(response.data);
+                } else {
+                    // response.success가 false인 경우에도 메시지 표시
+                    Swal.fire({
+                        icon: 'info',
+                        title: '확인 필요',
+                        text: response.error || '리뷰 정보를 찾을 수 없습니다.',
+                        confirmButtonColor: '#0F766E'
+                    });
+                }
+            } catch (error) {
+                console.error('Fetch review detail error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: '조회 실패',
+                    text: error.message || '리뷰 정보를 불러올 수 없습니다.',
+                    confirmButtonColor: '#0F766E'
+                });
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (id) fetchReview();
+    }, [id]);
+
+    const renderStars = (rating) => {
+        return (
+            <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                    <span 
+                        key={star} 
+                        className={`material-symbols-outlined text-[24px] ${star <= rating ? 'text-[#F97316]' : 'text-[#E2E8F0]'}`}
+                        style={{ fontVariationSettings: star <= rating ? "'FILL' 1" : "'FILL' 0" }}
+                    >
+                        star
+                    </span>
+                ))}
+            </div>
+        );
+    };
+
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen bg-[#F8FAFB]">
+                <span className="material-symbols-outlined text-6xl animate-spin text-[#0F766E]">progress_activity</span>
+            </div>
+        );
+    }
+
+    if (!review) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen bg-[#F8FAFB] p-6 text-center">
+                <span className="material-symbols-outlined text-slate-300 text-6xl mb-4">rate_review</span>
+                <h1 className="text-xl font-bold text-slate-800 mb-4">리뷰 내역이 없습니다.</h1>
+                <button onClick={() => navigate(-1)} className="bg-[#0F766E] text-white px-8 py-3 rounded-full font-bold shadow-lg">돌아가기</button>
+            </div>
+        );
+    }
 
     return (
-        <div className="bg-background text-on-surface min-h-screen pb-40 font-body text-left">
-            {/* TopAppBar */}
-            <header className="fixed top-0 w-full z-50 bg-white/70 backdrop-blur-3xl border-b border-white py-4 shadow-sm">
-                <div className="flex items-center justify-between px-6 h-18 w-full max-w-4xl mx-auto">
-                    <div className="flex items-center gap-4">
-                        <button onClick={() => navigate(-1)} className="material-symbols-outlined text-teal-700 hover:bg-slate-50 p-2 rounded-full transition-all">arrow_back</button>
-                        <h1 className="font-headline font-black text-xl tracking-tighter text-teal-900 italic">Review Detail</h1>
-                    </div>
-                    <div className="text-teal-800 font-black text-[10px] opacity-40 uppercase tracking-[0.3em]">
-                        Verified Feedback
-                    </div>
-                </div>
+        <div className="bg-[#F8FAFB] min-h-screen pb-40 text-left font-body">
+            {/* Header */}
+            <header className="fixed top-0 w-full z-50 bg-white border-b border-slate-100 px-6 h-16 flex items-center justify-between">
+                <button onClick={() => navigate(-1)} className="material-symbols-outlined text-[#1E293B] p-2 hover:bg-slate-50 rounded-full transition-all">arrow_back</button>
+                <h1 className="font-bold text-[17px] text-[#1E293B]">나의 리뷰 상세</h1>
+                <div className="w-10"></div>
             </header>
 
-            <main className="pt-32 px-6 max-w-3xl mx-auto space-y-12">
-                {/* Main Kinetic Review Card */}
-                <section className="bg-white rounded-[4rem] shadow-2xl shadow-teal-900/[0.04] overflow-hidden relative border border-slate-50 animate-in fade-in slide-in-from-bottom duration-1000 text-left">
-                    {/* Visual Status Link */}
-                    <div className="absolute top-0 left-0 w-2 h-40 bg-secondary opacity-20 rounded-br-full"></div>
-                    
-                    <div className="p-12 md:p-16">
-                        {/* Trip Meta Info */}
-                        <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-16 text-left">
-                            <div className="space-y-4 text-left">
-                                <p className="text-[10px] font-black text-secondary uppercase tracking-[0.4em] mb-2">Historical Journey</p>
-                                <h2 className="font-headline text-4xl md:text-5xl font-black text-on-surface tracking-tighter flex flex-wrap items-center gap-6 leading-none">
-                                    Seoul 
-                                    <span className="material-symbols-outlined text-slate-200 text-4xl">east</span> 
-                                    Busan
-                                </h2>
-                                <div className="flex items-center gap-3 text-slate-400 font-black text-xs uppercase tracking-widest mt-4">
-                                    <span className="material-symbols-outlined text-sm">calendar_today</span>
-                                    <span>2023. 11. 15</span>
-                                </div>
+            <main className="max-w-xl mx-auto px-6 pt-24 space-y-8">
+                {/* Trip Info Card */}
+                <section className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 relative overflow-hidden animate-in fade-in slide-in-from-bottom duration-700">
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="space-y-4 flex-1">
+                            <div className="flex items-center gap-3">
+                                <span className="px-3 py-1 bg-teal-50 text-[#0F766E] text-[10px] font-black rounded-lg uppercase tracking-widest border border-teal-100">운행 완료</span>
+                                <span className="text-[12px] text-slate-400 font-bold">{review.date}</span>
                             </div>
-                            <div className="bg-primary/5 px-8 py-4 rounded-[2rem] flex items-center gap-3 border border-primary/10 shadow-inner">
-                                <span className="text-primary font-black text-4xl tracking-tighter">5.0</span>
-                                <div className="flex flex-col">
-                                    <div className="flex">
-                                        {[1, 2, 3, 4, 5].map((s) => (
-                                            <span key={s} className="material-symbols-outlined text-primary text-lg" style={{fontVariationSettings: "'FILL' 1"}}>star</span>
-                                        ))}
-                                    </div>
-                                    <span className="text-[8px] font-black text-primary/40 uppercase tracking-widest mt-1">Perfect Score</span>
+                            <h2 className="text-[20px] font-black text-slate-800 tracking-tight leading-tight">
+                                {review.title}
+                            </h2>
+                            <div className="flex items-center gap-2">
+                                <span className="material-symbols-outlined text-slate-300 text-[18px]">location_on</span>
+                                <span className="text-[14px] text-slate-500 font-bold line-clamp-1">{review.startAddr}</span>
+                                <span className="material-symbols-outlined text-slate-300 text-[14px]">arrow_forward</span>
+                                <span className="text-[14px] text-slate-700 font-black">{review.endAddrMaster?.split(' ')[0]}</span>
+                            </div>
+                            
+                            {/* Driver/Bus Summary in Card */}
+                            <div className="flex items-center gap-4 pt-4 mt-4 border-t border-slate-50">
+                                <div className="w-12 h-12 rounded-2xl bg-[#F1F5F9] overflow-hidden border border-slate-50 shadow-inner">
+                                    {review.driverImage ? (
+                                        <img src={`${import.meta.env.VITE_API_BASE_URL || ''}${review.driverImage}`} className="w-full h-full object-cover" alt="Driver" />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-[#94A3B8]">
+                                            <span className="material-symbols-outlined text-2xl">person</span>
+                                        </div>
+                                    )}
+                                </div>
+                                <div>
+                                    <h4 className="text-[15px] font-black text-slate-800">{review.driverName} 기사님</h4>
+                                    <p className="text-[12px] text-slate-400 font-bold">{review.busModel} • {review.busNo}</p>
                                 </div>
                             </div>
                         </div>
-
-                        {/* User Review Text */}
-                        <div className="relative mb-20 text-left">
-                            <span className="material-symbols-outlined absolute -top-10 -left-6 text-slate-50 text-[120px] -z-10 select-none">format_quote</span>
-                            <p className="text-on-surface leading-[1.6] text-2xl md:text-3xl font-black tracking-tight relative z-10 px-4 md:px-0 bg-gradient-to-r from-slate-900 to-slate-600 bg-clip-text text-transparent">
-                                "기사님이 너무 친절하시고 차량 상태도 깨끗해서 편안하게 여행했습니다. 다음에도 꼭 이용하고 싶네요!"
-                            </p>
-                        </div>
-
-                        {/* Tonal Separator */}
-                        <div className="h-px w-full bg-slate-50 mb-16"></div>
-
-                        {/* Captain's Response Section */}
-                        <div className="bg-slate-50 rounded-[3rem] p-10 relative overflow-hidden group text-left">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-2xl"></div>
-                            <div className="flex items-center gap-6 mb-8 text-left relative z-10">
-                                <div className="relative text-left">
-                                    <img alt="Captain" className="w-20 h-20 rounded-3xl object-cover shadow-xl rotate-2 ring-4 ring-white" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDBb-Cs5OxgwPCbvHvg-gdg_4H5Zhw_2tjFoeHycnOjmwI6OCv5zKpr4NYF687THu-ReBNM5xQnvGro1sArwoV2u_eiFRVvEYDm6VMm4B7ZRgx8jJJdg2Ci7nbouJE9c1MKIJ5_v5cDOBT0G1OqKtOhbIEQt2gsREYXT-rzZJHHeIRZHSEMY0S3AsPTancDb1yMMrEsq6qcZL6sbDqxeV0S4zbfyJOrc-SK5zVeH32mt1FXrDO1qjRC7n1VInTtxBfdN41M-08NNC8"/>
-                                    <div className="absolute -bottom-2 -right-2 bg-primary p-2 rounded-xl border-2 border-white shadow-lg">
-                                        <span className="material-symbols-outlined text-white text-sm" style={{fontVariationSettings: "'FILL' 1"}}>verified</span>
-                                    </div>
-                                </div>
-                                <div className="text-left">
-                                    <p className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-1">Partner Response</p>
-                                    <h3 className="font-black text-on-surface text-2xl tracking-tighter">김영호 캡틴</h3>
-                                </div>
-                            </div>
-                            <div className="bg-white rounded-3xl p-8 shadow-xl shadow-teal-900/[0.02] text-left relative z-10 border border-white">
-                                <p className="text-slate-500 leading-relaxed font-bold text-lg tracking-tight italic">
-                                    "소중한 후기 감사합니다! 승객님들의 편안한 여행을 위해 항상 최선을 다하고 있습니다. 즐거운 여정 되셨다니 보람차네요. 다음에 또 뵙기를 기대하겠습니다."
-                                </p>
-                            </div>
-                            {/* Iconic Bus Backdrop */}
-                            <div className="absolute bottom-4 right-10 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
-                                <span className="material-symbols-outlined text-[140px] text-primary">directions_bus</span>
-                            </div>
+                        <div className="bg-orange-50 px-4 py-3 rounded-2xl flex flex-col items-center gap-1 border border-orange-100 shadow-sm min-w-[70px]">
+                            <span className="text-[20px] font-black text-[#F97316]">{review.rating?.toFixed(1)}</span>
+                            <span className="material-symbols-outlined text-[#F97316] text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
                         </div>
                     </div>
                 </section>
 
-                {/* Decorative Footer */}
-                <div className="pt-12 text-center opacity-10">
-                    <div className="w-1 h-20 bg-gradient-to-b from-primary to-transparent mx-auto"></div>
-                </div>
+                {/* Review Content */}
+                <section className="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100 space-y-8 animate-in fade-in slide-in-from-bottom duration-700 delay-200">
+                    <div className="flex justify-center gap-1">
+                        {renderStars(review.rating)}
+                    </div>
+
+                    <div className="relative">
+                        <span className="material-symbols-outlined absolute -left-6 -top-4 text-[#F1F5F9] text-6xl rotate-180 opacity-50">format_quote</span>
+                        <p className="text-[18px] text-[#334155] font-bold leading-relaxed relative z-10 text-center px-4 italic">
+                            {review.comment}
+                        </p>
+                    </div>
+
+                    <div className="h-px bg-slate-100 w-2/3 mx-auto" />
+
+                    {/* Driver Reply Section */}
+                    {review.reply ? (
+                        <div className="bg-[#F8FAFB] rounded-[2rem] p-6 space-y-4 border border-slate-50">
+                            <div className="flex items-center gap-4">
+                                <div className="w-14 h-14 rounded-2xl bg-white overflow-hidden shadow-sm border border-slate-100 relative">
+                                    {review.driverImage ? (
+                                        <img src={`${import.meta.env.VITE_API_BASE_URL || ''}${review.driverImage}`} className="w-full h-full object-cover" alt="Driver" />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-[#94A3B8]">
+                                            <span className="material-symbols-outlined text-3xl">person</span>
+                                        </div>
+                                    )}
+                                    <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#0F766E] rounded-full border-2 border-white flex items-center justify-center">
+                                        <span className="material-symbols-outlined text-white text-[14px]">verified</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <p className="text-[12px] font-black text-[#0F766E] uppercase tracking-wider">기사님 답변</p>
+                                    <h4 className="text-[16px] font-black text-[#1E293B]">{review.driverName} 기사님</h4>
+                                </div>
+                            </div>
+                            <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-50 relative">
+                                <p className="text-[14px] text-[#475569] font-medium leading-relaxed">
+                                    {review.reply}
+                                </p>
+                                <span className="material-symbols-outlined absolute right-4 bottom-4 text-[#F1F5F9] text-4xl opacity-50">directions_bus</span>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-center py-4 text-[#94A3B8] font-bold text-[13px]">
+                            아직 기사님의 답변이 없습니다.
+                        </div>
+                    )}
+                </section>
             </main>
 
-            {/* Premium Bottom Nav */}
-            <nav className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 flex justify-around items-center px-4 py-2 bg-slate-900 text-white w-[90%] max-w-md mx-auto rounded-full shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] border border-white/10">
-                <button onClick={() => navigate('/customer-dashboard')} className="flex flex-col items-center justify-center text-slate-500 px-5 py-2 hover:text-white transition-all">
-                    <span className="material-symbols-outlined">gavel</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1">Auction</span>
-                </button>
-                <button onClick={() => navigate('/reservation-list')} className="flex flex-col items-center justify-center text-slate-500 px-5 py-2 hover:text-white transition-all">
-                    <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 0"}}>directions_bus</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1">Trips</span>
-                </button>
-                <button className="flex flex-col items-center justify-center px-5 py-2 text-white relative">
-                    <div className="absolute inset-0 bg-white/10 rounded-2xl blur-lg"></div>
-                    <span className="material-symbols-outlined relative z-10" style={{fontVariationSettings: "'FILL' 1"}}>star</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1 relative z-10 underline decoration-2 underline-offset-4">Reviews</span>
-                </button>
-                <button onClick={() => navigate('/profile-customer')} className="flex flex-col items-center justify-center bg-white/20 text-white rounded-full w-12 h-12 shadow-lg active:scale-90 transition-all">
-                    <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1"}}>person</span>
-                </button>
-            </nav>
+            {/* Bottom Navigation */}
+            <BottomNavCustomer />
         </div>
     );
 };
 
 export default ReviewDetailCustomer;
+

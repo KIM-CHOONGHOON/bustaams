@@ -25,23 +25,21 @@ async function test() {
         console.log('Success Master');
 
         const bus = { busTypeCd: 'NORMAL_45', reqAmt: 100000, tollsAmt: 0, fuelCost: 0 };
-        const reqBusId = await getNextId('TB_AUCTION_REQ_BUS', 'REQ_BUS_ID', 10);
-        console.log('reqBusId:', reqBusId);
+        const reqBusSeq = 1;
         await connection.execute(`
             INSERT INTO TB_AUCTION_REQ_BUS (
-                REQ_BUS_ID, REQ_ID, BUS_TYPE_CD, DATA_STAT, TOLLS_AMT, FUEL_COST
+                REQ_BUS_SEQ, REQ_ID, BUS_TYPE_CD, DATA_STAT, TOLLS_AMT, FUEL_COST
             ) VALUES (?, ?, ?, 'AUCTION', ?, ?)
-        `, [reqBusId, reqId, bus.busTypeCd, bus.tollsAmt || 0, bus.fuelCost || 0]); // Note: in my appCustomer.js I added REQ_BUS_CNT ? WAIT
+        `, [reqBusSeq, reqId, bus.busTypeCd, bus.tollsAmt || 0, bus.fuelCost || 0]);
 
         const vias = [{viaType: 'START_NODE', addr: 'Start'}, {viaType: 'END_NODE', addr: 'End'}];
         for (let i = 0; i < vias.length; i++) {
              const via = vias[i];
-             const viaId = await getNextId('TB_AUCTION_REQ_VIA', 'VIA_ID', 10);
              await connection.execute(`
                  INSERT INTO TB_AUCTION_REQ_VIA (
-                     VIA_ID, REQ_ID, VIA_TYPE, VIA_ORD, VIA_ADDR
-                 ) VALUES (?, ?, ?, ?, ?)
-             `, [viaId, reqId, via.viaType, i + 1, via.addr]);
+                     REQ_ID, VIA_SEQ, VIA_TYPE, VIA_ADDR
+                 ) VALUES (?, ?, ?, ?)
+             `, [reqId, i + 1, via.viaType, via.addr]);
          }
         
         console.log('Success all inserts');

@@ -112,20 +112,20 @@ router.post('/register', async (req, res) => {
             const gcsPath = `https://storage.googleapis.com/${bucketName}/${fileName}`;
             signFileId = fileId;
 
-            // TB_FILE_MASTER 삽입 (REG_ID, MOD_ID를 CUST_ID로 설정)
+            // TB_FILE_MASTER 삽입 (REG_ID, MOD_ID를 CUST_ID로 설정, FILE_SIZE 추가)
             const fileQuery = `
-                INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, REG_ID, MOD_ID)
-                VALUES (?, 'SIGNATURE', ?, ?, ?, 'png', ?, ?)
+                INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_ID, MOD_ID)
+                VALUES (?, 'SIGNATURE', ?, ?, ?, 'png', ?, ?, ?)
             `;
-            await connection.execute(fileQuery, [fileId, bucketName, gcsPath, `${userId}_signature.png`, custId, custId]);
+            await connection.execute(fileQuery, [fileId, bucketName, gcsPath, `${userId}_signature.png`, buffer.length, custId, custId]);
         }
 
-        // 3. TB_USER 삽입 (개인정보 암호화 준수, CUST_ID 추가)
+        // 3. TB_USER 삽입 (CUST_ID 추가, DB.md 스키마 준수)
         const userQuery = `
             INSERT INTO TB_USER (
                 CUST_ID, USER_ID, EMAIL, PASSWORD, USER_NM, HP_NO, SNS_TYPE, 
-                SMS_AUTH_YN, USER_TYPE, JOIN_DT, USER_STAT, PROFILE_FILE_ID, PROFILE_IMG_PATH
-            ) VALUES (?, ?, ?, ?, ?, ?, 'NONE', ?, ?, NOW(), 'ACTIVE', ?, ?)
+                SMS_AUTH_YN, USER_TYPE, JOIN_DT, USER_STAT, SIGNATURE_FILE_ID
+            ) VALUES (?, ?, ?, ?, ?, ?, 'NONE', ?, ?, NOW(), 'ACTIVE', ?)
         `;
         
         const finalUserType = userType || 'TRAVELER';
@@ -139,9 +139,18 @@ router.post('/register', async (req, res) => {
             phoneNo, 
             smsAuthYn || 'Y', 
             finalUserType,
-            signFileId, // 서명 이미지의 FILE_ID를 PROFILE_FILE_ID 컬럼에 저장
-            signFileId ? `https://storage.googleapis.com/${bucketName}/signatures/${signFileId}.png` : null // 서명 경로를 프로필 이미지 경로로도 활용
+            signFileId // SIGNATURE_FILE_ID
         ]);
+
+        // 3.5 TB_USER_CANCEL_MANAGE 초기화 (취소 건수 0으로 설정)
+        const cancelManageQuery = `
+            INSERT INTO TB_USER_CANCEL_MANAGE (
+                CUST_ID, CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, 
+                CANCEL_TRAVELER_ALL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, 
+                TRADE_RESTRICT_YN, REG_ID, MOD_ID
+            ) VALUES (?, 0, 0, 0, 0, 'N', ?, ?)
+        `;
+        await connection.execute(cancelManageQuery, [custId, custId, custId]);
 
         // 4. 약관 동의 이력 처리 (TB_USER_TERMS_HIST - 키값을 CUST_ID로 변경)
         if (termsData && Array.isArray(termsData)) {
@@ -172,40 +181,56 @@ router.post('/register', async (req, res) => {
                         return false;
                     };
                     
-                    // 특정 단어(sms, push 등)가 포함된 키가 Body 어디에든 있고 그 값이 'Y'류인지 딥스캔
                     const deepSearch = (targetWord) => {
                         const target = targetWord.toLowerCase();
-                        
-                        // 재귀적으로 객체 내부를 뒤지는 함수
                         const scan = (obj) => {
                             if (!obj || typeof obj !== 'object') return false;
-                            
-                            // 1. 현재 객체의 키 값들 확인
+                            if (Array.isArray(obj)) {
+                                for (const item of obj) if (scan(item)) return true;
+                                return false;
+                            }
                             for (const [k, v] of Object.entries(obj)) {
                                 const key = k.toLowerCase();
-                                // 키에 단어가 포함되어 있고 값이 Y류인 경우
                                 if (key.includes(target) && isY(v)) return true;
-                                // 값이 배열인 경우 (예: channels: ['sms', 'push'])
-                                if (Array.isArray(v) && v.some(item => String(item).toLowerCase().includes(target))) return true;
-                                // 값이 또 다른 객체인 경우 재귀 탐색
-                                if (typeof v === 'object' && !Array.isArray(v) && scan(v)) return true;
+                                if (Array.isArray(v)) {
+                                    if (v.some(item => String(item).toLowerCase().includes(target) && isY(item))) return true;
+                                    for (const item of v) if (typeof item === 'object' && scan(item)) return true;
+                                } else if (typeof v === 'object' && scan(v)) return true;
                             }
                             return false;
                         };
-                        
                         return scan(req.body);
                     };
 
-                    // 마케팅 세부 동의 항목 초기화 (MARKETING 타입일 때만 딥스캔 수행)
+                    // 마케팅 세부 동의 항목 초기화
                     let mktSms = 'N', mktPush = 'N', mktEmail = 'N', mktTel = 'N';
 
                     if (normalizedType === 'MARKETING') {
-                        mktSms = deepSearch('sms') ? 'Y' : 'N';
-                        mktPush = (deepSearch('push') || deepSearch('alarm')) ? 'Y' : 'N';
-                        mktEmail = deepSearch('email') ? 'Y' : 'N';
-                        mktTel = (deepSearch('tel') || deepSearch('phone') || deepSearch('call')) ? 'Y' : 'N';
+                        // 1. 현재 term 객체에 channels가 있는 경우 (Signup.jsx 구조)
+                        if (term.channels) {
+                            const c = term.channels;
+                            mktSms = isY(c.sms) ? 'Y' : 'N';
+                            mktPush = isY(c.push || c.alarm) ? 'Y' : 'N';
+                            mktEmail = isY(c.email) ? 'Y' : 'N';
+                            mktTel = isY(c.tel || c.phone || c.call) ? 'Y' : 'N';
+                        }
                         
-                        console.log(`[Registration] Marketing DeepScan Result - User: ${userId}, SMS:${mktSms}, PUSH:${mktPush}, EMAIL:${mktEmail}, TEL:${mktTel}`);
+                        // 2. mktChannelYN 필드 확인 (하위 호환성)
+                        if (mktChannelYN && typeof mktChannelYN === 'object') {
+                            if (mktSms === 'N') mktSms = isY(mktChannelYN.sms) ? 'Y' : 'N';
+                            if (mktPush === 'N') mktPush = isY(mktChannelYN.push || mktChannelYN.alarm) ? 'Y' : 'N';
+                            if (mktEmail === 'N') mktEmail = isY(mktChannelYN.email) ? 'Y' : 'N';
+                            if (mktTel === 'N') mktTel = isY(mktChannelYN.tel || mktChannelYN.phone) ? 'Y' : 'N';
+                        }
+                        
+                        // 3. 만약 여전히 N이라면 딥스캔 수행 (최후의 수단)
+                        if (mktSms === 'N') mktSms = deepSearch('sms') ? 'Y' : 'N';
+                        if (mktPush === 'N') mktPush = (deepSearch('push') || deepSearch('alarm')) ? 'Y' : 'N';
+                        if (mktEmail === 'N') mktEmail = deepSearch('email') ? 'Y' : 'N';
+                        if (mktTel === 'N') mktTel = (deepSearch('tel') || deepSearch('phone') || deepSearch('call')) ? 'Y' : 'N';
+                        
+                        console.log(`[Registration] Marketing Result for ${userId} - SMS:${mktSms}, PUSH:${mktPush}, EMAIL:${mktEmail}, TEL:${mktTel}`);
+                        console.log(`[Registration] term.channels:`, JSON.stringify(term.channels || {}));
                     }
 
                     const histQuery = `
@@ -249,17 +274,20 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
     try {
         const { userId, password } = req.body;
+        console.log(`[App Login] Attempt for user: ${userId}`);
         
         // USER_ID 컬럼이 평문으로 저장되어 있으므로 직접 쿼리 가능 (속도 향상)
         const [rows] = await pool.execute('SELECT * FROM TB_USER WHERE USER_ID = ? AND USER_STAT = "ACTIVE"', [userId]);
         
         if (rows.length === 0) {
+            console.log(`[App Login] Failed: User ${userId} not found or inactive`);
             return res.status(401).json({ error: '아이디 또는 비밀번호가 일치하지 않습니다.' });
         }
 
         const user = rows[0];
         const match = await bcrypt.compare(password, user.PASSWORD);
         if (!match) {
+            console.log(`[App Login] Failed: Password mismatch for ${userId}`);
             return res.status(401).json({ error: '아이디 또는 비밀번호가 일치하지 않습니다.' });
         }
 
@@ -274,6 +302,7 @@ router.post('/login', async (req, res) => {
             { expiresIn: '24h' }
         );
 
+        console.log(`[App Login] Success: ${userId} (${user.CUST_ID})`);
         res.json({ 
             success: true, 
             token, 
@@ -286,7 +315,7 @@ router.post('/login', async (req, res) => {
             } 
         });
     } catch (err) {
-        console.error('App Login Error:', err);
+        console.error('[App Login] Critical Error:', err);
         res.status(500).json({ error: '로그인 중 오류가 발생했습니다.' });
     }
 });

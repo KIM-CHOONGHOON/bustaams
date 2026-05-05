@@ -23,32 +23,39 @@ const CustomerDashboard = () => {
     useEffect(() => {
         // 대시보드 통계 및 프로필 정보 로드
         const fetchDashboardData = async () => {
+            // 1. 대시보드 통계 가져오기
             try {
-                const [statsRes, profileRes] = await Promise.all([
-                    api.get('/app/customer/dashboard'),
-                    api.get('/app/customer/profile')
-                ]);
-                
-                if (statsRes.success) {
+                const statsRes = await api.get('/app/customer/dashboard');
+                if (statsRes.success && statsRes.data) {
                     setStats({
-                        progressing: statsRes.data.countProgressing,
-                        waiting: statsRes.data.countWaitingApproval
+                        progressing: statsRes.data.countProgressing || 0,
+                        waiting: statsRes.data.countWaitingApproval || 0
                     });
+                    if (statsRes.data.userName) {
+                        setUserName(statsRes.data.userName);
+                    }
                     if (statsRes.data.profileImage) {
                         setProfileImage(statsRes.data.profileImage);
-                        setImageVersion(Date.now());
-                    }
-                }
-                
-                if (profileRes.success) {
-                    setUserName(profileRes.data.name || profileRes.data.userName || '사용자');
-                    if (profileRes.data.profileImage) {
-                        setProfileImage(profileRes.data.profileImage);
-                        setImageVersion(Date.now());
                     }
                 }
             } catch (err) {
-                console.error('Fetch dashboard error:', err);
+                console.error('Fetch dashboard stats error:', err);
+            }
+
+            // 2. 프로필 정보 가져오기 (이름 보완)
+            try {
+                const profileRes = await api.get('/app/customer/profile');
+                if (profileRes.success && profileRes.data) {
+                    const name = profileRes.data.name || profileRes.data.userName;
+                    if (name) {
+                        setUserName(name);
+                    }
+                    if (profileRes.data.profileImage) {
+                        setProfileImage(profileRes.data.profileImage);
+                    }
+                }
+            } catch (err) {
+                console.error('Fetch profile error:', err);
             }
         };
 
@@ -120,18 +127,28 @@ const CustomerDashboard = () => {
 
                         <div className="flex flex-wrap gap-4">
                             <button 
-                                onClick={() => navigate('/estimate-list-customer?type=progress')} 
-                                className="flex-1 bg-white text-primary px-6 py-3.5 rounded-2xl font-bold hover:bg-slate-50 transition-all text-[13px] shadow-lg flex items-center justify-center gap-2"
+                                onClick={() => navigate('/estimate-request-list?type=progress')} 
+                                disabled={stats.progressing === 0}
+                                className={`flex-1 px-6 py-4 rounded-2xl font-bold transition-all text-[13px] shadow-lg flex flex-col items-center justify-center gap-1.5 ${
+                                    stats.progressing === 0 
+                                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200 shadow-none' 
+                                    : 'bg-white text-primary hover:bg-slate-50 hover:translate-y-[-2px] active:scale-95'
+                                }`}
                             >
-                                <span className="material-symbols-outlined text-[18px]">near_me</span>
-                                견적진행중 리스트
+                                <span className="material-symbols-outlined text-[20px]">near_me</span>
+                                <span>견적진행중</span>
                             </button>
                             <button 
-                                onClick={() => navigate('/estimate-list-customer?type=waiting')} 
-                                className="flex-1 bg-secondary text-white px-6 py-3.5 rounded-2xl font-bold hover:opacity-90 transition-all text-[13px] shadow-lg flex items-center justify-center gap-2"
+                                onClick={() => navigate('/estimate-request-list?type=waiting')} 
+                                disabled={stats.waiting === 0}
+                                className={`flex-1 px-6 py-4 rounded-2xl font-bold transition-all text-[13px] shadow-lg flex flex-col items-center justify-center gap-1.5 ${
+                                    stats.waiting === 0 
+                                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200 shadow-none' 
+                                    : 'bg-secondary text-white hover:opacity-90 hover:translate-y-[-2px] active:scale-95'
+                                }`}
                             >
-                                <span className="material-symbols-outlined text-[18px]">pending_actions</span>
-                                승인대기중 리스트
+                                <span className="material-symbols-outlined text-[20px]">pending_actions</span>
+                                <span>승인대기중</span>
                             </button>
                         </div>
                     </div>

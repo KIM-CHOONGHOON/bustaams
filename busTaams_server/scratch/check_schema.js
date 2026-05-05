@@ -1,19 +1,11 @@
-const { pool } = require('../db');
+const sqlite3 = require('sqlite3').verbose();
+const db = new sqlite3.Database('busTaams.db');
 
-async function checkSchema() {
-    try {
-        const [rows] = await pool.execute('DESCRIBE TB_USER');
-        console.log('--- TB_USER Schema ---');
-        console.table(rows);
-        
-        const [termsRows] = await pool.execute('DESCRIBE TB_USER_TERMS_HIST');
-        console.log('\n--- TB_USER_TERMS_HIST Schema ---');
-        console.table(termsRows);
-    } catch (err) {
-        console.error('Schema check failed:', err);
-    } finally {
-        process.exit();
+db.all("PRAGMA table_info(TB_BUS_RESERVATION)", [], (err, rows) => {
+    if (err) {
+        console.error(err);
+        return;
     }
-}
-
-checkSchema();
+    console.log(JSON.stringify(rows, null, 2));
+    db.close();
+});

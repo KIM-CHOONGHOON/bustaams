@@ -1,216 +1,447 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getBusProfile, getDriverProfile, updateBusProfile, request } from '../api';
+import { notify } from '../utils/toast';
+import BottomNavDriver from '../components/BottomNavDriver';
 
 const BusInfoRegistration = () => {
     const navigate = useNavigate();
+    const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+    const [userProfileImg, setUserProfileImg] = useState('');
+    const [busTypes, setBusTypes] = useState([]);
 
-    const busGrades = [
-        { label: '45인승', value: '45' },
-        { label: '28인승 우등', value: '28' },
-        { label: '35인승', value: '35' },
-        { label: '25인승 미니', value: '25' },
-        { label: '15인승', value: '15' },
-        { label: '12인승', value: '12' },
-        { label: '21인승 프리미엄', value: '21_premium' },
-    ];
+    const bizRegInputRef = useRef(null);
+    const transLicInputRef = useRef(null);
+    const insCertInputRef = useRef(null);
+    const photosInputRef = useRef(null);
 
-    const amenities = [
-        { icon: 'wifi', label: '와이파이' },
-        { icon: 'usb', label: 'USB 포트' },
-        { icon: 'mic', label: '노래방' },
-        { icon: 'tv', label: 'TV/모니터' },
-        { icon: 'kitchen', label: '냉장고' },
-        { icon: 'water_drop', label: '정수기' },
-        { icon: 'curtains', label: '커튼' },
-        { icon: 'air_purifier_gen', label: '공기청정기' },
-    ];
+    const [formData, setFormData] = useState({
+        vehicleNo: '',
+        modelNm: '',
+        manufactureYear: '',
+        serviceClass: '',
+        amenities: {
+            "Table": false,
+            "Wi-Fi": false,
+            "USB-CHARGE": false,
+            "Refrigerator": false,
+            "Individual-Screen": false
+        },
+        hasAdas: 'N',
+        lastInspectDt: '',
+        insuranceExpDt: '',
+        insuranceType: 'comprehensive'
+    });
+
+    const [previews, setPreviews] = useState({
+        bizRegImg: '',
+        transLicImg: '',
+        insCertImg: '',
+        vehiclePhotos: []
+    });
+
+    const [files, setFiles] = useState({
+        bizRegFile: null,
+        transLicFile: null,
+        insCertFile: null,
+        vehiclePhotos: []
+    });
+
+    useEffect(() => {
+        const fetchInitialData = async () => {
+            try {
+                setLoading(true);
+
+                // 1. 공통 코드 조회 (BUS_TYPE)
+                try {
+                    const codeRes = await request('/common/codes/BUS_TYPE');
+                    if (codeRes?.success && Array.isArray(codeRes.data)) {
+                        setBusTypes(codeRes.data);
+                    }
+                } catch (e) {
+                    console.error('Failed to fetch bus types:', e);
+                }
+
+                // 2. 기사 프로필 정보 조회 (헤더용)
+                try {
+                    const profRes = await getDriverProfile();
+                    if (profRes.success && profRes.data) {
+                        setUserProfileImg(profRes.data.driver?.profileImg || '');
+                    }
+                } catch (e) {
+                    console.error('Fetch driver profile error:', e);
+                }
+
+                // 3. 버스 정보 조회
+                try {
+                    const res = await getBusProfile();
+                    if (res.success && res.data) {
+                        const bus = res.data;
+                        const savedAmenities = typeof bus.amenities === 'string' ? JSON.parse(bus.amenities) : (bus.amenities || {});
+                        
+                        // 데이터 스키마가 단순 객체 형태인 경우를 기본으로 하되, 
+                        // 이전 버전(list 래퍼가 있는 경우)도 호환되도록 처리
+                        let amenityObj = formData.amenities;
+                        if (savedAmenities && typeof savedAmenities === 'object') {
+                            if (savedAmenities.list && typeof savedAmenities.list === 'object' && !Array.isArray(savedAmenities.list)) {
+                                amenityObj = { ...formData.amenities, ...savedAmenities.list };
+                            } else if (!Array.isArray(savedAmenities)) {
+                                amenityObj = { ...formData.amenities, ...savedAmenities };
+                            }
+                        }
+
+                        setFormData({
+                            vehicleNo: bus.vehicleNo || '',
+                            modelNm: bus.modelNm || '',
+                            manufactureYear: bus.manufactureYear || '',
+                            serviceClass: bus.serviceClass || '',
+                            amenities: amenityObj,
+                            hasAdas: bus.hasAdas || 'N',
+                            lastInspectDt: bus.lastInspectDt || '',
+                            insuranceExpDt: bus.insuranceExpDt || '',
+                            insuranceType: savedAmenities.insuranceType || 'comprehensive'
+                        });
+                        setPreviews({
+                            bizRegImg: bus.bizRegImg || '',
+                            transLicImg: bus.transLicImg || '',
+                            insCertImg: bus.insCertImg || '',
+                            vehiclePhotos: bus.vehiclePhotos || []
+                        });
+                    }
+                } catch (err) {
+                    console.error('Fetch bus profile error:', err);
+                }
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchInitialData();
+    }, []);
+
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleAmenityChange = (key) => {
+        setFormData(prev => ({
+            ...prev,
+            amenities: {
+                ...prev.amenities,
+                [key]: !prev.amenities[key]
+            }
+        }));
+    };
+
+    const handleFileChange = (e, key) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setPreviews(prev => ({ ...prev, [key + 'Img']: reader.result }));
+            setFiles(prev => ({ ...prev, [key + 'File']: file }));
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleMultiFileChange = (e) => {
+        const newFiles = Array.from(e.target.files);
+        if (newFiles.length === 0) return;
+
+        const updatedFiles = [...files.vehiclePhotos, ...newFiles].slice(-9);
+        setFiles(prev => ({ ...prev, vehiclePhotos: updatedFiles }));
+
+        const promises = updatedFiles.map(file => {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.readAsDataURL(file);
+            });
+        });
+
+        Promise.all(promises).then(results => {
+            setPreviews(prev => ({ ...prev, vehiclePhotos: results }));
+        });
+    };
+
+    const handleSubmit = async () => {
+        if (!formData.vehicleNo || !formData.modelNm) {
+            notify.error('입력 오류', '차량 번호와 모델명은 필수 입력 사항입니다.');
+            return;
+        }
+
+        const today = new Date().toISOString().split('T')[0];
+        if (formData.insuranceExpDt && formData.insuranceExpDt < today) {
+            notify.error('입력 오류', '보험 만료일은 오늘 이후 날짜여야 합니다.');
+            return;
+        }
+        if (formData.lastInspectDt && formData.lastInspectDt < today) {
+            notify.error('입력 오류', '차량 정기검사 유효기간은 오늘 이후 날짜여야 합니다.');
+            return;
+        }
+
+        // 필수 서류 체크 (기존 previews에 이미지가 있거나 새로 선택한 파일이 있어야 함)
+        if (!files.bizRegFile && !previews.bizRegImg) {
+            notify.error('입력 오류', '사업자 등록증은 필수 입력 사항입니다.');
+            return;
+        }
+        if (!files.transLicFile && !previews.transLicImg) {
+            notify.error('입력 오류', '운송 허가증은 필수 입력 사항입니다.');
+            return;
+        }
+        if (!files.insCertFile && !previews.insCertImg) {
+            notify.error('입력 오류', '보험 증명서는 필수 입력 사항입니다.');
+            return;
+        }
+
+        try {
+            setSubmitting(true);
+            const data = new FormData();
+            
+            data.append('vehicleNo', formData.vehicleNo);
+            data.append('modelNm', formData.modelNm);
+            data.append('manufactureYear', formData.manufactureYear);
+            data.append('serviceClass', formData.serviceClass);
+            data.append('hasAdas', formData.hasAdas);
+            data.append('lastInspectDt', formData.lastInspectDt);
+            data.append('insuranceExpDt', formData.insuranceExpDt);
+
+            // 요청에 따라 'list' 래퍼와 'insuranceType'을 제외한 순수 편의시설 객체만 전송
+            data.append('amenities', JSON.stringify(formData.amenities));
+
+            if (files.bizRegFile) data.append('bizRegFile', files.bizRegFile);
+            if (files.transLicFile) data.append('transLicFile', files.transLicFile);
+            if (files.insCertFile) data.append('insCertFile', files.insCertFile);
+            
+            files.vehiclePhotos.forEach(file => {
+                data.append('vehiclePhotos', file);
+            });
+
+            const res = await updateBusProfile(data);
+            if (res.success) {
+                notify.success('저장 완료', '버스 정보가 안전하게 저장되었습니다.');
+                setTimeout(() => navigate('/driver-dashboard'), 2000);
+            }
+        } catch (err) {
+            notify.error('저장 실패', err.message);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    if (loading) return (
+        <div className="min-h-screen flex items-center justify-center bg-[#f7f9fb]">
+            <div className="w-12 h-12 border-4 border-[#004e47] border-t-transparent rounded-full animate-spin"></div>
+        </div>
+    );
 
     return (
-        <div className="bg-background text-on-surface min-h-[100dvh] pb-48 font-body text-left">
+        <div className="bg-[#f7f9fb] text-[#191c1e] font-body min-h-screen pb-32 text-left">
             {/* TopAppBar */}
-            <header className="fixed top-0 w-full z-50 bg-white/40 backdrop-blur-3xl border-b border-white/20 py-6">
-                <div className="flex justify-between items-center w-full px-6 max-w-7xl mx-auto">
-                    <div className="flex items-center gap-6">
-                        <button onClick={() => navigate(-1)} className="p-3 bg-white rounded-2xl text-teal-800 shadow-xl shadow-teal-900/5 active:scale-95 transition-all">
-                            <span className="material-symbols-outlined text-lg">menu</span>
-                        </button>
-                        <h1 className="font-headline font-black tracking-tighter text-3xl text-teal-900 italic">busTaams</h1>
-                    </div>
-                    <div className="w-12 h-12 rounded-2xl overflow-hidden border-2 border-primary-container shadow-2xl rotate-3">
-                        <img alt="User profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDLNdNQAbua3KeCHG1vsEPgBgwJdOFDE4TX3AGzHm2LvcI_vsinDKaWK-QIJOEo1Yp8n7xvf_-AV9uVqzHt9EIDBaEI0xRjShrShvRSA4zHGTsnTHwvBjBa5tJr4bfXa2BERNWhIolnByegmpLBkh-1SWvciN8vSSoI_q3c0M40vfOgQlQulPSoGj_ZYJcbu3_7W2UIy1lBOn9hHTZz-q2Q6hXHoCfhoKN3liBCS0akSIUvPBTyttaQFDWw7qONE2IUEXUZCBN_m6I" />
+            <header className="bg-transparent text-teal-800 flex justify-between items-center w-full px-6 pt-8 pb-4 max-w-7xl mx-auto">
+                <div className="flex items-center gap-4">
+                    <button onClick={() => navigate(-1)} className="hover:opacity-80 transition-opacity active:scale-95 duration-200">
+                        <span className="material-symbols-outlined text-2xl">menu</span>
+                    </button>
+                    <h1 className="font-headline font-extrabold tracking-tight text-3xl text-[#004e47] tracking-tighter">busTaams</h1>
+                </div>
+                <div className="flex items-center gap-6">
+                    <nav className="hidden md:flex gap-8 items-center text-sm font-bold">
+                        <a className="text-slate-500 hover:text-teal-600 transition-colors" href="#" onClick={(e) => {e.preventDefault(); navigate('/estimate-list-driver')}}>경매</a>
+                        <a className="text-slate-500 hover:text-teal-600 transition-colors" href="#">관심목록</a>
+                        <a className="text-slate-500 hover:text-teal-600 transition-colors" href="#">입찰</a>
+                        <a className="text-teal-600" href="#" onClick={(e) => {e.preventDefault(); navigate('/driver-dashboard')}}>프로필</a>
+                    </nav>
+                    <div className="w-10 h-10 rounded-full bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
+                        {userProfileImg ? (
+                            <img alt="User Profile" src={userProfileImg} className="w-full h-full object-cover" />
+                        ) : (
+                            <span className="material-symbols-outlined text-[#bec9c6]">person</span>
+                        )}
                     </div>
                 </div>
             </header>
 
-            <main className="pt-40 px-6 max-w-7xl mx-auto space-y-20 animate-in fade-in slide-in-from-bottom duration-1000 text-left">
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 text-left">
-                    {/* Left Column: Editorial Header */}
-                    <div className="lg:col-span-4 flex flex-col gap-10 text-left">
-                        <div className="space-y-6 text-left">
-                            <span className="text-secondary font-black tracking-[0.4em] uppercase text-[10px] block px-2 italic">Partner Fleet System</span>
-                            <h2 className="font-headline text-6xl font-black text-primary leading-[0.9] tracking-tighter italic text-left uppercase">Bus<br/>Registry.</h2>
-                            <p className="text-slate-400 text-xl font-bold tracking-tight italic leading-relaxed max-w-sm text-left">
-                                승객에게 최고의 신뢰를 제공하기 위해 차량의 모든 제원과 서류를 꼼꼼히 등록해 주세요.
-                            </p>
-                        </div>
-
-                        <div className="p-8 bg-slate-900 rounded-[3rem] border-l-[12px] border-secondary shadow-2xl shadow-slate-900/20 text-left text-white space-y-4">
-                            <p className="text-[10px] font-black text-secondary uppercase tracking-[0.3em] italic">Protocol Notice</p>
-                            <p className="text-sm font-bold text-slate-300 leading-relaxed italic text-left">
-                                모든 날짜 형식은 <span className="text-white underline underline-offset-4 decoration-secondary/50">YYYY/MM/DD</span> 형식을 준수하십시오. 허위 정보 기재 시 서비스 전용 망 이용이 즉시 제한될 수 있습니다.
-                            </p>
+            <main className="max-w-7xl mx-auto px-6 pt-12 pb-32">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
+                    {/* Left Column */}
+                    <div className="lg:col-span-4 flex flex-col gap-6 text-left">
+                        <span className="text-[#9d4300] font-bold tracking-[0.2em] uppercase text-sm">기사 전용</span>
+                        <h2 className="font-headline text-5xl font-extrabold text-[#004e47] leading-[1.1] tracking-tight">버스 정보 등록</h2>
+                        <p className="text-[#3e4947] text-lg leading-relaxed max-w-sm">
+                            승객에게 최고의 신뢰를 제공하기 위해 차량의 모든 제원과 서류를 꼼꼼히 등록해 주세요.
+                        </p>
+                        <div className="mt-8 p-6 bg-[#f2f4f6] rounded-xl border-l-4 border-[#9d4300]">
+                            <p className="text-sm font-semibold text-[#9d4300] mb-2">필독 안내</p>
+                            <p className="text-sm text-[#3e4947] leading-relaxed">모든 날짜 형식은 <span className="font-bold">YYYY-MM-DD</span> 형식을 지켜주세요. 허위 정보 기재 시 서비스 이용이 제한될 수 있습니다.</p>
                         </div>
                     </div>
 
-                    {/* Right Column: Form Modules */}
-                    <div className="lg:col-span-8 space-y-12 text-left pb-20">
-                        {/* 01: Identification */}
-                        <section className="bg-white/40 backdrop-blur-2xl p-10 md:p-14 rounded-[4rem] shadow-2xl shadow-teal-900/5 border border-white space-y-12 text-left">
-                            <div className="flex items-center justify-between border-b-4 border-slate-50 pb-8 text-left">
-                                <h3 className="font-headline font-black text-3xl text-on-surface flex items-center gap-6 italic text-left">
-                                    <span className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center text-xl not-italic">01</span>
-                                    Registry Entry
-                                </h3>
-                                <span className="text-[9px] font-black uppercase tracking-[0.4em] text-slate-300 italic">Mandatory Area</span>
+                    {/* Right Column */}
+                    <div className="lg:col-span-8 space-y-12">
+                        {/* Section 1 */}
+                        <section className="space-y-6">
+                            <div className="flex items-baseline justify-between border-b border-[#bec9c6] pb-4">
+                                <h3 className="font-headline text-2xl font-bold text-[#191c1e]">01. 기본 정보 및 차량 등록</h3>
+                                <span className="text-[#6e7977] text-xs font-bold uppercase tracking-widest">필수 입력</span>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 text-left">
-                                <div className="space-y-4 text-left text-[10px] font-black uppercase tracking-[0.4em] text-slate-300">
-                                    <label className="ml-4">Terminal Plate No.</label>
-                                    <input className="w-full bg-white border-4 border-slate-50 rounded-[2.5rem] px-8 py-6 text-on-surface font-black text-lg focus:border-primary transition-all outline-none shadow-sm" placeholder="서울 70 사 1234" />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2 text-left">
+                                    <label className="block text-xs font-extrabold text-[#004e47] uppercase tracking-wider ml-1">차량 번호</label>
+                                    <input name="vehicleNo" value={formData.vehicleNo} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-[#00685f] text-[#191c1e] font-medium placeholder:text-[#6e7977]/50" placeholder="예: 서울 70 사 1234" />
                                 </div>
-                                <div className="space-y-4 text-left text-[10px] font-black uppercase tracking-[0.4em] text-slate-300">
-                                    <label className="ml-4">Chassis Model</label>
-                                    <input className="w-full bg-white border-4 border-slate-50 rounded-[2.5rem] px-8 py-6 text-on-surface font-black text-lg focus:border-primary transition-all outline-none shadow-sm" placeholder="현대 유니버스, 기아 그랜버드" />
+                                <div className="space-y-2 text-left">
+                                    <label className="block text-xs font-extrabold text-[#004e47] uppercase tracking-wider ml-1">섀시 모델명</label>
+                                    <input name="modelNm" value={formData.modelNm} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-[#00685f] text-[#191c1e] font-medium placeholder:text-[#6e7977]/50" placeholder="예: 현대 유니버스, 기아 그랜버드" />
                                 </div>
-                                <div className="space-y-4 text-left text-[10px] font-black uppercase tracking-[0.4em] text-slate-300">
-                                    <label className="ml-4">Production Year</label>
-                                    <input className="w-full bg-white border-4 border-slate-50 rounded-[2.5rem] px-8 py-6 text-on-surface font-black text-lg focus:border-primary transition-all outline-none shadow-sm" placeholder="2023" type="number" />
+                                <div className="space-y-2 text-left">
+                                    <label className="block text-xs font-extrabold text-[#004e47] uppercase tracking-wider ml-1">제작 연도 (Year)</label>
+                                    <input name="manufactureYear" value={formData.manufactureYear} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-[#00685f] text-[#191c1e] font-medium placeholder:text-[#6e7977]/50" placeholder="예: 2023" type="number" />
                                 </div>
                             </div>
                         </section>
 
-                        {/* 02: Grade Grid */}
-                        <section className="bg-white/40 backdrop-blur-2xl p-10 md:p-14 rounded-[4rem] shadow-2xl shadow-teal-900/5 border border-white space-y-12 text-left">
-                            <div className="flex items-center justify-between border-b-4 border-slate-50 pb-8 text-left">
-                                <h3 className="font-headline font-black text-3xl text-on-surface flex items-center gap-6 italic text-left">
-                                    <span className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center text-xl not-italic">02</span>
-                                    Grade Selection
-                                </h3>
-                                <span className="text-[9px] font-black uppercase tracking-[0.4em] text-slate-300 italic">Configuration</span>
-                            </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-left">
-                                {busGrades.map((grade, i) => (
-                                    <label key={i} className="relative group cursor-pointer text-left">
-                                        <input className="hidden peer" name="bus_grade" type="radio" value={grade.value} />
-                                        <div className="p-6 rounded-[2.5rem] bg-white border-4 border-slate-50 peer-checked:border-secondary peer-checked:bg-secondary/5 transition-all text-center flex flex-col items-center justify-center gap-2 group-hover:scale-105">
-                                            <span className="text-[10px] font-black text-slate-400 peer-checked:text-secondary uppercase tracking-widest leading-tight">{grade.label}</span>
-                                        </div>
-                                    </label>
-                                ))}
+                        {/* Section 2 */}
+                        <section className="space-y-8 bg-white p-8 rounded-[2rem] shadow-[0_40px_60px_-15px_rgba(0,104,95,0.08)]">
+                            <div className="flex items-baseline justify-between text-left">
+                                <h3 className="font-headline text-2xl font-bold text-[#191c1e]">02. 서비스 등급 및 유형</h3>
+                                <span className="text-[#6e7977] text-xs font-bold uppercase tracking-widest">운행 정보</span>
                             </div>
                             <div className="space-y-4 text-left">
-                                <label className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-300 ml-4 italic">Mission Type</label>
-                                <select className="w-full bg-white border-4 border-slate-50 rounded-[2.5rem] px-8 py-6 text-on-surface font-black text-lg focus:border-primary transition-all outline-none shadow-sm appearance-none cursor-pointer italic italic">
-                                    <option value="">Choose Protocol</option>
-                                    <option value="sightseeing">관광/전세 (Sightseeing)</option>
-                                    <option value="business">비즈니스 (Enterprise)</option>
-                                    <option value="shuttle">셔틀/통근 (Commute)</option>
-                                </select>
+                                <label className="block text-xs font-extrabold text-[#004e47] uppercase tracking-wider ml-1">버스 종류 및 등급</label>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    {busTypes.map((type) => (
+                                        <label key={type.code} className={`relative flex flex-col items-center justify-center p-4 rounded-xl border-2 cursor-pointer transition-all ${formData.serviceClass === type.code ? 'border-[#9d4300] bg-[#9d4300]/5' : 'border-[#e6e8ea]'}`}>
+                                            <input className="hidden" name="serviceClass" type="radio" value={type.code} checked={formData.serviceClass === type.code} onChange={handleInputChange} />
+                                            <span className={`text-sm font-bold text-center ${formData.serviceClass === type.code ? 'text-[#9d4300]' : 'text-[#3e4947]'}`}>{type.name}</span>
+                                        </label>
+                                    ))}
+                                </div>
                             </div>
-                            <div className="space-y-6 text-left pt-6">
-                                <label className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-300 ml-4 italic">Visual Archive (Max 9 Units)</label>
-                                <div className="grid grid-cols-3 md:grid-cols-5 gap-6 text-left">
-                                    <div className="aspect-square bg-slate-900 rounded-[2rem] border-4 border-dashed border-slate-700 flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-all text-white group shadow-2xl">
-                                        <span className="material-symbols-outlined text-3xl group-hover:rotate-12 transition-all">add_a_photo</span>
-                                        <span className="text-[8px] font-black uppercase tracking-widest mt-2">Initialize</span>
+                            <div className="space-y-4 text-left">
+                                <div className="flex items-center justify-between">
+                                    <label className="block text-xs font-extrabold text-[#004e47] uppercase tracking-wider ml-1">차량 사진 (내/외부 포함 최대 9장)</label>
+                                    <span className="text-[10px] text-[#6e7977] font-bold">{previews.vehiclePhotos.length} / 9</span>
+                                </div>
+                                <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
+                                    <div onClick={() => photosInputRef.current.click()} className="aspect-square bg-[#e6e8ea] rounded-xl border-2 border-dashed border-[#bec9c6] flex flex-col items-center justify-center cursor-pointer hover:border-[#004e47] transition-colors">
+                                        <span className="material-symbols-outlined text-2xl text-[#6e7977]">add_a_photo</span>
                                     </div>
-                                    {[1, 2, 3, 4].map(i => (
-                                        <div key={i} className="aspect-square bg-slate-50 rounded-[2rem] border-4 border-white flex items-center justify-center opacity-20">
-                                            <span className="material-symbols-outlined text-slate-400">image</span>
+                                    <input type="file" ref={photosInputRef} className="hidden" multiple onChange={handleMultiFileChange} accept="image/*" />
+                                    {previews.vehiclePhotos.map((url, i) => (
+                                        <div key={i} className="aspect-square bg-[#eceef0]/30 rounded-xl border border-[#bec9c6]/30 overflow-hidden">
+                                            <img src={url} className="w-full h-full object-cover" />
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         </section>
 
-                        {/* 04: Amenities Ledger */}
-                        <section className="bg-slate-900 rounded-[4rem] p-10 md:p-14 shadow-2xl shadow-slate-900/40 space-y-12 text-left">
-                            <div className="flex items-center justify-between border-b-4 border-white/5 pb-8 text-left">
-                                <h4 className="font-headline font-black text-3xl text-white italic uppercase tracking-tighter text-left">Amenity Options</h4>
-                                <span className="text-[9px] font-black uppercase tracking-[0.4em] text-slate-600 italic">Intelligence</span>
+                        {/* Section 3 */}
+                        <section className="space-y-8 bg-white p-8 rounded-[2rem] shadow-[0_40px_60px_-15px_rgba(0,104,95,0.08)]">
+                            <div className="flex items-baseline justify-between text-left">
+                                <h3 className="font-headline text-2xl font-bold text-[#191c1e]">03. 편의 시설 및 옵션</h3>
+                                <span className="text-[#6e7977] text-xs font-bold uppercase tracking-widest">추가 옵션</span>
                             </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-left">
-                                {amenities.map((item, i) => (
-                                    <label key={i} className="group cursor-pointer text-left">
-                                        <input className="hidden peer" type="checkbox" />
-                                        <div className="p-8 rounded-[3rem] bg-white/5 border-4 border-transparent peer-checked:border-primary peer-checked:bg-primary/10 transition-all flex flex-col items-center justify-center gap-4 group-hover:bg-white/10 text-center">
-                                            <span className="material-symbols-outlined text-slate-700 peer-checked:text-primary transition-all text-3xl">{item.icon}</span>
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 peer-checked:text-primary">{item.label}</span>
-                                        </div>
+                            <div className="space-y-4 text-left">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                                    {[
+                                        { id: 'Table', label: '테이블', icon: 'table_restaurant' },
+                                        { id: 'Wi-Fi', label: '와이파이', icon: 'wifi' },
+                                        { id: 'USB-CHARGE', label: 'USB 충전', icon: 'usb' },
+                                        { id: 'Refrigerator', label: '냉장고', icon: 'kitchen' },
+                                        { id: 'Individual-Screen', label: '개인 모니터', icon: 'monitor' }
+                                    ].map(item => (
+                                        <label key={item.id} className={`flex flex-col items-center justify-center p-4 rounded-2xl cursor-pointer transition-colors group ${formData.amenities[item.id] ? 'bg-[#a1f1e5] text-[#004e47]' : 'bg-[#e6e8ea] text-[#6e7977]'}`}>
+                                            <input className="hidden" type="checkbox" checked={formData.amenities[item.id]} onChange={() => handleAmenityChange(item.id)} />
+                                            <span className="material-symbols-outlined text-2xl transition-colors">{item.icon}</span>
+                                            <span className="text-[10px] font-bold uppercase mt-2 transition-colors text-center">{item.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="space-y-4 text-left pt-6 border-t border-[#bec9c6]/30">
+                                <p className="text-[10px] font-extrabold text-[#6e7977] uppercase tracking-[0.2em] ml-1">안전 장치</p>
+                                <div className="grid grid-cols-1 gap-4">
+                                    <label className={`flex items-center gap-4 p-4 rounded-2xl cursor-pointer transition-colors group ${formData.hasAdas === 'Y' ? 'bg-[#a1f1e5]' : 'bg-[#e6e8ea]'}`}>
+                                        <input className="w-5 h-5 rounded border-[#bec9c6] text-[#004e47] focus:ring-[#004e47]" type="checkbox" checked={formData.hasAdas === 'Y'} onChange={(e) => setFormData(prev => ({ ...prev, hasAdas: e.target.checked ? 'Y' : 'N' }))} />
+                                        <span className={`text-xs font-bold ${formData.hasAdas === 'Y' ? 'text-[#004e47]' : 'text-[#3e4947]'}`}>AEBS (자동 비상 제동 장치) 장착</span>
                                     </label>
-                                ))}
+                                </div>
                             </div>
                         </section>
 
-                        {/* 06: Legal Grid */}
-                        <section className="bg-white/40 backdrop-blur-2xl p-10 md:p-14 rounded-[4rem] shadow-2xl shadow-teal-900/5 border border-white space-y-12 text-left">
-                            <div className="flex items-center justify-between border-b-4 border-slate-50 pb-8 text-left">
-                                <h3 className="font-headline font-black text-3xl text-on-surface flex items-center gap-6 italic text-left uppercase">Document Base</h3>
-                                <span className="text-[9px] font-black uppercase tracking-[0.4em] text-slate-300 italic">Validation</span>
+                        {/* Section 4 */}
+                        <section className="space-y-6 text-left">
+                            <div className="flex items-baseline justify-between border-b border-[#bec9c6] pb-4">
+                                <h3 className="font-headline text-2xl font-bold text-[#191c1e]">04. 보험 및 자격 검증</h3>
+                                <span className="text-[#6e7977] text-xs font-bold uppercase tracking-widest">보험/검사</span>
                             </div>
-                            <div className="space-y-6 text-left">
-                                {[
-                                    { title: '사업자 등록증', desc: 'Valid Business ID Card', color: 'bg-tertiary-fixed', icon: 'badge' },
-                                    { title: '운송 허가증', desc: 'Transport Permit Protocol', color: 'bg-secondary-fixed', icon: 'local_shipping' },
-                                    { title: '보험 증명서', desc: 'Insurance Ledger Grid', color: 'bg-primary-fixed', icon: 'verified_user' }
-                                ].map((doc, i) => (
-                                    <div key={i} className="bg-slate-50 p-2 rounded-[3rem] text-left hover:scale-[1.02] transition-all">
-                                        <div className="bg-white rounded-[2.5rem] p-8 flex flex-col md:flex-row items-center gap-10 text-left">
-                                            <div className={`w-20 h-20 rounded-[1.5rem] ${doc.color} flex items-center justify-center text-on-surface shrink-0 shadow-inner`}>
-                                                <span className="material-symbols-outlined text-4xl">{doc.icon}</span>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                                <div className="space-y-2">
+                                    <label className="block text-xs font-extrabold text-[#004e47] uppercase tracking-wider ml-1">보험 가입 현황</label>
+                                    <select name="insuranceType" value={formData.insuranceType} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-[#00685f] text-[#191c1e] font-medium">
+                                        <option value="comprehensive">종합보험 (유상운송 특약 포함)</option>
+                                        <option value="liability">책임보험</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="block text-xs font-extrabold text-[#004e47] uppercase tracking-wider ml-1">보험 만료일</label>
+                                    <input name="insuranceExpDt" value={formData.insuranceExpDt} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-[#00685f] text-[#191c1e] font-medium" type="date" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="block text-xs font-extrabold text-[#004e47] uppercase tracking-wider ml-1">차량 정기검사 유효기간</label>
+                                    <input name="lastInspectDt" value={formData.lastInspectDt} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-[#00685f] text-[#191c1e] font-medium" type="date" />
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Section 5 */}
+                        <section className="space-y-6 text-left">
+                            <div className="flex items-baseline justify-between border-b border-[#bec9c6] pb-4">
+                                <h3 className="font-headline text-2xl font-bold text-[#191c1e]">05. 법적 증빙 서류 업로드 <span className="text-red-500">*</span></h3>
+                                <span className="text-[#6e7977] text-xs font-bold uppercase tracking-widest">필수 증빙 서류</span>
+                            </div>
+                            <div className="space-y-4">
+                                {
+                                    [
+                                        { key: 'bizReg', title: '사업자 등록증', desc: '유효한 사업자 등록증의 PDF 또는 고화질 사진을 업로드해 주세요.', color: 'bg-[#ffdbcf]', icon: 'badge', ref: bizRegInputRef },
+                                        { key: 'transLic', title: '운송 허가증', desc: '유효한 운송 허가증의 PDF 또는 고화질 사진을 업로드해 주세요.', color: 'bg-[#ffdbca]', icon: 'local_shipping', ref: transLicInputRef },
+                                        { key: 'insCert', title: '보험 증명서 (책임/종합보험)', desc: '유효한 보험 가입 증명서의 PDF 또는 고화질 사진을 업로드해 주세요.', color: 'bg-[#a1f1e5]', icon: 'verified_user', ref: insCertInputRef }
+                                    ].map((doc) => (
+                                        <div key={doc.key} className="bg-[#e6e8ea] rounded-3xl p-1">
+                                            <div className="bg-white rounded-[1.4rem] p-6 flex flex-col md:flex-row items-center gap-6">
+                                                <div className={`w-16 h-16 rounded-2xl ${doc.color} flex items-center justify-center shrink-0 overflow-hidden`}>
+                                                    {previews[doc.key + 'Img'] ? <img src={previews[doc.key + 'Img']} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-3xl">{doc.icon}</span>}
+                                                </div>
+                                                <div className="flex-1 text-center md:text-left">
+                                                    <h4 className="font-bold text-[#191c1e]">{doc.title} <span className="text-red-500">*</span></h4>
+                                                    <p className="text-sm text-[#6e7977] mt-1">{doc.desc}</p>
+                                                </div>
+                                                <button onClick={() => doc.ref.current.click()} className="w-full md:w-auto px-6 py-3 rounded-full bg-[#eceef0] text-[#004e47] font-bold text-sm hover:bg-[#004e47] hover:text-white transition-colors">
+                                                    파일 추가
+                                                </button>
+                                                <input type="file" ref={doc.ref} className="hidden" onChange={e => handleFileChange(e, doc.key)} accept="image/*" />
                                             </div>
-                                            <div className="flex-1 text-center md:text-left space-y-1 text-left">
-                                                <h4 className="font-black text-xl text-on-surface italic leading-none">{doc.title}</h4>
-                                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-300">{doc.desc}</p>
-                                            </div>
-                                            <button className="w-full md:w-auto px-12 py-5 rounded-full bg-slate-50 text-primary font-black text-[9px] uppercase tracking-[0.4em] hover:bg-primary hover:text-white transition-all shadow-xl">
-                                                Inject File
-                                            </button>
                                         </div>
-                                    </div>
-                                ))}
+                                    ))
+                                }
                             </div>
                         </section>
 
-                        {/* Footer Action */}
-                        <div className="flex flex-col md:flex-row items-center justify-end gap-8 pt-10 border-t-4 border-slate-50 text-left">
-                            <button className="px-12 py-8 rounded-full bg-slate-50 text-slate-400 font-black font-headline text-xl italic uppercase tracking-[0.2em] transition-all hover:bg-slate-100">
-                                Save Cache
-                            </button>
-                            <button className="w-full md:w-auto px-20 py-8 rounded-full bg-gradient-to-br from-primary to-primary-container text-white font-black font-headline text-xl italic uppercase tracking-[0.2em] shadow-2xl shadow-primary/30 hover:shadow-primary/50 active:scale-95 transition-all duration-500">
-                                Confirm Registry
+                        {/* Action Button */}
+                        <div className="pt-8 flex flex-col sm:flex-row justify-end gap-4">
+                            <button onClick={handleSubmit} disabled={submitting} className="w-full px-10 py-5 bg-gradient-to-br from-[#004e47] to-[#00685f] text-white rounded-full font-headline font-bold text-lg shadow-xl shadow-[#004e47]/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50">
+                                {submitting ? '등록 중...' : '등록 완료'}
                             </button>
                         </div>
                     </div>
                 </div>
             </main>
 
-            {/* Bottom Nav */}
-            <nav className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 flex justify-around items-center px-4 py-2 bg-slate-900 text-slate-500 w-[90%] max-w-lg mx-auto rounded-full shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] border border-white/10">
-                <button onClick={() => navigate('/driver-dashboard')} className="flex flex-col items-center justify-center px-5 py-2 hover:text-white transition-all">
-                    <span className="material-symbols-outlined">dashboard</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1">Home</span>
-                </button>
-                <button onClick={() => navigate('/estimate-list-driver')} className="flex flex-col items-center justify-center px-5 py-2 hover:text-white transition-all">
-                    <span className="material-symbols-outlined">gavel</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1">Auction</span>
-                </button>
-                <button onClick={() => navigate('/bus-info')} className="flex flex-col items-center justify-center px-5 py-2 text-primary relative">
-                    <div className="absolute inset-0 bg-primary/5 rounded-2xl blur-lg"></div>
-                    <span className="material-symbols-outlined relative z-10" style={{fontVariationSettings: "'FILL' 1"}}>directions_bus</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1 relative z-10 underline decoration-2 underline-offset-4">Fleet</span>
-                </button>
-            </nav>
+            <BottomNavDriver />
         </div>
     );
 };

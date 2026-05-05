@@ -90,6 +90,9 @@ const Signup = () => {
     const [authCode, setAuthCode] = useState('');
     const [signature, setSignature] = useState('');
 
+    const [showPassword, setShowPassword] = useState(false);
+    const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
+
     const [isIdChecked, setIsIdChecked] = useState(false);
     const [isEmailChecked, setIsEmailChecked] = useState(false);
     const [isCodeSent, setIsCodeSent] = useState(false);
@@ -291,13 +294,21 @@ const Signup = () => {
                         <div className="space-y-3">
                             <label className="text-xs font-bold text-on-surface ml-1">비밀번호</label>
                             <div className="space-y-1">
-                                <input 
-                                    value={password} 
-                                    onChange={e=>setPassword(e.target.value)} 
-                                    type="password" 
-                                    placeholder="비밀번호(8자 이상, 숫자, 특수문자 포함)" 
-                                    className="w-full bg-slate-100 rounded-xl py-4 px-5 outline-none font-medium focus:bg-slate-200 transition-all" 
-                                />
+                                <div className="relative">
+                                    <input 
+                                        value={password} 
+                                        onChange={e=>setPassword(e.target.value)} 
+                                        type={showPassword ? "text" : "password"} 
+                                        placeholder="비밀번호(8자 이상, 숫자, 특수문자 포함)" 
+                                        className="w-full bg-slate-100 rounded-xl py-4 px-5 pr-12 outline-none font-medium focus:bg-slate-200 transition-all" 
+                                    />
+                                    <span 
+                                        className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline cursor-pointer hover:text-primary"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                    >
+                                        {showPassword ? 'visibility_off' : 'visibility'}
+                                    </span>
+                                </div>
                                 {password && (
                                     <p className={`text-[10px] ml-1 font-bold ${validatePassword(password) ? 'text-green-600' : 'text-red-500'}`}>
                                         {validatePassword(password) ? '✔ 사용 가능한 비밀번호입니다.' : '✘ 8자 이상, 영문, 숫자, 특수문자를 포함해야 합니다.'}
@@ -306,13 +317,21 @@ const Signup = () => {
                             </div>
                             
                             <div className="space-y-1">
-                                <input 
-                                    value={passwordConfirm} 
-                                    onChange={e=>setPasswordConfirm(e.target.value)} 
-                                    type="password" 
-                                    placeholder="비밀번호를 다시 한번 입력하세요" 
-                                    className="w-full bg-slate-100 rounded-xl py-4 px-5 outline-none font-medium focus:bg-slate-200 transition-all" 
-                                />
+                                <div className="relative">
+                                    <input 
+                                        value={passwordConfirm} 
+                                        onChange={e=>setPasswordConfirm(e.target.value)} 
+                                        type={showPasswordConfirm ? "text" : "password"} 
+                                        placeholder="비밀번호를 다시 한번 입력하세요" 
+                                        className="w-full bg-slate-100 rounded-xl py-4 px-5 pr-12 outline-none font-medium focus:bg-slate-200 transition-all" 
+                                    />
+                                    <span 
+                                        className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline cursor-pointer hover:text-primary"
+                                        onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
+                                    >
+                                        {showPasswordConfirm ? 'visibility_off' : 'visibility'}
+                                    </span>
+                                </div>
                                 {passwordConfirm && (
                                     <p className={`text-[10px] ml-1 font-bold ${password === passwordConfirm ? 'text-green-600' : 'text-red-500'}`}>
                                         {password === passwordConfirm ? '✔ 비밀번호가 일치합니다.' : '✘ 비밀번호가 일치하지 않습니다.'}

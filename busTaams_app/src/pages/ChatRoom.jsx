@@ -1,135 +1,225 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import api from '../api';
+import { notify } from '../utils/toast';
+import BottomNavCustomer from '../components/BottomNavCustomer';
 
+/**
+ * busTaams Talk - 실시간 채팅 화면
+ * 기사와 여행자 간의 소통을 담당
+ */
 const ChatRoom = () => {
     const navigate = useNavigate();
+    const { id } = useParams(); // resId 혹은 chatSeq
     const [message, setMessage] = useState('');
+    const [chatRoom, setChatRoom] = useState(null);
+    const [history, setHistory] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [currentUser, setCurrentUser] = useState(null);
+    const scrollRef = useRef(null);
+
+    // 사용자 정보 로드
+    useEffect(() => {
+        const user = JSON.parse(localStorage.getItem('user'));
+        setCurrentUser(user);
+    }, []);
+
+    // 채팅방 정보 및 내역 로드
+    useEffect(() => {
+        const fetchRoomData = async () => {
+            try {
+                // 1. 채팅방 정보 가져오기 (resId 기준)
+                const roomRes = await api.get(`/app/chat/room/${id}`);
+                if (roomRes.success) {
+                    setChatRoom(roomRes.data);
+                    
+                    // 2. 초기 내역 가져오기
+                    const histRes = await api.get(`/app/chat/history/${roomRes.data.chatSeq}`);
+                    if (histRes.success) {
+                        setHistory(histRes.data);
+                    }
+                } else {
+                    notify.error('오류', '채팅방을 불러올 수 없습니다.');
+                }
+            } catch (err) {
+                console.error('Chat init error:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchRoomData();
+    }, [id]);
+
+    // 폴링 (3초마다 내역 갱신)
+    useEffect(() => {
+        if (!chatRoom) return;
+
+        const interval = setInterval(async () => {
+            try {
+                const histRes = await api.get(`/app/chat/history/${chatRoom.chatSeq}`);
+                if (histRes.success) {
+                    // 메시지 개수가 다를 때만 업데이트 (간단한 동기화)
+                    if (histRes.data.length !== history.length) {
+                        setHistory(histRes.data);
+                    }
+                }
+            } catch (err) {
+                console.error('Polling error:', err);
+            }
+        }, 3000);
+
+        return () => clearInterval(interval);
+    }, [chatRoom, history.length]);
+
+    // 스크롤 하단 이동
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+    }, [history]);
+
+    // 메시지 전송
+    const handleSendMessage = async () => {
+        if (!message.trim() || !chatRoom) return;
+
+        const originalMsg = message;
+        setMessage(''); // 즉시 비우기 (UX)
+
+        try {
+            const res = await api.post('/app/chat/send', {
+                chatSeq: chatRoom.chatSeq,
+                msgBody: originalMsg,
+                msgKind: 'TEXT'
+            });
+
+            if (res.success) {
+                // 내역 즉시 갱신
+                const histRes = await api.get(`/app/chat/history/${chatRoom.chatSeq}`);
+                if (histRes.success) {
+                    setHistory(histRes.data);
+                }
+            } else {
+                notify.error('전송 실패', '메시지를 보낼 수 없습니다.');
+                setMessage(originalMsg); // 복구
+            }
+        } catch (err) {
+            notify.error('오류', '메시지 전송 중 오류가 발생했습니다.');
+            setMessage(originalMsg);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="bg-[#F8F9FA] min-h-screen flex items-center justify-center">
+                <div className="animate-pulse text-[#004D40] font-black">busTaams Talk 연결 중...</div>
+            </div>
+        );
+    }
 
     return (
-        <div className="bg-background text-on-surface min-h-screen flex flex-col font-body text-left overflow-hidden">
-            {/* TopAppBar Shell */}
-            <header className="fixed top-0 left-0 right-0 z-50 bg-white/60 backdrop-blur-3xl border-b border-white/50">
-                <div className="flex justify-between items-center w-full px-6 py-4 max-w-7xl mx-auto">
+        <div className="bg-[#F8F9FA] text-[#1D3557] min-h-screen flex flex-col font-body overflow-hidden">
+            {/* 상단 헤더 */}
+            <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
+                <div className="flex justify-between items-center px-6 py-4 max-w-2xl mx-auto w-full">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => navigate(-1)} className="w-10 h-10 flex items-center justify-center bg-white rounded-2xl text-primary shadow-sm active:scale-90 transition-all">
-                            <span className="material-symbols-outlined">arrow_back</span>
+                        <button onClick={() => navigate(-1)} className="text-[#004D40]">
+                            <span className="material-symbols-outlined text-2xl">arrow_back</span>
                         </button>
                         <div className="flex flex-col">
-                            <span className="font-headline font-black tracking-tighter text-xl text-teal-800 italic">busTaams Talk</span>
-                            <span className="text-[9px] uppercase tracking-[0.3em] font-black text-secondary">Real-time Support</span>
+                            <h2 className="font-black text-lg text-[#004D40] tracking-tighter italic">busTaams Talk</h2>
+                            <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">실시간 채팅 지원</span>
                         </div>
                     </div>
-                    {/* Glassmorphic Driver Profile Header */}
-                    <div className="flex items-center gap-4 bg-white/80 backdrop-blur-xl pl-2 pr-6 py-2 rounded-full shadow-2xl shadow-teal-900/5 ring-1 ring-white/50">
-                        <div className="relative w-10 h-10 shadow-lg rounded-full">
-                            <img className="w-full h-full rounded-full object-cover border-2 border-white" alt="Partner" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC1DcaELpugvDEaa2s88SbvxYHUuWaS8Mc7J-wANTo6T702nkqMfMJcr4r4DozYsBAWxssGGTXVkB-3A-iT6V2o_IY-4FsDqd3fw0ymz2eDfak8jk7eGiRNpkyZixCUpuPahfqYs_OUR2vh6kBQcGf94eInbikl4oxA7xN8lW9Cd6tpDBF_JWdPjBckP-paeHnP70RdNxeZ_VEP-qKg3WGeRFAMTzOLjME9LxIjmiInyFJAXH9LBmKm36OFOkPO4xU0_2I9mQPnO8k"/>
-                            <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-teal-500 border-2 border-white rounded-full pulse shadow-sm"></div>
+
+                    {/* 상대방 프로필 (마커스 반스 예시 스타일 적용) */}
+                    <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-full shadow-sm border border-gray-50">
+                        <div className="relative w-8 h-8 rounded-full overflow-hidden border border-gray-100">
+                            {chatRoom?.otherUser?.USER_IMAGE ? (
+                                <img 
+                                    src={chatRoom.otherUser.USER_IMAGE.startsWith('http') ? 
+                                        chatRoom.otherUser.USER_IMAGE : 
+                                        `${import.meta.env.VITE_API_BASE_URL || ''}${chatRoom.otherUser.USER_IMAGE}`} 
+                                    alt="Other" 
+                                    className="w-full h-full object-cover"
+                                />
+                            ) : (
+                                <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400">
+                                    <span className="material-symbols-outlined text-xl">person</span>
+                                </div>
+                            )}
+                            <div className="absolute bottom-0 right-0 w-2 h-2 bg-teal-500 rounded-full border border-white"></div>
                         </div>
                         <div className="flex flex-col">
-                            <span className="font-black text-xs text-on-surface leading-tight tracking-tight">마커스 반스</span>
-                            <span className="text-[9px] text-teal-600 font-black uppercase tracking-widest opacity-60">Logistics Expert</span>
+                            <span className="text-[11px] font-black leading-none">{chatRoom?.otherUser?.USER_NM || '사용자'}</span>
+                            <span className="text-[9px] text-gray-400 font-bold">{chatRoom?.otherUser?.PART_TYPE === 'TRAVELER' ? '여행자' : '파트너'}</span>
                         </div>
                     </div>
                 </div>
             </header>
 
-            {/* Main Chat Canvas */}
-            <main className="flex-1 pt-32 px-6 max-w-3xl mx-auto w-full overflow-y-auto space-y-10 pb-64 no-scrollbar">
-                {/* Date Indicator */}
-                <div className="flex justify-center">
-                    <span className="px-5 py-2 bg-white/50 backdrop-blur-md text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] rounded-full border border-white/50 shadow-sm">Today</span>
+            {/* 메시지 영역 */}
+            <main 
+                ref={scrollRef}
+                className="flex-1 pt-24 px-6 pb-40 overflow-y-auto space-y-6 no-scrollbar max-w-2xl mx-auto w-full"
+            >
+                <div className="flex justify-center mb-8">
+                    <span className="px-4 py-1.5 bg-gray-100 text-gray-400 text-[10px] font-bold rounded-full">오늘</span>
                 </div>
 
-                {/* Receiver Bubble */}
-                <div className="flex flex-col gap-3 items-start max-w-[85%] animate-in fade-in slide-in-from-left duration-700">
-                    <div className="bg-white text-on-surface p-6 rounded-[2rem] rounded-tl-none shadow-2xl shadow-teal-900/[0.03] border border-slate-50 relative">
-                        <p className="text-[15px] leading-relaxed font-medium opacity-80 italic">"안녕하세요! 2022년형 볼보 9700 모델에 관심이 있으시군요. 입찰 시작 전에 확인하고 싶으신 특별한 정비 기록이 있으신가요?"</p>
-                    </div>
-                    <span className="text-[9px] font-black text-slate-300 ml-4 uppercase tracking-widest">09:12 AM</span>
-                </div>
-
-                {/* Sender Bubble */}
-                <div className="flex flex-col gap-3 items-end ml-auto max-w-[85%] animate-in fade-in slide-in-from-right duration-700">
-                    <div className="bg-gradient-to-br from-primary to-teal-800 text-white p-6 rounded-[2rem] rounded-tr-none shadow-2xl shadow-primary/20 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
-                        <p className="text-[15px] leading-relaxed font-bold relative z-10">네, 마커스 님. 변속기 점검 이력과 마지막 타이어 교체 시기를 확인하고 싶습니다. 장거리 운송 차량 확충 계획이 있어서요.</p>
-                    </div>
-                    <div className="flex items-center gap-2 mr-4">
-                        <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">09:15 AM</span>
-                        <span className="material-symbols-outlined text-[14px] text-primary" style={{fontVariationSettings: "'FILL' 1"}}>done_all</span>
-                    </div>
-                </div>
-
-                {/* Receiver Bubble + Attachment */}
-                <div className="flex flex-col gap-3 items-start max-w-[85%] animate-in fade-in slide-in-from-left duration-1000">
-                    <div className="bg-white text-on-surface p-6 rounded-[2rem] rounded-tl-none shadow-2xl shadow-teal-900/[0.03] border border-slate-50">
-                        <p className="text-[15px] leading-relaxed font-medium opacity-80 opacity-80 italic">"확인했습니다. 8821번 차량의 디지털 정비 로그를 첨부해 드립니다. 변속기는 약 24,000km 전에 전체 오버홀을 마친 최상급 상태입니다."</p>
-                    </div>
-                    {/* File Attachment */}
-                    <div className="bg-white border border-slate-100 p-4 rounded-3xl flex items-center gap-5 w-full cursor-pointer hover:bg-slate-50 transition-all shadow-lg shadow-teal-900/5 group">
-                        <div className="w-12 h-12 bg-primary/5 rounded-2xl flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-                            <span className="material-symbols-outlined text-2xl">description</span>
+                {history.map((msg, idx) => {
+                    // 내가 보낸 메시지인지 확인
+                    const isMe = msg.SENDER_CUST_ID === currentUser?.custId;
+                    
+                    return (
+                        <div key={idx} className={`flex flex-col gap-2 ${isMe ? 'items-end' : 'items-start'}`}>
+                            <div className={`max-w-[85%] p-4 rounded-2xl shadow-sm ${
+                                isMe 
+                                ? 'bg-[#004D40] text-white rounded-tr-none' 
+                                : 'bg-white text-[#1D3557] rounded-tl-none border border-gray-50'
+                            }`}>
+                                <p className="text-[14px] leading-relaxed font-medium">{msg.MSG_BODY}</p>
+                            </div>
+                            <div className={`flex items-center gap-2 ${isMe ? 'mr-1' : 'ml-1'}`}>
+                                <span className="text-[9px] font-bold text-gray-300 uppercase">
+                                    {msg.regDt.split(' ')[1].substring(0, 5)}
+                                </span>
+                                {isMe && (
+                                    <span className="material-symbols-outlined text-[12px] text-[#004D40]" style={{fontVariationSettings: "'FILL' 1"}}>done_all</span>
+                                )}
+                            </div>
                         </div>
-                        <div className="flex-1 overflow-hidden">
-                            <h4 className="text-xs font-black truncate text-on-surface uppercase tracking-tight">Volvo_9700_Service_Log.pdf</h4>
-                            <p className="text-[9px] text-slate-300 font-black uppercase tracking-widest mt-1">2.4 MB • PDF Document</p>
-                        </div>
-                        <button className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:text-primary transition-colors">
-                            <span className="material-symbols-outlined text-[20px]">download</span>
-                        </button>
-                    </div>
-                    <span className="text-[9px] font-black text-slate-300 ml-4 uppercase tracking-widest">09:18 AM</span>
-                </div>
-
-                {/* Sender Bubble */}
-                <div className="flex flex-col gap-3 items-end ml-auto max-w-[85%] animate-in fade-in slide-in-from-right duration-1000">
-                    <div className="bg-gradient-to-br from-primary to-teal-800 text-white p-6 rounded-[2rem] rounded-tr-none shadow-2xl shadow-primary/20 relative overflow-hidden group">
-                        <p className="text-[15px] leading-relaxed font-bold">좋은 소식이네요. 경매 입찰 준비가 된 것 같습니다. 현재 예상 최저 낙찰가는 어느 정도인가요?</p>
-                    </div>
-                    <span className="text-[9px] font-black text-slate-300 mr-4 uppercase tracking-widest">09:20 AM</span>
-                </div>
+                    );
+                })}
             </main>
 
-            {/* Interaction Footer */}
-            <div className="fixed bottom-0 left-0 right-0 z-50">
-                <div className="max-w-3xl mx-auto px-6 mb-28">
-                    <div className="bg-white/90 backdrop-blur-3xl p-3 rounded-[2.5rem] shadow-[0_50px_100px_-20px_rgba(0,78,71,0.15)] flex items-center gap-4 border border-white ring-1 ring-teal-900/5">
-                        <button className="w-12 h-12 flex items-center justify-center text-slate-300 hover:text-primary hover:bg-primary/5 rounded-2xl transition-all active:scale-90">
+            {/* 입력 영역 */}
+            <div className="fixed bottom-24 left-0 right-0 bg-gradient-to-t from-[#F8F9FA]/80 via-[#F8F9FA]/40 to-transparent z-40">
+                <div className="max-w-2xl mx-auto px-6 py-4">
+                    <div className="bg-white p-2 rounded-[2rem] shadow-xl border border-gray-100 flex items-center gap-2">
+                        <button className="w-10 h-10 flex items-center justify-center text-gray-300 hover:text-[#004D40] transition-colors">
                             <span className="material-symbols-outlined text-2xl">add_circle</span>
                         </button>
                         <input 
-                            className="flex-1 bg-transparent border-none focus:ring-0 text-[15px] font-bold text-on-surface placeholder:text-slate-200 py-3" 
-                            placeholder="Type your message..." 
+                            className="flex-1 bg-transparent border-none focus:ring-0 text-[14px] font-bold text-[#1D3557] placeholder:text-gray-200 py-2" 
+                            placeholder="메시지를 입력하세요..." 
                             type="text"
                             value={message}
                             onChange={(e) => setMessage(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                         />
-                        <button className="bg-gradient-to-br from-primary to-teal-800 text-white w-12 h-12 flex items-center justify-center rounded-2xl shadow-xl shadow-primary/30 active:scale-95 hover:rotate-12 transition-all">
-                            <span className="material-symbols-outlined text-2xl" style={{fontVariationSettings: "'FILL' 1"}}>send</span>
+                        <button 
+                            onClick={handleSendMessage}
+                            disabled={!message.trim()}
+                            className="bg-[#004D40] text-white w-10 h-10 flex items-center justify-center rounded-full shadow-lg active:scale-90 transition-all disabled:opacity-30"
+                        >
+                            <span className="material-symbols-outlined text-xl" style={{fontVariationSettings: "'FILL' 1"}}>send</span>
                         </button>
                     </div>
                 </div>
-
-                {/* Premium Bottom Nav */}
-                <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex justify-around items-center px-4 py-2 bg-slate-900 text-white w-[90%] max-w-md mx-auto rounded-full shadow-2xl shadow-teal-900/40">
-                    <button onClick={() => navigate('/customer-dashboard')} className="flex flex-col items-center justify-center text-slate-500 px-5 py-2 hover:text-white transition-all">
-                        <span className="material-symbols-outlined">gavel</span>
-                        <span className="font-black text-[9px] uppercase tracking-widest mt-1">Auction</span>
-                    </button>
-                    <button className="flex flex-col items-center justify-center px-5 py-2 text-white relative">
-                        <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1"}}>chat_bubble</span>
-                        <span className="font-black text-[9px] uppercase tracking-widest mt-1 underline decoration-2 underline-offset-4">Talk</span>
-                        <div className="absolute top-2 right-4 w-2 h-2 bg-red-500 rounded-full ring-2 ring-slate-900"></div>
-                    </button>
-                    <button onClick={() => navigate('/reservation-list')} className="flex flex-col items-center justify-center text-slate-500 px-5 py-2 hover:text-white transition-all">
-                        <span className="material-symbols-outlined">directions_bus</span>
-                        <span className="font-black text-[9px] uppercase tracking-widest mt-1">Trips</span>
-                    </button>
-                    <button onClick={() => navigate('/profile-customer')} className="flex flex-col items-center justify-center bg-white/20 text-white rounded-full w-12 h-12 shadow-lg active:scale-90 transition-all">
-                        <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1"}}>person</span>
-                    </button>
-                </nav>
             </div>
+
+            <BottomNavCustomer />
         </div>
     );
 };

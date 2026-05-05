@@ -235,7 +235,7 @@ const ProfileCustomer = () => {
                     </div>
                     <div className="space-y-1">
                         <h2 className="text-3xl font-extrabold tracking-tight text-on-surface">
-                            {userData.name} <span className="text-primary text-base font-medium ml-2">{userData.userType === 'CUSTOMER' ? 'Premium Member' : 'Driver Partner'}</span>
+                            {userData.name} <span className="text-primary text-base font-medium ml-2">{userData.userType === 'TRAVELER' ? 'Premium Member' : 'Driver Partner'}</span>
                         </h2>
                         <p className="text-on-surface-variant font-medium">{userData.userId}</p>
                     </div>

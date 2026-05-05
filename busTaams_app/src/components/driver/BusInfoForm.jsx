@@ -39,7 +39,7 @@ const BusInfoForm = ({ onNext }) => {
       try {
         const response = await fetch('http://127.0.0.1:8080/api/app/driver/bus/detail', {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
           }
         });
         const result = await response.json();
@@ -77,7 +77,7 @@ const BusInfoForm = ({ onNext }) => {
     try {
       const res = await fetch('http://127.0.0.1:8080/api/upload', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
         body: fd
       });
       const data = await res.json();
@@ -122,7 +122,7 @@ const BusInfoForm = ({ onNext }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
         },
         body: JSON.stringify(formData)
       });

@@ -2,18 +2,28 @@ const { pool } = require('./db');
 
 async function debug() {
     try {
-        console.log('--- TB_SMS_LOG Structure ---');
-        const [rows] = await pool.execute("DESCRIBE TB_SMS_LOG");
-        console.table(rows);
-        
-        console.log('--- Checking DB Connectivity ---');
-        const [test] = await pool.execute("SELECT 1");
-        console.log('DB Connected:', test);
+        const [users] = await pool.execute('SELECT CUST_ID, USER_ID FROM TB_USER WHERE USER_ID = "ch070809"');
+        console.log('User:', users);
+
+        const [reqs] = await pool.execute('SELECT REQ_ID, TRAVELER_ID FROM TB_AUCTION_REQ');
+        console.log('Requests:', reqs);
+
+        if (users.length > 0 && reqs.length > 0) {
+            const userId = users[0].USER_ID;
+            const custId = users[0].CUST_ID;
+            const reqId = reqs[0].REQ_ID;
+            
+            const [rows] = await pool.execute(
+                'SELECT * FROM TB_AUCTION_REQ WHERE REQ_ID = ? AND TRAVELER_ID = ?',
+                [reqId, custId]
+            );
+            console.log(`Match for REQ_ID ${reqId} and CUST_ID ${custId}:`, rows.length > 0 ? 'YES' : 'NO');
+        }
 
     } catch (err) {
-        console.error('Debug Error:', err);
+        console.error(err);
     } finally {
-        await pool.end();
+        process.exit(0);
     }
 }
 
