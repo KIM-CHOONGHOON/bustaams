@@ -19,6 +19,8 @@ const SignupPage = ({ onBack }) => {
   const [hasSignature, setHasSignature] = useState(false);
   const [timer, setTimer] = useState(0);
   const [isSmsLoading, setIsSmsLoading] = useState(false);
+  const [profilePhoto, setProfilePhoto] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
 
   // Error states
   const [idError, setIdError] = useState('');
@@ -153,6 +155,22 @@ const SignupPage = ({ onBack }) => {
     }
   };
 
+  const handlePhotoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        alert('사진 크기는 2MB 이하여야 합니다.');
+        return;
+      }
+      setProfilePhoto(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSignatureClear = () => {
     if (sigCanvas.current) { sigCanvas.current.clear(); setHasSignature(false); }
   };
@@ -176,6 +194,7 @@ const SignupPage = ({ onBack }) => {
     if (password !== passwordConfirm) { setPasswordConfirmError('비밀번호가 일치하지 않습니다.'); valid = false; }
     else setPasswordConfirmError('');
     if (!isPhoneVerified) { setPhoneError('휴대폰 인증을 완료해주세요.'); valid = false; }
+    if (userRole === 'driver' && !photoPreview) { setFormError('기사님 프로필 사진을 등록해 주세요.'); valid = false; }
     if (!hasSignature) { setFormError('전자 서명을 해주세요.'); valid = false; }
     if (!agreements.term1 || !agreements.term2) { setFormError('필수 약관에 동의해주세요.'); valid = false; }
     if (!valid) return;
@@ -202,6 +221,8 @@ const SignupPage = ({ onBack }) => {
           userType: userRole === 'driver' ? 'DRIVER' : userRole === 'salesperson' ? 'SALESPERSON' : 'TRAVELER',
           agreedTerms,
           signatureBase64,
+          photoBase64: photoPreview,
+          photoName: profilePhoto?.name || 'profile.png',
           recomCode
         })
       });
@@ -339,17 +360,50 @@ const SignupPage = ({ onBack }) => {
                 </div>
               </div>
 
-              {/* 추천인 코드 (버스기사 전용) */}
+              {/* 추천인 코드 + 프로필 사진 (버스기사 전용) */}
               {userRole === 'driver' && (
-                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                  <label style={labelStyle}>추천인 아이디 (선택)</label>
-                  <input
-                    type="text"
-                    value={recomCode}
-                    onChange={e => setRecomCode(e.target.value)}
-                    placeholder="추천인 아이디를 입력해주세요"
-                    style={inputStyle}
-                  />
+                <div className="animate-in fade-in slide-in-from-top-2 duration-300 flex flex-col gap-6">
+                  {/* 프로필 사진 업로드 */}
+                  <div>
+                    <label style={labelStyle}>프로필 사진 (필수)</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', background: '#fff', padding: '1.25rem', borderRadius: '1rem', border: '1px solid rgba(0,78,71,0.1)' }}>
+                      <div style={{ position: 'relative', width: '80px', height: '80px', borderRadius: '50%', background: '#eceef0', overflow: 'hidden', border: '3px solid #fff', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                        {photoPreview ? (
+                          <img src={photoPreview} alt="Preview" style={{ width: '100%', height: '100%', objectCover: 'cover' }} />
+                        ) : (
+                          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bec9c6' }}>
+                            <svg width="32" height="32" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: '0.85rem', fontWeight: 600, color: '#191c1e', marginBottom: '0.25rem' }}>전문적인 인상을 주는 사진을 권장합니다.</p>
+                        <p style={{ fontSize: '0.75rem', color: '#6e7977', marginBottom: '0.75rem' }}>JPG, PNG (최대 2MB)</p>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handlePhotoChange}
+                          id="photo-upload"
+                          style={{ display: 'none' }}
+                        />
+                        <label htmlFor="photo-upload" style={{ ...outlineButtonStyle, padding: '0.6rem 1rem', display: 'inline-block', cursor: 'pointer' }}>
+                          사진 선택하기
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 추천인 아이디 */}
+                  <div>
+                    <label style={labelStyle}>추천인 아이디 (선택)</label>
+                    <input
+                      type="text"
+                      value={recomCode}
+                      onChange={e => setRecomCode(e.target.value)}
+                      placeholder="추천인 아이디를 입력해주세요"
+                      style={inputStyle}
+                    />
+                  </div>
                 </div>
               )}
             </div>

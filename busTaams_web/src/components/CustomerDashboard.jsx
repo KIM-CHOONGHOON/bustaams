@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import DetailBusRequestModal from './DetailBusRequestModal';
 import TripHistoryModal from './ReservationList/TripHistoryModal';
+import ReviewManageModal from './ReservationList/ReviewManageModal';
 
 const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onViewReservationList, onViewConfirmedList, onOpenLiveChat, refreshTrigger }) => {
   const [recentRequests, setRecentRequests] = useState([]);
   const [selectedRequestId, setSelectedRequestId] = useState(null);
   const [showTripHistory, setShowTripHistory] = useState(false);
+  const [showReviewManage, setShowReviewManage] = useState(false);
 
   useEffect(() => {
     if (user && user.custId) {
@@ -112,7 +114,7 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
               { id: 'onViewReservationList', icon: 'event_available', label: '예약 목록 조회',     action: onViewReservationList },
               { id: 'onViewConfirmedList',   icon: 'task_alt',         label: '확정 예약 목록',     action: onViewConfirmedList },
               { id: 'onShowTripHistory',     icon: 'history',          label: '이용 내역 확인',     action: () => setShowTripHistory(true) },
-              { id: 'onReviewManage',        icon: 'rate_review',      label: '리뷰 관리',          action: null },
+              { id: 'onReviewManage',        icon: 'rate_review',      label: '리뷰 관리',          action: () => setShowReviewManage(true) },
               { id: 'onOpenLiveChat',        icon: 'forum',            label: '실시간 채팅',        action: onOpenLiveChat },
             ].map((srv) => (
               <div 
@@ -304,6 +306,13 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
         <TripHistoryModal 
           user={user}
           onClose={() => setShowTripHistory(false)} 
+        />
+      )}
+
+      {showReviewManage && (
+        <ReviewManageModal 
+          user={user}
+          onClose={() => setShowReviewManage(false)} 
         />
       )}
     </div>

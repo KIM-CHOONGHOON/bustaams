@@ -445,9 +445,22 @@ app.post('/api/auth/register', async (req, res) => {
     try {
         const {
             userId, email, password, userName, phoneNo, userType,
-            firebaseIdToken, mktAgreeYn, signatureBase64, agreedTerms,
+            firebaseIdToken, mktAgreeYn, signatureBase64, photoBase64, photoName, agreedTerms,
             recomCode
         } = req.body;
+
+        // [DEBUG LOG] 데이터 수신 확인
+        const fs = require('fs');
+        const debugInfo = `
+[${new Date().toISOString()}] Register Request
+- userId: ${userId}
+- userType: ${userType}
+- hasPhoto: ${!!photoBase64}
+- photoLength: ${photoBase64 ? photoBase64.length : 0}
+- photoPreviewPrefix: ${photoBase64 ? photoBase64.substring(0, 50) : 'none'}
+- hasSignature: ${!!signatureBase64}
+`;
+        fs.appendFileSync('d:/project_bustaams/busTaams_server/scratch/register_debug.log', debugInfo);
 
         if (!userId || !password || !userName || !phoneNo || !signatureBase64 || !agreedTerms || !userType) {
             return res.status(400).json({ error: '필수 항목이 누락되었습니다.' });
@@ -476,9 +489,11 @@ app.post('/api/auth/register', async (req, res) => {
             const [maxUserRows] = await connection.execute('SELECT MAX(CUST_ID) as maxId FROM TB_USER');
             const nextCustId = generateNextNumericId(maxUserRows[0].maxId || '0', 10);
 
-            // 3-2. [ID 생성] 20자리 숫자 ID (FILE_ID for Signature)
+            // 3-2. [ID 생성] 20자리 숫자 ID (FILE_ID for Signature & Profile)
             const [maxFileRows] = await connection.execute("SELECT MAX(FILE_ID) as maxFileId FROM TB_FILE_MASTER WHERE FILE_ID REGEXP '^[0-9]+$'");
-            const nextFileId = generateNextNumericId(maxFileRows[0].maxFileId || '0', 20);
+            const baseFileId = maxFileRows[0].maxFileId || '0';
+            const nextFileId = generateNextNumericId(baseFileId, 20);
+            const nextProfileFileId = generateNextNumericId(nextFileId, 20); // 서명 ID 다음 번호
 
             // UserType Mapping
             let mappedUserType = 'TRAVELER';
@@ -490,10 +505,11 @@ app.post('/api/auth/register', async (req, res) => {
             const userQuery = `
                 INSERT INTO TB_USER (
                     CUST_ID, USER_ID, EMAIL, PASSWORD, USER_NM, HP_NO, SNS_TYPE, 
-                    SMS_AUTH_YN, USER_TYPE, RECOM_CODE, SIGNATURE_FILE_ID,
+                    SMS_AUTH_YN, USER_TYPE, RECOM_CODE, SIGNATURE_FILE_ID, PROFILE_FILE_ID,
                     JOIN_DT, USER_STAT, MOD_DT, MOD_ID
-                ) VALUES (?, ?, ?, ?, ?, ?, 'NONE', 'Y', ?, ?, ?, NOW(), 'ACTIVE', NOW(), ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, 'NONE', 'Y', ?, ?, ?, ?, NOW(), 'ACTIVE', NOW(), ?)
             `;
+
             await connection.execute(userQuery, [
                 nextCustId, 
                 userId, 
@@ -504,6 +520,7 @@ app.post('/api/auth/register', async (req, res) => {
                 mappedUserType, 
                 mappedUserType === 'DRIVER' ? recomCode : null,
                 nextFileId,
+                (mappedUserType === 'DRIVER' && photoBase64) ? nextProfileFileId : null,
                 nextCustId
             ]);
 
@@ -521,8 +538,8 @@ app.post('/api/auth/register', async (req, res) => {
             const buffer = Buffer.from(base64Data, 'base64');
             const fileNameWithoutExt = nextFileId; // 파일ID명을 파일명으로 사용
             const fileExt = 'png';
-            const fileName = `${fileNameWithoutExt}.${fileExt}`;
-            const gcsPathForDB = `https://storage.googleapis.com/${bucketName}/signatures/${nextFileId}`;
+            const fileName = `${nextFileId}.${fileExt}`;
+            const gcsPathForDB = `https://storage.googleapis.com/${bucketName}/signatures/${fileName}`;
             const actualGcsPath = `signatures/${fileName}`;
             const gcsFile = bucket.file(actualGcsPath);
             
@@ -530,13 +547,35 @@ app.post('/api/auth/register', async (req, res) => {
             await gcsFile.save(buffer, { metadata: { contentType: 'image/png' }, resumable: false });
             uploadedFiles.push(gcsFile);
 
-            // [DB] TB_FILE_MASTER INSERT
+            // [DB] TB_FILE_MASTER INSERT (Signature)
             await connection.execute(`
                 INSERT INTO TB_FILE_MASTER (
                     FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, 
                     ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT, REG_ID, MOD_DT, MOD_ID
                 ) VALUES (?, 'SIGNATURE', ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)
             `, [nextFileId, bucketName, gcsPathForDB, fileNameWithoutExt, fileExt, buffer.length, nextCustId, nextCustId]);
+
+            // 4-1. 프로필 사진 이미지 처리 (GCS & TB_FILE_MASTER) - 기사 전용
+            if (mappedUserType === 'DRIVER' && photoBase64) {
+                const photoData = photoBase64.replace(/^data:image\/\w+;base64,/, "");
+                const photoBuffer = Buffer.from(photoData, 'base64');
+                const photoExt = photoBase64.match(/data:image\/(\w+);base64/)?.[1] || 'png';
+                const photoFileName = `${nextProfileFileId}.${photoExt}`;
+                const bucketName = process.env.GCS_BUCKET_NAME || 'bustaams-secure-data';
+                const photoGcsPathForDB = `https://storage.googleapis.com/${bucketName}/profiles/${photoFileName}`;
+                const photoActualGcsPath = `profiles/${photoFileName}`;
+                const photoGcsFile = bucket.file(photoActualGcsPath);
+
+                await photoGcsFile.save(photoBuffer, { metadata: { contentType: `image/${photoExt}` }, resumable: false });
+                uploadedFiles.push(photoGcsFile);
+
+                await connection.execute(`
+                    INSERT INTO TB_FILE_MASTER (
+                        FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, 
+                        ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT, REG_ID, MOD_DT, MOD_ID
+                    ) VALUES (?, 'PROFILE', ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)
+                `, [nextProfileFileId, bucketName, photoGcsPathForDB, photoName || photoFileName, photoExt, photoBuffer.length, nextCustId, nextCustId]);
+            }
 
             // 5. 약관 동의 이력 저장 (TB_USER_TERMS_HIST)
             const termsMapping = {
@@ -666,8 +705,8 @@ app.post(['/api/auth/login', '/api/users/login'], async (req, res) => {
 // 사용자 통합 정보 수정 API (이메일, 휴대폰, 비밀번호)
 app.put('/api/user/profile', async (req, res) => {
     try {
-        const { custId, email, phoneNo, currentPassword, newPassword } = req.body;
-        console.log(`\n[STEP 1] Update Request Received: CUST_ID=${custId}`);
+        const { custId, email, phoneNo, currentPassword, newPassword, photoBase64, photoName } = req.body;
+        console.log(`\n[STEP 1] Update Request Received: CUST_ID=${custId}, hasPhoto=${!!photoBase64}`);
 
         if (!custId || !currentPassword) {
             console.log('[STEP 2] Validation Failed: Missing custId or currentPassword');
@@ -690,49 +729,90 @@ app.put('/api/user/profile', async (req, res) => {
         const user = userRows[0];
         console.log(`[STEP 5] Comparing Password for ${user.USER_NM}...`);
         const isMatch = await bcrypt.compare(currentPassword, user.PASSWORD);
-        if (!isMatch && currentPassword !== user.PASSWORD) {
+        if (!isMatch) {
             console.log('[STEP 6] Password Mismatch');
             return res.status(401).json({ error: '비밀번호가 일치하지 않습니다.' });
         }
 
-        // 2. 동적 쿼리 생성
-        console.log('[STEP 7] Building Dynamic Query...');
-        const updateParts = [];
-        const params = [];
+        const connection = await pool.getConnection();
+        await connection.beginTransaction();
 
-        if (email !== undefined) { updateParts.push('EMAIL = ?'); params.push(email); }
-        if (phoneNo !== undefined) { updateParts.push('HP_NO = ?'); params.push(phoneNo); }
+        try {
+            let newProfileFileId = user.PROFILE_FILE_ID;
 
-        if (newPassword && String(newPassword).trim() !== '') {
-            console.log('[STEP 8] Hashing New Password...');
-            const hashedPassword = await bcrypt.hash(newPassword, 10);
-            updateParts.push('PASSWORD = ?');
-            params.push(hashedPassword);
+            // [STEP 6.1] 신규 프로필 사진 처리
+            if (photoBase64) {
+                const [maxFileRows] = await connection.execute("SELECT MAX(FILE_ID) as maxFileId FROM TB_FILE_MASTER WHERE FILE_ID REGEXP '^[0-9]+$'");
+                const nextFileId = generateNextNumericId(maxFileRows[0].maxFileId || '0', 20);
+                newProfileFileId = nextFileId;
+
+                const photoData = photoBase64.replace(/^data:image\/\w+;base64,/, "");
+                const photoBuffer = Buffer.from(photoData, 'base64');
+                const photoExt = photoBase64.match(/data:image\/(\w+);base64/)?.[1] || 'png';
+                const photoFileName = `${nextFileId}.${photoExt}`;
+                const bucketName = process.env.GCS_BUCKET_NAME || 'bustaams-secure-data';
+                const photoGcsPathForDB = `https://storage.googleapis.com/${bucketName}/profiles/${photoFileName}`;
+                const photoActualGcsPath = `profiles/${photoFileName}`;
+                
+                const photoGcsFile = bucket.file(photoActualGcsPath);
+                await photoGcsFile.save(photoBuffer, { metadata: { contentType: `image/${photoExt}` }, resumable: false });
+
+                await connection.execute(`
+                    INSERT INTO TB_FILE_MASTER (
+                        FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, 
+                        ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT, REG_ID, MOD_DT, MOD_ID
+                    ) VALUES (?, 'PROFILE', ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)
+                `, [nextFileId, bucketName, photoGcsPathForDB, photoName || photoFileName, photoExt, photoBuffer.length, custId, custId]);
+            }
+
+            // 2. 동적 쿼리 생성
+            console.log('[STEP 7] Building Dynamic Query...');
+            const updateParts = [];
+            const params = [];
+
+            if (email !== undefined) { updateParts.push('EMAIL = ?'); params.push(email); }
+            if (phoneNo !== undefined) { updateParts.push('HP_NO = ?'); params.push(phoneNo.replace(/-/g, '')); }
+
+            if (newPassword && String(newPassword).trim() !== '') {
+                console.log('[STEP 8] Hashing New Password...');
+                const hashedPassword = await bcrypt.hash(newPassword, 10);
+                updateParts.push('PASSWORD = ?');
+                params.push(hashedPassword);
+            }
+
+            if (photoBase64) {
+                updateParts.push('PROFILE_FILE_ID = ?');
+                params.push(newProfileFileId);
+            }
+
+            if (updateParts.length > 0) {
+                updateParts.push('MOD_DT = NOW()');
+                updateParts.push('MOD_ID = ?');
+                params.push(custId);
+
+                const sql = `UPDATE TB_USER SET ${updateParts.join(', ')} WHERE CUST_ID = ? OR USER_ID = ?`;
+                params.push(custId, custId);
+
+                console.log('[STEP 9] Executing Update...');
+                await connection.execute(sql, params);
+            }
+
+            await connection.commit();
+            console.log('[STEP 10] Update Success');
+            res.status(200).json({ 
+                message: '회원 정보가 성공적으로 수정되었습니다.',
+                profileFileId: newProfileFileId 
+            });
+
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
         }
-
-        updateParts.push('MOD_DT = NOW()');
-        updateParts.push('MOD_ID = ?');
-        params.push(custId || user.CUST_ID);
-
-        const query = `UPDATE TB_USER SET ${updateParts.join(', ')} WHERE CUST_ID = ?`;
-        params.push(user.CUST_ID);
-
-        console.log('[STEP 9] Executing Update Query...');
-        const [result] = await pool.execute(query, params);
-        console.log(`[STEP 10] Update Success: affectedRows=${result.affectedRows}`);
-
-        res.status(200).json({ message: '성공적으로 처리되었습니다.' });
     } catch (error) {
-        const errorDetail = `
-[${new Date().toISOString()}] Update Profile Error:
-Message: ${error.message}
-Stack: ${error.stack}
-Payload: ${JSON.stringify(req.body)}
---------------------------------------------------
-`;
-        fs.appendFileSync(path.join(__dirname, 'server_error.log'), errorDetail);
-        console.error('[DEBUG] Update Profile Error (logged to file):', error.message);
-        res.status(500).json({ error: '정보 업데이트 중 서버 오류가 발생했습니다.', details: error.message });
+        console.error('❌ [UPDATE_ERROR]', error);
+        res.status(500).json({ error: '정보 수정 중 서버 오류가 발생했습니다.', details: error.message });
     }
 });
 
@@ -1022,6 +1102,65 @@ app.get('/api/driver/profile-photo', async (req, res) => {
             .pipe(res);
     } catch (error) {
         console.error('GET driver profile-photo error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// [신규] 사용자 프로필 이미지 조회 API (CUST_ID 제약 없이 FILE_ID로만 조회 - 범용)
+app.get('/api/user/profile-image', async (req, res) => {
+    try {
+        const { fileId } = req.query;
+        if (!fileId) return res.status(400).json({ error: 'fileId is required' });
+
+        const [fRows] = await pool.execute(
+            `SELECT GCS_PATH, ORG_FILE_NM, FILE_EXT FROM TB_FILE_MASTER WHERE FILE_ID = ?`,
+            [fileId]
+        );
+        if (!fRows.length) return res.status(404).json({ error: '파일을 찾을 수 없습니다.' });
+        const { GCS_PATH, ORG_FILE_NM, FILE_EXT } = fRows[0];
+        let bucketName = process.env.GCS_BUCKET_NAME || 'bustaams-secure-data';
+        let relativePath = GCS_PATH;
+
+        if (GCS_PATH && GCS_PATH.startsWith('http')) {
+            const urlParts = GCS_PATH.split('/');
+            // urlParts[3]가 버킷명
+            if (urlParts[3]) bucketName = urlParts[3];
+            relativePath = urlParts.slice(4).join('/');
+        }
+        const bucket = storage.bucket(bucketName);
+
+        console.log(`\n[PHOTO_DEBUG] FileID: ${fileId}`);
+        console.log(`[PHOTO_DEBUG] Original GCS_PATH: ${GCS_PATH}`);
+        console.log(`[PHOTO_DEBUG] Extracted RelativePath: ${relativePath}`);
+        console.log(`[PHOTO_DEBUG] Bucket: ${bucketName}`);
+
+        const gcsFile = bucket.file(relativePath);
+        
+        try {
+            const [exists] = await gcsFile.exists();
+            if (!exists) {
+                console.error(`[PHOTO_ERROR] File does not exist in GCS: ${relativePath}`);
+                return res.status(404).json({ error: '스토리지에 파일이 없습니다.' });
+            }
+        } catch (gcsErr) {
+            console.error(`[PHOTO_ERROR] GCS Access Denied or Error: ${gcsErr.message}`);
+            return res.status(403).json({ error: 'GCS 접근 권한이 없거나 오류가 발생했습니다.', detail: gcsErr.message });
+        }
+
+        const ext = (FILE_EXT || 'png').toLowerCase();
+        const ctMap = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' };
+        const ct = ctMap[ext] || 'image/png';
+
+        res.setHeader('Content-Type', ct);
+        res.setHeader('Cache-Control', 'private, max-age=3600');
+        
+        gcsFile.createReadStream()
+            .on('error', (err) => {
+                console.error('[PHOTO_STREAM_ERROR]', err);
+            })
+            .pipe(res);
+    } catch (error) {
+        console.error('GET user profile-image error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -2031,6 +2170,7 @@ app.get('/api/auction/history/:custId', async (req, res) => {
             FROM TB_AUCTION_REQ r
             INNER JOIN TB_AUCTION_REQ_BUS ab ON r.REQ_ID = ab.REQ_ID
             WHERE r.TRAVELER_ID = ?
+              AND r.START_DT >= NOW()
               AND r.DATA_STAT NOT IN ('TRAVELER_CANCEL', 'BUS_CHANGE')
               AND ab.DATA_STAT NOT IN ('BUS_CHANGE', 'TRAVELER_CANCEL', 'BUS_CANCEL')
             ORDER BY r.REG_DT DESC, ab.REQ_BUS_SEQ ASC
@@ -2043,6 +2183,100 @@ app.get('/api/auction/history/:custId', async (req, res) => {
     } catch (error) {
         console.error('Fetch Trip History Error:', error);
         res.status(500).json({ error: '여정 기록 조회 중 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// [신규] 사용자의 전체 이용 내역 조회 (시간 제한 없음 - 이용 내역 모달용)
+app.get('/api/auction/total-history/:custId', async (req, res) => {
+    console.log(`[DEBUG] GET /api/auction/total-history/:custId called with id: [${req.params.custId}]`);
+    let connection;
+    try {
+        const { custId } = req.params;
+        if (!custId) return res.status(400).json({ error: 'custId is required' });
+
+        connection = await pool.getConnection();
+        
+        const query = `
+            SELECT 
+                r.REQ_ID, 
+                r.TRIP_TITLE, r.START_ADDR, r.END_ADDR, r.TRAVELER_ID,
+                r.START_DT, r.END_DT, r.PASSENGER_CNT, r.DATA_STAT, r.REG_DT, r.REQ_AMT,
+                MAX(res.RES_ID) as RES_ID,
+                MAX(res.DRIVER_ID) as DRIVER_ID,
+                COALESCE(MAX(u.USER_NM), '기사 정보 없음') as DRIVER_NAME,
+                MAX(u.USER_IMAGE) as DRIVER_PHOTO,
+                MAX(rv.STAR_RATING) as STAR_RATING,
+                MAX(rv.COMMENT_TEXT) as MY_COMMENT,
+                MAX(rv.REPLY_TEXT) as DRIVER_REPLY,
+                MAX(rv.REG_DT) as REVIEW_REG_DT,
+                MAX(rv.REPLY_DT) as DRIVER_REPLY_DT
+            FROM TB_AUCTION_REQ r
+            LEFT JOIN TB_BUS_RESERVATION res ON TRIM(r.REQ_ID) = TRIM(res.REQ_ID)
+            LEFT JOIN TB_USER u ON TRIM(res.DRIVER_ID) = TRIM(u.CUST_ID)
+            LEFT JOIN TB_TRIP_REVIEW rv ON res.RES_ID = rv.RES_ID
+            WHERE r.TRAVELER_ID = ?
+              AND r.DATA_STAT IN ('DONE', 'TRAVELER_CANCEL', 'DRIVER_CANCEL', 'BUS_CHANGE', 'BUS_CANCEL')
+            GROUP BY r.REQ_ID
+            ORDER BY r.REG_DT DESC
+        `;
+
+        const [rows] = await connection.execute(query, [custId]);
+        if (rows.length > 0) {
+            console.log(`[DEBUG] First history row - DRIVER_ID: [${rows[0].DRIVER_ID}], NAME: [${rows[0].DRIVER_NAME}]`);
+        }
+        if (rows.length > 0) {
+            console.log(`[DEBUG] First history row REQ_AMT: [${rows[0].REQ_AMT}]`);
+        }
+        res.status(200).json(rows);
+
+    } catch (error) {
+        console.error('Fetch Total History Error:', error);
+        res.status(500).json({ error: '전체 여정 기록 조회 중 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// 리뷰 저장 API
+app.post('/api/review/submit', async (req, res) => {
+    let { reqId, resId, driverId, writerId, rating, content, writerType } = req.body;
+    
+    // 데이터가 없는 경우를 대비한 대체 처리 (테스트용)
+    const targetResId = resId || reqId; 
+    const targetDriverId = driverId || 'SYSTEM';
+
+    let connection;
+    try {
+        connection = await pool.getConnection();
+        
+        // 1. 해당 예약(RES_ID)에 대한 다음 리뷰 순번(REVIEW_SEQ) 조회
+        const [seqResult] = await connection.execute(
+            'SELECT COALESCE(MAX(REVIEW_SEQ), 0) + 1 as nextSeq FROM TB_TRIP_REVIEW WHERE RES_ID = ?',
+            [targetResId]
+        );
+        const nextSeq = seqResult[0].nextSeq;
+
+        // 2. 리뷰 저장
+        const query = `
+            INSERT INTO TB_TRIP_REVIEW (
+                RES_ID, REVIEW_SEQ, WRITER_ID, DRIVER_ID, 
+                STAR_RATING, COMMENT_TEXT, 
+                REG_DT, REG_ID, MOD_DT, MOD_ID
+            ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, CURRENT_TIMESTAMP, ?)
+        `;
+
+        await connection.execute(query, [
+            targetResId, nextSeq, writerId, targetDriverId, 
+            rating, content, writerId, writerId
+        ]);
+
+        res.status(200).json({ message: '리뷰가 성공적으로 등록되었습니다.', reviewSeq: nextSeq });
+
+    } catch (error) {
+        console.error('Submit Review Error:', error);
+        res.status(500).json({ error: '리뷰 등록 중 오류가 발생했습니다.' });
     } finally {
         if (connection) connection.release();
     }
@@ -2981,7 +3215,7 @@ app.get('/api/list-of-traveler-quotations', async (req, res) => {
                   FROM TB_BUS_RESERVATION res
                   INNER JOIN TB_AUCTION_REQ ar ON ar.REQ_ID = res.REQ_ID
                  WHERE res.DRIVER_ID = ?
-                   AND res.RES_STAT = 'CONFIRM'
+                   AND res.DATA_STAT = 'CONFIRM'
                    AND DATE(ar.START_DT) = DATE(r.START_DT)
                    AND ar.REQ_ID <> r.REQ_ID
               )`
@@ -3048,7 +3282,7 @@ app.get('/api/auction-list', async (req, res) => {
                 r.REG_DT                         AS regDt,
                 (SELECT BUS_TYPE_CD FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID LIMIT 1) AS busType,
                 (SELECT COUNT(*) FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID) AS busCnt,
-                (SELECT res.RES_STAT
+                (SELECT res.DATA_STAT
                    FROM TB_BUS_RESERVATION res
                   WHERE res.REQ_ID = r.REQ_ID
                     AND res.DRIVER_ID = ?
@@ -3063,7 +3297,7 @@ app.get('/api/auction-list', async (req, res) => {
                       FROM TB_BUS_RESERVATION res2
                       INNER JOIN TB_AUCTION_REQ ar ON ar.REQ_ID = res2.REQ_ID
                      WHERE res2.DRIVER_ID = ?
-                       AND res2.RES_STAT = 'CONFIRM'
+                       AND res2.DATA_STAT = 'CONFIRM'
                        AND DATE(ar.START_DT) = DATE(r.START_DT)
                        AND ar.REQ_ID <> r.REQ_ID
                    )

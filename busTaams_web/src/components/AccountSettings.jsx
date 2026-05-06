@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 const AccountSettings = ({ user, onBack, onLogout, onUpdateUser }) => {
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
   const [userName, setUserName] = useState(user?.userName || '');
   const [email, setEmail] = useState(user?.email || '');
   const [phoneNo, setPhoneNo] = useState(user?.phoneNo || '');
@@ -21,15 +22,19 @@ const AccountSettings = ({ user, onBack, onLogout, onUpdateUser }) => {
   // user 정보가 변경될 때마다 state 동기화
   useEffect(() => {
     if (user) {
-      console.log('[DEBUG] AccountSettings User Prop:', user);
-      setUserName(user.userName || '');
-      setEmail(user.email || '');
-      const phone = user.phoneNo || '';
+      console.log('[DEBUG] AccountSettings User Prop Full:', JSON.stringify(user, null, 2));
+      console.log('[DEBUG] User Keys:', Object.keys(user));
+      setUserName(user.userName || user.USER_NM || '');
+      setEmail(user.email || user.EMAIL || '');
+      const phone = user.phoneNo || user.HP_NO || '';
       setPhoneNo(phone);
       setOriginalPhoneNo(phone);
       setIsPhoneVerified(true);
     }
   }, [user]);
+
+  // 프로필 이미지 ID 추출 (대소문자 및 매핑 호환성)
+  const profileFileId = user?.profileFileId || user?.PROFILE_FILE_ID || null;
 
   // 타이머 관리
   useEffect(() => {
@@ -109,8 +114,25 @@ const AccountSettings = ({ user, onBack, onLogout, onUpdateUser }) => {
     }
   };
 
-  // 모달 상태
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [newPhoto, setNewPhoto] = useState(null);
+  const [newPhotoPreview, setNewPhotoPreview] = useState(null);
+
+  const handlePhotoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        alert('사진 크기는 2MB 이하여야 합니다.');
+        return;
+      }
+      setNewPhoto(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewPhotoPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSave = async () => {
     if (!currentPassword) {
@@ -133,6 +155,8 @@ const AccountSettings = ({ user, onBack, onLogout, onUpdateUser }) => {
           email,
           phoneNo,
           currentPassword, // 정보 수정을 위한 인증용
+          photoBase64: newPhotoPreview, // 신규 추가
+          photoName: newPhoto?.name || 'profile.png'
         }),
       });
 
@@ -145,11 +169,14 @@ const AccountSettings = ({ user, onBack, onLogout, onUpdateUser }) => {
           const updatedUser = {
             ...user,
             email,
-            phoneNo
+            phoneNo,
+            profileFileId: result.profileFileId || profileFileId // 서버에서 돌려받은 신규 ID 반영
           };
           onUpdateUser(updatedUser);
         }
         setCurrentPassword('');
+        setNewPhoto(null);
+        setNewPhotoPreview(null);
       } else {
         alert(result.error || '정보 수정에 실패했습니다.');
       }
@@ -358,14 +385,51 @@ const AccountSettings = ({ user, onBack, onLogout, onUpdateUser }) => {
 
             {/* Right: Security Branding & SNS */}
             <section className="col-span-12 lg:col-span-5 space-y-8">
-              <div className="bg-teal-950 text-white p-8 rounded-[2rem] shadow-xl relative overflow-hidden group min-h-[220px] flex flex-col justify-end">
-                <div className="relative z-10">
-                  <span className="inline-block px-3 py-1 bg-primary text-[10px] font-black uppercase tracking-[0.2em] rounded-full mb-4">Protected</span>
-                  <h4 className="font-headline text-2xl font-bold mb-2">데이터 보안 보장</h4>
-                  <p className="text-white/60 text-sm font-medium leading-relaxed">모든 개인정보는 AES-256 규격으로 안전하게 암호화되어 보호받고 있습니다.</p>
+              {/* Right Side Card: Profile Photo (Driver only) */}
+              {user?.userType === 'DRIVER' ? (
+                <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100 flex flex-col items-center justify-center space-y-6 relative overflow-hidden group min-h-[300px]">
+                  <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-teal-600 to-teal-400"></div>
+                  
+                  {/* Hidden File Input */}
+                  <input 
+                    type="file" 
+                    id="profile-photo-input" 
+                    accept="image/*" 
+                    className="hidden" 
+                    onChange={handlePhotoChange}
+                  />
+
+                  <div className="relative">
+                    <div className="relative w-40 h-40 rounded-full overflow-hidden border-4 border-white shadow-xl ring-4 ring-teal-50">
+                      {newPhotoPreview ? (
+                        <img src={newPhotoPreview} alt="Preview" className="w-full h-full object-cover" />
+                      ) : profileFileId ? (
+                        <img 
+                          src={`${API_BASE}/api/user/profile-image?fileId=${profileFileId}`} 
+                          alt="Profile" 
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-300">
+                          <span className="material-symbols-outlined text-6xl">person</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Edit Button Overlay */}
+                    <button 
+                      onClick={() => document.getElementById('profile-photo-input').click()}
+                      className="absolute bottom-1 right-1 w-10 h-10 bg-teal-600 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-teal-700 transition-all active:scale-90 border-2 border-white"
+                    >
+                      <span className="material-symbols-outlined text-xl">photo_camera</span>
+                    </button>
+                  </div>
+
+                  <div className="text-center">
+                    <h4 className="font-headline text-2xl font-black text-teal-950">{user?.userNm || '기사님'}</h4>
+                  </div>
                 </div>
-                <span className="material-symbols-outlined absolute -top-4 -right-4 text-9xl opacity-5 rotate-12 group-hover:rotate-0 transition-transform duration-700">verified_user</span>
-              </div>
+              ) : null}
 
               <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
                 <h3 className="font-headline text-xl font-bold mb-8 flex items-center gap-3 text-teal-900">

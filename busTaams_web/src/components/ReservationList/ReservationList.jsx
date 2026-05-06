@@ -206,6 +206,13 @@ const ReservationList = ({ user, onBack }) => {
           ) : (
             <div className="grid grid-cols-1 gap-8">
               {Object.values(reservations.reduce((acc, curr) => {
+                // [추가] 시간이 지난 여정은 목록에서 제외
+                const now = new Date();
+                const startDt = new Date(curr.START_DT);
+                if (startDt < now) {
+                  return acc;
+                }
+
                 // 취소된 버스는 목록에서 제외 (BUS_STAT 기준)
                 if (curr.BUS_STAT === 'TRAVELER_CANCEL' || curr.BUS_STAT === 'BUS_CANCEL') {
                   return acc;

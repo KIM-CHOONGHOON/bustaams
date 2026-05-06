@@ -9,7 +9,7 @@ const TripHistoryModal = ({ user, onClose }) => {
     // 모달이 열려있을 때 뒤 배경 스크롤 방지
     document.body.style.overflow = 'hidden';
     
-    if (user && user.userUuid) {
+    if (user && user.custId) {
       fetchHistory();
     }
 
@@ -21,7 +21,7 @@ const TripHistoryModal = ({ user, onClose }) => {
   const fetchHistory = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`http://localhost:8080/api/auction/history/${user.userUuid}`);
+      const response = await fetch(`http://localhost:8080/api/auction/total-history/${user.custId}`);
       if (response.ok) {
         const data = await response.json();
         setHistory(data);
@@ -54,7 +54,8 @@ const TripHistoryModal = ({ user, onClose }) => {
       'COMPLETED': { label: '이용 완료', class: 'bg-blue-100 text-blue-700' },
       'TRAVELER_CANCEL': { label: '취소됨 (고객)', class: 'bg-rose-100 text-rose-700' },
       'DRIVER_CANCEL': { label: '취소됨 (기사)', class: 'bg-rose-100 text-rose-700' },
-      'AUCTION': { label: '견적중', class: 'bg-amber-100 text-amber-700' }
+      'AUCTION': { label: '견적중', class: 'bg-amber-100 text-amber-700' },
+      'DONE': { label: '완료된 건', class: 'bg-slate-100 text-slate-700 font-black' }
     };
     const s = statusMap[status] || { label: status, class: 'bg-slate-100 text-slate-700' };
     return (
@@ -78,10 +79,16 @@ const TripHistoryModal = ({ user, onClose }) => {
     return map[type] || type;
   };
 
-  const filteredHistory = history.filter(item => {
+  const filteredHistory = Object.values(history.reduce((acc, curr) => {
+    if (!acc[curr.REQ_ID]) {
+      acc[curr.REQ_ID] = { ...curr, buses: [] };
+    }
+    acc[curr.REQ_ID].buses.push(curr);
+    return acc;
+  }, {})).filter(item => {
     if (filter === 'ALL') return true;
-    if (filter === 'COMPLETED') return item.DATA_STAT === 'COMPLETED' || item.DATA_STAT === 'CONFIRM';
-    if (filter === 'CANCELED') return item.DATA_STAT === 'TRAVELER_CANCEL' || item.DATA_STAT === 'DRIVER_CANCEL';
+    if (filter === 'COMPLETED') return item.DATA_STAT === 'DONE';
+    if (filter === 'CANCELED') return ['TRAVELER_CANCEL', 'DRIVER_CANCEL', 'BUS_CHANGE', 'BUS_CANCEL'].includes(item.DATA_STAT);
     return true;
   });
 
@@ -112,8 +119,8 @@ const TripHistoryModal = ({ user, onClose }) => {
         <div className="px-12 py-6 flex space-x-3 shrink-0">
           {[
             { id: 'ALL', label: '전체 내역' },
-            { id: 'COMPLETED', label: '완료/확정됨' },
-            { id: 'CANCELED', label: '취소 내역' }
+            { id: 'COMPLETED', label: '완료내역' },
+            { id: 'CANCELED', label: '취소내역' }
           ].map(btn => (
             <button
               key={btn.id}
@@ -145,7 +152,7 @@ const TripHistoryModal = ({ user, onClose }) => {
             <div className="grid gap-6">
               {filteredHistory.map((item) => (
                 <div 
-                  key={item.REQ_UUID_STR}
+                  key={item.REQ_ID}
                   className="bg-white rounded-3xl p-8 border border-slate-100 flex flex-col md:flex-row items-center gap-8 hover:shadow-xl hover:shadow-teal-900/5 transition-all duration-500 group relative overflow-hidden"
                 >
                   {/* Status Bar */}
@@ -164,7 +171,6 @@ const TripHistoryModal = ({ user, onClose }) => {
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-3">
                       {getStatusBadge(item.DATA_STAT)}
-                      <span className="text-xs font-bold text-slate-300">#{item.REQ_UUID_STR.slice(0, 8).toUpperCase()}</span>
                     </div>
                     <h3 className="text-2xl font-headline font-extrabold text-teal-900 mb-2 truncate">
                       {item.TRIP_TITLE || '일반 여정 예약'}
@@ -181,9 +187,9 @@ const TripHistoryModal = ({ user, onClose }) => {
                   {/* Price & Actions */}
                   <div className="flex flex-col items-end shrink-0 gap-4">
                     <div className="text-right">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">희망/최대 금액</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">여행 금액</p>
                       <p className="text-3xl font-headline font-black text-teal-900 tracking-tighter">
-                        {formatPrice(item.UNIT_REQ_AMT)}
+                        {formatPrice(item.REQ_AMT ?? item.req_amt ?? 0)}
                       </p>
                     </div>
                     <button className="px-6 py-2 rounded-full border border-slate-200 text-xs font-bold text-slate-500 hover:bg-teal-800 hover:border-teal-800 hover:text-white transition-all duration-300">
