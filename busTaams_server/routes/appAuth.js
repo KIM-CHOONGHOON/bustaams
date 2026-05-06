@@ -93,8 +93,10 @@ router.post('/register', async (req, res) => {
             const cleanFirebasePhone = firebasePhone.replace(/[^0-9]/g, '');
             const cleanRequestPhone = phoneNo.replace(/[^0-9]/g, '');
             
-            // 뒤에서 10~11자리가 일치하는지 확인 (국가번호 차이 고려)
-            if (!cleanFirebasePhone.endsWith(cleanRequestPhone)) {
+            // 한국 휴대폰 번호의 경우 010... 에서 앞의 0을 제외한 나머지 숫자가 Firebase 번호 끝과 일치하는지 확인
+            const phoneForMatch = cleanRequestPhone.startsWith('0') ? cleanRequestPhone.substring(1) : cleanRequestPhone;
+
+            if (!cleanFirebasePhone.endsWith(phoneForMatch)) {
                 console.error(`[Registration] Phone mismatch: FB(${cleanFirebasePhone}) vs Req(${cleanRequestPhone})`);
                 await connection.rollback();
                 return res.status(400).json({ error: '인증된 휴대폰 번호와 입력된 번호가 일치하지 않습니다.' });
@@ -410,7 +412,10 @@ router.post('/reset-password', async (req, res) => {
             const cleanFirebasePhone = firebasePhone.replace(/[^0-9]/g, '');
             const cleanRequestPhone = phoneNo.replace(/[^0-9]/g, '');
             
-            if (!cleanFirebasePhone.endsWith(cleanRequestPhone)) {
+            // 한국 휴대폰 번호의 경우 010... 에서 앞의 0을 제외한 나머지 숫자가 Firebase 번호 끝과 일치하는지 확인
+            const phoneForMatch = cleanRequestPhone.startsWith('0') ? cleanRequestPhone.substring(1) : cleanRequestPhone;
+
+            if (!cleanFirebasePhone.endsWith(phoneForMatch)) {
                 await connection.rollback();
                 return res.status(400).json({ error: '인증된 휴대폰 번호와 입력된 번호가 일치하지 않습니다.' });
             }

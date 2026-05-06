@@ -155,7 +155,7 @@ const FindAccount = () => {
                 notify.error('변경 실패', res.error);
             }
         } catch (err) {
-            notify.error('오류', '비밀번호 재설정 중 문제가 발생했습니다.');
+            notify.error('오류', err.message || '비밀번호 재설정 중 문제가 발생했습니다.');
         }
     };
 
