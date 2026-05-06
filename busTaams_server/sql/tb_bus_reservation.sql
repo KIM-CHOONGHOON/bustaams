@@ -1,0 +1,56 @@
+-- TB_BUS_RESERVATION — 기사 입찰·예약(응찰) 행
+--
+-- 데이터 흐름:
+--   1) TB_AUCTION_REQ        … 여행자 요청 마스터 (REQ_UUID)
+--   2) TB_AUCTION_REQ_BUS    … 유형별 요청 상세 (REQ_BUS_UUID, REQ_UUID → 마스터)
+--   3) TB_BUS_RESERVATION    … 기사가 (2)를 참고해 생성하는 입찰 행 (RES_UUID), RES_STAT 예: BIDDING
+--
+-- 무결성: FK (REQ_UUID, REQ_BUS_UUID) → TB_AUCTION_REQ_BUS(REQ_UUID, REQ_BUS_UUID)
+--   → 예약 행의 마스터 키 REQ_UUID 가 반드시 해당 요청 버스 행의 REQ_UUID 와 일치 (단일 FK 만으로는 불가능했던 불일치 방지).
+-- 삭제: 마스터 삭제 시 BUS 가 CASCADE 되고, 본 테이블은 BUS 를 참조하므로 입찰 행도 정리된다.
+--
+-- 조인 예시 — 마스터·요청버스·입찰을 한 줄로 (복합 키로 연결):
+--   FROM TB_AUCTION_REQ r
+--   INNER JOIN TB_AUCTION_REQ_BUS b ON b.REQ_UUID = r.REQ_UUID
+--   INNER JOIN TB_BUS_RESERVATION res
+--     ON res.REQ_UUID = b.REQ_UUID AND res.REQ_BUS_UUID = b.REQ_BUS_UUID
+-- 입찰이 아직 없는 요청 버스 행까지 보려면 위에서 INNER JOIN res 를 LEFT JOIN res 로 바꾼다.
+--
+-- TB_AUCTION_REQ.REQ_STAT(마스터) 과 별개로, RES_STAT 는 기사·예약 행 단위 상태이다.
+
+SET NAMES utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `TB_BUS_RESERVATION` (
+  `RES_UUID` binary(16) NOT NULL COMMENT '예약 요청정보 키값',
+  `REQ_UUID` binary(16) NOT NULL COMMENT '여행 요청정보 키값 (TB_AUCTION_REQ.REQ_UUID)',
+  `REQ_BUS_UUID` binary(16) NOT NULL COMMENT '요청버스 키값 (TB_AUCTION_REQ_BUS.REQ_BUS_UUID)',
+  `TRAVELER_UUID` binary(16) DEFAULT NULL COMMENT '해당 여행 여행자 (TB_USER.USER_UUID)',
+  `DRIVER_UUID` binary(16) DEFAULT NULL COMMENT '해당 버스 기사 (TB_USER.USER_UUID)',
+  `BUS_UUID` binary(16) DEFAULT NULL COMMENT '버스정보 키값 (TB_DRIVER_BUS.BUS_UUID 등)',
+  `DRIVER_BIDDING_PRICE` decimal(18,3) NOT NULL COMMENT '버스기사 입찰가격',
+  `RES_FEE_TOTAL_AMT` decimal(18,3) DEFAULT NULL COMMENT '예약금액 전체 6.6% 해당 금액',
+  `RES_FEE_REFUND_AMT` decimal(18,3) DEFAULT NULL COMMENT '예약 환급 금액 5.5% 해당 금액',
+  `RES_FEE_ATTRIBUTION_AMT` decimal(18,3) DEFAULT NULL COMMENT '예약 귀속 금액 1.1% 해당 금액',
+  `RES_STAT` enum(
+    'AUCTION',
+    'BIDDING',
+    'CONFIRM',
+    'DONE',
+    'TRAVELER_CANCEL',
+    'DRIVER_CANCEL'
+  ) NOT NULL DEFAULT 'BIDDING' COMMENT '버스기사 입찰 현황 상태 (1. AUCTION : 여행자 경매등록, 2. BIDDING : 버스기사 입찰등록, 3. CONFIRM : 예약금액 결제완료, 4. DONE : 버스 운행 정상 종료, 5. TRAVELER_CANCEL : 여행자 경매취소, 6. DRIVER_CANCEL : 버스기사 입찰취소)',
+  `CONFIRM_DT` datetime DEFAULT NULL COMMENT '예약 확정 일시',
+  `REG_DT` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '등록 일시',
+  `REG_ID` varchar(30) DEFAULT NULL COMMENT '등록자 ID',
+  `MOD_DT` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '수정 일시',
+  `MOD_ID` varchar(30) DEFAULT NULL COMMENT '수정자 ID',
+  PRIMARY KEY (`RES_UUID`),
+  KEY `IDX_RES_TRAVELER` (`TRAVELER_UUID`),
+  KEY `IDX_RES_DRIVER` (`DRIVER_UUID`),
+  KEY `IDX_RES_REQ_UUID` (`REQ_UUID`),
+  KEY `IDX_RES_REQ_BUS_UUID` (`REQ_BUS_UUID`),
+  CONSTRAINT `FK_RES_TRAVELER` FOREIGN KEY (`TRAVELER_UUID`) REFERENCES `TB_USER` (`USER_UUID`),
+  CONSTRAINT `FK_RES_DRIVER` FOREIGN KEY (`DRIVER_UUID`) REFERENCES `TB_USER` (`USER_UUID`),
+  CONSTRAINT `FK_RES_AUCTION_REQ_BUS_PAIR` FOREIGN KEY (`REQ_UUID`, `REQ_BUS_UUID`) REFERENCES `TB_AUCTION_REQ_BUS` (`REQ_UUID`, `REQ_BUS_UUID`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='버스 예약 및 매칭 확정 정보';

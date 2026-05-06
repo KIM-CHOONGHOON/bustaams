@@ -3,9 +3,14 @@ const { Storage } = require('@google-cloud/storage');
 const { randomBytes } = require('crypto');
 require('dotenv').config();
 
+const rawPort = String(process.env.DB_PORT ?? '').trim();
+const parsedPort = parseInt(rawPort, 10);
+const dbPort = Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 3306;
+const dbHost = (process.env.DB_HOST || '127.0.0.1').split('#')[0].trim();
+
 const pool = mysql.createPool({
-    host: process.env.DB_HOST || '127.0.0.1',
-    port: process.env.DB_PORT || 3307,
+    host: dbHost,
+    port: dbPort,
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'bustaams',
@@ -14,6 +19,11 @@ const pool = mysql.createPool({
     queueLimit: 0,
     timezone: '+09:00'
 });
+
+if (process.env.DB_LOG_CONN !== '0') {
+    const dbName = process.env.DB_NAME || 'bustaams';
+    console.log(`[db] ${dbHost}:${dbPort} / ${dbName} (DB_PORT from env: ${rawPort || '—'} → used ${dbPort})`);
+}
 
 // 모든 연결 세션에 타임존을 한국 시간(+09:00)으로 설정
 pool.on('connection', (connection) => {
@@ -31,7 +41,6 @@ const bucket = storage.bucket(bucketName);
 async function getNextId(tableName, idColumnName, length, connection = null) {
     try {
         // 트랜잭션 내에서 호출될 경우 중복 방지를 위해 잠금 시도 고려 가능
-        // 단, 여기서는 단순 MAX+1 로직을 유지하되 TB_FILE_MASTER 특수 처리 제거
         const query = `SELECT MAX(${idColumnName}) as maxId FROM ${tableName} WHERE ${idColumnName} REGEXP '^[0-9]+$'`;
         const executor = connection || pool;
         const [rows] = await executor.execute(query);

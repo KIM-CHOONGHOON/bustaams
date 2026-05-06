@@ -9,6 +9,7 @@
 **/.env.*.local
 **/.env.development
 **/.env.production
+**/.env.local.backup
 
 # ── Firebase Admin 비공개 키 (절대 커밋 금지) ───────────────
 **/firebase-admin-key.json
