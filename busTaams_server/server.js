@@ -40,6 +40,7 @@ app.use((req, res, next) => {
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 const PORT = process.env.PORT || 8080;
 
@@ -144,18 +145,8 @@ function formatDateYmd(v) {
 
 /** 진위 검증 생략 비교용 — TB_DRIVER_INFO 기존 행 */
 async function fetchDriverInfoRow(custId) {
-    try {
-        const [rows] = await pool.execute(
-            `SELECT LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO, LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT,
-                    QUAL_CERT_NO, QUAL_CERT_VERIFY_STATUS
-             FROM TB_DRIVER_INFO WHERE USER_ID = ?`,
-            [custId]
-        );
-        return rows[0] || null;
-    } catch (e) {
-        if (e.code === 'ER_NO_SUCH_TABLE') return null;
-        throw e;
-    }
+    // TB_DRIVER_INFO 테이블 삭제됨. 항상 null 반환하거나 필요시 TB_DRIVER_DOCS/DETAIL에서 조회하도록 추후 확장 가능
+    return null;
 }
 
 
@@ -929,14 +920,14 @@ app.post('/api/driver/profile', async (req, res) => {
             const query = `
                 INSERT INTO TB_DRIVER_DETAIL (
                     USER_ID, LICENSE_NO, CERT_PHOTO_URL, ACCIDENT_FREE_DOC,
-                    MEMBERSHIP_TYPE, BIO_DESC, PROFILE_IMG_URL, REG_ID, MOD_ID
+                    MEMBERSHIP_TYPE, SELF_INTRO, PROFILE_IMG_URL, REG_ID, MOD_ID
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     LICENSE_NO = VALUES(LICENSE_NO),
                     CERT_PHOTO_URL = IF(VALUES(CERT_PHOTO_URL) != '', VALUES(CERT_PHOTO_URL), CERT_PHOTO_URL),
                     ACCIDENT_FREE_DOC = VALUES(ACCIDENT_FREE_DOC),
                     MEMBERSHIP_TYPE = VALUES(MEMBERSHIP_TYPE),
-                    BIO_DESC = VALUES(BIO_DESC),
+                    SELF_INTRO = VALUES(SELF_INTRO),
                     PROFILE_IMG_URL = IF(VALUES(PROFILE_IMG_URL) != '', VALUES(PROFILE_IMG_URL), PROFILE_IMG_URL),
                     MOD_ID = VALUES(MOD_ID)
             `;
@@ -1002,22 +993,25 @@ app.get('/api/driver/profile-setup', async (req, res) => {
 
         let dRows;
         try {
+            // TB_DRIVER_INFO가 삭제되었으므로 TB_DRIVER_DETAIL과 TB_USER에서 정보를 가져옴
             const [dr] = await pool.execute(
-                `SELECT RRN_ENC, LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO, LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT,
-                        QUAL_CERT_NO, BIO_TEXT,
-                        IFNULL(QUAL_CERT_VERIFY_STATUS, 'UNVERIFIED') AS QUAL_CERT_VERIFY_STATUS,
-                        QUAL_CERT_VERIFY_DT,
-                        PROFILE_PHOTO_ID,
-                        QUAL_CERT_FILE_ID
-                 FROM TB_DRIVER_INFO WHERE USER_ID = ?`,
+                `SELECT 
+                    u.PROFILE_FILE_ID as PROFILE_PHOTO_ID,
+                    di.SELF_INTRO as BIO_TEXT,
+                    -- 나머지 정보들은 TB_DRIVER_DOCS 등에서 필요시 별도 조회해야 함
+                    NULL as RRN_ENC, NULL as LICENSE_TYPE, NULL as LICENSE_NO, NULL as LICENSE_SERIAL_NO,
+                    NULL as LICENSE_ISSUE_DT, NULL as LICENSE_EXPIRY_DT, NULL as QUAL_CERT_NO,
+                    'UNVERIFIED' as QUAL_CERT_VERIFY_STATUS, NULL as QUAL_CERT_VERIFY_DT,
+                    NULL as QUAL_CERT_FILE_ID
+                 FROM TB_USER u
+                 LEFT JOIN TB_DRIVER_DETAIL di ON u.CUST_ID = di.USER_ID
+                 WHERE u.CUST_ID = ?`,
                 [custId]
             );
             dRows = dr;
         } catch (e) {
-            if (e.code === 'ER_NO_SUCH_TABLE') {
-                return res.json({ exists: false, userName, phoneNo });
-            }
-            throw e;
+            console.error('Fetch driver detail error:', e);
+            return res.json({ exists: false, userName, phoneNo });
         }
 
         if (!dRows.length) {
@@ -1073,8 +1067,8 @@ app.get('/api/driver/profile-photo', async (req, res) => {
         if (!custId || !fileId) return res.status(400).json({ error: 'custId and fileId are required' });
 
         const [rows] = await pool.execute(
-            `SELECT PROFILE_PHOTO_ID FROM TB_DRIVER_INFO
-             WHERE USER_ID = ? AND PROFILE_PHOTO_ID = ?`,
+            `SELECT PROFILE_FILE_ID FROM TB_USER
+             WHERE CUST_ID = ? AND PROFILE_FILE_ID = ?`,
             [custId, fileId]
         );
         if (!rows.length) return res.status(403).json({ error: '접근할 수 없는 파일입니다.' });
@@ -1945,9 +1939,9 @@ app.post('/api/auction/bus-cancel', async (req, res) => {
         // 4. TB_BUS_RESERVATION 무효화 (기존 확정 데이터를 BUS_CHANGE로 변경)
         // 무효화 하기 전에 기사 정보를 가져와서 알림 발송 준비
         const [driverInfoRows] = await connection.execute(
-            `SELECT r.DRIVER_ID, d.DRIVER_HP, d.DRIVER_NM 
+            `SELECT r.DRIVER_ID, d.HP_NO as DRIVER_HP, d.USER_NM as DRIVER_NM 
              FROM TB_BUS_RESERVATION r
-             JOIN TB_DRIVER_INFO d ON r.DRIVER_ID = d.DRIVER_ID
+             JOIN TB_USER d ON r.DRIVER_ID = d.CUST_ID
              WHERE r.REQ_ID = ? AND r.REQ_BUS_SEQ = ? AND r.DATA_STAT NOT IN ('BUS_CHANGE', 'TRAVELER_CANCEL')`,
             [reqId, String(reqBusSeq)]
         );
@@ -2082,7 +2076,7 @@ app.get('/api/auction/bids/:reqId', async (req, res) => {
                 res.DRIVER_BIDDING_PRICE,
                 res.DATA_STAT as RES_STAT,
                 u.USER_NM as driverName,
-                di.BIO_DESC as driverBio,
+                di.SELF_INTRO as driverBio,
                 u.USER_STAT as verifyStatus,
                 v.MODEL_NM as busModel,
                 v.SERVICE_CLASS as busClass,
@@ -2298,7 +2292,7 @@ app.get('/api/auction/bid-detail/:bidId', async (req, res) => {
                 res.DRIVER_BIDDING_PRICE as bidPrice,
                 res.DRIVER_ID as driverId,
                 u.USER_NM as driverName,
-                di.BIO_DESC as driverBio,
+                di.SELF_INTRO as driverBio,
                 u.PROFILE_FILE_ID as driverProfilePhotoId,
                 v.MODEL_NM as busModel,
                 v.SERVICE_CLASS as busClass,
@@ -2440,72 +2434,354 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                 `, [qualCertId, bucketName, gcsPath, `qual_cert.${ext}`, ext, buffer.length]);
             }
 
-            // 3. TB_DRIVER_INFO 저장 (Upsert)
-            const driverQuery = `
-                INSERT INTO TB_DRIVER_INFO (
-                    USER_ID, RRN_ENC, LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO, LICENSE_ISSUE_DT, 
-                    LICENSE_EXPIRY_DT, QUAL_CERT_NO, QUAL_CERT_VERIFY_STATUS, QUAL_CERT_VERIFY_DT,
-                    QUAL_CERT_FILE_ID, PROFILE_PHOTO_ID, BIO_TEXT, UPDATE_DT
-                ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ${qualCertId ? '?' : 'NULL'}, 
-                    ${profilePhotoId ? '?' : 'NULL'}, 
-                    ?, NOW()
-                )
+            // 3. TB_USER 프로필 사진 업데이트
+            if (profilePhotoId) {
+                await connection.execute(
+                    `UPDATE TB_USER SET PROFILE_FILE_ID = ?, MOD_DT = NOW() WHERE CUST_ID = ?`,
+                    [profilePhotoId, custId]
+                );
+            }
+
+            // 4. TB_DRIVER_DETAIL 저장 (Upsert)
+            const detailQuery = `
+                INSERT INTO TB_DRIVER_DETAIL (
+                    USER_ID, LICENSE_NO, SELF_INTRO, REG_ID, MOD_ID
+                ) VALUES (?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE 
-                    RRN_ENC = VALUES(RRN_ENC),
-                    LICENSE_TYPE = VALUES(LICENSE_TYPE),
                     LICENSE_NO = VALUES(LICENSE_NO),
-                    LICENSE_SERIAL_NO = VALUES(LICENSE_SERIAL_NO),
-                    LICENSE_ISSUE_DT = VALUES(LICENSE_ISSUE_DT),
-                    LICENSE_EXPIRY_DT = VALUES(LICENSE_EXPIRY_DT),
-                    QUAL_CERT_NO = VALUES(QUAL_CERT_NO),
-                    QUAL_CERT_VERIFY_STATUS = VALUES(QUAL_CERT_VERIFY_STATUS),
-                    QUAL_CERT_VERIFY_DT = IFNULL(VALUES(QUAL_CERT_VERIFY_DT), QUAL_CERT_VERIFY_DT),
-                    QUAL_CERT_FILE_ID = IFNULL(VALUES(QUAL_CERT_FILE_ID), QUAL_CERT_FILE_ID),
-                    PROFILE_PHOTO_ID = IFNULL(VALUES(PROFILE_PHOTO_ID), PROFILE_PHOTO_ID),
-                    BIO_TEXT = VALUES(BIO_TEXT),
-                    UPDATE_DT = NOW()
+                    SELF_INTRO = VALUES(SELF_INTRO),
+                    MOD_ID = VALUES(MOD_ID),
+                    MOD_DT = NOW()
             `;
-            
-            const params = [
-                custId,
-                encryptedRrn,
-                licenseType,
-                licenseNo,
-                licenseSerialNo || null,
-                licenseIssueDt,
-                licenseExpiryDt,
-                qualCertNo,
-                qualCertVerifyStatus,
-                qualCertVerifyDt
-            ];
-            if (qualCertId) params.push(qualCertId);
-            if (profilePhotoId) params.push(profilePhotoId);
-            params.push(bioText);
-
-            await connection.execute(driverQuery, params);
-
-            // 방금 저장된 QUAL_CERT_FILE_ID 조회 (문서 보기 버튼용)
-            const [savedRows] = await connection.execute(
-                `SELECT QUAL_CERT_FILE_ID FROM TB_DRIVER_INFO WHERE USER_ID = ?`,
-                [custId]
-            );
-            const savedQualCertFileId = savedRows[0]?.QUAL_CERT_FILE_ID || null;
+            await connection.execute(detailQuery, [custId, licenseNo || '', bioText || '', custId, custId]);
 
             await connection.commit();
             res.status(200).json({
                 message: "기사 프로필 설정이 완료되었습니다.",
                 qualCertVerifyStatus,
-                qualCertFileId: savedQualCertFileId
+                qualCertFileId: qualCertId || null
             });
         } catch (error) {
-            await connection.rollback();
+            if (connection) await connection.rollback();
             throw error;
-        } finally { connection.release(); }
+        } finally { 
+            if (connection) connection.release(); 
+        }
     } catch (error) {
         console.error('Profile setup error:', error);
         res.status(500).json({ error: error.message });
+    }
+});
+
+// --- KG 이니시스 결제 준비 (서명 생성) ---
+app.get('/api/payment/ready', async (req, res) => {
+    try {
+        const { reqId, driverId, amount } = req.query;
+        if (!reqId || !amount) {
+            return res.status(400).json({ error: 'reqId and amount are required' });
+        }
+
+        const mid = (process.env.INI_MID || 'INIpayTest').trim();
+        // 분석 결과: INIpayTest의 정식 PC웹표준 키는 아래 값이 확실합니다.
+        const signKey = 'SU5JTElURV9UUklQTEVERVNfS0VZU1RS'; 
+        
+        // 1. 금액에서 숫자만 남기기
+        let cleanAmount = String(amount).replace(/[^0-9]/g, '');
+        
+        // [안전장치] 테스트 모드일 경우 사고 방지를 위해 금액을 1,000원으로 강제 고정
+        if (mid === 'INIpayTest') {
+            console.log(`[PAY_SAFETY] Test mode detected. Forcing amount from ${cleanAmount} to 1000 KRW.`);
+            cleanAmount = '1000';
+        }
+
+        // 2. 타임스탬프 문자열 변환
+        const timestamp = String(new Date().getTime());
+        const oid = `${reqId}_${timestamp}`;
+
+        // 3. 이니시스 웹 표준 결제 서명 공식
+        const crypto = require('crypto');
+        const signatureStr = `oid=${oid}&price=${cleanAmount}&timestamp=${timestamp}`;
+        
+        // 인코딩 'utf8' 명시 및 대문자 변환 (이니시스 공식 가이드 최적화)
+        const signature = crypto.createHash('sha256').update(signatureStr, 'utf8').digest('hex').toUpperCase();
+        const mKey = crypto.createHash('sha256').update(signKey, 'utf8').digest('hex').toUpperCase();
+
+        console.log(`[PAY_READY] Used SignKey: ${signKey}`);
+        console.log(`[PAY_READY] OID: ${oid}, Price: ${cleanAmount}, TS: ${timestamp}`);
+        console.log(`[PAY_READY] SigStr: ${signatureStr}`);
+        console.log(`[PAY_READY] Sig(UPPER): ${signature}`);
+
+        res.json({
+            mid,
+            oid,
+            timestamp,
+            amount: cleanAmount,
+            signature,
+            mKey,
+            buyertel: '01012345678',
+            buyername: '홍길동'
+        });
+    } catch (error) {
+        console.error('Payment ready error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- KG 이니시스 결제 결과 수신 및 최종 승인 (Return URL) ---
+app.post('/api/payment/return', async (req, res) => {
+    let connection;
+    try {
+        const { resultCode, resultMsg, mid, authUrl, authToken, merchantData } = req.body;
+        console.log('[PAY_RETURN] Received result:', resultCode, resultMsg);
+
+        if (resultCode !== '0000') {
+            return res.send(`
+                <!DOCTYPE html>
+                <html><head><meta charset="utf-8"></head><body>
+                <script>alert("결제 실패: ${resultMsg}"); window.location.href="http://localhost:5173/quotation-list";</script>
+                </body></html>
+            `);
+        }
+
+        // 1. 이니시스 승인 API (Server-to-Server) 호출 준비
+        const timestamp = String(new Date().getTime());
+        // 정식 PC웹표준 테스트 키
+        const signKey = 'SU5JTElURV9UUklQTEVERVNfS0VZU1RS';
+        const crypto = require('crypto');
+        const signatureStr = `authToken=${authToken}&timestamp=${timestamp}`;
+        const signature = crypto.createHash('sha256').update(signatureStr, 'utf8').digest('hex').toUpperCase();
+
+        const authRes = await fetch(authUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                mid,
+                authToken,
+                timestamp,
+                signature,
+                format: 'JSON'
+            })
+        });
+
+        const authText = await authRes.text();
+        console.log('[PAY_AUTH] Raw Result:', authText);
+
+        let authData;
+        try {
+            authData = JSON.parse(authText);
+        } catch (e) {
+            console.error('[PAY_AUTH] Failed to parse Inicis response as JSON:', authText);
+            return res.send(`
+                <html><head><meta charset="utf-8"></head><body>
+                <script>alert("결제 승인 처리 중 오류가 발생했습니다. (포맷 불일치)"); window.close();</script>
+                </body></html>
+            `);
+        }
+        console.log('[PAY_AUTH] Auth Result:', authData.resultCode, authData.resultMsg);
+
+        if (authData.resultCode !== '0000') {
+            return res.send(`
+                <!DOCTYPE html>
+                <html><head><meta charset="utf-8"></head><body>
+                <script>alert("최종 승인 실패: ${authData.resultMsg}"); window.location.href="http://localhost:5173/quotation-list";</script>
+                </body></html>
+            `);
+        }
+
+        // 2. 결제 성공 -> DB 업데이트 (트랜잭션 처리)
+        let reqId, driverId;
+        console.log('[PAY_SUCCESS] Raw MerchantData:', merchantData);
+
+        if (merchantData && merchantData.includes(':')) {
+            // 새로운 단순 문자열 형식 (reqId:driverId)
+            const parts = merchantData.split(':');
+            reqId = parts[0];
+            driverId = parts[1];
+        } else {
+            // 기존 JSON 형식 (혹시 모를 호환성 유지)
+            try {
+                // HTML Entity (&quot; 등) 처리
+                const unescapedData = merchantData.replace(/&quot;/g, '"');
+                const mData = JSON.parse(unescapedData);
+                reqId = mData.reqId;
+                driverId = mData.driverId;
+            } catch (e) {
+                console.error('MerchantData parse error:', e);
+            }
+        }
+        
+        console.log(`[PAY_SUCCESS] Target - ReqId: ${reqId}, DriverId: ${driverId}`);
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        if (reqId && driverId) {
+            // 3. 상태 업데이트 로직
+            // 예약 내역 확정 상태로 변경
+            await connection.execute(
+                `UPDATE TB_BUS_RESERVATION SET DATA_STAT = 'CONFIRM', MOD_DT = NOW() 
+                 WHERE REQ_ID = ? AND DRIVER_ID = ? AND DATA_STAT NOT IN ('TRAVELER_CANCEL', 'BUS_CHANGE')`,
+                [reqId, driverId]
+            );
+
+            // 전체 요청 상태를 'CONFIRM'으로 변경
+            await connection.execute(
+                `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'CONFIRM', MOD_DT = NOW() WHERE REQ_ID = ?`,
+                [reqId]
+            );
+            
+            console.log(`[PAY_SUCCESS] Updated status for REQ_ID: ${reqId}, DRIVER_ID: ${driverId}`);
+        }
+        
+        await connection.commit();
+
+        res.send(`
+            <!DOCTYPE html>
+            <html><head><meta charset="utf-8"></head><body>
+            <script>alert("결제가 완료되어 예약이 확정되었습니다!"); window.location.href="http://localhost:5173/quotation-list";</script>
+            </body></html>
+        `);
+
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('Payment return error:', error);
+        res.send(`
+            <!DOCTYPE html>
+            <html><head><meta charset="utf-8"></head><body>
+            <script>alert("결제 처리 중 오류 발생: ${error.message}"); window.location.href="http://localhost:5173/quotation-list";</script>
+            </body></html>
+        `);
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// --- 기사 상세 정보 및 리뷰 조회 ---
+app.get('/api/driver/detail/:driverId', async (req, res) => {
+    let connection;
+    try {
+        const { driverId } = req.params;
+        connection = await pool.getConnection();
+
+        // 1. 기사 핵심 정보 조회 (TB_USER + TB_DRIVER_INFO)
+        const [driverRows] = await connection.execute(
+            `SELECT 
+                u.USER_NM as userNm, 
+                u.PROFILE_FILE_ID as profilePhotoId,
+                di.BUS_NO as busNo
+             FROM TB_USER u
+             LEFT JOIN TB_DRIVER_INFO di ON u.USER_ID = di.USER_ID
+             WHERE u.CUST_ID = ?`,
+            [driverId]
+        );
+
+        if (driverRows.length === 0) {
+            return res.status(404).json({ error: '기사 정보를 찾을 수 없습니다.' });
+        }
+
+        // 2. 해당 기사의 리뷰 목록 조회 (명칭 포함 조인)
+        const [reviewRows] = await connection.execute(
+            `SELECT 
+                r.STAR_RATING as starRating,
+                r.COMMENT_TEXT as commentText,
+                r.REG_DT as regDt,
+                u.USER_NM as writerName,
+                aq.TRIP_TITLE as tripTitle
+             FROM TB_TRIP_REVIEW r
+             LEFT JOIN TB_USER u ON r.WRITER_ID = u.CUST_ID
+             LEFT JOIN TB_BUS_RESERVATION br ON r.RES_ID = br.RES_ID
+             LEFT JOIN TB_AUCTION_REQ aq ON br.REQ_ID = aq.REQ_ID
+             WHERE r.DRIVER_ID = ?
+             ORDER BY r.REG_DT DESC`,
+            [driverId]
+        );
+
+        res.json({
+            driver: driverRows[0],
+            reviews: reviewRows
+        });
+
+    } catch (error) {
+        console.error('[DRIVER_DETAIL_ERR]', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// --- 여행자의 기사 선택 취소 (거절 및 경매 재개) ---
+app.post('/api/reservation/refuse-driver', async (req, res) => {
+    let connection;
+    try {
+        const { reqId, driverId, travelerId } = req.body;
+        if (!reqId || !driverId || !travelerId) {
+            return res.status(400).json({ error: 'Missing required parameters (reqId, driverId, travelerId)' });
+        }
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        console.log(`[REFUSE_DRIVER] Processing cancellation for REQ_ID: ${reqId}, DRIVER_ID: ${driverId}, Traveler: ${travelerId}`);
+
+        // 1. 전체 경매 요청 상태를 다시 'AUCTION'으로 복구
+        await connection.execute(
+            `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'AUCTION', MOD_DT = NOW(), MOD_ID = ? WHERE REQ_ID = ?`,
+            [travelerId, reqId]
+        );
+
+        // 2. 해당 기사와의 예약 상세 상태를 'BUS_CANCEL'로 변경
+        await connection.execute(
+            `UPDATE TB_BUS_RESERVATION SET DATA_STAT = 'BUS_CANCEL', MOD_DT = NOW(), MOD_ID = ? 
+             WHERE REQ_ID = ? AND DRIVER_ID = ?`,
+            [travelerId, reqId, driverId]
+        );
+
+        // 3. 여행자의 기사 취소 누적 횟수 증가 (TB_USER_CANCEL_MANAGE)
+        // 레코드가 없을 경우를 대비해 INSERT ... ON DUPLICATE KEY UPDATE 형식 권장하지만, 설계상 이미 존재하므로 UPDATE 수행
+        const [manageRows] = await connection.execute(
+            `UPDATE TB_USER_CANCEL_MANAGE 
+             SET CANCEL_BUS_DRIVER_CNT = CANCEL_BUS_DRIVER_CNT + 1, MOD_DT = NOW(), MOD_ID = ? 
+             WHERE CUST_ID = ?`,
+            [travelerId, travelerId]
+        );
+
+        // 만약 관리 레코드가 없다면 (최초 가입 시 누락 등) 생성
+        if (manageRows.affectedRows === 0) {
+            await connection.execute(
+                `INSERT INTO TB_USER_CANCEL_MANAGE (CUST_ID, CANCEL_BUS_DRIVER_CNT, REG_ID, MOD_ID) 
+                 VALUES (?, 1, ?, ?)`,
+                [travelerId, travelerId, travelerId]
+            );
+        }
+
+        await connection.commit();
+
+        // 4. 기사에게 알림톡(SMS) 발송 예약 (TB_SMS_LOG)
+        try {
+            await pool.execute(
+                `INSERT INTO TB_SMS_LOG (REQ_ID, SEND_CATEGORY, SENDER_ID, RECEIVER_ID, MSG_CONTENT, MSG_TYPE, SEND_STAT, REG_ID) 
+                 VALUES (?, 'CANCEL_NOTICE', 'SYSTEM', ?, ?, 'SMS', 'PENDING', 'SYSTEM')`,
+                [
+                    reqId, 
+                    driverId, 
+                    `[BusTaams] 고객님의 요청으로 REQ_ID:${reqId} 견적 제안이 취소되었습니다.`,
+                    'SYSTEM'
+                ]
+            );
+            console.log(`[REFUSE_DRIVER] Notification queued for Driver: ${driverId}`);
+        } catch (smsErr) {
+            console.error('[REFUSE_DRIVER_SMS_ERR]', smsErr);
+            // 알림 발송 실패는 전체 트랜잭션 실패로 간주하지 않음
+        }
+
+        res.json({ success: true, message: '기사 선택이 취소되고 경매가 재개되었습니다.' });
+
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('[REFUSE_DRIVER_ERR]', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        if (connection) connection.release();
     }
 });
 
