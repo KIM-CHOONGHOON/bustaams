@@ -1,10 +1,16 @@
+console.log('>>> CUSTOMER ROUTER LOADING...');
 const express = require('express');
 const router = express.Router();
-const pool = require('../db');
+console.log('>>> Loading pool in customer...');
+const { pool } = require('../db');
+console.log('>>> Loading auth in customer...');
 const { authenticateToken } = require('../middleware/auth');
+console.log('>>> Loading crypto in customer...');
 const { encrypt, decrypt } = require('../crypto');
+console.log('>>> Loading uuid in customer...');
 const { v4: uuidv4 } = require('uuid');
-const bcrypt = require('bcrypt');
+console.log('>>> Loading bcryptjs in customer...');
+const bcrypt = require('bcryptjs');
 
 // [고객용] 프로필 정보 조회
 router.get('/profile', authenticateToken, async (req, res) => {

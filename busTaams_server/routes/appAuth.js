@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { pool, getNextId, bucket, bucketName } = require('../db');
-const bcrypt = require('bcrypt');
+const { pool, getNextId, getBucket, bucketName } = require('../db');
+const bcrypt = require('bcryptjs');
 const { randomUUID } = require('crypto');
 const jwt = require('jsonwebtoken');
 const { decrypt, encrypt } = require('../crypto');
@@ -132,7 +132,7 @@ router.post('/register', async (req, res) => {
         if (signatureBase64 && signatureBase64.startsWith('data:image')) {
             const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20);
             const fileName = `signatures/${fileId}.png`;
-            const file = bucket.file(fileName);
+            const file = getBucket().file(fileName);
             const buffer = Buffer.from(signatureBase64.split(',')[1], 'base64');
             
             // GCS 업로드
@@ -547,5 +547,6 @@ router.post('/verify-code', async (req, res) => {
     }
 });
 
+console.log('>>> APP AUTH ROUTER LOADED SUCCESSFULLY');
 module.exports = router;
 

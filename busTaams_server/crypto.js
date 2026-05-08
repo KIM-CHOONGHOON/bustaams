@@ -9,13 +9,23 @@
  */
 
 require('dotenv').config();
+console.log('>>> CRYPTO INITIALIZING...');
 const crypto = require('crypto');
 
 const ALGORITHM = 'aes-256-gcm';
-const KEY = Buffer.from(process.env.ENCRYPTION_KEY, 'hex');
+const RAW_KEY = process.env.ENCRYPTION_KEY;
+let KEY;
 
-if (!process.env.ENCRYPTION_KEY || KEY.length !== 32) {
-    throw new Error('[FATAL] ENCRYPTION_KEY가 .env에 설정되지 않았거나 32바이트가 아닙니다. 서버를 시작할 수 없습니다.');
+console.log(`>>> [DEBUG] ENCRYPTION_KEY type: ${typeof RAW_KEY}, length: ${RAW_KEY ? RAW_KEY.length : 'N/A'}`);
+
+if (!RAW_KEY || RAW_KEY.length < 32) {
+    console.error('❌ [FATAL] ENCRYPTION_KEY is missing or too short. Encryption features will fail.');
+} else {
+    try {
+        KEY = Buffer.from(RAW_KEY, 'hex');
+    } catch (e) {
+        console.error('❌ [FATAL] Failed to parse ENCRYPTION_KEY as hex:', e.message);
+    }
 }
 
 /**

@@ -1,5 +1,6 @@
+console.log('>>> AUTH MIDDLEWARE LOADING...');
 const jwt = require('jsonwebtoken');
-require('dotenv').config();
+console.log('>>> AUTH MIDDLEWARE LOADED.');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'bustaams-dev-secret-key-2026';
 

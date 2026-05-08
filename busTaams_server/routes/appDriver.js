@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const admin = require('firebase-admin');
-const { pool, getNextId, bucket, bucketName } = require('../db');
+const { pool, getNextId, getBucket, bucketName } = require('../db');
 const { encrypt, decrypt } = require('../crypto');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
@@ -32,7 +32,7 @@ const uploadToGCS = async (file, folder, connection = null) => {
     const ext = path.extname(file.originalname).replace('.', '') || 'png';
     const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20, connection);
     const gcsFileName = `${folder}/${fileId}.${ext}`;
-    const gcsFile = bucket.file(gcsFileName);
+    const gcsFile = getBucket().file(gcsFileName);
 
     await gcsFile.save(file.buffer, {
         metadata: { contentType: file.mimetype }

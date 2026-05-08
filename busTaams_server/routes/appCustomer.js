@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { pool, getNextId, bucket, bucketName } = require('../db');
+const { pool, getNextId, getBucket, bucketName } = require('../db');
 const { authenticateToken } = require('../middleware/auth');
 const { encrypt, decrypt } = require('../crypto');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -783,7 +783,7 @@ router.post('/profile/upload-image', authenticateToken, memoryUpload.single('pro
         // 캐싱 문제를 피하기 위해 항상 새로운 fileId를 생성합니다.
         const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20);
         const gcsFileName = `profiles/${fileId}.${ext}`;
-        const file = bucket.file(gcsFileName);
+        const file = getBucket().file(gcsFileName);
 
         // 2. GCS 업로드
         await file.save(req.file.buffer, {
@@ -1248,6 +1248,158 @@ router.post('/auction-req', authenticateToken, async (req, res) => {
     }
 });
 
+/**
+ * 🚌 [신규] 견적 요청 상세 조회 (수정용)
+ * - REQ_ID를 기반으로 마스터, 차량, 경유지 정보를 한꺼번에 조회합니다.
+ */
+router.get('/auction-req/:id', authenticateToken, async (req, res) => {
+    try {
+        const reqId = req.params.id;
+        const userId = req.user.userId;
+
+        // 1. 마스터 정보 조회
+        const [masterRows] = await pool.execute(`
+            SELECT 
+                REQ_ID, TRIP_TITLE, START_ADDR, END_ADDR, 
+                START_DT, END_DT, PASSENGER_CNT, REQ_AMT, DATA_STAT
+            FROM TB_AUCTION_REQ
+            WHERE REQ_ID = ?
+        `, [reqId]);
+
+        if (masterRows.length === 0) {
+            return res.status(404).json({ success: false, error: '요청 정보를 찾을 수 없습니다.' });
+        }
+
+        const master = masterRows[0];
+
+        // 2. 차량 정보 조회
+        const [busRows] = await pool.execute(`
+            SELECT 
+                REQ_BUS_SEQ, BUS_TYPE_CD, TOLLS_AMT, FUEL_COST, RES_BUS_AMT as reqAmt
+            FROM TB_AUCTION_REQ_BUS
+            WHERE REQ_ID = ?
+            ORDER BY REQ_BUS_SEQ ASC
+        `, [reqId]);
+
+        // 3. 경유지 정보 조회
+        const [viaRows] = await pool.execute(`
+            SELECT 
+                VIA_SEQ, VIA_TYPE, VIA_ADDR as addr
+            FROM TB_AUCTION_REQ_VIA
+            WHERE REQ_ID = ?
+            ORDER BY VIA_SEQ ASC
+        `, [reqId]);
+
+        res.json({
+            success: true,
+            data: {
+                ...master,
+                buses: busRows,
+                vias: viaRows
+            }
+        });
+    } catch (error) {
+        console.error('[App Auction Request Detail] Error:', error);
+        res.status(500).json({ success: false, error: '정보 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+/**
+ * 🚌 [신규] 견적 요청 수정 (앱 전용)
+ * - 기존 정보를 업데이트하고 차량/경유지 정보를 갱신합니다.
+ */
+router.put('/auction-req/:id', authenticateToken, async (req, res) => {
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+        const reqId = req.params.id;
+        const userId = req.user.userId;
+        const { startAddr, endAddr, startDt, endDt, passengerCnt, buses, vias, tripTitle: clientTripTitle } = req.body;
+
+        // 1. 권한 확인 (본인의 요청인지)
+        const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        const custId = uRows.length > 0 ? uRows[0].CUST_ID : userId;
+
+        const [masterCheck] = await connection.execute(
+            'SELECT TRAVELER_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ?',
+            [reqId]
+        );
+
+        if (masterCheck.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, error: '요청을 찾을 수 없습니다.' });
+        }
+
+        if (masterCheck[0].TRAVELER_ID !== custId) {
+            await connection.rollback();
+            return res.status(403).json({ success: false, error: '수정 권한이 없습니다.' });
+        }
+
+        // 2. 마스터 업데이트
+        const safeBuses = Array.isArray(buses) ? buses : [];
+        const totalReqAmt = safeBuses.reduce((acc, b) => acc + (parseInt(b.reqAmt, 10) || 0), 0);
+        const tripTitle = clientTripTitle || `${startAddr.split(' ')[0]} -> ${endAddr.split(' ')[0]} 여정`;
+        const formatDt = (dtStr) => dtStr.replace('T', ' ').replace('Z', '').substring(0, 19);
+
+        await connection.execute(`
+            UPDATE TB_AUCTION_REQ SET
+                TRIP_TITLE = ?, START_ADDR = ?, END_ADDR = ?, 
+                START_DT = ?, END_DT = ?, REQ_AMT = ?, MOD_ID = ?, MOD_DT = NOW()
+            WHERE REQ_ID = ?
+        `, [tripTitle, startAddr, endAddr, formatDt(startDt), formatDt(endDt), totalReqAmt, custId, reqId]);
+
+        // 3. 기존 차량/경유지 삭제
+        await connection.execute('DELETE FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ?', [reqId]);
+        await connection.execute('DELETE FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = ?', [reqId]);
+
+        // 4. 새 차량 정보 저장
+        if (safeBuses.length > 0) {
+            let busSeq = 1;
+            for (const bus of safeBuses) {
+                const busAmt = parseInt(bus.reqAmt, 10) || 0;
+                const feeTotal = Math.floor(busAmt * 0.066);
+                const feeRefund = Math.floor(busAmt * 0.055);
+                const feeAttribution = parseFloat((busAmt * 0.011).toFixed(3));
+
+                await connection.execute(`
+                    INSERT INTO TB_AUCTION_REQ_BUS (
+                        REQ_ID, REQ_BUS_SEQ, BUS_TYPE_CD, DATA_STAT, TOLLS_AMT, FUEL_COST, 
+                        RES_BUS_AMT, RES_FEE_TOTAL_AMT, RES_FEE_REFUND_AMT, RES_FEE_ATTRIBUTION_AMT,
+                        REG_ID, MOD_ID
+                    ) VALUES (?, ?, ?, 'AUCTION', ?, ?, ?, ?, ?, ?, ?, ?)
+                `, [
+                    reqId, busSeq++, bus.busTypeCd || bus.name, parseInt(bus.tollsAmt, 10) || 0, parseInt(bus.fuelCost, 10) || 0, 
+                    busAmt, feeTotal, feeRefund, feeAttribution, custId, custId
+                ]);
+            }
+        }
+
+        // 5. 새 경유지 정보 저장
+        const safeVias = Array.isArray(vias) ? vias : [];
+        if (safeVias.length > 0) {
+            for (let i = 0; i < safeVias.length; i++) {
+                const via = safeVias[i];
+                await connection.execute(`
+                    INSERT INTO TB_AUCTION_REQ_VIA (
+                        REQ_ID, VIA_SEQ, VIA_TYPE, VIA_ADDR, REG_ID, MOD_ID
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                `, [reqId, i + 1, via.type || via.viaType, via.addr || via.viaAddr || '', custId, custId]);
+            }
+        }
+
+        await connection.commit();
+        res.json({ success: true, message: '예약 정보가 수정되었습니다.' });
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('Update Auction Request Error:', error);
+        res.status(500).json({ success: false, error: '수정 중 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+
+
 // 10. 입찰 선정 및 예약 확정 (앱 전용)
 router.post('/confirm-bid', authenticateToken, async (req, res) => {
     const { bidUuid: resId } = req.body;
@@ -1432,12 +1584,21 @@ router.get('/inquiries/:id', authenticateToken, async (req, res) => {
 router.get('/reservations', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
+        const tokenCustId = req.user.custId;
 
-        // 1. 사용자 CUST_ID 조회
-        const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
-        if (uRows.length === 0) return res.status(404).json({ success: false, error: '사용자 정보를 찾을 수 없습니다.' });
-        const custId = uRows[0].CUST_ID;
-        console.log('[App Reservations] Fetching for CustID:', custId);
+        console.log(`[App Reservations] Request by userId: ${userId}, tokenCustId: ${tokenCustId}`);
+
+        // 1. 사용자 CUST_ID 조회 (토큰에 있으면 우선 사용, 없으면 DB 조회)
+        let custId = tokenCustId;
+        if (!custId) {
+            const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+            if (uRows.length === 0) {
+                console.error(`[App Reservations] User not found: ${userId}`);
+                return res.status(404).json({ success: false, error: '사용자 정보를 찾을 수 없습니다.' });
+            }
+            custId = uRows[0].CUST_ID;
+        }
+        console.log('[App Reservations] Final CustID for query:', custId);
 
         // 2. 예약 내역 조회 (TB_BUS_RESERVATION 기반, CONFIRM인 것만)
         // REQ_ID 기준으로 그룹화하여 하나의 요청에 여러 대의 버스가 있더라도 리스트에는 하나로 표시 (추후 상세에서 개별 확인)
@@ -1452,7 +1613,7 @@ router.get('/reservations', authenticateToken, async (req, res) => {
                 DATE_FORMAT(r.START_DT, '%Y/%m/%d') as date,
                 r.TRIP_TITLE as title,
                 COUNT(res.RES_ID) as busCount,
-                SUM(res.OFFER_PRICE) as totalOfferPrice
+                SUM(res.DRIVER_BIDDING_PRICE) as totalOfferPrice
             FROM TB_AUCTION_REQ r
             JOIN TB_BUS_RESERVATION res ON r.REQ_ID = res.REQ_ID
             WHERE r.TRAVELER_ID = ? AND res.DATA_STAT = 'CONFIRM'

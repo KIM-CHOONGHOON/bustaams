@@ -1,3 +1,4 @@
+console.log('>>> DB INITIALIZING...');
 const mysql = require('mysql2/promise');
 const { Storage } = require('@google-cloud/storage');
 const { randomBytes } = require('crypto');
@@ -8,9 +9,7 @@ const parsedPort = parseInt(rawPort, 10);
 const dbPort = Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 3306;
 const dbHost = (process.env.DB_HOST || '127.0.0.1').split('#')[0].trim();
 
-const pool = mysql.createPool({
-    host: dbHost,
-    port: dbPort,
+const dbConfig = {
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'bustaams',
@@ -18,7 +17,16 @@ const pool = mysql.createPool({
     connectionLimit: 20,
     queueLimit: 0,
     timezone: '+09:00'
-});
+};
+
+if (dbHost.startsWith('/')) {
+    dbConfig.socketPath = dbHost;
+} else {
+    dbConfig.host = dbHost;
+    dbConfig.port = dbPort;
+}
+
+const pool = mysql.createPool(dbConfig);
 
 if (process.env.DB_LOG_CONN !== '0') {
     const dbName = process.env.DB_NAME || 'bustaams';
@@ -30,10 +38,19 @@ pool.on('connection', (connection) => {
     connection.query('SET time_zone = "+09:00"');
 });
 
-// Google Cloud Storage 설정
-const storage = new Storage();
+// Google Cloud Storage 설정 (Lazy initialization)
+let storageInstance;
+let bucketInstance;
 const bucketName = process.env.GCS_BUCKET_NAME || 'bustaams-secure-data';
-const bucket = storage.bucket(bucketName);
+
+function getBucket() {
+    if (!bucketInstance) {
+        const { Storage } = require('@google-cloud/storage');
+        storageInstance = new Storage();
+        bucketInstance = storageInstance.bucket(bucketName);
+    }
+    return bucketInstance;
+}
 
 /**
  * [공통] 일련번호 기반 ID 생성 (MAX+1 및 '0' 패딩)
@@ -56,4 +73,4 @@ async function getNextId(tableName, idColumnName, length, connection = null) {
     }
 }
 
-module.exports = { pool, getNextId, bucket, bucketName };
+module.exports = { pool, getNextId, getBucket, bucketName };

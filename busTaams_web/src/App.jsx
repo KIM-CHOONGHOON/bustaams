@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
-import busLogo from './assets/images/bustaams_bus_logo.png';
+import busLogo from './assets/images/BUSTAAMS_IMAGE_LOGO.png';
 import nameLogo from './assets/images/bustaams_name_logo.png';
 import Login from './components/Login/Login';
 

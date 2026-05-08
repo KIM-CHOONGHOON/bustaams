@@ -5,6 +5,19 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>busTaams - 전세버스 최저가 역경매 서비스</title>
+    <!-- PWA Settings -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0052cc" />
+    <link rel="apple-touch-icon" href="/icon-512.png" />
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('SW Registered', reg))
+            .catch(err => console.log('SW Reg Error', err));
+        });
+      }
+    </script>
     <!-- Google Fonts for Radiant Traveler Design System -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
