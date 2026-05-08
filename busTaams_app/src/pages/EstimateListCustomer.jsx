@@ -6,7 +6,7 @@ import BottomNavCustomer from '../components/BottomNavCustomer';
 
 /**
  * 고객용 상세 견적 확인 페이지
- * 각 차량별로 입찰된 기사님의 견적을 확인하고 승인하거나 취소할 수 있습니다.
+ * 각 차량별로 입찰된 기사님의 청약을 확인하고 승인하거나 취소할 수 있습니다.
  */
 const EstimateListCustomer = () => {
     const navigate = useNavigate();
@@ -39,12 +39,12 @@ const EstimateListCustomer = () => {
 
     // 개별 차량 견적 취소
     const handleCancelBus = async (unitSeq) => {
-        const confirmed = await notify.confirm('차량 견적 취소', `차량 #${unitSeq}의 견적 요청을 취소하시겠습니까?`);
+        const confirmed = await notify.confirm('차량 청약 취소', `차량 #${unitSeq}의 청약 요청을 취소하시겠습니까?`);
         if (!confirmed) return;
         try {
             const res = await api.post(`/app/customer/cancel-bus`, { reqId, unitSeq });
             if (res.data.success) {
-                notify.success('취소 완료', '해당 차량의 견적 요청이 취소되었습니다.');
+                notify.success('취소 완료', '해당 차량의 청약 요청이 취소되었습니다.');
                 fetchEstimates();
             }
         } catch (error) {
@@ -55,7 +55,7 @@ const EstimateListCustomer = () => {
 
     // 입찰 승인 (개별)
     const handleApproveBid = async (resId) => {
-        const confirmed = await notify.confirm('견적 승인', '이 기사님의 견적을 승인하시겠습니까?');
+        const confirmed = await notify.confirm('청약 승인', '이 기사님의 청약을 승인하시겠습니까?');
         if (!confirmed) return;
         try {
             const res = await api.post('/app/customer/approve-bid', { resId });
@@ -71,12 +71,12 @@ const EstimateListCustomer = () => {
 
     // 전체 승인
     const handleApproveAll = async () => {
-        const confirmed = await notify.confirm('전체 견적 승인', '진행 중인 모든 견적을 승인하시겠습니까?');
+        const confirmed = await notify.confirm('전체 청약 승인', '진행 중인 모든 청약을 승인하시겠습니까?');
         if (!confirmed) return;
         try {
             const res = await api.post('/app/customer/approve-all', { reqId });
             if (res.success) {
-                notify.success('전체 승인 완료', '모든 견적의 승인이 완료되었습니다.');
+                notify.success('전체 승인 완료', '모든 청약의 승인이 완료되었습니다.');
                 fetchEstimates();
             }
         } catch (error) {
@@ -87,7 +87,7 @@ const EstimateListCustomer = () => {
 
     // 전체 취소
     const handleCancelRequest = async () => {
-        const confirmed = await notify.confirm('전체 견적 요청 취소', '전체 견적 요청을 취소하시겠습니까?');
+        const confirmed = await notify.confirm('전체 청약 요청 취소', '전체 청약 요청을 취소하시겠습니까?');
         if (!confirmed) return;
         try {
             const res = await api.post('/app/customer/cancel-request', { reqId });
@@ -105,7 +105,7 @@ const EstimateListCustomer = () => {
 
     const getBusStatusDisplay = (status) => {
         const config = {
-            'AUCTION': { label: '견적대기중..', color: 'bg-slate-100 text-slate-400' },
+            'AUCTION': { label: '청약대기중..', color: 'bg-slate-100 text-slate-400' },
             'BIDDING': { label: '승인대기중..', color: 'bg-orange-100 text-orange-700' },
             'CONFIRM': { label: '예약 확정..', color: 'bg-teal-100 text-teal-700' },
             'DONE': { label: '운행 종료..', color: 'bg-slate-100 text-slate-500' },
@@ -151,7 +151,7 @@ const EstimateListCustomer = () => {
                         <span className="text-2xl font-black text-teal-800 tracking-tighter italic">Velocity</span>
                     </div>
                     <div className="flex items-center gap-4">
-                         <span className="text-sm font-bold text-slate-400">상세 견적 확인</span>
+                         <span className="text-sm font-bold text-slate-400">상세 청약 확인</span>
                     </div>
                 </div>
             </header>
@@ -162,7 +162,7 @@ const EstimateListCustomer = () => {
                     <div className="md:col-span-8">
                         <p className="text-secondary font-bold tracking-[0.2em] text-xs mb-3 uppercase">Detailed Estimate</p>
                         <h1 className="text-4xl md:text-6xl font-extrabold tracking-tighter text-on-surface leading-tight italic">
-                            <span className="text-primary">{tripSummary.title}</span> 여정
+                            <span className="text-primary">{tripSummary.title}</span> 여행
                         </h1>
                     </div>
                     <div className="md:col-span-4 text-right">
@@ -183,7 +183,7 @@ const EstimateListCustomer = () => {
                             <div className="absolute top-0 left-0 w-2 h-full bg-primary/20"></div>
                             <h2 className="text-2xl font-black mb-10 flex items-center gap-3 italic text-teal-800">
                                 <span className="material-symbols-outlined text-primary" style={{fontVariationSettings: "'FILL' 1"}}>route</span>
-                                여정 경로
+                                여행 경로
                             </h2>
                             <div className="space-y-0 relative">
                                 <div className="absolute left-[11px] top-4 bottom-4 w-0.5 bg-slate-100"></div>
@@ -223,10 +223,10 @@ const EstimateListCustomer = () => {
                             </div>
                         </div>
 
-                        {/* 차량별 견적 리스트 */}
+                        {/* 차량별 청약 리스트 */}
                         <div className="space-y-6">
                             <div className="flex justify-between items-end px-2">
-                                <h2 className="text-2xl font-black italic tracking-tighter">차량별 견적 현황</h2>
+                                <h2 className="text-2xl font-black italic tracking-tighter">차량별 청약 현황</h2>
                                 <span className="text-sm text-slate-400 font-bold">{units.length}대 요청됨</span>
                             </div>
 
@@ -252,11 +252,7 @@ const EstimateListCustomer = () => {
 
                                     {/* 입찰 내역 */}
                                     <div className="space-y-4">
-                                        {unit.estimates.length === 0 ? (
-                                            <div className="py-12 bg-slate-50/50 rounded-[2rem] text-center border-2 border-dashed border-slate-100">
-                                                <p className="text-slate-400 font-bold italic">아직 도착한 견적이 없습니다.</p>
-                                            </div>
-                                        ) : (
+                                        {unit.estimates.length > 0 && (
                                             unit.estimates.map((est) => (
                                                 <div key={est.id} className="bg-slate-50/30 rounded-[2.5rem] p-6 border border-slate-100/50 hover:bg-white hover:shadow-2xl transition-all duration-300 group">
                                                     <div className="flex flex-col gap-8">
@@ -362,7 +358,7 @@ const EstimateListCustomer = () => {
                                                                         est.isSelected ? 'bg-secondary text-white shadow-lg' : 'bg-primary text-white shadow-lg shadow-primary/20'
                                                                     }`}
                                                                 >
-                                                                    {est.isSelected ? '확정된 견적' : '상세 견적 및 승인하기'}
+                                                                    {est.isSelected ? '확정된 청약' : '상세 청약 및 승인하기'}
                                                                 </button>
                                                                 <button 
                                                                     onClick={() => navigate(`/chat-detail/${est.id}`)}
@@ -378,7 +374,7 @@ const EstimateListCustomer = () => {
                                                                     onClick={() => handleCancelBus(unit.unitSeq)}
                                                                     className="w-full py-3 text-[10px] font-black text-error border border-error/10 rounded-xl hover:bg-error/5 transition-all active:scale-95 uppercase tracking-widest"
                                                                 >
-                                                                    이 차량 견적 요청 취소
+                                                                    이 차량 청약 요청 취소
                                                                 </button>
                                                             )}
                                                         </div>
@@ -395,7 +391,7 @@ const EstimateListCustomer = () => {
                     {/* 오른쪽 사이드바 (요약 및 전체 액션) */}
                     <div className="lg:col-span-5 space-y-8">
                         <div className="bg-slate-900 rounded-[3rem] p-8 text-white sticky top-28 shadow-2xl shadow-slate-900/20 border border-slate-800">
-                            <h2 className="text-2xl font-black mb-8 italic tracking-tighter">견적 상세 요약</h2>
+                            <h2 className="text-2xl font-black mb-8 italic tracking-tighter">청약 상세 요약</h2>
                             
                             <div className="space-y-6 mb-10">
                                 {units.map((unit) => (
@@ -439,14 +435,14 @@ const EstimateListCustomer = () => {
                                         className="w-full bg-white/5 text-error border border-error/20 py-5 rounded-[2rem] font-black text-lg hover:bg-error/10 active:scale-95 transition-all flex items-center justify-center gap-3 italic"
                                     >
                                         <span className="material-symbols-outlined">cancel</span>
-                                        전체 견적 취소
+                                        전체 청약 취소
                                     </button>
                                 )}
                             </div>
 
                             <div className="mt-10 p-5 bg-white/5 rounded-2xl border border-white/5">
                                 <p className="text-[10px] leading-relaxed text-slate-400 italic">
-                                    * 실제 운행 시 발생하는 유류비, 톨비, 기사님 봉사료 등은 견적 금액에 포함되어 있으나, 현장 상황에 따라 변동될 수 있습니다.
+                                    * 실제 운행 시 발생하는 유류비, 톨비, 기사님 봉사료 등은 청약 금액에 포함되어 있으나, 현장 상황에 따라 변동될 수 있습니다.
                                 </p>
                             </div>
                         </div>

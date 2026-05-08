@@ -135,7 +135,7 @@ const EstimateForm = () => {
                                 {/* Buttons */}
                                 <div className="pt-4 flex flex-col md:flex-row items-center gap-6">
                                     <button type="submit" className="w-full md:w-auto px-16 py-5 bg-gradient-to-br from-primary to-teal-800 text-white font-headline font-extrabold rounded-full text-lg shadow-2xl shadow-primary/30 hover:scale-105 active:scale-95 transition-all duration-300 tracking-tighter">
-                                        견적 제출하기
+                                        청약승인
                                     </button>
                                     <button type="button" onClick={() => navigate(-1)} className="text-slate-400 font-headline font-bold hover:text-primary transition-colors text-[11px] uppercase tracking-widest">
                                         작성 취소

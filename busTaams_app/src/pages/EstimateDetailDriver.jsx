@@ -209,7 +209,7 @@ const EstimateDetailDriver = () => {
 
                                 <div className="pt-8 text-left">
                                     <button className="w-full py-8 bg-[#004e47] text-white font-black font-headline text-2xl italic uppercase tracking-[0.3em] rounded-full shadow-2xl shadow-teal-900/20 hover:shadow-secondary/40 hover:bg-secondary active:scale-95 transition-all duration-500" type="submit">
-                                        견적 제출하기
+                                        청약승인
                                     </button>
                                 </div>
                             </form>

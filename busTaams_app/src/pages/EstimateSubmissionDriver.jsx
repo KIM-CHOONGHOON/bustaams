@@ -132,7 +132,7 @@ const EstimateSubmissionDriver = () => {
                                 {/* Actions */}
                                 <div className="pt-8 flex flex-col md:flex-row items-center gap-10 text-left">
                                     <button className="w-full md:w-auto px-20 py-8 bg-gradient-to-br from-primary to-primary-container text-white font-black font-headline text-xl italic uppercase tracking-[0.2em] rounded-full shadow-2xl shadow-primary/30 hover:shadow-primary/50 active:scale-95 transition-all duration-500" type="submit">
-                                        견적 제출하기
+                                        청약승인
                                     </button>
                                     <button className="text-slate-300 font-black text-[10px] uppercase tracking-[0.4em] hover:text-secondary transition-all italic" type="button">
                                         임시 저장

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import DaumPostcodeEmbed from 'react-daum-postcode';
 import api from '../api';
 import Swal from 'sweetalert2';
@@ -18,35 +18,105 @@ const BUS_INFO = [
 
 const RequestBus = () => {
     const navigate = useNavigate();
+    const { id } = useParams();
     
     const [tripName, setTripName] = useState('');
-    // const [customDetails, setCustomDetails] = useState(''); // 삭제됨
     
     // Bus types from DB
     const [busTypes, setBusTypes] = useState([]);
     const [busCounts, setBusCounts] = useState({});
     const [quoteAmounts, setQuoteAmounts] = useState({});
 
+    // Address states
+    const [depAddress, setDepAddress] = useState(''); // 출발지
+    const [stops, setStops] = useState([]); // 출발 경유지
+    const [arrAddress, setArrAddress] = useState(''); // 회차지
+    const [returnStops, setReturnStops] = useState([]); // 복귀 경유지
+    const [endAddress, setEndAddress] = useState(''); // 최종 도착지
+
+    // DateTime states (YYYY-MM-DD HH:mm)
+    const [depDateTime, setDepDateTime] = useState('');
+    const [arrDateTime, setArrDateTime] = useState('');
+
     // Fetch bus types from DB
     useEffect(() => {
         const fetchBusTypes = async () => {
             try {
                 const response = await api.get('/common/codes/BUS_TYPE');
-                if (response.success) {
+                if (response.data) {
                     setBusTypes(response.data);
-                    // Initialize counts to 0
-                    const initialCounts = {};
-                    response.data.forEach(bus => {
-                        initialCounts[bus.code] = 0;
-                    });
-                    setBusCounts(initialCounts);
+                    
+                    // 만약 수정 모드라면, 데이터를 먼저 가져온 뒤 counts 설정
+                    if (id) {
+                        const resDetail = await api.get(`/app/customer/auction-req/${id}`);
+                        console.log('[RequestBus] Detail Response:', resDetail);
+                        if (resDetail.success && resDetail.data) {
+                            const data = resDetail.data;
+                            setTripName(data.TRIP_TITLE || '');
+                            setDepAddress(data.START_ADDR || '');
+                            setEndAddress(data.END_ADDR || '');
+                            
+                            // 시간 변환 (YYYY-MM-DD HH:mm)
+                            const formatInputDt = (dt) => {
+                                if(!dt) return '';
+                                // 만약 dt가 ISO 스트링이나 Date 객체라면 문자열로 변환 후 처리
+                                const dtStr = typeof dt === 'string' ? dt : new Date(dt).toISOString();
+                                return dtStr.replace(' ', 'T').replace('Z', '').substring(0, 16);
+                            };
+                            setDepDateTime(formatInputDt(data.START_DT));
+                            setArrDateTime(formatInputDt(data.END_DT));
+
+                            // 차량 정보 복원
+                            const initialCounts = {};
+                            if (response.data) {
+                                response.data.forEach(bus => initialCounts[bus.code] = 0);
+                            }
+                            
+                            const initialQuotes = {};
+                            if (data.buses && Array.isArray(data.buses)) {
+                                data.buses.forEach((b, idx) => {
+                                    initialCounts[b.BUS_TYPE_CD] = (initialCounts[b.BUS_TYPE_CD] || 0) + 1;
+                                    initialQuotes[idx] = b.reqAmt;
+                                });
+                            }
+                            setBusCounts(initialCounts);
+                            setQuoteAmounts(initialQuotes);
+
+                            // 경유지 복원
+                            if (data.vias && Array.isArray(data.vias)) {
+                                // 기존 addr 필드를 사용하여 복원
+                                const startNodes = data.vias.filter(v => v.VIA_TYPE === 'START_NODE');
+                                const startWays = data.vias.filter(v => v.VIA_TYPE === 'START_WAY');
+                                const roundTrips = data.vias.filter(v => v.VIA_TYPE === 'ROUND_TRIP');
+                                const endWays = data.vias.filter(v => v.VIA_TYPE === 'END_WAY');
+                                const endNodes = data.vias.filter(v => v.VIA_TYPE === 'END_NODE');
+
+                                if(startNodes.length > 0) setDepAddress(startNodes[0].addr);
+                                setStops(startWays.map(v => v.addr));
+                                if(roundTrips.length > 0) setArrAddress(roundTrips[0].addr);
+                                setReturnStops(endWays.map(v => v.addr));
+                                if(endNodes.length > 0) setEndAddress(endNodes[0].addr);
+                            }
+                        } else {
+                            console.error('[RequestBus] Failed to load request data:', resDetail);
+                            notify.error('오류', '요청 정보를 불러오지 못했습니다.');
+                            navigate(-1);
+                        }
+                    } else {
+                        // 신규 모드: Initialize counts to 0
+                        const initialCounts = {};
+                        response.data.forEach(bus => {
+                            initialCounts[bus.code] = 0;
+                        });
+                        setBusCounts(initialCounts);
+                    }
                 }
             } catch (err) {
                 console.error('Bus types fetch error:', err);
             }
         };
         fetchBusTypes();
-    }, []);
+    }, [id]);
 
     const handleQuoteChange = (index, value) => {
         const numStr = value.replace(/[^0-9]/g, '');
@@ -60,17 +130,6 @@ const RequestBus = () => {
             return { ...prev, [key]: newVal };
         });
     };
-
-    // Address states
-    const [depAddress, setDepAddress] = useState(''); // 출발지
-    const [stops, setStops] = useState([]); // 출발 경유지
-    const [arrAddress, setArrAddress] = useState(''); // 회차지
-    const [returnStops, setReturnStops] = useState([]); // 복귀 경유지
-    const [endAddress, setEndAddress] = useState(''); // 최종 도착지
-
-    // DateTime states (YYYY-MM-DD HH:mm)
-    const [depDateTime, setDepDateTime] = useState('');
-    const [arrDateTime, setArrDateTime] = useState('');
 
     // Postcode Modal state
     const [postcodeOpen, setPostcodeOpen] = useState(false);
@@ -107,7 +166,6 @@ const RequestBus = () => {
         }
     });
 
-    const expensesPerBus = 250000; // 톨비(10만) + 유류비(15만) (숙박비 제외)
     const grandTotal = selectedBuses.reduce((acc, bus, idx) => {
         return acc + (quoteAmounts[idx] || 0);
     }, 0);
@@ -150,8 +208,8 @@ const RequestBus = () => {
             return;
         }
 
+
         try {
-            const token = localStorage.getItem('accessToken');
             const vias = [];
             
             // 1. 출발지 (START_NODE)
@@ -185,10 +243,12 @@ const RequestBus = () => {
                 vias
             };
 
-            const response = await api.post('/app/customer/auction-req', payload);
+            const response = id 
+                ? await api.put(`/app/customer/auction-req/${id}`, payload)
+                : await api.post('/app/customer/auction-req', payload);
 
             if(response.success) {
-                await notify.success('성공', '차량 견적 요청이 성공적으로 접수되었습니다.');
+                await notify.success('성공', id ? '예약 정보가 성공적으로 수정되었습니다.' : '차량 견적 요청이 성공적으로 접수되었습니다.');
                 navigate('/customer-dashboard');
             } else {
                 notify.error('실패', response.error || '요청 중 오류가 발생했습니다.');
@@ -290,7 +350,7 @@ const RequestBus = () => {
                         <button onClick={() => navigate(-1)} className="hover:opacity-80 transition-opacity active:scale-95 duration-200">
                             <span className="material-symbols-outlined text-3xl">arrow_back</span>
                         </button>
-                        <h1 className="font-headline font-extrabold tracking-tight text-3xl text-teal-900 text-[24px]">요청서 작성</h1>
+                        <h1 className="font-headline font-extrabold tracking-tight text-3xl text-teal-900 text-[24px]">{id ? '요청서 수정' : '요청서 작성'}</h1>
                     </div>
                 </div>
             </header>
@@ -514,7 +574,7 @@ const RequestBus = () => {
                                             <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-[2.5rem] p-10 text-white shadow-2xl shadow-orange-950/30 relative overflow-hidden group">
                                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
                                                     <div className="space-y-1">
-                                                        <p className="font-label text-xs font-extrabold uppercase tracking-[0.2em] opacity-80">전체 견적 합계 (GRAND TOTAL)</p>
+                                                        <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">총 예약 금액</p>
                                                         <h4 className="font-headline font-black text-5xl tracking-tighter">₩ {grandTotal.toLocaleString()}</h4>
                                                     </div>
                                                     <div className="text-left md:text-right pb-1">

@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getMessaging } from 'firebase/messaging';
 
 // Firebase 프로젝트 설정
 const firebaseConfig = {
@@ -15,9 +16,11 @@ const firebaseConfig = {
 // Firebase 초기화
 const app = initializeApp(firebaseConfig);
 
-// Auth 인스턴스 생성 및 내보내기
+// 인스턴스 생성 및 내보내기
 export const auth = getAuth(app);
+export const messaging = getMessaging(app);
 export const googleProvider = new GoogleAuthProvider();
+
 auth.languageCode = 'ko'; // 한국어 설정
 
 export default app;

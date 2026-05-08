@@ -75,6 +75,7 @@ function App() {
         {/* 고객용 라우트 */}
         <Route path="/customer-dashboard" element={<CustomerDashboard />} />
         <Route path="/request-bus" element={<RequestBus />} />
+        <Route path="/edit-request/:id" element={<RequestBus />} />
         <Route path="/order-history" element={<OrderHistoryCustomer />} />
         <Route path="/order-detail/:id" element={<OrderDetailCustomer />} />
         <Route path="/review-pending-list" element={<ReviewPendingList />} />

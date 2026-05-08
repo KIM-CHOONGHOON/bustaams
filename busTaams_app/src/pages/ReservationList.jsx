@@ -13,11 +13,12 @@ const ReservationList = () => {
             setLoading(true);
             try {
                 const res = await api.get('/app/customer/reservations');
+                console.log('[ReservationList] API Response:', res);
                 if (res.success) {
                     setReservations(res.data);
                 }
             } catch (err) {
-                console.error('Failed to fetch reservations:', err);
+                console.error('[ReservationList] Failed to fetch reservations:', err);
             } finally {
                 setLoading(false);
             }
@@ -127,10 +128,15 @@ const ReservationList = () => {
                                         <div className="mt-8 flex gap-4 text-left">
                                             {res.statusCode !== 'DONE' ? (
                                                 <>
-                                                    <button className="bg-primary text-white px-8 py-3 rounded-full font-bold text-sm tracking-wide shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all">
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); /* 티켓 확인 로직 */ }}
+                                                        className="bg-primary text-white px-8 py-3 rounded-full font-bold text-sm tracking-wide shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all">
                                                         티켓 확인
                                                     </button>
-                                                    <button className="border border-slate-200 text-slate-500 px-8 py-3 rounded-full font-bold text-sm tracking-wide hover:bg-slate-50 transition-all">
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); navigate(`/edit-request/${res.id}`); }}
+                                                        className="border border-slate-200 text-slate-500 px-8 py-3 rounded-full font-bold text-sm tracking-wide hover:bg-slate-50 transition-all"
+                                                    >
                                                         변경하기
                                                     </button>
                                                 </>

@@ -17,8 +17,8 @@ const EstimateRequestListCustomer = () => {
         switch(type) {
             case 'progress':
                 return { 
-                    title: '견적진행중', 
-                    subtitle: '기사님의 견적 제안을 기다리는 중입니다',
+                    title: '청약진행중', 
+                    subtitle: '기사님의 청약 제안을 기다리는 중입니다',
                     icon: 'near_me',
                     color: 'text-teal-600',
                     bgColor: 'bg-teal-50',
@@ -27,7 +27,7 @@ const EstimateRequestListCustomer = () => {
             case 'waiting':
                 return { 
                     title: '승인대기중', 
-                    subtitle: '도착한 견적 중 마음에 드는 차량을 선택해주세요',
+                    subtitle: '',
                     icon: 'pending_actions',
                     color: 'text-orange-600',
                     bgColor: 'bg-orange-50',
@@ -35,7 +35,7 @@ const EstimateRequestListCustomer = () => {
                 };
             default:
                 return { 
-                    title: '견적 요청 관리', 
+                    title: '청약 요청 관리', 
                     subtitle: '전체 요청 내역입니다',
                     icon: 'list_alt',
                     color: 'text-slate-600',
@@ -49,7 +49,7 @@ const EstimateRequestListCustomer = () => {
 
     const getRequestStatus = (status) => {
         const config = {
-            'AUCTION': { label: '견적대기중..', color: 'bg-blue-50 text-blue-600 border-blue-100' },
+            'AUCTION': { label: '청약대기중..', color: 'bg-blue-50 text-blue-600 border-blue-100' },
             'BIDDING': { label: '승인대기중..', color: 'bg-orange-50 text-orange-600 border-orange-100' },
             'CONFIRM': { label: '예약 확정..', color: 'bg-teal-50 text-teal-600 border-teal-100' },
             'DONE': { label: '운행 종료..', color: 'bg-slate-50 text-slate-500 border-slate-100' },
@@ -187,7 +187,7 @@ const EstimateRequestListCustomer = () => {
                                             req.buses.map((bus, idx) => {
                                                 const getBusStatusDisplay = (status) => {
                                                     const config = {
-                                                        'AUCTION': { label: '견적대기중..', color: 'bg-slate-100 text-slate-400' },
+                                                        'AUCTION': { label: '청약대기중..', color: 'bg-slate-100 text-slate-400' },
                                                         'BIDDING': { label: '승인대기중...', color: 'bg-orange-100 text-orange-700' },
                                                         'CONFIRM': { label: '예약 확정...', color: 'bg-teal-100 text-teal-700' },
                                                         'DONE': { label: '운행 종료...', color: 'bg-slate-100 text-slate-500' },
@@ -248,7 +248,7 @@ const EstimateRequestListCustomer = () => {
                                         onClick={() => navigate(`/${typeParam === 'waiting' ? 'approval-list' : 'estimate-list'}?reqId=${req.reqUuid}`)}
                                         className={`flex-1 ${typeParam === 'waiting' ? 'bg-orange-600' : 'bg-teal-700'} text-white py-4 rounded-2xl font-black text-sm hover:opacity-90 active:scale-95 transition-all shadow-lg`}
                                     >
-                                        {typeParam === 'waiting' ? '승인 처리하기' : '상세 견적 확인'}
+                                        {typeParam === 'waiting' ? '승인 처리하기' : '상세 청약 확인'}
                                     </button>
                                     <button 
                                         className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition-all"
@@ -266,13 +266,13 @@ const EstimateRequestListCustomer = () => {
                         </div>
                         <div>
                             <h3 className="text-xl font-black text-slate-800">해당 내역이 없습니다</h3>
-                            <p className="text-slate-400 font-medium mt-1">새로운 견적을 요청하거나 다른 리스트를 확인해보세요.</p>
+                            <p className="text-slate-400 font-medium mt-1">새로운 청약을 요청하거나 다른 리스트를 확인해보세요.</p>
                         </div>
                         <button 
                             onClick={() => navigate('/request-bus')}
                             className="bg-teal-700 text-white px-8 py-3 rounded-xl font-black text-sm shadow-lg shadow-teal-900/20"
                         >
-                            첫 견적 요청 등록하기
+                            첫 청약 요청 등록하기
                         </button>
                     </div>
                 )}

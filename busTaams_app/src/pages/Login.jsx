@@ -36,8 +36,6 @@ const Login = () => {
       <header className="flex justify-between items-center w-full px-6 pt-8 pb-4 max-w-7xl mx-auto z-10">
         <div className="text-teal-900 font-black tracking-tighter font-headline text-3xl">busTaams</div>
         <div className="flex items-center gap-4">
-          <span className="text-on-surface-variant font-medium text-sm text-[12px]">도움이 필요하신가요?</span>
-          <span className="material-symbols-outlined text-primary text-2xl">help_outline</span>
         </div>
       </header>
 
@@ -59,9 +57,11 @@ const Login = () => {
 
           <section className="lg:col-span-5 w-full">
             <div className="space-y-12">
+              <div className="rounded-2xl overflow-hidden shadow-md mb-8">
+                <img src="/assets/login_banner.png" alt="Promotion Banner" className="w-full h-auto object-cover" />
+              </div>
               <div className="space-y-4">
-                <h1 className="font-headline font-extrabold text-4xl lg:text-5xl text-on-surface tracking-tighter text-[40px]">다시 오신 것을 환영합니다</h1>
-                <p className="text-on-surface-variant text-lg text-[16px]">개인 대시보드에 접속하려면 자격 증명을 입력하세요.</p>
+                <h1 className="font-headline font-extrabold text-4xl lg:text-5xl text-on-surface tracking-tighter text-[40px]">귀하의 방문을 환영합니다.</h1>
               </div>
               <form onSubmit={handleLogin} className="space-y-6">
                 <div className="space-y-2">
@@ -121,19 +121,6 @@ const Login = () => {
                   <button type="button" onClick={() => navigate('/find-account')} className="text-on-surface-variant hover:text-primary transition-colors">아이디 / 비밀번호 찾기</button>
                 </div>
               </form>
-              <div className="relative py-4 flex items-center">
-                <div className="flex-grow h-[1px] bg-surface-container-high"></div>
-                <span className="px-4 text-xs font-bold text-outline uppercase tracking-[0.2em]">간편 로그인</span>
-                <div className="flex-grow h-[1px] bg-surface-container-high"></div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <button className="flex items-center justify-center gap-3 bg-[#FEE500] hover:bg-[#FEE500]/90 text-[#191919] font-bold py-4 rounded-xl transition-all shadow-sm">
-                  <span className="text-sm">카카오 로그인</span>
-                </button>
-                <button className="flex items-center justify-center gap-3 bg-[#03C75A] hover:bg-[#03C75A]/90 text-white font-bold py-4 rounded-xl transition-all shadow-sm">
-                  <span className="text-sm">네이버 로그인</span>
-                </button>
-              </div>
             </div>
           </section>
         </div>

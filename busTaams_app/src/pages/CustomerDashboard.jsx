@@ -98,7 +98,7 @@ const CustomerDashboard = () => {
                         <p className="text-secondary font-semibold tracking-wider text-sm uppercase">반가워요!</p>
                         <h2 className="text-4xl md:text-5xl font-extrabold text-on-surface tracking-tight leading-tight text-[36px]">
                             안녕하세요, <span className="text-primary">{userName || '사용자'}</span>님!<br/>
-                            오늘의 새로운 여정을 시작해볼까요?
+                            오늘의 새로운 여행을 시작해볼까요?
                         </h2>
                     </div>
                 </section>
@@ -136,7 +136,7 @@ const CustomerDashboard = () => {
                                 }`}
                             >
                                 <span className="material-symbols-outlined text-[20px]">near_me</span>
-                                <span>견적진행중</span>
+                                <span>청약진행중</span>
                             </button>
                             <button 
                                 onClick={() => navigate('/estimate-request-list?type=waiting')} 
