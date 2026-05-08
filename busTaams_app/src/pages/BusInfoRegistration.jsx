@@ -240,31 +240,24 @@ const BusInfoRegistration = () => {
     return (
         <div className="bg-[#f7f9fb] text-[#191c1e] font-body min-h-screen pb-32 text-left">
             {/* TopAppBar */}
-            <header className="bg-transparent text-teal-800 flex justify-between items-center w-full px-6 pt-8 pb-4 max-w-7xl mx-auto">
-                <div className="flex items-center gap-4">
-                    <button onClick={() => navigate(-1)} className="hover:opacity-80 transition-opacity active:scale-95 duration-200">
-                        <span className="material-symbols-outlined text-2xl">menu</span>
+            {/* TopAppBar - 표준화된 헤더 스타일 */}
+            <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-white/20 px-4 h-16 flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-3">
+                    <button onClick={() => navigate(-1)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors">
+                        <span className="material-symbols-outlined text-slate-600">arrow_back</span>
                     </button>
-                    <h1 className="font-headline font-extrabold tracking-tight text-3xl text-[#004e47] tracking-tighter">busTaams</h1>
+                    <h1 className="text-lg font-bold text-slate-800">버스 정보 등록</h1>
                 </div>
-                <div className="flex items-center gap-6">
-                    <nav className="hidden md:flex gap-8 items-center text-sm font-bold">
-                        <a className="text-slate-500 hover:text-teal-600 transition-colors" href="#" onClick={(e) => {e.preventDefault(); navigate('/estimate-list-driver')}}>경매</a>
-                        <a className="text-slate-500 hover:text-teal-600 transition-colors" href="#">관심목록</a>
-                        <a className="text-slate-500 hover:text-teal-600 transition-colors" href="#">입찰</a>
-                        <a className="text-teal-600" href="#" onClick={(e) => {e.preventDefault(); navigate('/driver-dashboard')}}>프로필</a>
-                    </nav>
-                    <div className="w-10 h-10 rounded-full bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
-                        {userProfileImg ? (
-                            <img alt="User Profile" src={userProfileImg} className="w-full h-full object-cover" />
-                        ) : (
-                            <span className="material-symbols-outlined text-[#bec9c6]">person</span>
-                        )}
-                    </div>
+                <div className="w-10 h-10 rounded-full bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
+                    {userProfileImg ? (
+                        <img alt="User Profile" src={userProfileImg} className="w-full h-full object-cover" />
+                    ) : (
+                        <span className="material-symbols-outlined text-[#bec9c6]">person</span>
+                    )}
                 </div>
             </header>
 
-            <main className="max-w-7xl mx-auto px-6 pt-12 pb-32">
+            <main className="max-w-7xl mx-auto px-6 pt-24 pb-32">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
                     {/* Left Column */}
                     <div className="lg:col-span-4 flex flex-col gap-6 text-left">

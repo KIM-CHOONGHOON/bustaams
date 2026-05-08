@@ -34,7 +34,10 @@ const Login = () => {
   return (
     <div className="bg-background font-body text-on-background min-h-screen flex flex-col overflow-x-hidden">
       <header className="flex justify-between items-center w-full px-6 pt-8 pb-4 max-w-7xl mx-auto z-10">
-        <div className="text-teal-900 font-black tracking-tighter font-headline text-3xl">busTaams</div>
+        <div className="flex items-center gap-3">
+          <img src="/icon-512.png" alt="busTaams Logo" className="w-10 h-10 object-contain rounded-xl shadow-sm" />
+          <div className="text-teal-900 font-black tracking-tighter font-headline text-3xl">busTaams</div>
+        </div>
         <div className="flex items-center gap-4">
         </div>
       </header>

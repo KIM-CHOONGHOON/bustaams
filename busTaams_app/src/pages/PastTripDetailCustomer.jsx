@@ -45,7 +45,7 @@ const PastTripDetailCustomer = () => {
         );
     }
 
-    // 여정 필터링 로직 (출발 -> 출발경유지 -> 회차지 -> 회차경유지 -> 도착지)
+    // 여행 필터링 로직 (출발 -> 출발경유지 -> 목적지 -> 도착경유지 -> 도착지)
     const startNode = { type: 'START', addr: detail.startAddr, time: detail.startDt };
     
     // 경유지들을 순서대로 분류
@@ -59,14 +59,16 @@ const PastTripDetailCustomer = () => {
     const endNode = { type: 'END', addr: detail.waypoints?.find(w => w.type === 'END_NODE')?.addr || detail.endAddrMaster, time: detail.endDt };
 
     // 결제 총액 (데이터가 없을 경우 0으로 처리)
-    const totalPrice = detail.totalAmt || 0;
+    const totalPrice = Number(detail.price || 0);
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] pb-32">
             <header className="fixed top-0 w-full z-50 bg-white border-b border-slate-100 shadow-sm">
                 <div className="flex items-center justify-between px-6 h-16 w-full max-w-4xl mx-auto">
-                    <button onClick={() => navigate(-1)} className="material-symbols-outlined text-teal-700 hover:bg-slate-50 p-2 rounded-full transition-all">arrow_back</button>
-                    <h1 className="font-bold text-[17px] text-[#1E293B]">주문 상세</h1>
+                    <div className="flex items-center gap-4">
+                        <button onClick={() => navigate(-1)} className="material-symbols-outlined text-teal-700 hover:bg-slate-50 p-2 rounded-full transition-all">arrow_back</button>
+                        <h1 className="font-bold text-[17px] text-[#1E293B]">여행 상세</h1>
+                    </div>
                     <div className="text-[#94A3B8] font-bold text-[13px] tracking-tight">
                         #{detail.id}
                     </div>
@@ -74,7 +76,7 @@ const PastTripDetailCustomer = () => {
             </header>
 
             <main className="max-w-4xl mx-auto px-6 pt-24 space-y-12">
-                {/* 제목 및 여정 경로 표시 */}
+                {/* 제목 및 여행 경로 표시 */}
                 <section className="px-2 space-y-2">
                     <h2 className="text-[24px] font-black text-[#1E293B] tracking-tight leading-tight">
                         {detail.title}
@@ -125,8 +127,8 @@ const PastTripDetailCustomer = () => {
                 {/* Section 1: 요청정보 요약 */}
                 <section className="space-y-6">
                     <div className="flex justify-between items-center px-2">
-                        <h2 className="text-xl font-black text-[#1E293B] tracking-tight">요청정보 요약</h2>
-                        <span className="px-4 py-1.5 rounded-full bg-[#E2E8F0] text-[#64748B] text-[11px] font-black uppercase tracking-wider">운행 완료</span>
+                        <h2 className="text-xl font-black text-[#1E293B] tracking-tight">여행 정보 요약</h2>
+                        <span className="px-4 py-1.5 rounded-full bg-[#E2E8F0] text-[#64748B] text-[11px] font-black uppercase tracking-wider">여행 완료</span>
                     </div>
                     
                     <div className="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100 space-y-10 relative overflow-hidden">
@@ -160,13 +162,13 @@ const PastTripDetailCustomer = () => {
                                 <div className="relative">
                                     <div className="absolute -left-[30px] top-1.5 w-4 h-4 rounded-full border-2 border-slate-900 bg-white z-10"></div>
                                     <div className="space-y-1">
-                                        <p className="text-[11px] font-bold text-[#94A3B8]">회차지</p>
+                                        <p className="text-[11px] font-bold text-[#94A3B8]">목적지</p>
                                         <p className="text-[17px] font-black tracking-tight">{roundNode.addr}</p>
                                     </div>
                                 </div>
                             )}
 
-                            {/* 회차 경유지 */}
+                            {/* 도착 경유지 */}
                             {viaAfterRound.map((via, idx) => (
                                 <div key={`via-after-${idx}`} className="relative">
                                     <div className="absolute -left-[30px] top-1.5 w-3 h-3 rounded-full border-2 border-slate-200 bg-white z-10"></div>
@@ -252,7 +254,7 @@ const PastTripDetailCustomer = () => {
                     <h2 className="text-xl font-black text-[#1E293B] tracking-tight px-2">결제 내역 상세</h2>
                     <div className="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100 space-y-8">
                         <div className="flex justify-between items-center py-2">
-                            <span className="text-[16px] font-black text-[#1E293B]">견적 요청 금액</span>
+                            <span className="text-[16px] font-black text-[#1E293B]">청약 요청 금액</span>
                             <span className="text-[20px] font-black text-[#1E293B]">₩ {totalPrice.toLocaleString()}</span>
                         </div>
 

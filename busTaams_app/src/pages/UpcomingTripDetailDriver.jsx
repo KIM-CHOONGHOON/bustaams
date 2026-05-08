@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import api from '../api';
+import api, { getDriverProfile } from '../api';
 import { notify } from '../utils/toast';
 import BottomNavDriver from '../components/BottomNavDriver';
 
@@ -14,10 +14,18 @@ const UpcomingTripDetailDriver = () => {
     const [trip, setTrip] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [userProfileImg, setUserProfileImg] = useState('');
 
     useEffect(() => {
         const fetchDetail = async () => {
             try {
+                // 1. 기사 프로필 정보 조회 (헤더용)
+                const profRes = await getDriverProfile();
+                if (profRes.success && profRes.data) {
+                    setUserProfileImg(profRes.data.driver?.profileImg || '');
+                }
+
+                // 2. 상세 정보 조회
                 const result = await api.get(`/app/driver/mission-detail/${id}`);
                 if (result.success) {
                     setTrip(result.data);
@@ -84,17 +92,21 @@ const UpcomingTripDetailDriver = () => {
     }
 
     return (
-        <div className="bg-[#F8F9FA] text-[#1D3557] min-h-[100dvh] pb-32 font-body">
-            {/* 상단 앱바 */}
-            <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 py-4">
-                <div className="flex justify-between items-center px-6 max-w-2xl mx-auto">
-                    <button onClick={() => navigate(-1)} className="text-[#004D40]">
-                        <span className="material-symbols-outlined text-2xl">arrow_back</span>
+        <div className="bg-[#F8F9FA] text-[#1D3557] min-h-[100dvh] pb-32 font-body text-left">
+            {/* 상단 앱바 - 표준화된 스타일 적용 */}
+            <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-white/20 px-4 h-16 flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-3">
+                    <button onClick={() => navigate(-1)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors">
+                        <span className="material-symbols-outlined text-slate-600">arrow_back</span>
                     </button>
-                    <h1 className="font-bold text-lg text-[#004D40]">운행상세 내역</h1>
-                    <button className="text-[#004D40]">
-                        <span className="material-symbols-outlined text-2xl">more_vert</span>
-                    </button>
+                    <h1 className="text-lg font-bold text-slate-800">운행상세 내역</h1>
+                </div>
+                <div className="w-10 h-10 rounded-full bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
+                    {userProfileImg ? (
+                        <img alt="User Profile" src={userProfileImg} className="w-full h-full object-cover" />
+                    ) : (
+                        <span className="material-symbols-outlined text-[#bec9c6]">person</span>
+                    )}
                 </div>
             </header>
 
@@ -104,25 +116,7 @@ const UpcomingTripDetailDriver = () => {
                     <span className="text-[#E64A19] font-bold text-xs block mb-1">운행 예정</span>
                     <div className="flex flex-col gap-4">
                         <h2 className="text-xl md:text-2xl font-black text-[#004D40] leading-tight break-keep">
-                            {(() => {
-                                const start = trip.waypoints.find(w => w.type === 'START');
-                                const round = trip.waypoints.find(w => w.type === 'ROUND');
-                                const end = trip.waypoints.find(w => w.type === 'END');
-
-                                const getShortAddr = (addr) => {
-                                    if (!addr) return '';
-                                    const parts = addr.split(' ');
-                                    return parts.slice(0, 2).join(' ');
-                                };
-
-                                return (
-                                    <>
-                                        {getShortAddr(start.addr)}(출발)
-                                        {round && <><span className="text-gray-300 mx-2">→</span>{getShortAddr(round.addr)}(회차)</>}
-                                        <span className="text-gray-300 mx-2">→</span>{getShortAddr(end.addr)}(도착지)
-                                    </>
-                                );
-                            })()}
+                            {trip.title || '여행 제목 없음'}
                         </h2>
                         <div className="text-left md:text-right border-t border-gray-100 pt-4 md:border-none md:pt-0">
                             <p className="text-gray-400 text-[10px] font-bold mb-1 uppercase tracking-widest">계약 금액</p>
@@ -199,7 +193,7 @@ const UpcomingTripDetailDriver = () => {
                 </div>
 
                 <section className="mb-12">
-                    <h3 className="text-2xl font-black text-[#1D3557] mb-8">상세 여정 안내</h3>
+                    <h3 className="text-2xl font-black text-[#1D3557] mb-8">상세 여행 안내</h3>
                     <div className="space-y-6 relative ml-4 border-l border-gray-100 pl-8">
                         {trip.waypoints.map((wp, i, arr) => {
                             const roundIdx = arr.findIndex(w => w.type === 'ROUND');
@@ -211,13 +205,13 @@ const UpcomingTripDetailDriver = () => {
                                 label = '출발';
                                 badgeColor = 'bg-[#D1F7EC] text-[#004D40]';
                             } else if (wp.type === 'START_WAY') {
-                                label = '출발경유지';
+                                label = '출발 경유지';
                                 badgeColor = 'bg-gray-100 text-gray-600';
                             } else if (wp.type === 'ROUND') {
-                                label = '회차지';
+                                label = '목적지';
                                 badgeColor = 'bg-[#E3F2FD] text-[#1976D2]';
                             } else if (wp.type === 'END_WAY') {
-                                label = '회차경유지';
+                                label = '도착 경유지';
                                 badgeColor = 'bg-gray-100 text-gray-600';
                             } else if (wp.type === 'END') {
                                 label = '도착지';
@@ -244,7 +238,7 @@ const UpcomingTripDetailDriver = () => {
                                         <p className="text-xs text-gray-400 leading-relaxed font-medium">
                                             {wp.type === 'START' ? '승객 명단 확인 및 수하물 적재를 위해 최소 20분 전 대기 권장합니다.' :
                                                 wp.type === 'END' ? '최종 목적지 하차 및 차량 내부 유실물 확인 후 운행 종료 보고 바랍니다.' :
-                                                    wp.type === 'ROUND' ? '회차지에서의 대기 시간 및 집결 시간을 다시 한번 확인해 주세요.' :
+                                                    wp.type === 'ROUND' ? '목적지에서의 대기 시간 및 집결 시간을 다시 한번 확인해 주세요.' :
                                                         '안전한 승하차를 위해 주변 환경을 확인하고 정차해 주세요.'}
                                         </p>
                                     </div>

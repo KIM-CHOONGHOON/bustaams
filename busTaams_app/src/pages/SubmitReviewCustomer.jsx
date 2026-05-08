@@ -75,8 +75,10 @@ const SubmitReviewCustomer = () => {
         <div className="bg-[#F8FAFB] min-h-screen pb-20 text-left font-body">
             {/* Header */}
             <header className="fixed top-0 w-full z-50 bg-white border-b border-slate-100 px-6 h-16 flex items-center justify-between">
-                <button onClick={() => navigate(-1)} className="material-symbols-outlined text-[#1E293B] p-2 hover:bg-slate-50 rounded-full transition-all">close</button>
-                <h1 className="font-bold text-[17px] text-[#1E293B]">평점 및 감사글 작성</h1>
+                <div className="flex items-center gap-4">
+                    <button onClick={() => navigate(-1)} className="material-symbols-outlined text-[#1E293B] p-2 hover:bg-slate-50 rounded-full transition-all">close</button>
+                    <h1 className="font-bold text-[17px] text-[#1E293B]">평점 및 감사글 작성</h1>
+                </div>
                 <div className="w-10"></div>
             </header>
 
@@ -87,7 +89,7 @@ const SubmitReviewCustomer = () => {
                         <span className="px-3 py-1 rounded-full bg-teal-50 text-teal-700 text-[10px] font-black uppercase tracking-wider">Reviewing Trip</span>
                         <span className="text-[12px] text-slate-400 font-bold">{detail?.date}</span>
                     </div>
-                    <h2 className="text-[20px] font-black text-slate-800 tracking-tight">{detail?.title || '나의 버스 여정'}</h2>
+                    <h2 className="text-[20px] font-black text-slate-800 tracking-tight">{detail?.title || '나의 버스 여행'}</h2>
                     <div className="flex items-center gap-2 text-slate-500">
                         <span className="material-symbols-outlined text-[18px]">distance</span>
                         <p className="text-[14px] font-bold">
@@ -119,7 +121,7 @@ const SubmitReviewCustomer = () => {
                 {/* Rating Section */}
                 <section className="text-center space-y-8 animate-in fade-in slide-in-from-bottom duration-700 delay-200">
                     <div className="space-y-2">
-                        <h2 className="text-[24px] font-black text-[#1E293B] tracking-tight">여정은 어떠셨나요?</h2>
+                        <h2 className="text-[24px] font-black text-[#1E293B] tracking-tight">여행은 어떠셨나요?</h2>
                         <p className="text-[14px] text-[#64748B] font-medium">기사님께 별점을 남겨주세요.</p>
                     </div>
 

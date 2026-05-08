@@ -1,17 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../api';
+import api, { getDriverProfile } from '../api';
 import BottomNavDriver from '../components/BottomNavDriver';
 
 const UpcomingTripsDriver = () => {
     const navigate = useNavigate();
     const [upcomingTrips, setUpcomingTrips] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [userProfileImg, setUserProfileImg] = useState('');
 
     useEffect(() => {
-        const fetchTrips = async () => {
+        const fetchData = async () => {
             setLoading(true);
             try {
+                // 1. 기사 프로필 정보 조회 (헤더용)
+                const profRes = await getDriverProfile();
+                if (profRes.success && profRes.data) {
+                    setUserProfileImg(profRes.data.driver?.profileImg || '');
+                }
+
+                // 2. 운행 일정 조회
                 const res = await api.get('/app/driver/upcoming-trips');
                 if (res.success) {
                     setUpcomingTrips(res.data);
@@ -22,27 +30,29 @@ const UpcomingTripsDriver = () => {
                 setLoading(false);
             }
         };
-        fetchTrips();
+        fetchData();
     }, []);
 
     return (
         <div className="bg-background text-on-surface min-h-[100dvh] pb-48 font-body text-left">
-            {/* TopAppBar */}
-            <header className="fixed top-0 w-full z-50 bg-white/40 backdrop-blur-3xl border-b border-white/20 py-6">
-                <div className="flex justify-between items-center w-full px-6 max-w-7xl mx-auto">
-                    <div className="flex items-center gap-6 text-left">
-                        <button onClick={() => navigate(-1)} className="p-3 bg-white rounded-2xl text-teal-800 shadow-xl shadow-teal-900/5 active:scale-95 transition-all">
-                            <span className="material-symbols-outlined text-lg">arrow_back</span>
-                        </button>
-                        <h1 className="font-headline font-black tracking-tighter text-3xl text-teal-900 italic uppercase">busTaams</h1>
-                    </div>
-                    <div className="w-12 h-12 rounded-2xl overflow-hidden border-2 border-white shadow-2xl rotate-3">
-                        <img alt="User profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCsf1fTFUXZEBkAapjlINnKsBJh4aLCVH588hSiZiY38jIs7xt060L40FPWV_8W9s0nyFSYUgEDeUgfTBkNsQH4LaXw0yyZRXGoqbkuvj4whXqLdwIrotpKKjUml3-_jqjhyWXJDlpYBIIwT2IlqA3oQwxvsm4VA0BMtDuh4FPEgEhmv137JUrMBRthn0z4kfT2DnWW4Ukc4o_cqKte86848uR9jxB0mOdx42GBE-F0zikuQU7AZRT91g7cMoAkaPWiB-UroEeBb9A" />
-                    </div>
+            {/* TopAppBar - 표준화된 헤더 스타일 */}
+            <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-white/20 px-4 h-16 flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-3">
+                    <button onClick={() => navigate(-1)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors">
+                        <span className="material-symbols-outlined text-slate-600">arrow_back</span>
+                    </button>
+                    <h1 className="text-lg font-bold text-slate-800">운행 일정</h1>
+                </div>
+                <div className="w-10 h-10 rounded-full bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
+                    {userProfileImg ? (
+                        <img alt="User Profile" src={userProfileImg} className="w-full h-full object-cover" />
+                    ) : (
+                        <span className="material-symbols-outlined text-[#bec9c6]">person</span>
+                    )}
                 </div>
             </header>
 
-            <main className="pt-48 px-6 max-w-7xl mx-auto space-y-20 animate-in fade-in slide-in-from-bottom duration-1000 text-left">
+            <main className="pt-24 px-6 max-w-7xl mx-auto space-y-20 animate-in fade-in slide-in-from-bottom duration-1000 text-left">
                 {/* Editorial Header Section */}
                 <section className="grid grid-cols-1 md:grid-cols-12 gap-8 items-end text-left">
                     <div className="md:col-span-7 space-y-6 text-left">
@@ -74,7 +84,7 @@ const UpcomingTripsDriver = () => {
                         {upcomingTrips.map((trip, idx) => {
                             const isFeatured = idx === 0;
                             return (
-                                <div key={trip.id} className={`${isFeatured ? 'lg:col-span-2' : 'col-span-1'} group bg-white rounded-[3.5rem] p-10 relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:shadow-teal-900/5 hover:-translate-y-2 text-left`}>
+                                <div key={trip.id} className={`${isFeatured ? 'lg:col-span-2' : 'col-span-1'} group bg-white rounded-[3.5rem] p-10 relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:shadow-teal-900/5 hover:-translate-y-2 text-left shadow-lg`}>
                                     {isFeatured && <div className="absolute left-0 top-0 bottom-0 w-2.5 bg-secondary"></div>}
                                     
                                     <div className="flex flex-col md:flex-row gap-10 text-left">
@@ -90,7 +100,7 @@ const UpcomingTripsDriver = () => {
                                             </div>
 
                                             <div className="space-y-2 text-left">
-                                                <h3 className="font-headline text-3xl font-black text-primary italic uppercase tracking-tighter text-left line-clamp-1">{trip.title || '여정 제목 없음'}</h3>
+                                                <h3 className="font-headline text-3xl font-black text-primary italic uppercase tracking-tighter text-left line-clamp-1">{trip.title || '여행 제목 없음'}</h3>
                                                 <p className="text-slate-400 font-bold italic text-lg leading-tight uppercase tracking-widest line-clamp-1">{trip.route || '정보 없음'}</p>
                                             </div>
 
@@ -117,13 +127,6 @@ const UpcomingTripsDriver = () => {
                                                 상세 내역 보기
                                             </button>
                                         </div>
-
-                                        {isFeatured && (
-                                            <div className="w-full md:w-80 h-auto min-h-[300px] rounded-[3rem] overflow-hidden shadow-2xl relative group-hover:scale-[1.02] transition-transform duration-700">
-                                                <img alt={trip.title} className="w-full h-full object-cover" src={trip.image || 'https://lh3.googleusercontent.com/aida-public/AB6AXuDZmRZL_HsaOszSmVrtuGwUBYyk6tx-rD4Vk4Dasgb37vYAbbZuWacuLUPqrpB9BVhKLuUw-tF2Etkrkt-rZ4xwhT9ZgE3DjgEoksHVJIAaAcDdV-b-rsVtEvcVtKK2EmfqAmsfSSz-jkrLECuP2Pl1W98npMSrPEjigDVHPy5EauRaAGFpUNKJwbmlxIhbJXkrmDZf4k95TECEDbq8ljjlCzWMxf9L9qkUPJwW0evuxafMlIu1mxVH0QFXZ0fXd6sgXKIvpbZIdOo'} />
-                                                <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent"></div>
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
                             );

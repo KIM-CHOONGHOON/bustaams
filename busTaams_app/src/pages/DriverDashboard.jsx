@@ -57,7 +57,7 @@ const DriverDashboard = () => {
     const quickMenus = [
         { icon: 'badge', label: '기사 정보 등록', path: '/driver-certification' },
         { icon: 'directions_bus', label: '버스 정보 등록', path: '/bus-certification' },
-        { icon: 'format_list_bulleted', label: '견적 리스트', path: '/estimate-list-driver' },
+        { icon: 'format_list_bulleted', label: '청약 리스트', path: '/estimate-list-driver' },
         { icon: 'calendar_month', label: '운행 예정 리스트', path: '/upcoming-trips-driver' },
         { icon: 'pending_actions', label: '승인 진행 리스트', path: '/approval-pending-driver' },
         { icon: 'task_alt', label: '운행 완료 리스트', path: '/completed-trips-driver' },
@@ -72,6 +72,7 @@ const DriverDashboard = () => {
             {/* TopAppBar */}
             <header className="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-xl shadow-teal-900/5 flex items-center justify-between px-6 h-16 w-full">
                 <div className="flex items-center gap-3">
+                    <img src="/icon-512.png" alt="busTaams Logo" className="w-8 h-8 object-contain rounded-lg" />
                     <div className="w-10 h-10 rounded-full bg-surface-container-highest overflow-hidden border border-slate-100 flex items-center justify-center">
                         {userImage ? (
                             <img alt="Driver profile" className="w-full h-full object-cover" src={userImage} />
@@ -97,7 +98,7 @@ const DriverDashboard = () => {
                 {/* Active Opportunities Hero */}
                 <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-end text-left">
                     <div className="lg:col-span-4 space-y-4">
-                        <h2 className="text-4xl font-extrabold font-headline tracking-tighter text-on-surface leading-none italic uppercase">실시간 견적 기회</h2>
+                        <h2 className="text-4xl font-extrabold font-headline tracking-tighter text-on-surface leading-none italic uppercase">실시간 청약 기회</h2>
                         <p className="text-on-surface-variant text-sm max-w-xs font-medium">현재 {stats.countAuctions}개의 새로운 운행 요청이 기사님의 제안을 기다리고 있습니다.</p>
                         <div className="flex gap-2 items-center text-secondary font-black text-sm">
                             <span className="relative flex h-3 w-3">
@@ -119,7 +120,7 @@ const DriverDashboard = () => {
                                                 </span>
                                                 <span className="text-[10px] text-slate-400 font-bold uppercase">{auction.timeAgo}</span>
                                             </div>
-                                            <h3 className="mt-4 font-bold text-lg text-on-surface italic truncate">{auction.title || '여정 제목 없음'}</h3>
+                                            <h3 className="mt-4 font-bold text-lg text-on-surface italic truncate">{auction.title || '여행 제목 없음'}</h3>
                                             <div className="text-[11px] text-on-surface-variant font-bold leading-tight mt-1 space-x-1">
                                                 <span>{auction.startAddr.split(' ')[1] || auction.startAddr.split(' ')[0]}</span>
                                                 {auction.roundTrip && (
@@ -139,7 +140,7 @@ const DriverDashboard = () => {
                                                 onClick={() => navigate(`/estimate-detail-driver/${auction.id}`)}
                                                 className="bg-primary text-white rounded-full px-6 py-2.5 text-[12px] font-black shadow-lg shadow-primary/20 uppercase tracking-widest hover:bg-secondary transition-all"
                                             >
-                                                견적선택
+                                                청약선택
                                             </button>
                                         </div>
                                     </div>

@@ -543,9 +543,9 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
             if (v.type === 'START_NODE' || v.type === 'END_NODE') return;
 
             let title = '경유지';
-            if (v.type === 'START_WAY') title = '경로1';
-            else if (v.type === 'END_WAY') title = '경로2';
-            else if (v.type === 'ROUND_TRIP') title = '회차지';
+            if (v.type === 'START_WAY') title = '출발 경유지';
+            else if (v.type === 'END_WAY') title = '도착 경유지';
+            else if (v.type === 'ROUND_TRIP') title = '목적지';
             fullRoute.push({ type: v.type, addr: v.addr, title: title });
         });
         
@@ -573,7 +573,7 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
                 DATE_FORMAT(db.INSURANCE_EXP_DT, '%Y-%m-%d') as insuranceExpDt,
                 DATE_FORMAT(db.LAST_INSPECT_DT, '%Y-%m-%d') as lastInspectDt,
                 db.VEHICLE_PHOTOS_JSON as busPhotos,
-                CASE WHEN f.GCS_PATH IS NOT NULL THEN CONCAT('/api/common/display-image?path=', f.GCS_PATH) ELSE NULL END as driverImage
+                f.GCS_PATH as driverImageRaw
             FROM TB_AUCTION_REQ_BUS rb
             LEFT JOIN TB_BUS_RESERVATION res ON rb.REQ_ID = res.REQ_ID AND rb.REQ_BUS_SEQ = res.REQ_BUS_SEQ
             LEFT JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID
@@ -589,19 +589,29 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
             if (row.busPhotos) {
                 try {
                     const ids = typeof row.busPhotos === 'string' ? JSON.parse(row.busPhotos) : row.busPhotos;
-                    if (Array.isArray(ids)) allPhotoIds.push(...ids);
-                } catch (e) {}
+                    if (Array.isArray(ids)) {
+                        ids.forEach(id => {
+                            if (id) allPhotoIds.push(String(id).trim());
+                        });
+                    }
+                } catch (e) {
+                    console.error('[JSON Parse Error] busPhotos IDs:', e);
+                }
             }
         });
 
         let photoMap = {};
         if (allPhotoIds.length > 0) {
             const uniqueIds = [...new Set(allPhotoIds)];
+            // TB_FILE_MASTER에서 GCS_PATH 조회
             const [pRows] = await pool.execute(
-                `SELECT FILE_ID, CONCAT('/api/common/display-image?path=', GCS_PATH) as url FROM TB_FILE_MASTER WHERE FILE_ID IN (${uniqueIds.map(() => '?').join(',')})`,
+                `SELECT FILE_ID, GCS_PATH FROM TB_FILE_MASTER WHERE FILE_ID IN (${uniqueIds.map(() => '?').join(',')})`,
                 uniqueIds
             );
-            pRows.forEach(p => photoMap[p.FILE_ID] = p.url);
+            pRows.forEach(p => {
+                const fid = String(p.FILE_ID).trim();
+                photoMap[fid] = `/api/common/display-image?path=${encodeURIComponent(p.GCS_PATH)}`;
+            });
         }
 
         // 데이터를 유닛별로 그룹화
@@ -628,16 +638,16 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
                             tags = parsed;
                         } else if (typeof parsed === 'object') {
                             const mapping = {
-                                'Table': '테이블',
-                                'Wi-Fi': '와이파이',
-                                'USB-CHARGE': 'USB 충전',
-                                'Refrigerator': '냉장고',
-                                'Individual-Screen': '개별 모니터',
-                                'Air-Conditioner': '에어컨',
-                                'Heating': '히터'
+                                'Table': '테이블', 'table': '테이블',
+                                'Wi-Fi': '와이파이', 'wifi': '와이파이',
+                                'USB-CHARGE': 'USB충전', 'usb': 'USB충전',
+                                'Refrigerator': '냉장고', 'fridge': '냉장고',
+                                'Individual-Screen': '개인모니터', 'screen': '개인모니터',
+                                'Air-Conditioner': '에어컨', 'aircon': '에어컨',
+                                'Heating': '히터', 'heater': '히터'
                             };
                             tags = Object.keys(parsed)
-                                .filter(key => parsed[key] === true)
+                                .filter(key => parsed[key] === true || parsed[key] === 'Y')
                                 .map(key => mapping[key] || key);
                         }
                     }
@@ -664,7 +674,7 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
                     experience: row.joinDt ? Math.max(1, new Date().getFullYear() - new Date(row.joinDt).getFullYear()) : 1,
                     price: row.price,
                     tags: tags,
-                    image: row.driverImage || 'https://via.placeholder.com/150',
+                    image: row.driverImageRaw ? `/api/common/display-image?path=${encodeURIComponent(row.driverImageRaw)}` : 'https://via.placeholder.com/150',
                     busImages: busImages.length > 0 ? busImages : ['https://via.placeholder.com/600x400?text=No+Vehicle+Image'],
                     hasAdas: row.hasAdas || 'N',
                     insuranceExpDt: row.insuranceExpDt || '-',
@@ -888,9 +898,9 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
         fullRoute.push({ type: 'START', addr: reservation.from_addr, title: '출발지', time: reservation.start_date });
         
         viaRows.forEach(v => {
-            if (v.type === 'START_WAY') fullRoute.push({ type: 'WAY', addr: v.addr, title: '가는길 경유지' });
-            else if (v.type === 'ROUND_TRIP') fullRoute.push({ type: 'ROUND', addr: v.addr, title: '도착지(회차)' });
-            else if (v.type === 'END_WAY') fullRoute.push({ type: 'WAY', addr: v.addr, title: '복귀길 경유지' });
+            if (v.type === 'START_WAY') fullRoute.push({ type: 'WAY', addr: v.addr, title: '출발 경유지' });
+            else if (v.type === 'ROUND_TRIP') fullRoute.push({ type: 'ROUND', addr: v.addr, title: '목적지' });
+            else if (v.type === 'END_WAY') fullRoute.push({ type: 'WAY', addr: v.addr, title: '도착 경유지' });
         });
         
         fullRoute.push({ type: 'END', addr: reservation.from_addr, title: '복귀지', time: reservation.end_date });
@@ -985,9 +995,9 @@ router.get('/received-bids', authenticateToken, async (req, res) => {
             const fullRoute = [];
             fullRoute.push({ type: 'START', addr: master.from_addr, title: '출발지' });
             viaRows.forEach(v => {
-                if (v.type === 'START_WAY') fullRoute.push({ type: 'WAY', addr: v.addr, title: '가는길 경유지' });
-                else if (v.type === 'ROUND_TRIP') fullRoute.push({ type: 'ROUND', addr: v.addr, title: '도착지(회차)' });
-                else if (v.type === 'END_WAY') fullRoute.push({ type: 'WAY', addr: v.addr, title: '복귀길 경유지' });
+                if (v.type === 'START_WAY') fullRoute.push({ type: 'WAY', addr: v.addr, title: '출발 경유지' });
+                else if (v.type === 'ROUND_TRIP') fullRoute.push({ type: 'ROUND', addr: v.addr, title: '목적지' });
+                else if (v.type === 'END_WAY') fullRoute.push({ type: 'WAY', addr: v.addr, title: '도착 경유지' });
             });
             fullRoute.push({ type: 'END', addr: master.from_addr, title: '복귀지' });
             master.route = fullRoute;

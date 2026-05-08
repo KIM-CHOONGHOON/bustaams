@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../api';
+import api, { getDriverProfile } from '../api';
 import { notify } from '../utils/toast';
 import BottomNavDriver from '../components/BottomNavDriver';
 
@@ -8,11 +8,19 @@ const CompletedTripsDriver = () => {
     const navigate = useNavigate();
     const [trips, setTrips] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [userProfileImg, setUserProfileImg] = useState('');
 
     useEffect(() => {
-        const fetchTrips = async () => {
+        const fetchData = async () => {
             setLoading(true);
             try {
+                // 1. 기사 프로필 정보 조회 (헤더용)
+                const profRes = await getDriverProfile();
+                if (profRes.success && profRes.data) {
+                    setUserProfileImg(profRes.data.driver?.profileImg || '');
+                }
+
+                // 2. 운행 완료 목록 조회
                 const res = await api.get('/app/driver/completed-missions');
                 if (res.success) {
                     setTrips(res.data);
@@ -25,7 +33,7 @@ const CompletedTripsDriver = () => {
                 setLoading(false);
             }
         };
-        fetchTrips();
+        fetchData();
     }, []);
 
     const getShortAddr = (addr) => {
@@ -35,19 +43,24 @@ const CompletedTripsDriver = () => {
 
     return (
         <div className="bg-[#F7F9FB] text-[#191C1E] min-h-[100dvh] pb-32 font-body text-left">
-            {/* 상단바 */}
-            <header className="fixed top-0 w-full z-50 bg-white/40 backdrop-blur-3xl border-b border-white/20 py-6">
-                <div className="flex justify-between items-center w-full px-6 max-w-7xl mx-auto">
-                    <div className="flex items-center gap-6 text-left">
-                        <button onClick={() => navigate(-1)} className="p-3 bg-white rounded-2xl text-[#004D40] shadow-xl shadow-teal-900/5 active:scale-95 transition-all">
-                            <span className="material-symbols-outlined text-lg">arrow_back</span>
-                        </button>
-                        <h1 className="font-headline font-black tracking-tighter text-3xl text-[#004D40] italic uppercase">busTaams</h1>
-                    </div>
+            {/* 상단바 - 표준화된 스타일 적용 */}
+            <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-white/20 px-4 h-16 flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-3">
+                    <button onClick={() => navigate(-1)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors">
+                        <span className="material-symbols-outlined text-slate-600">arrow_back</span>
+                    </button>
+                    <h1 className="text-lg font-bold text-slate-800">운행 완료 목록</h1>
+                </div>
+                <div className="w-10 h-10 rounded-full bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
+                    {userProfileImg ? (
+                        <img alt="User Profile" src={userProfileImg} className="w-full h-full object-cover" />
+                    ) : (
+                        <span className="material-symbols-outlined text-[#bec9c6]">person</span>
+                    )}
                 </div>
             </header>
 
-            <main className="pt-32 px-6 max-w-7xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom duration-1000 text-left">
+            <main className="pt-24 px-6 max-w-7xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom duration-1000 text-left">
                 {/* 헤더 섹션 */}
                 <section className="grid grid-cols-1 md:grid-cols-12 gap-8 items-end text-left">
                     <div className="md:col-span-7 space-y-4 text-left">
@@ -86,7 +99,7 @@ const CompletedTripsDriver = () => {
                                         </h3>
                                         <p className="text-slate-400 font-bold italic text-xs leading-tight uppercase tracking-widest line-clamp-1">
                                             경로: {getShortAddr(trip.startAddr)}(출발)
-                                            {trip.roundTrip && ` → ${getShortAddr(trip.roundTrip)}(회차)`}
+                                            {trip.roundTrip && ` → ${getShortAddr(trip.roundTrip)}(목적지)`}
                                             → {getShortAddr(trip.endAddr)}(도착지)
                                         </p>
                                     </div>

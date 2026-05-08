@@ -33,7 +33,7 @@ const ReservationDetail = () => {
                 {/* Editorial Header Section */}
                 <section className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
                     <div className="md:col-span-8">
-                        <p className="text-secondary font-bold tracking-[0.2em] text-[10px] mb-3 uppercase">여정 상세 가이드</p>
+                        <p className="text-secondary font-bold tracking-[0.2em] text-[10px] mb-3 uppercase">여행 상세 가이드</p>
                         <h1 className="text-4xl md:text-6xl font-extrabold tracking-tighter text-on-surface leading-tight text-[48px] md:text-[60px]">
                             <span className="text-primary italic">광주 유스퀘어</span> 투어
                         </h1>
@@ -54,7 +54,7 @@ const ReservationDetail = () => {
                             <div className="absolute top-0 left-0 w-1.5 h-full bg-primary/40"></div>
                             <h2 className="text-xl font-black mb-8 flex items-center gap-3 text-primary">
                                 <span className="material-symbols-outlined">route</span>
-                                여정 타임라인
+                                여행 타임라인
                             </h2>
                             <div className="space-y-12 relative pb-4">
                                 {/* Timeline Line */}
@@ -183,7 +183,7 @@ const ReservationDetail = () => {
                                 </button>
                             </div>
                             <p className="mt-8 text-[11px] text-slate-400 leading-relaxed italic font-medium">
-                                * 최종 결제 금액은 톨게이트 비용 및 추가 경유지에 따라 소폭 변동될 수 있습니다. 귀하의 안전한 여정을 위해 최선을 다하겠습니다.
+                                * 최종 결제 금액은 톨게이트 비용 및 추가 경유지에 따라 소폭 변동될 수 있습니다. 귀하의 안전한 여행을 위해 최선을 다하겠습니다.
                             </p>
                         </div>
                     </div>

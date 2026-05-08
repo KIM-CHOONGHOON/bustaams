@@ -32,7 +32,7 @@ const PastTripListCustomer = () => {
                 <div className="flex justify-between items-center w-full px-6 py-5 max-w-7xl mx-auto">
                     <div className="flex items-center gap-5">
                         <button onClick={() => navigate(-1)} className="material-symbols-outlined text-teal-800 hover:bg-teal-50 p-2 rounded-full transition-all">arrow_back</button>
-                        <h1 className="font-headline font-black tracking-tighter text-3xl text-teal-900 border-l-4 border-primary pl-4 leading-none italic">busTaams</h1>
+                        <h1 className="font-headline font-black tracking-tighter text-3xl text-teal-900 leading-none italic">여행 이력</h1>
                     </div>
                 </div>
             </header>
@@ -42,7 +42,7 @@ const PastTripListCustomer = () => {
                 <div className="mb-16 animate-in fade-in slide-in-from-bottom duration-1000">
                     <p className="font-headline font-black text-secondary uppercase tracking-[0.5em] text-[10px] mb-6">Contract History</p>
                     <h2 className="font-headline font-black text-5xl md:text-[70px] text-primary leading-[0.9] tracking-tighter max-w-4xl">
-                        나의 과거 운행 이력<span className="text-secondary">.</span>
+                        나의 과거 여행 이력<span className="text-secondary">.</span>
                     </h2>
                     <div className="h-2 w-32 bg-gradient-to-r from-secondary to-orange-200 mt-10 rounded-full shadow-lg shadow-secondary/20"></div>
                 </div>
@@ -55,8 +55,8 @@ const PastTripListCustomer = () => {
                 ) : trips.length === 0 ? (
                     <div className="bg-white rounded-[3rem] p-20 text-center shadow-xl border border-white">
                         <span className="material-symbols-outlined text-8xl text-slate-100 mb-6">history</span>
-                        <h3 className="text-2xl font-black text-slate-300">완료된 운행 이력이 없습니다.</h3>
-                        <p className="text-slate-400 mt-2">새로운 여정을 시작해보세요!</p>
+                        <h3 className="text-2xl font-black text-slate-300">완료된 여행 이력이 없습니다.</h3>
+                        <p className="text-slate-400 mt-2">새로운 여행을 시작해보세요!</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 gap-8">

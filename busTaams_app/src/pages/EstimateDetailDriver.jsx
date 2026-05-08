@@ -94,7 +94,7 @@ const EstimateDetailDriver = () => {
                         <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-full transition-colors active:scale-95 duration-200">
                             <span className="material-symbols-outlined text-2xl text-slate-600">arrow_back</span>
                         </button>
-                        <h1 className="font-headline font-extrabold tracking-tighter text-2xl text-[#004e47] italic">견적 상세 내역</h1>
+                        <h1 className="font-headline font-extrabold tracking-tighter text-2xl text-[#004e47] italic">청약 상세 내역</h1>
                     </div>
                     <div className="w-10 h-10 rounded-full bg-slate-100 overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
                         {userProfileImg ? (
@@ -109,9 +109,9 @@ const EstimateDetailDriver = () => {
             <main className="pt-28 px-6 max-w-7xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom duration-700 text-left">
                 {/* Header Section */}
                 <div className="space-y-2 text-left">
-                    <span className="text-secondary font-black tracking-[0.4em] uppercase text-[11px] block px-1 italic">견적 ID: #BT-{auction.id}</span>
+                    <span className="text-secondary font-black tracking-[0.4em] uppercase text-[11px] block px-1 italic">청약 ID: #BT-{auction.id}</span>
                     <h2 className="font-headline text-5xl md:text-7xl font-black text-[#004e47] tracking-tighter italic uppercase">
-                        견적 상세 확인
+                        청약 상세 확인
                     </h2>
                 </div>
 
@@ -133,20 +133,20 @@ const EstimateDetailDriver = () => {
                                             <div className={`min-w-[40px] h-10 rounded-xl flex items-center justify-center border ${
                                                 item.label === '출발지' ? 'bg-primary/10 text-primary border-primary/20' : 
                                                 item.label === '최종 도착지' ? 'bg-secondary/10 text-secondary border-secondary/20' : 
-                                                item.label === '회차지' ? 'bg-orange-100 text-orange-600 border-orange-200 shadow-sm shadow-orange-200' :
+                                                item.label === '목적지' ? 'bg-orange-100 text-orange-600 border-orange-200 shadow-sm shadow-orange-200' :
                                                 'bg-slate-50 text-slate-400 border-slate-100'
                                             }`}>
                                                 <span className="material-symbols-outlined text-xl">
                                                     {item.label === '출발지' ? 'location_on' : 
                                                      item.label === '최종 도착지' ? 'flag' : 
-                                                     item.label === '회차지' ? 'sync_alt' : 'route'}
+                                                     item.label === '목적지' ? 'sync_alt' : 'route'}
                                                 </span>
                                             </div>
                                             <div className="text-left">
-                                                <p className={`text-[10px] font-black uppercase tracking-[0.3em] mb-1 italic ${item.label === '회차지' ? 'text-orange-500' : 'text-slate-300'}`}>
-                                                    {item.label} {item.label === '회차지' && '★'}
+                                                <p className={`text-[10px] font-black uppercase tracking-[0.3em] mb-1 italic ${item.label === '목적지' ? 'text-orange-500' : 'text-slate-300'}`}>
+                                                    {item.label} {item.label === '목적지' && '★'}
                                                 </p>
-                                                <p className={`font-black text-xl leading-tight tracking-tight ${item.label === '회차지' ? 'text-orange-700' : 'text-[#191c1e]'}`}>{item.addr}</p>
+                                                <p className={`font-black text-xl leading-tight tracking-tight ${item.label === '목적지' ? 'text-orange-700' : 'text-[#191c1e]'}`}>{item.addr}</p>
                                             </div>
                                         </div>
                                     ))}

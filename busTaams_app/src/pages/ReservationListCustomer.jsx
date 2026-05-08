@@ -26,7 +26,7 @@ const ReservationListCustomer = () => {
 
     const getBusStatusDisplay = (status) => {
         const config = {
-            'AUCTION': { label: '견적대기중..', color: 'bg-slate-100 text-slate-400' },
+            'AUCTION': { label: '청약대기중..', color: 'bg-slate-100 text-slate-400' },
             'BIDDING': { label: '승인대기중...', color: 'bg-orange-100 text-orange-700' },
             'CONFIRM': { label: '예약 확정...', color: 'bg-teal-100 text-teal-700' },
             'DONE': { label: '운행 종료...', color: 'bg-slate-100 text-slate-500' },
@@ -177,7 +177,7 @@ const ReservationListCustomer = () => {
                             </div>
                             <div className="space-y-2">
                                 <h3 className="text-2xl font-black text-slate-800">예약 내역이 없습니다</h3>
-                                <p className="text-slate-400 font-medium">새로운 여정을 계획하고 예약을 시작해보세요.</p>
+                                <p className="text-slate-400 font-medium">새로운 여행을 계획하고 예약을 시작해보세요.</p>
                             </div>
                             <button onClick={() => navigate('/customer-dashboard')} className="bg-primary text-white px-10 py-4 rounded-full font-black text-sm shadow-xl shadow-primary/20 active:scale-95 transition-all">
                                 대시보드로 돌아가기

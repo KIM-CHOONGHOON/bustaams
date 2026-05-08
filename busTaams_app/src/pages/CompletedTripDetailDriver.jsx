@@ -73,7 +73,7 @@ const CompletedTripDetailDriver = () => {
             </header>
 
             <main className="pt-40 px-6 max-w-3xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom duration-1000 text-left">
-                {/* 여정 요약 히어로 섹션 */}
+                {/* 여행 요약 히어로 섹션 */}
                 <section className="relative overflow-hidden bg-primary rounded-[3.5rem] p-10 text-white shadow-[0_40px_100px_-20px_rgba(0,104,95,0.4)] text-left">
                     <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
                     <div className="relative z-10 flex flex-col gap-4 text-left">

@@ -36,7 +36,7 @@ const ApprovalDetailCustomer = () => {
 
     const getBusStatusDisplay = (status) => {
         const config = {
-            'AUCTION': { label: '견적대기중..', color: 'bg-slate-100 text-slate-400' },
+            'AUCTION': { label: '청약대기중..', color: 'bg-slate-100 text-slate-400' },
             'BIDDING': { label: '승인대기중..', color: 'bg-orange-100 text-orange-700' },
             'CONFIRM': { label: '예약 확정..', color: 'bg-teal-100 text-teal-700' },
             'DONE': { label: '운행 종료..', color: 'bg-slate-100 text-slate-500' },
@@ -49,7 +49,7 @@ const ApprovalDetailCustomer = () => {
     };
 
     const handleApproveBid = async () => {
-        if (!window.confirm('이 기사님의 견적을 승인하시겠습니까?')) return;
+        if (!window.confirm('이 기사님의 청약을 승인하시겠습니까?')) return;
         try {
             const res = await api.post('/app/customer/approve-bid', { resId: id });
             if (res.success) {
@@ -69,11 +69,11 @@ const ApprovalDetailCustomer = () => {
             alert('요청 정보를 찾을 수 없습니다.');
             return;
         }
-        if (!window.confirm('이 요청에 대한 모든 견적을 승인하시겠습니까?')) return;
+        if (!window.confirm('이 요청에 대한 모든 청약을 승인하시겠습니까?')) return;
         try {
             const res = await api.post('/app/customer/approve-all', { reqId: bid.reqId });
             if (res.success) {
-                alert('모든 견적이 승인되었습니다.');
+                alert('모든 청약이 승인되었습니다.');
                 navigate(-1);
             } else {
                 alert(res.error || '전체 승인 처리 중 오류가 발생했습니다.');
@@ -99,7 +99,7 @@ const ApprovalDetailCustomer = () => {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6 text-center">
                 <span className="material-symbols-outlined text-6xl text-slate-200 mb-4">error</span>
-                <h2 className="text-2xl font-black text-teal-900 mb-2">{error || '견적 정보를 찾을 수 없습니다.'}</h2>
+                <h2 className="text-2xl font-black text-teal-900 mb-2">{error || '청약 정보를 찾을 수 없습니다.'}</h2>
                 <button onClick={() => navigate(-1)} className="px-8 py-3 bg-primary text-white rounded-full font-black">뒤로 가기</button>
             </div>
         );
@@ -220,7 +220,7 @@ const ApprovalDetailCustomer = () => {
                             </div>
                             <div className="space-y-6">
                                 <div className="flex justify-between items-center">
-                                    <span className="text-slate-400 font-bold text-sm">최종 견적 금액</span>
+                                    <span className="text-slate-400 font-bold text-sm">최종 청약 금액</span>
                                     <span className="text-2xl font-black text-orange-600 italic">₩ {(Number(bid.totalPrice) || 0).toLocaleString()}</span>
                                 </div>
                             </div>

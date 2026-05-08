@@ -16,8 +16,8 @@ function safeDecryptUserNm(val) {
 const VIA_TYPE_PREFIX = {
     START_NODE: '출발지',
     START_WAY: '출발 경유지',
-    ROUND_TRIP: '회차지',
-    END_WAY: '복귀 경유지',
+    ROUND_TRIP: '목적지',
+    END_WAY: '도착 경유지',
     END_NODE: '도착지',
 };
 

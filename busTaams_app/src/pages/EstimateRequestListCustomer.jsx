@@ -155,7 +155,7 @@ const EstimateRequestListCustomer = () => {
                                                         {req.roundAddr ? (
                                                             <>
                                                                 <div className="flex-1 text-center">
-                                                                    <p className="text-[8px] font-black text-teal-500 uppercase tracking-tighter mb-0.5">회차</p>
+                                                                    <p className="text-[8px] font-black text-teal-500 uppercase tracking-tighter mb-0.5">목적지</p>
                                                                     <p className="font-bold text-xs text-slate-700">{formatAddr(req.roundAddr)}</p>
                                                                 </div>
                                                                 <div className="px-4 text-slate-200">

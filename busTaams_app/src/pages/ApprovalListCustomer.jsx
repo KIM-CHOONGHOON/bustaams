@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { notify } from '../utils/toast';
+import BottomNavCustomer from '../components/BottomNavCustomer';
 
 const ApprovalListCustomer = () => {
     const navigate = useNavigate();
@@ -32,12 +33,12 @@ const ApprovalListCustomer = () => {
     }, [reqId]);
 
     const handleCancelBus = async (unitSeq) => {
-        const confirmed = await notify.confirm('차량 견적 취소', `차량 #${unitSeq}의 견적 요청을 취소하시겠습니까?`);
+        const confirmed = await notify.confirm('차량 청약 취소', `차량 #${unitSeq}의 청약 요청을 취소하시겠습니까?`);
         if (!confirmed) return;
         try {
             const res = await api.post(`/app/customer/cancel-bus`, { reqId, unitSeq });
             if (res.success) {
-                notify.success('취소 완료', '해당 차량의 견적 요청이 취소되었습니다.');
+                notify.success('취소 완료', '해당 차량의 청약 요청이 취소되었습니다.');
                 fetchEstimates();
             }
         } catch (error) {
@@ -47,7 +48,7 @@ const ApprovalListCustomer = () => {
     };
 
     const handleApproveBid = async (resId) => {
-        const confirmed = await notify.confirm('견적 승인', '이 기사님의 견적을 승인하시겠습니까?');
+        const confirmed = await notify.confirm('청약 승인', '이 기사님의 청약을 승인하시겠습니까?');
         if (!confirmed) return;
         try {
             const res = await api.post('/app/customer/approve-bid', { resId });
@@ -62,12 +63,12 @@ const ApprovalListCustomer = () => {
     };
 
     const handleApproveAll = async () => {
-        const confirmed = await notify.confirm('전체 견적 승인', '진행 중인 모든 견적을 승인하시겠습니까?');
+        const confirmed = await notify.confirm('전체 청약 승인', '진행 중인 모든 청약을 승인하시겠습니까?');
         if (!confirmed) return;
         try {
             const res = await api.post('/app/customer/approve-all', { reqId });
             if (res.success) {
-                notify.success('전체 승인 완료', '모든 견적의 승인이 완료되었습니다.');
+                notify.success('전체 승인 완료', '모든 청약의 승인이 완료되었습니다.');
                 fetchEstimates();
             }
         } catch (error) {
@@ -77,7 +78,7 @@ const ApprovalListCustomer = () => {
     };
 
     const handleCancelRequest = async () => {
-        const confirmed = await notify.confirm('전체 견적 요청 취소', '전체 견적 요청을 취소하시겠습니까?');
+        const confirmed = await notify.confirm('전체 청약 요청 취소', '전체 청약 요청을 취소하시겠습니까?');
         if (!confirmed) return;
         try {
             const res = await api.post('/app/customer/cancel-request', { reqId });
@@ -95,7 +96,7 @@ const ApprovalListCustomer = () => {
 
     const getBusStatusDisplay = (status) => {
         const config = {
-            'AUCTION': { label: '견적대기중..', color: 'bg-slate-100 text-slate-400' },
+            'AUCTION': { label: '청약대기중..', color: 'bg-slate-100 text-slate-400' },
             'BIDDING': { label: '승인대기중..', color: 'bg-orange-100 text-orange-700' },
             'CONFIRM': { label: '예약 확정..', color: 'bg-teal-100 text-teal-700' },
             'DONE': { label: '운행 종료..', color: 'bg-slate-100 text-slate-500' },
@@ -138,7 +139,7 @@ const ApprovalListCustomer = () => {
                         <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-full scale-95 active:scale-90 duration-200">
                             <span className="material-symbols-outlined">arrow_back</span>
                         </button>
-                        <span className="text-2xl font-black text-teal-800 tracking-tighter italic">Velocity</span>
+                        <span className="text-xl font-bold text-teal-900 tracking-tight">승인 상세 화면</span>
                     </div>
                     <div className="flex items-center gap-4">
                          <span className="text-sm font-bold text-orange-600">승인 처리</span>
@@ -170,7 +171,7 @@ const ApprovalListCustomer = () => {
                             <div className="absolute top-0 left-0 w-2 h-full bg-primary/20"></div>
                             <h2 className="text-2xl font-black mb-10 flex items-center gap-3 italic text-teal-800">
                                 <span className="material-symbols-outlined text-primary" style={{fontVariationSettings: "'FILL' 1"}}>route</span>
-                                여정 경로
+                                여행 경로
                             </h2>
                             <div className="space-y-0 relative">
                                 <div className="absolute left-[11px] top-4 bottom-4 w-0.5 bg-slate-100"></div>
@@ -354,7 +355,7 @@ const ApprovalListCustomer = () => {
                                                                 <span className="material-symbols-outlined">
                                                                     {est.isSelected ? 'check_circle' : 'approval'}
                                                                 </span>
-                                                                {est.isSelected ? '승인 완료된 견적' : '승인 처리하기'}
+                                                                {est.isSelected ? '승인 완료된 청약' : '승인 처리하기'}
                                                             </button>
 
                                                             {/* 취소 버튼을 승인 버튼 밑으로 이동 */}
@@ -363,7 +364,7 @@ const ApprovalListCustomer = () => {
                                                                     onClick={() => handleCancelBus(unit.unitSeq)}
                                                                     className="w-full py-3 text-[10px] font-black text-error border border-error/10 rounded-2xl hover:bg-error/5 transition-all active:scale-95 uppercase tracking-[0.2em]"
                                                                 >
-                                                                    이 차량 견적 요청 취소
+                                                                    이 차량 청약 요청 취소
                                                                 </button>
                                                             )}
                                                         </div>
@@ -423,7 +424,7 @@ const ApprovalListCustomer = () => {
                                         className="w-full bg-white/5 text-error border border-error/20 py-5 rounded-[2rem] font-black text-lg hover:bg-error/10 active:scale-95 transition-all flex items-center justify-center gap-3 italic"
                                     >
                                         <span className="material-symbols-outlined">cancel</span>
-                                        전체 견적 취소
+                                        전체 청약 취소
                                     </button>
                                 )}
                             </div>
@@ -432,25 +433,7 @@ const ApprovalListCustomer = () => {
                 </div>
             </main>
 
-            {/* Bottom Nav */}
-            <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex justify-around items-center px-4 py-2 bg-white/80 backdrop-blur-3xl text-slate-400 w-[90%] max-w-md mx-auto rounded-full shadow-[0_40px_80px_-20px_rgba(0,0,0,0.1)] border border-white/50">
-                <button onClick={() => navigate('/customer-dashboard')} className="flex flex-col items-center justify-center px-5 py-2 hover:text-primary transition-all">
-                    <span className="material-symbols-outlined">home</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1">Home</span>
-                </button>
-                <button onClick={() => navigate('/estimate-request-list')} className="flex flex-col items-center justify-center px-5 py-2 text-primary relative">
-                    <div className="absolute inset-0 bg-primary/10 rounded-2xl blur-lg"></div>
-                    <span className="material-symbols-outlined relative z-10" style={{fontVariationSettings: "'FILL' 1"}}>confirmation_number</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1 relative z-10 underline decoration-2 underline-offset-4 italic">Trips</span>
-                </button>
-                <button onClick={() => navigate('/chat-list')} className="flex flex-col items-center justify-center px-5 py-2 hover:text-primary transition-all">
-                    <span className="material-symbols-outlined">chat_bubble</span>
-                    <span className="font-black text-[9px] uppercase tracking-widest mt-1">Talk</span>
-                </button>
-                <button onClick={() => navigate('/user-profile')} className="flex flex-col items-center justify-center bg-slate-900 text-white rounded-full w-12 h-12 shadow-lg active:scale-90 transition-all ml-2">
-                    <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1"}}>person</span>
-                </button>
-            </nav>
+            <BottomNavCustomer />
         </div>
     );
 };

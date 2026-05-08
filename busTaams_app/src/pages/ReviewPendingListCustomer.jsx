@@ -44,8 +44,10 @@ const ReviewPendingListCustomer = () => {
             {/* Header */}
             <header className="fixed top-0 w-full z-50 bg-white border-b border-slate-100 shadow-sm">
                 <div className="flex items-center justify-between px-6 h-16 w-full max-w-4xl mx-auto">
-                    <button onClick={() => navigate(-1)} className="material-symbols-outlined text-teal-700 hover:bg-slate-50 p-2 rounded-full transition-all">arrow_back</button>
-                    <h1 className="font-bold text-[17px] text-[#1E293B]">평점 및 감사글 작성대기</h1>
+                    <div className="flex items-center gap-4">
+                        <button onClick={() => navigate(-1)} className="material-symbols-outlined text-teal-700 hover:bg-slate-50 p-2 rounded-full transition-all">arrow_back</button>
+                        <h1 className="font-bold text-[17px] text-[#1E293B]">평점 및 감사글 작성대기</h1>
+                    </div>
                     <button className="material-symbols-outlined text-slate-400 p-2">notifications</button>
                 </div>
             </header>
@@ -54,7 +56,7 @@ const ReviewPendingListCustomer = () => {
                 {/* Hero Section */}
                 <div className="space-y-3 px-2">
                     <h2 className="text-[32px] font-black text-[#1E293B] leading-tight tracking-tight">
-                        당신의 여정은<br />어떠셨나요?
+                        당신의 여행은<br />어떠셨나요?
                     </h2>
                     <p className="text-[15px] text-[#64748B] font-medium">
                         소중한 후기는 버스 파트너들에게 큰 힘이 됩니다.
@@ -75,7 +77,7 @@ const ReviewPendingListCustomer = () => {
                                 <div className="absolute top-0 left-0 w-1.5 h-full bg-[#92400E]"></div>
                                 
                                 <div className="flex justify-between items-center px-1">
-                                    <span className="px-4 py-1.5 rounded-full bg-[#F1F5F9] text-[#64748B] text-[11px] font-black uppercase tracking-wider">운행 완료</span>
+                                    <span className="px-4 py-1.5 rounded-full bg-[#F1F5F9] text-[#64748B] text-[11px] font-black uppercase tracking-wider">여행 완료</span>
                                 </div>
 
                                 <div className="space-y-4 px-1">
@@ -83,7 +85,7 @@ const ReviewPendingListCustomer = () => {
                                         <p className="text-[12px] font-black text-[#0F766E] uppercase tracking-wider">{mission.busModel} · {mission.busCnt}대</p>
                                         <span className="text-[12px] text-[#94A3B8] font-bold">{mission.date}</span>
                                     </div>
-                                    <h3 className="text-[18px] font-black text-[#1E293B] mb-2 truncate">{mission.title || '나의 버스 여정'}</h3>
+                                    <h3 className="text-[18px] font-black text-[#1E293B] mb-2 truncate">{mission.title || '나의 버스 여행'}</h3>
                                     <div className="flex items-center gap-2 text-[#64748B] mb-6">
                                         <span className="material-symbols-outlined text-[18px] text-[#94A3B8]">distance</span>
                                         <p className="text-[14px] font-bold truncate">

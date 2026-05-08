@@ -69,8 +69,8 @@ const CustomerDashboard = () => {
             {/* TopAppBar */}
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl shadow-[0px_40px_60px_rgba(0,104,95,0.06)] h-16 flex items-center justify-between px-6">
                 <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-teal-700">directions_bus</span>
-                    <h1 className="text-2xl font-black text-teal-800 italic font-headline tracking-tight text-[22px]">Velocity</h1>
+                    <img src="/icon-512.png" alt="busTaams Logo" className="w-8 h-8 object-contain rounded-lg" />
+                    <h1 className="text-2xl font-black text-teal-800 italic font-headline tracking-tight text-[22px]">busTaams</h1>
                 </div>
                 <div className="flex items-center gap-4">
                     <button className="p-2 rounded-full hover:bg-slate-100/50 transition-colors">
@@ -168,8 +168,8 @@ const CustomerDashboard = () => {
                             <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mb-4 text-slate-600">
                                 <span className="material-symbols-outlined">history</span>
                             </div>
-                            <h4 className="font-bold text-on-surface text-[14px]">과거 운행 이력</h4>
-                            <p className="text-[10px] text-on-surface-variant mt-1">지난 여정 확인</p>
+                            <h4 className="font-bold text-on-surface text-[14px]">과거 여행 이력</h4>
+                            <p className="text-[10px] text-on-surface-variant mt-1">지난 여행 확인</p>
                         </div>
                         <div onClick={() => navigate('/reservation-list')} className="cursor-pointer bg-white p-6 rounded-3xl shadow-sm hover:translate-y-[-4px] transition-all">
                             <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4 text-indigo-600">

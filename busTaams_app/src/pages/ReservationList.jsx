@@ -44,13 +44,9 @@ const ReservationList = () => {
                         <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-full scale-95 active:scale-90 duration-200">
                             <span className="material-symbols-outlined">arrow_back</span>
                         </button>
-                        <h1 className="text-2xl font-black text-teal-800 tracking-tighter font-headline text-[24px]">Velocity</h1>
+                        <h1 className="text-2xl font-black text-teal-800 tracking-tighter font-headline text-[24px]">예약 리스트</h1>
                     </div>
-                    <div className="flex items-center gap-6">
-                        <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-teal-100 shadow-sm transition-transform hover:scale-110">
-                            <img alt="User" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBDAuydGKeWcVXnNwZDRc1I8NFS_BI9gq969584jVmM5maopYZ63srZ7FvlrWEb_EAlmkWIjBb5BPNcP1t7cxeVW66HWUlO53iZcSpZ7qSCpZdrQUXwvp8X5ibBv6Xx57pJrCmFA8WY8f1W6QCEC0wt2VbiePnFQ6Dco1T3vF-Vkzh0wL5vNyHOTwR2RKCQJ0QLxejtltR8UYIvSuocurIgQmtVJa8pHYHzWuHFe8N8rJRH34uYOlkJtQMcv8C1c99d4lMC41r-mrI" />
-                        </div>
-                    </div>
+                    <div></div>
                 </div>
             </header>
 
@@ -158,7 +154,7 @@ const ReservationList = () => {
                             </div>
                             <div className="space-y-2">
                                 <h3 className="text-xl font-bold text-slate-800">예약 내역이 없습니다</h3>
-                                <p className="text-slate-400 text-sm font-medium">새로운 여정을 계획하고 예약을 시작해보세요.</p>
+                                <p className="text-slate-400 text-sm font-medium">새로운 여행을 계획하고 예약을 시작해보세요.</p>
                             </div>
                             <button onClick={() => navigate('/customer-dashboard')} className="bg-primary text-white px-10 py-3 rounded-full font-bold text-sm shadow-lg shadow-primary/10 active:scale-95 transition-all">
                                 대시보드로 돌아가기

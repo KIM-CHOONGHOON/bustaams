@@ -5,7 +5,7 @@ import { notify } from '../utils/toast';
 import BottomNavCustomer from '../components/BottomNavCustomer';
 
 /**
- * 고객용 상세 견적 확인 페이지
+ * 고객용 상세 청약 확인 페이지
  * 각 차량별로 입찰된 기사님의 청약을 확인하고 승인하거나 취소할 수 있습니다.
  */
 const EstimateListCustomer = () => {
@@ -17,7 +17,7 @@ const EstimateListCustomer = () => {
     const [units, setUnits] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // 견적 데이터 가져오기
+    // 청약 데이터 가져오기
     const fetchEstimates = async () => {
         if (!reqId) return;
         try {
@@ -37,7 +37,7 @@ const EstimateListCustomer = () => {
         fetchEstimates();
     }, [reqId]);
 
-    // 개별 차량 견적 취소
+    // 개별 차량 청약 취소
     const handleCancelBus = async (unitSeq) => {
         const confirmed = await notify.confirm('차량 청약 취소', `차량 #${unitSeq}의 청약 요청을 취소하시겠습니까?`);
         if (!confirmed) return;
@@ -122,7 +122,7 @@ const EstimateListCustomer = () => {
             <div className="min-h-screen flex items-center justify-center bg-background">
                 <div className="flex flex-col items-center gap-4">
                     <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                    <p className="font-black text-primary animate-pulse tracking-widest uppercase text-xs">Loading Estimates</p>
+                    <p className="font-black text-primary animate-pulse tracking-widest uppercase text-xs">Loading Subscriptions</p>
                 </div>
             </div>
         );
@@ -148,7 +148,7 @@ const EstimateListCustomer = () => {
                         <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-full scale-95 active:scale-90 duration-200">
                             <span className="material-symbols-outlined">arrow_back</span>
                         </button>
-                        <span className="text-2xl font-black text-teal-800 tracking-tighter italic">Velocity</span>
+                        <span className="text-xl font-bold text-teal-900 tracking-tight">청약 상세 화면</span>
                     </div>
                     <div className="flex items-center gap-4">
                          <span className="text-sm font-bold text-slate-400">상세 청약 확인</span>
@@ -160,7 +160,7 @@ const EstimateListCustomer = () => {
                 {/* 상단 섹션 */}
                 <section className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
                     <div className="md:col-span-8">
-                        <p className="text-secondary font-bold tracking-[0.2em] text-xs mb-3 uppercase">Detailed Estimate</p>
+                        <p className="text-secondary font-bold tracking-[0.2em] text-xs mb-3 uppercase">Detailed Subscription</p>
                         <h1 className="text-4xl md:text-6xl font-extrabold tracking-tighter text-on-surface leading-tight italic">
                             <span className="text-primary">{tripSummary.title}</span> 여행
                         </h1>
@@ -178,7 +178,7 @@ const EstimateListCustomer = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                     {/* 왼쪽 컨텐츠 */}
                     <div className="lg:col-span-7 space-y-8">
-                        {/* 여정 경로 카드 */}
+                        {/* 여행 경로 카드 */}
                         <div className="bg-white rounded-[2.5rem] p-8 shadow-[0_40px_60px_rgba(0,0,0,0.03)] border border-slate-50 relative overflow-hidden">
                             <div className="absolute top-0 left-0 w-2 h-full bg-primary/20"></div>
                             <h2 className="text-2xl font-black mb-10 flex items-center gap-3 italic text-teal-800">

@@ -30,8 +30,8 @@ const RequestBus = () => {
     // Address states
     const [depAddress, setDepAddress] = useState(''); // 출발지
     const [stops, setStops] = useState([]); // 출발 경유지
-    const [arrAddress, setArrAddress] = useState(''); // 회차지
-    const [returnStops, setReturnStops] = useState([]); // 복귀 경유지
+    const [arrAddress, setArrAddress] = useState(''); // 목적지
+    const [returnStops, setReturnStops] = useState([]); // 도착 경유지
     const [endAddress, setEndAddress] = useState(''); // 최종 도착지
 
     // DateTime states (YYYY-MM-DD HH:mm)
@@ -200,7 +200,7 @@ const RequestBus = () => {
             return;
         }
         if(!depAddress || !arrAddress || !endAddress) {
-            notify.warn('알림', '출발지, 회차지, 최종도착지를 모두 입력해주세요.');
+            notify.warn('알림', '출발지, 목적지, 최종도착지를 모두 입력해주세요.');
             return;
         }
         if(!depDateTime || !arrDateTime) {
@@ -218,10 +218,10 @@ const RequestBus = () => {
             // 2. 출발 경유지 (START_WAY)
             stops.forEach(s => s && vias.push({ viaType: 'START_WAY', addr: s }));
             
-            // 3. 회차지 (ROUND_TRIP)
+            // 3. 목적지 (ROUND_TRIP)
             vias.push({ viaType: 'ROUND_TRIP', addr: arrAddress });
             
-            // 4. 복귀 경유지 (END_WAY)
+            // 4. 도착 경유지 (END_WAY)
             returnStops.forEach(s => s && vias.push({ viaType: 'END_WAY', addr: s }));
             
             // 5. 최종 도착지 (END_NODE)
@@ -232,7 +232,7 @@ const RequestBus = () => {
                 endAddr: endAddress,
                 startDt: depDateTime,
                 endDt: arrDateTime,
-                tripTitle: tripName || `${depAddress.split(' ')[0]} 여정`,
+                tripTitle: tripName || `${depAddress.split(' ')[0]} 여행`,
                 passengerCnt: 1, 
                 buses: selectedBuses.map((bus, idx) => ({
                     busTypeCd: bus.code,
@@ -248,7 +248,7 @@ const RequestBus = () => {
                 : await api.post('/app/customer/auction-req', payload);
 
             if(response.success) {
-                await notify.success('성공', id ? '예약 정보가 성공적으로 수정되었습니다.' : '차량 견적 요청이 성공적으로 접수되었습니다.');
+                await notify.success('성공', id ? '예약 정보가 성공적으로 수정되었습니다.' : '차량 청약 요청이 성공적으로 접수되었습니다.');
                 navigate('/customer-dashboard');
             } else {
                 notify.error('실패', response.error || '요청 중 오류가 발생했습니다.');
@@ -364,7 +364,7 @@ const RequestBus = () => {
                             당신만을 위한<br/>전용 버스.
                         </h2>
                         <p className="text-slate-600 text-lg lg:text-xl leading-relaxed max-w-md text-[18px]">
-                            일생에 단 한 번뿐인 특별한 여정을 정의하세요. 럭셔리 비즈니스 코치부터 지속 가능한 운송 솔루션까지, 귀하의 단체에 꼭 필요한 사양을 요청하실 수 있습니다.
+                            일생에 단 한 번뿐인 특별한 여행을 정의하세요. 럭셔리 비즈니스 코치부터 지속 가능한 운송 솔루션까지, 귀하의 단체에 꼭 필요한 사양을 요청하실 수 있습니다.
                         </p>
 
                         <div className="mt-12 relative rounded-2xl overflow-hidden h-64 w-full shadow-xl">
@@ -416,7 +416,7 @@ const RequestBus = () => {
                                         {stops.map((stop, index) => (
                                             <div key={`stop-${index}`} className="space-y-2 relative pl-6 border-l-2 border-dashed border-slate-200 ml-4 animate-fade-in">
                                                 <div className="absolute -left-[9px] top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-slate-300 rounded-full"></div>
-                                                <label className="font-label text-[10px] font-bold text-slate-400 ml-2">경유지</label>
+                                                <label className="font-label text-[10px] font-bold text-slate-400 ml-2">출발 경유지</label>
                                                 <div className="relative group cursor-pointer" onClick={() => openPostcode(`stop-${index}`)}>
                                                     <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-[18px] group-hover:text-teal-600 transition-colors">more_vert</span>
                                                     <input className="w-full pl-10 pr-12 py-3 bg-white border border-slate-100 rounded-xl text-sm font-bold text-teal-900 cursor-pointer placeholder-slate-400 outline-none shadow-sm" placeholder={`클릭하여 주소 검색`} readOnly type="text" value={stop} />
@@ -429,25 +429,25 @@ const RequestBus = () => {
                                         {stops.length < 3 && (
                                             <button onClick={addStop} type="button" className="flex items-center gap-2 text-teal-600 font-bold text-sm ml-4 hover:opacity-70 transition-opacity">
                                                 <span className="material-symbols-outlined text-lg">add_circle</span>
-                                                <span>도중 경유지 추가</span>
+                                                <span>출발 경유지 추가</span>
                                             </button>
                                         )}
 
-                                        {/* 회차지 */}
+                                        {/* 목적지 */}
                                         <div className="space-y-2 pt-4">
-                                            <label className="font-label text-xs font-bold uppercase tracking-wider text-slate-500 ml-2">회차지 <span className="text-red-500">*</span></label>
+                                            <label className="font-label text-xs font-bold uppercase tracking-wider text-slate-500 ml-2">목적지 <span className="text-red-500">*</span></label>
                                             <div className="relative group cursor-pointer" onClick={() => openPostcode('arr')}>
                                                 <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-hover:text-teal-600 transition-colors">flag</span>
-                                                <input className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 transition-all font-bold text-teal-900 cursor-pointer placeholder-slate-400 outline-none" placeholder="클릭하여 회차지 주소 검색" readOnly type="text" value={arrAddress} />
+                                                <input className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 transition-all font-bold text-teal-900 cursor-pointer placeholder-slate-400 outline-none" placeholder="클릭하여 목적지 주소 검색" readOnly type="text" value={arrAddress} />
                                             </div>
                                         </div>
 
 
-                                        {/* 복귀 경유지 */}
+                                        {/* 도착 경유지 */}
                                         {returnStops.map((stop, index) => (
                                             <div key={`retStop-${index}`} className="space-y-2 relative pl-6 border-l-2 border-dashed border-slate-200 ml-4 animate-fade-in">
                                                 <div className="absolute -left-[9px] top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-slate-300 rounded-full"></div>
-                                                <label className="font-label text-[10px] font-bold text-slate-400 ml-2">복귀 경유지</label>
+                                                <label className="font-label text-[10px] font-bold text-slate-400 ml-2">도착 경유지</label>
                                                 <div className="relative group cursor-pointer" onClick={() => openPostcode(`returnStop-${index}`)}>
                                                     <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-[18px] group-hover:text-teal-600 transition-colors">more_vert</span>
                                                     <input className="w-full pl-10 pr-12 py-3 bg-white border border-slate-100 rounded-xl text-sm font-bold text-teal-900 cursor-pointer placeholder-slate-400 outline-none shadow-sm" placeholder={`클릭하여 주소 검색`} readOnly type="text" value={stop} />
@@ -460,7 +460,7 @@ const RequestBus = () => {
                                         {returnStops.length < 3 && (
                                             <button onClick={addReturnStop} type="button" className="flex items-center gap-2 text-teal-600 font-bold text-sm ml-4 hover:opacity-70 transition-opacity">
                                                 <span className="material-symbols-outlined text-lg">add_circle</span>
-                                                <span>복귀 경로 경유지 추가</span>
+                                                <span>도착 경유지 추가</span>
                                             </button>
                                         )}
 
@@ -486,7 +486,7 @@ const RequestBus = () => {
                                              </div>
                                          </div>
                                          <div className="space-y-2 cursor-pointer" onClick={() => openDateTimePopup('arr')}>
-                                             <label className="font-label text-xs font-bold uppercase tracking-wider text-slate-500 ml-2">도착(회차) 일시 <span className="text-red-500">*</span></label>
+                                             <label className="font-label text-xs font-bold uppercase tracking-wider text-slate-500 ml-2">도착(목적지) 일시 <span className="text-red-500">*</span></label>
                                              <div className="relative group">
                                                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-teal-600">event_available</span>
                                                  <input className="w-full pl-12 pr-4 py-4 bg-teal-50 border border-teal-100 rounded-xl focus:ring-2 focus:ring-teal-600/20 transition-all font-bold text-teal-900 cursor-pointer placeholder-teal-700/50 outline-none" type="text" placeholder="일시 설정 클릭" value={arrDateTime} readOnly />
@@ -518,7 +518,7 @@ const RequestBus = () => {
                                     <section className="bg-slate-50/50 rounded-[3rem] p-6 md:p-10 space-y-10 border border-slate-100">
                                         <div className="flex items-center justify-between">
                                             <div className="space-y-1">
-                                                <h3 className="font-headline font-black text-2xl text-teal-950">계산된 예상 견적 상세</h3>
+                                                <h3 className="font-headline font-black text-2xl text-teal-950">계산된 예상 청약 상세</h3>
                                             </div>
                                             <span className="px-4 py-2 rounded-full bg-white text-teal-800 text-[10px] font-extrabold uppercase tracking-widest border border-teal-800/10 shadow-sm">실시간 자동 업데이트</span>
                                         </div>
@@ -550,7 +550,7 @@ const RequestBus = () => {
                                                         
                                                         <div className="pt-6">
                                                             <div className="bg-slate-50/80 rounded-[2rem] p-6 space-y-4 border border-slate-100">
-                                                                <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] block ml-1 text-center">고객 요청 견적 금액 (REQUESTED AMOUNT)</span>
+                                                                <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] block ml-1 text-center">고객 요청 청약 금액 (REQUESTED AMOUNT)</span>
                                                                 <div className="relative">
                                                                     <span className="absolute left-0 top-1/2 -translate-y-1/2 text-teal-800 font-black text-xl">₩</span>
                                                                     <input 
@@ -588,7 +588,7 @@ const RequestBus = () => {
 
                                 <div className="pt-8">
                                     <button onClick={handleRequestSubmit} className="w-full py-5 px-8 rounded-2xl bg-teal-700 text-white font-headline font-extrabold text-xl shadow-lg hover:shadow-xl hover:shadow-teal-900/20 active:scale-95 transition-all duration-300 flex items-center justify-center gap-3">
-                                        <span>여정 요청하기</span>
+                                        <span>여행 요청하기</span>
                                         <span className="material-symbols-outlined">arrow_forward</span>
                                     </button>
                                 </div>

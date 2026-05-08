@@ -8,7 +8,7 @@ const EstimateForm = () => {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        alert('견적이 성공적으로 제출되었습니다!');
+        alert('청약이 성공적으로 제출되었습니다!');
         navigate('/driver-dashboard');
     };
 
@@ -36,7 +36,7 @@ const EstimateForm = () => {
                     </div>
                     <div className="md:col-span-4 md:text-right hidden md:block">
                         <p className="text-on-surface-variant font-medium max-w-xs ml-auto text-sm">
-                            경쟁력 있는 견적으로 노선을 확보하세요. 프리미엄 물류를 위한 정밀한 가격 책정.
+                            경쟁력 있는 청약으로 노선을 확보하세요. 프리미엄 물류를 위한 정밀한 가격 책정.
                         </p>
                     </div>
                 </div>
@@ -75,7 +75,7 @@ const EstimateForm = () => {
                                 <div className="flex items-start gap-4">
                                     <span className="material-symbols-outlined text-secondary">calendar_month</span>
                                     <div>
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">여정 일정</p>
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">여행 일정</p>
                                         <p className="font-headline font-bold text-on-surface text-sm">2024.11.24 (목) - 11.26 (토)</p>
                                     </div>
                                 </div>

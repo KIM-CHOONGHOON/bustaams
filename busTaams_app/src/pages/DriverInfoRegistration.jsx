@@ -38,7 +38,8 @@ const DriverInfoRegistration = () => {
         busLicenseNo: '',
         qualAcquisitionDt: '',
         qualStatus: 'ACTIVE',
-        qualApproveStat: ''
+        qualApproveStat: '',
+        careerCertApproveStat: ''
     });
 
     const [verificationSent, setVerificationSent] = useState(false);
@@ -103,7 +104,8 @@ const DriverInfoRegistration = () => {
                         busLicenseNo: driver?.busLicenseNo || '',
                         qualAcquisitionDt: driver?.qualAcquisitionDt || '',
                         qualStatus: driver?.qualStatus || 'ACTIVE',
-                        qualApproveStat: driver?.qualApproveStat || ''
+                        qualApproveStat: driver?.qualApproveStat || '',
+                        careerCertApproveStat: driver?.careerCertApproveStat || ''
                     }));
                     setOriginalPhone(user?.phone || '');
                     if (user?.phone) setIsVerified(true); // 이미 번호가 있으면 인증된 것으로 간주 (변경 시 재인증 필요)
@@ -343,17 +345,17 @@ const DriverInfoRegistration = () => {
             )}
 
             {/* TopAppBar */}
-            <header className="bg-transparent text-teal-800 flex justify-between items-center w-full px-6 pt-8 pb-4 max-w-7xl mx-auto">
-                <div className="flex items-center gap-4">
-                    <button onClick={() => navigate(-1)} className="hover:opacity-80 transition-opacity active:scale-95 duration-200">
-                        <span className="material-symbols-outlined text-2xl">menu</span>
-                    </button>
-                    <h1 className="font-headline font-extrabold tracking-tight text-3xl text-[#004e47] tracking-tighter">busTaams</h1>
-                </div>
-                <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-[#e6e8ea] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
+            <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl shadow-sm shadow-teal-900/5 h-16 flex items-center">
+                <div className="flex items-center justify-between px-6 w-full max-w-7xl mx-auto">
+                    <div className="flex items-center gap-4">
+                        <button onClick={() => navigate(-1)} className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-slate-100 transition-colors active:scale-90">
+                            <span className="material-symbols-outlined text-teal-800">arrow_back</span>
+                        </button>
+                        <h1 className="text-teal-900 font-extrabold tracking-tight font-headline text-lg">기사정보 등록</h1>
+                    </div>
+                    <div className="w-10 h-10 rounded-full bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
                         {previews.profileImg ? (
-                            <img src={previews.profileImg} className="h-full w-full object-cover" />
+                            <img alt="Driver Profile" src={previews.profileImg} className="w-full h-full object-cover" />
                         ) : (
                             <span className="material-symbols-outlined text-[#bec9c6]">person</span>
                         )}
@@ -361,7 +363,7 @@ const DriverInfoRegistration = () => {
                 </div>
             </header>
 
-            <main className="max-w-7xl mx-auto px-6 pt-12 pb-32">
+            <main className="max-w-7xl mx-auto px-6 pt-24 pb-32">
                 <section className="grid grid-cols-1 md:grid-cols-12 gap-8 mb-16">
                     <div className="col-span-12 md:col-span-8">
                         <p className="font-headline font-bold text-[#9d4300] uppercase tracking-[0.2em] mb-4 text-sm">온보딩</p>
@@ -622,9 +624,9 @@ const DriverInfoRegistration = () => {
                                 <div onClick={() => careerCertInputRef.current.click()} className="p-6 rounded-2xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
                                     <div className="flex items-center justify-between mb-4">
                                         <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6e7977]">운전경력증명서 <span className="text-red-500">*필수</span></span>
-                                        <span className="flex items-center gap-1 text-[10px] font-bold text-[#9d4300]">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-[#9d4300]"></span> 
-                                            경찰청 발급분
+                                        <span className={`flex items-center gap-1 text-[10px] font-bold ${formData.careerCertApproveStat === 'APPROVE' ? 'text-[#00685f]' : formData.careerCertApproveStat === 'WAIT' ? 'text-[#9d4300]' : 'text-[#ba1a1a]'}`}>
+                                            <span className={`w-1.5 h-1.5 rounded-full ${formData.careerCertApproveStat === 'APPROVE' ? 'bg-[#00685f]' : formData.careerCertApproveStat === 'WAIT' ? 'bg-[#9d4300]' : 'bg-[#ba1a1a]'}`}></span> 
+                                            {!formData.careerCertApproveStat ? '미등록' : formData.careerCertApproveStat === 'WAIT' ? '확인 중' : formData.careerCertApproveStat === 'APPROVE' ? '승인됨' : '반려됨'}
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-4">

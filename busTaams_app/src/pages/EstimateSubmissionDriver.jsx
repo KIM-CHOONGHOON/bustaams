@@ -13,7 +13,7 @@ const EstimateSubmissionDriver = () => {
                         <button onClick={() => navigate(-1)} className="p-3 bg-white rounded-2xl text-teal-800 shadow-xl shadow-teal-900/5 active:scale-95 transition-all">
                             <span className="material-symbols-outlined text-lg">arrow_back</span>
                         </button>
-                        <h1 className="font-headline font-black tracking-[ -0.05em] text-3xl text-teal-900 italic">견적 제출</h1>
+                        <h1 className="font-headline font-black tracking-[ -0.05em] text-3xl text-teal-900 italic">청약 제출</h1>
                     </div>
                     <div className="w-12 h-12 rounded-2xl overflow-hidden border-2 border-primary-fixed shadow-2xl rotate-3">
                         <img alt="User profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD4vN2iJhYT28dqF3bXn1UtFElHnQDFzWTM9CdNaAeMcn5Y85HNmY9B2z1Nknl7_0LRROWW6Kp6ePpluuaaJm60f9fheJfiNCV-IjIldyuNn0rqoOsilL34BrGPY00oGI6qIOd2cKXQSsudhdeVbyanrHnuCqiifKuAoRcDX2pk1oO0TDo7Izx1aFfEP7T9ggFWTGdVNwsWWLAAqtiCftrqWM46536UPanJUNNd6GPoEFB-bpkobjeORZueHC5FbV1a-Z71vgICFjo" />
@@ -25,14 +25,14 @@ const EstimateSubmissionDriver = () => {
                 {/* Editorial Header Section */}
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-end text-left">
                     <div className="md:col-span-8 space-y-4 text-left">
-                        <span className="font-headline text-secondary font-black tracking-[0.4em] uppercase text-[10px] block px-2 italic">견적 ID: #BT-88429</span>
+                        <span className="font-headline text-secondary font-black tracking-[0.4em] uppercase text-[10px] block px-2 italic">청약 ID: #BT-88429</span>
                         <h2 className="font-headline font-black text-6xl md:text-8xl text-primary leading-[0.9] tracking-tighter italic uppercase text-left">
-                            견적 <br/><span className="text-secondary underline decoration-secondary/20 underline-offset-[12px]">제출하기.</span>
+                            청약 <br/><span className="text-secondary underline decoration-secondary/20 underline-offset-[12px]">제출하기.</span>
                         </h2>
                     </div>
                     <div className="md:col-span-4 text-left hidden md:block border-l-4 border-slate-50 pl-8">
                         <p className="text-slate-400 text-lg font-bold italic tracking-tight leading-snug text-left">
-                            경쟁력 있는 견적으로 노선을 확보하세요. 프리미엄 운송을 위한 정밀한 가격 책정 제안.
+                            경쟁력 있는 청약으로 노선을 확보하세요. 프리미엄 운송을 위한 정밀한 가격 책정 제안.
                         </p>
                     </div>
                 </div>
@@ -42,7 +42,7 @@ const EstimateSubmissionDriver = () => {
                     {/* Left Column: Trip Details */}
                     <aside className="lg:col-span-4 text-left">
                         <div className="bg-slate-900 rounded-[3.5rem] p-12 space-y-12 shadow-2xl shadow-slate-900/40 sticky top-48 text-left">
-                            <h3 className="font-headline font-black text-2xl text-white italic border-l-8 border-secondary pl-6 text-left uppercase">여정 정보</h3>
+                            <h3 className="font-headline font-black text-2xl text-white italic border-l-8 border-secondary pl-6 text-left uppercase">여행 정보</h3>
                             
                             <div className="space-y-10 text-left">
                                 {[
@@ -90,7 +90,7 @@ const EstimateSubmissionDriver = () => {
                                     {/* Pricing Input */}
                                     <div className="space-y-4 text-left group">
                                         <div className="flex justify-between items-center px-4 text-left">
-                                            <label className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-300 italic">총 견적 금액</label>
+                                            <label className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-300 italic">총 청약 금액</label>
                                             <span className="text-[9px] font-black text-secondary uppercase tracking-[0.3em]">KRW Index</span>
                                         </div>
                                         <div className="relative text-left">

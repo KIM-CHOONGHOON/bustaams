@@ -50,7 +50,7 @@ const FailBidListDriver = () => {
                     <div className="md:col-span-7 space-y-6 text-left">
                         <span className="text-secondary font-black tracking-[0.4em] uppercase text-[10px] block px-2 italic">유찰 내역 분석</span>
                         <h2 className="font-headline text-6xl md:text-8xl font-black text-primary leading-[0.85] tracking-tighter italic uppercase text-left">
-                            유찰된 <br/><span className="text-slate-200 underline decoration-slate-200/20 underline-offset-[12px]">견적들.</span>
+                            유찰된 <br /><span className="text-slate-200 underline decoration-slate-200/20 underline-offset-[12px]">청약들.</span>
                         </h2>
                     </div>
                     <div className="md:col-span-5 md:pl-12 text-left border-l-4 border-slate-50">
@@ -85,7 +85,7 @@ const FailBidListDriver = () => {
                                 </div>
                                 <div className="grid grid-cols-2 gap-6 text-left">
                                     <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 text-left group-hover:bg-white transition-colors">
-                                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-300 mb-2 italic">나의 견적가</p>
+                                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-300 mb-2 italic">나의 청약가</p>
                                         <p className="font-headline text-2xl font-black text-primary italic tracking-tighter">₩{failedBids[0].price}</p>
                                     </div>
                                     <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 text-left group-hover:bg-white transition-colors">
@@ -121,7 +121,7 @@ const FailBidListDriver = () => {
 
                                 <div className="space-y-4 text-left border-t border-slate-50 pt-8">
                                     <div className="flex justify-between items-center text-left">
-                                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-300 italic">견적 금액</span>
+                                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-300 italic">청약 금액</span>
                                         <span className="font-black text-primary text-xs italic">₩{item.price}</span>
                                     </div>
                                     <div className="flex justify-between items-center text-left">

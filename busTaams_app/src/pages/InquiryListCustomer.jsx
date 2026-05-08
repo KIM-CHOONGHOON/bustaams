@@ -94,10 +94,12 @@ const InquiryListCustomer = () => {
             {/* TopAppBar */}
             <header className="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-sm shadow-teal-900/5 h-16 flex items-center">
                 <div className="flex items-center justify-between px-6 w-full max-w-2xl mx-auto">
-                    <button onClick={() => navigate(-1)} className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-slate-100 transition-colors active:scale-90">
-                        <span className="material-symbols-outlined text-teal-800 dark:text-teal-400">arrow_back</span>
-                    </button>
-                    <h1 className="font-headline font-bold text-lg text-teal-800 dark:text-teal-400 tracking-tight">1:1 문의 내역</h1>
+                    <div className="flex items-center gap-4">
+                        <button onClick={() => navigate(-1)} className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-slate-100 transition-colors active:scale-90">
+                            <span className="material-symbols-outlined text-teal-800 dark:text-teal-400">arrow_back</span>
+                        </button>
+                        <h1 className="font-headline font-bold text-lg text-teal-800 dark:text-teal-400 tracking-tight">1:1 문의 내역</h1>
+                    </div>
                     <div className="w-10"></div>
                 </div>
             </header>

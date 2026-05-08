@@ -15,16 +15,16 @@ router.get('/display-image', async (req, res) => {
     }
 
     try {
-        if (rawPath.startsWith('http')) {
-            // 1. GCS URL에서 버킷 내부 경로 추출
-            // 형식: https://storage.googleapis.com/[bucket-name]/[file-path]
-            const urlPrefix = `https://storage.googleapis.com/${bucketName}/`;
-            let gcsFilePath = '';
+        let gcsFilePath = '';
 
+        if (rawPath.startsWith('http')) {
+            // 1. GCS URL 또는 외부 URL 처리
+            const urlPrefix = `https://storage.googleapis.com/${bucketName}/`;
+            
             if (rawPath.startsWith(urlPrefix)) {
                 gcsFilePath = rawPath.replace(urlPrefix, '');
             } else {
-                // 다른 도메인의 URL인 경우 (예: 카카오 프로필 등) 기존 방식 유지
+                // 외부 URL인 경우 (예: 카카오 프로필 등) 스트리밍 유지
                 const axios = require('axios');
                 const response = await axios({
                     method: 'get',
@@ -34,37 +34,39 @@ router.get('/display-image', async (req, res) => {
                 res.setHeader('Content-Type', response.headers['content-type'] || 'image/png');
                 return response.data.pipe(res);
             }
-
-            // 2. SDK를 사용하여 파일 읽기
-            const bucket = getBucket();
-            const file = bucket.file(gcsFilePath);
-
-            // 파일 존재 여부 확인
-            const [exists] = await file.exists();
-            if (!exists) {
-                console.warn(`[Display Image] File not found in GCS: ${gcsFilePath}`);
-                return res.status(404).send('Image not found');
-            }
-
-            // 메타데이터에서 Content-Type 가져오기
-            const [metadata] = await file.getMetadata();
-            res.setHeader('Content-Type', metadata.contentType || 'image/png');
-
-            // 스트림으로 클라이언트에 전송
-            file.createReadStream()
-                .on('error', (err) => {
-                    console.error('[GCS Stream Error]:', err.message);
-                    if (!res.headersSent) res.status(500).send('Stream error');
-                })
-                .pipe(res);
-
         } else {
-            // 3. 로컬 파일 경로인 경우 (보안을 위해 /uploads 내로 제한 권장)
+            // 2. GCS 상대 경로인 경우 (예: VEHICLE_PHOTO/...)
+            gcsFilePath = rawPath;
+        }
+
+        // GCS에서 파일 가져오기
+        const bucket = getBucket();
+        const file = bucket.file(gcsFilePath);
+
+        // 파일 존재 여부 확인
+        const [exists] = await file.exists();
+        if (!exists) {
+            // 로컬 파일인지 마지막으로 확인 (호환성 유지)
             const path = require('path');
             const fs = require('fs');
-            // 절대 경로가 아닌 경우를 대비해 uploads 기준 상대 경로로 처리하거나 제한 필요
-            res.sendFile(rawPath);
+            if (fs.existsSync(rawPath) && !fs.lstatSync(rawPath).isDirectory()) {
+                return res.sendFile(rawPath);
+            }
+            console.warn(`[Display Image] File not found in GCS or Local: ${gcsFilePath}`);
+            return res.status(404).send('Image not found');
         }
+
+        // 메타데이터에서 Content-Type 가져오기
+        const [metadata] = await file.getMetadata();
+        res.setHeader('Content-Type', metadata.contentType || 'image/png');
+
+        // 스트림으로 클라이언트에 전송
+        file.createReadStream()
+            .on('error', (err) => {
+                console.error('[GCS Stream Error]:', err.message);
+                if (!res.headersSent) res.status(500).send('Stream error');
+            })
+            .pipe(res);
     } catch (error) {
         console.error('[Display Image Error]:', error.message);
         if (!res.headersSent) {

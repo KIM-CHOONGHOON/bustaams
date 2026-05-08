@@ -284,9 +284,9 @@ router.get('/auctions/:id', authenticateToken, async (req, res) => {
         // 경로 시퀀스 가공
         const fullPath = [
             { label: '출발지', addr: row.startAddr },
-            ...(row.startVia ? row.startVia.split(',').map(v => ({ label: '출발경유지', addr: v })) : []),
-            ...(row.roundTrip ? [{ label: '회차지', addr: row.roundTrip }] : []),
-            ...(row.endVia ? row.endVia.split(',').map(v => ({ label: '회차경유지', addr: v })) : []),
+            ...(row.startVia ? row.startVia.split(',').map(v => ({ label: '출발 경유지', addr: v })) : []),
+            ...(row.roundTrip ? [{ label: '목적지', addr: row.roundTrip }] : []),
+            ...(row.endVia ? row.endVia.split(',').map(v => ({ label: '도착 경유지', addr: v })) : []),
             { label: '최종 도착지', addr: endAddr }
         ];
 
@@ -363,6 +363,9 @@ router.get('/profile', authenticateToken, async (req, res) => {
                 driverData.busLicenseImg = doc.filePath;
                 driverData.qualStatus = doc.INFO_STAT_CD;
                 driverData.qualApproveStat = doc.approveStat;
+            } else if (doc.DOC_TYPE === 'CAREER_CERT' && !driverData.careerCertImg) {
+                driverData.careerCertImg = doc.filePath;
+                driverData.careerCertApproveStat = doc.approveStat;
             }
         }
 
@@ -1070,7 +1073,7 @@ router.get('/mission-detail/:id', authenticateToken, async (req, res) => {
             waypoints: [
                 { type: 'START', addr: row.startAddr, time: row.startDate || '출발' },
                 ...(row.startVia ? row.startVia.split(',').map(v => ({ type: 'START_WAY', addr: v, time: '경유' })) : []),
-                ...(row.roundTrip ? [{ type: 'ROUND', addr: row.roundTrip, time: '회차지' }] : []),
+                ...(row.roundTrip ? [{ type: 'ROUND', addr: row.roundTrip, time: '목적지' }] : []),
                 ...(row.endVia ? row.endVia.split(',').map(v => ({ type: 'END_WAY', addr: v, time: '경유' })) : []),
                 { type: 'END', addr: endAddr, time: row.endDate || '도착지' }
             ]

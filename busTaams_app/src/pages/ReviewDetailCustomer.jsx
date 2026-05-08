@@ -82,8 +82,10 @@ const ReviewDetailCustomer = () => {
         <div className="bg-[#F8FAFB] min-h-screen pb-40 text-left font-body">
             {/* Header */}
             <header className="fixed top-0 w-full z-50 bg-white border-b border-slate-100 px-6 h-16 flex items-center justify-between">
-                <button onClick={() => navigate(-1)} className="material-symbols-outlined text-[#1E293B] p-2 hover:bg-slate-50 rounded-full transition-all">arrow_back</button>
-                <h1 className="font-bold text-[17px] text-[#1E293B]">나의 리뷰 상세</h1>
+                <div className="flex items-center gap-4">
+                    <button onClick={() => navigate(-1)} className="material-symbols-outlined text-[#1E293B] p-2 hover:bg-slate-50 rounded-full transition-all">arrow_back</button>
+                    <h1 className="font-bold text-[17px] text-[#1E293B]">나의 리뷰 상세</h1>
+                </div>
                 <div className="w-10"></div>
             </header>
 
@@ -93,7 +95,7 @@ const ReviewDetailCustomer = () => {
                     <div className="flex items-center justify-between gap-4">
                         <div className="space-y-4 flex-1">
                             <div className="flex items-center gap-3">
-                                <span className="px-3 py-1 bg-teal-50 text-[#0F766E] text-[10px] font-black rounded-lg uppercase tracking-widest border border-teal-100">운행 완료</span>
+                                <span className="px-3 py-1 bg-teal-50 text-[#0F766E] text-[10px] font-black rounded-lg uppercase tracking-widest border border-teal-100">여행 완료</span>
                                 <span className="text-[12px] text-slate-400 font-bold">{review.date}</span>
                             </div>
                             <h2 className="text-[20px] font-black text-slate-800 tracking-tight leading-tight">
