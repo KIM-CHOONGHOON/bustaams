@@ -29,17 +29,26 @@ const ReservationList = ({ user, onBack }) => {
 
     if (currentUser && currentUser.custId) {
       setLoading(true);
+      console.log('[DEBUG] Fetching from:', `http://localhost:8080/api/auction/history/${currentUser.custId}`);
       fetch(`http://localhost:8080/api/auction/history/${currentUser.custId}`)
-        .then(res => res.json())
+        .then(res => {
+          console.log('[DEBUG] Response received, status:', res.status);
+          return res.json();
+        })
         .then(data => {
-          console.log('[DEBUG] History API result:', data);
+          console.log('[DEBUG] Data parsed successfully:', data);
           if (Array.isArray(data)) {
+            // [추가] 데이터 상세 로깅
+            data.forEach(item => {
+              console.log(`[DEBUG] REQ_ID: ${item.REQ_ID}, DATA_STAT: ${item.DATA_STAT}, RES_STAT: ${item.RES_STAT}, DRIVER_NM: ${item.DRIVER_NM}`);
+            });
             setReservations(data);
           }
           setLoading(false);
+          console.log('[DEBUG] loading set to false');
         })
         .catch(err => {
-          console.error('Error fetching reservations:', err);
+          console.error('[DEBUG] Fetch Error occurred:', err);
           setLoading(false);
         });
     } else {
@@ -50,7 +59,7 @@ const ReservationList = ({ user, onBack }) => {
 
   useEffect(() => {
     fetchReservations();
-  }, [user]);
+  }, [user?.custId]);
 
   const handleCancelTrip = (trip) => {
     setCancelTripData(trip);
@@ -127,6 +136,41 @@ const ReservationList = ({ user, onBack }) => {
 
   const handleViewDetail = (bidId) => {
     setSelectedBidId(bidId);
+  };
+
+  const handleConfirmTrip = async (trip) => {
+    // trip 객체에 담긴 정보를 바탕으로 확정 처리
+    // 응찰한 기사가 있는 경우 DRIVER_ID가 포함되어 있어야 함
+    if (!trip.DRIVER_ID) {
+      alert('응찰한 기사 정보가 없습니다. 견적 목록에서 기사를 먼저 선택해 주세요.');
+      return;
+    }
+
+    if (!window.confirm(`${trip.DRIVER_NM || '기사'}님의 청약을 승인하시겠습니까?\n승인 시 예약이 확정됩니다.`)) return;
+
+    try {
+      const response = await fetch('http://localhost:8080/api/auction/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reqId: trip.REQ_ID,
+          driverId: trip.DRIVER_ID,
+          bidSeq: trip.BID_SEQ || 1 // 기본값 1
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert('청약 승인이 완료되었습니다. 예약이 확정되었습니다.');
+        fetchReservations(); // 목록 갱신
+      } else {
+        alert(result.error || '처리 중 오류가 발생했습니다.');
+      }
+    } catch (error) {
+      console.error('Confirm Trip Error:', error);
+      alert('서버와 통신 중 오류가 발생했습니다.');
+    }
   };
 
   const trimAddress = (addr) => {
@@ -206,12 +250,14 @@ const ReservationList = ({ user, onBack }) => {
           ) : (
             <div className="grid grid-cols-1 gap-8">
               {Object.values(reservations.reduce((acc, curr) => {
-                // [추가] 시간이 지난 여정은 목록에서 제외
+                // [임시 주석 처리] 테스트를 위해 과거 일정 필터링 제거
+                /*
                 const now = new Date();
                 const startDt = new Date(curr.START_DT);
                 if (startDt < now) {
                   return acc;
                 }
+                */
 
                 // 취소된 버스는 목록에서 제외 (BUS_STAT 기준)
                 if (curr.BUS_STAT === 'TRAVELER_CANCEL' || curr.BUS_STAT === 'BUS_CANCEL') {
@@ -267,13 +313,15 @@ const ReservationList = ({ user, onBack }) => {
                             <h4 className="text-[10px] font-black text-on-surface-variant uppercase tracking-[0.2em]">요청 차량 ({trip.buses.length}대)</h4>
                          </div>
                          <div className="flex items-center gap-3">
-                            <button 
-                              onClick={() => handleOpenQuotations(trip.REQ_ID)}
-                              className="px-5 py-2.5 bg-primary text-white text-[10px] font-black rounded-full hover:shadow-lg hover:shadow-primary/30 transition-all active:scale-95 flex items-center gap-2 uppercase tracking-widest"
-                            >
-                               <span className="material-symbols-outlined text-sm">verified</span>
-                               예약확정
-                            </button>
+                             {trip.DATA_STAT === 'BIDDING' && (
+                               <button
+                                 onClick={() => handleConfirmTrip(trip)}
+                                 className="px-6 py-2.5 bg-[#004d40] text-white text-[11px] font-black rounded-full hover:bg-[#003d33] transition-all shadow-md flex items-center gap-2"
+                               >
+                                  <span className="material-symbols-outlined text-sm">verified</span>
+                                  청약승인
+                               </button>
+                             )}
                             <button 
                               onClick={() => handleCancelTrip(trip)}
                               className="px-5 py-2.5 text-[10px] font-black text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all flex items-center gap-2 uppercase tracking-widest border border-slate-100 hover:border-red-100"
@@ -292,11 +340,38 @@ const ReservationList = ({ user, onBack }) => {
                                   <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-300 group-hover/bus:bg-primary group-hover/bus:text-white transition-all transform group-hover/bus:rotate-3">
                                      <span className="material-symbols-outlined text-xl">commute</span>
                                   </div>
-                                  <div>
+                                  <div className="flex flex-col">
                                      <p className="text-sm font-black text-on-surface tracking-tight mb-0.5">{vehicleLabel}</p>
                                      <p className="text-[10px] text-outline font-bold">금액: <span className="text-primary">{Number(bus.FINAL_CONFIRM_AMT || bus.UNIT_REQ_AMT || 0).toLocaleString()}원</span></p>
                                   </div>
                                </div>
+
+                               {bus.RES_STAT && (
+                                 <div className="flex-1 flex justify-center items-center">
+                                   <div className="flex items-center gap-3 bg-white px-5 py-2.5 rounded-2xl border-2 border-primary/10 shadow-sm hover:border-primary/30 transition-all cursor-default group/driver max-w-fit">
+                                     <div className="relative">
+                                       <div className="w-9 h-9 rounded-xl overflow-hidden border border-slate-100 shadow-inner bg-slate-50 flex items-center justify-center">
+                                         {bus.PROFILE_PHOTO_ID ? (
+                                           <img 
+                                             src={`http://localhost:8080/api/user/profile-image?fileId=${bus.PROFILE_PHOTO_ID}`} 
+                                             alt="driver"
+                                             className="w-full h-full object-cover group-hover/driver:scale-110 transition-transform duration-300"
+                                           />
+                                         ) : (
+                                           <span className="material-symbols-outlined text-sm text-slate-300">person</span>
+                                         )}
+                                       </div>
+                                       <div className="absolute -bottom-1 -right-1 w-4.5 h-4.5 bg-primary rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                                         <span className="material-symbols-outlined text-[10px] text-white font-bold">check</span>
+                                       </div>
+                                     </div>
+                                     <div className="flex flex-col">
+                                       <span className="text-[10px] text-primary font-black uppercase tracking-tight leading-none mb-1">담당 기사님</span>
+                                       <p className="text-sm text-on-surface font-black leading-none">{bus.DRIVER_NM || '확인 중'}</p>
+                                     </div>
+                                   </div>
+                                 </div>
+                               )}
                                <div className="flex items-center gap-2 shrink-0 ml-4">
                                   <button 
                                     onClick={() => handleBusChange(bus)}

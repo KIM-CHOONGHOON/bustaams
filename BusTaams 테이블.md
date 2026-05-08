@@ -56,7 +56,7 @@
 | `TB_DRIVER_DETAIL` | `USER_ID` 255, FK `TB_USER(USER_ID)` | 기사 식별 **CUST_ID(10)**, FK `TB_USER(CUST_ID)` |
 | `TB_DRIVER_DOCS` | — | **§3 CREATE 반영:** `CUST_ID` varchar(10), PK·FK `TB_USER(CUST_ID)` — 아래 `TB_DRIVER_DOCS` 블록 |
 | `TB_INQUIRY` / `TB_PAYMENT_CARD` | `USER_ID` 255, FK `USER_ID` | `CUST_ID` + FK `TB_USER(CUST_ID)` |
-| `TB_USER_CANCEL_HIST` / `TB_USER_CANCEL_MANAGE` | 키 `USER_ID` 255 | PK/ FK **`CUST_ID` varchar(10)** (SERVER 환경.md 로그인 페이로드 정책과 동일) |
+| `TB_USER_CANCEL_HIST` / `TB_USER_CANCEL_MANAGE` | 키 `CUST_ID` 10 | PK/ FK **`CUST_ID` varchar(10)** (SERVER 환경.md 로그인 페이로드 정책과 동일. 가입 시 자동 생성) |
 | `TB_USER_TERMS_HIST` | `USER_ID` 255 | `CUST_ID` (또는 `USER_ID` 유지 + 별도 `CUST_ID` — **운영 스키마** 따름) |
 | `TB_USER_DEVICE_TOKEN` | `USER_UUID` binary(16) | 운영이 `CUST_ID` 만 쓰도록 바꿨다면 **문서·코드** 동시 갱신 (`SERVER 환경.md` — UUID 비사용 정책) |
 
@@ -608,9 +608,8 @@ CREATE TABLE `TB_USER_CANCEL_HIST` (
 -- bustaams.TB_USER_CANCEL_MANAGE definition
 
 CREATE TABLE `TB_USER_CANCEL_MANAGE` (
-  `USER_ID` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '대상 고객 TB_USER.USER_ID',
-  `USER_TYPE` enum('TRAVELER','DRIVER','SALES') COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '고객 구분: 여행자·버스기사·영업회원',
-  `CANCEL_CNT` int NOT NULL DEFAULT '0' COMMENT '누적 취소 건수(총합·정책에 따라 세부 합과 일치시키거나 별도 집계)',
+  `CUST_ID` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '대상 고객 TB_USER.CUST_ID',
+  `CANCEL_CNT` int NOT NULL DEFAULT '0' COMMENT '누적 취소 건수(총합)',
   `CANCEL_BUS_DRIVER_CNT` int NOT NULL DEFAULT '0' COMMENT '버스기사 누적 취소 건수',
   `CANCEL_TRAVELER_ALL_CNT` int NOT NULL DEFAULT '0' COMMENT '여행자 여행 전체취소 누적 건수',
   `CANCEL_TRAVELER_PARTIAL_BUS_CNT` int NOT NULL DEFAULT '0' COMMENT '여행자 버스 부분 취소 누적 건수',
@@ -618,12 +617,12 @@ CREATE TABLE `TB_USER_CANCEL_MANAGE` (
   `TRADE_RESTRICT_START_DT` datetime DEFAULT NULL COMMENT '거래제한 시작일시',
   `TRADE_RESTRICT_END_DT` datetime DEFAULT NULL COMMENT '거래제한 종료일시',
   `REG_DT` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '마스터 등록 일시',
-  `REG_ID` varchar(30) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '등록자 ID',
+  `REG_ID` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '등록자 CUST_ID',
   `MOD_DT` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '마스터 수정 일시',
-  `MOD_ID` varchar(30) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '수정자 ID',
-  PRIMARY KEY (`USER_ID`),
-  KEY `IDX_UCM_USER` (`USER_ID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='고객별·유형별 취소 누적·거래제한 마스터';
+  `MOD_ID` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '수정자 CUST_ID',
+  PRIMARY KEY (`CUST_ID`),
+  KEY `IDX_UCM_USER` (`CUST_ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='고객별 취소 누적·거래제한 마스터 (가입 시 자동 생성)';
 ```
 
 ### `TB_USER_DEVICE_TOKEN`

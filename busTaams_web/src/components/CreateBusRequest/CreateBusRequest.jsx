@@ -397,6 +397,14 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
     try {
         let currentUser = userProp || JSON.parse(localStorage.getItem('user'));
         
+        // [페널티 체크] 취소 건수가 3건 이상인 경우 등록 불가 (설계서 정책 준수)
+        const cancelCnt = currentUser?.cancelManage?.cancelTravelerAllCnt || 0;
+        if (cancelCnt >= 3) {
+          alert(`누적 취소 건수가 ${cancelCnt}건으로 서비스 이용이 제한되었습니다.\n(3건 이상 취소 시 신규 예약 등록이 불가합니다.)`);
+          setIsSubmitting(false);
+          return;
+        }
+
         // Prepare journey point sequence for database storage
         // Sequence: Departure -> Waypoints -> Arrival -> ReturnWaypoints -> FinalArrival
         const mainJourney = [
