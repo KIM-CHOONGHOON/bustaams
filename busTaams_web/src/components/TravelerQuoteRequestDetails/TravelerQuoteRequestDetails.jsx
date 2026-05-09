@@ -38,7 +38,7 @@ const TravelerQuoteRequestDetails = ({ close, reqId, currentUser }) => {
         setLoadError(null);
         try {
             const custId = currentUser?.custId || '';
-            const url = `${API_BASE}/api/traveler-quote-request-details?reqId=${encodeURIComponent(reqId)}${custId ? `&custId=${encodeURIComponent(custId)}` : ''}`;
+            const url = `${API_BASE}/api/traveler-quote-request-details/view/${encodeURIComponent(reqId)}?${custId ? `custId=${encodeURIComponent(custId)}&` : ''}_t=${Date.now()}`;
             const res  = await fetch(url);
             if (!res.ok) throw new Error('데이터를 불러오지 못했습니다.');
             const json = await res.json();
