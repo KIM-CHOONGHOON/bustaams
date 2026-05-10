@@ -43,21 +43,15 @@ function normalizeUserSession(raw) {
   }
 
   // CUST_ID (내부 식별자) 표준화
-  let cidCandidate = (u.custId != null && String(u.custId).trim()) ||
+  const cidCandidate = (u.custId != null && String(u.custId).trim()) ||
     (u.CUST_ID != null && String(u.CUST_ID).trim()) ||
     '';
-
-  // [추가] 레거시 UUID 형식(하이픈 포함)인 경우 무시 (10자리 숫자 ID 체계 준수)
-  if (cidCandidate.includes('-')) {
-    cidCandidate = '';
-  }
 
   const cid = clipBizVarcharId(cidCandidate);
   
   if (cid) {
     u.custId = cid;
   } else {
-    // ID가 없거나 레거시인 경우 식별자 제거
     delete u.custId;
   }
 

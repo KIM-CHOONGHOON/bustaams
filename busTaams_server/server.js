@@ -1178,10 +1178,12 @@ app.post('/api/driver/profile', async (req, res) => {
 app.get('/api/driver/profile-setup', async (req, res) => {
     let connection;
     try {
-        const { custId } = req.query;
-        if (!custId) return res.status(400).json({ error: 'custId is required' });
+        const custIdParam = req.query.custId != null ? String(req.query.custId).trim() : '';
+        if (!custIdParam) {
+            return res.status(400).json({ error: 'custId is required' });
+        }
 
-        const custCands = custIdMatchCandidates(custId);
+        const custCands = custIdMatchCandidates(custIdParam);
         if (!custCands.length) return res.status(400).json({ error: 'custId is required' });
 
         const custIn = custCands.map(() => '?').join(', ');

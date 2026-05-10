@@ -185,7 +185,7 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
     };
   }, []);
 
-  /** 저장된 기사 정보 GET → 폼 채움 */
+  /** 저장된 기사 정보 GET → 폼 채움 (`custId` 필수) */
   useEffect(() => {
     const custId = currentUser?.custId != null ? String(currentUser.custId).trim() : '';
     if (!custId) return;
@@ -197,6 +197,7 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
         );
         const data = await res.json();
         if (cancelled || !res.ok) return;
+
         const nm = (data.userName || '').trim();
         if (nm) setProfileModalTitle(`${nm} 기사님`);
 
