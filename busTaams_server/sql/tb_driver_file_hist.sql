@@ -1,5 +1,5 @@
 -- TB_DRIVER_FILE_HIST — 기사(USER) 단위 파일 제출 이력 (운송종사자 자격증 등)
--- 선행: TB_FILE_MASTER, TB_USER(또는 TB_DRIVER_INFO) 존재 권장
+-- 선행: TB_FILE_MASTER, TB_USER 존재 권장
 -- 서버는 `ensureTbDriverFileHistTable` 로 동등 스키마를 자동 생성할 수 있음.
 
 CREATE TABLE IF NOT EXISTS TB_DRIVER_FILE_HIST (

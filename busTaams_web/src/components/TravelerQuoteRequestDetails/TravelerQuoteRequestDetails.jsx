@@ -1,275 +1,404 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080').replace(/\/$/, '');
+
+const RES_STAT_LABEL = {
+  AUCTION: '입찰대기',
+  BIDDING: '응찰등록',
+  REQ: '요청',
+  CONFIRM: '예약확정',
+  DONE: '운행종료',
+  TRAVELER_CANCEL: '여행자 취소',
+  DRIVER_CANCEL: '응찰취소',
+  BUS_CHANGE: '버스변경',
+  BUS_CANCEL: '버스취소',
+};
+
+function normalizeCustId(user) {
+  if (!user || typeof user !== 'object') return '';
+  const c =
+    (user.custId != null && String(user.custId).trim()) ||
+    (user.CUST_ID != null && String(user.CUST_ID).trim()) ||
+    '';
+  return c;
+}
+
+function canEditBid(custId, resStat) {
+  if (!custId) return false;
+  if (resStat == null || resStat === '') return true;
+  const u = String(resStat).toUpperCase();
+  return u === 'BIDDING' || u === 'AUCTION' || u === 'REQ';
+}
+
+function formatDtShort(iso) {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' });
+}
+
+/** TB_AUCTION_REQ_VIA.VIA_TYPE → "출발지 :" 등 접두(주소 앞 공백은 렌더에서) */
+function viaTypeColonPrefix(viaType) {
+  const t = String(viaType || '').toUpperCase();
+  switch (t) {
+    case 'START_NODE':
+      return '출발지 :';
+    case 'START_WAY':
+      return '출발 경유지 :';
+    case 'ROUND_TRIP':
+      return '목적지 :';
+    case 'END_WAY':
+      return '도착 경유지 :';
+    case 'END_NODE':
+      return '도착지 :';
+    default:
+      return viaType ? `${viaType} :` : '지점 :';
+  }
+}
+
 /**
- * 여행자 견적 요청 상세 (TravelerQuoteRequestDetails)
- * - 설계서(MD) 기준: BID_SEQ 제거, REQ_BUS_SEQ(슬롯) 기반 입찰 적용
+ * 여행자 견적 상세 · 청약 정보 등록
+ * @param {{ reqId: string, reqBusSeq?: number, close: () => void, currentUser: object, onBidInsertSuccess?: () => void }} props
  */
+const TravelerQuoteRequestDetails = ({
+  reqId,
+  reqBusSeq: reqBusSeqProp,
+  close,
+  currentUser,
+  onBidInsertSuccess,
+}) => {
+  const custId = normalizeCustId(currentUser);
+  const reqBusSeq =
+    reqBusSeqProp != null &&
+    Number.isFinite(Number(reqBusSeqProp)) &&
+    Number(reqBusSeqProp) >= 0
+      ? Number(reqBusSeqProp)
+      : 1;
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [updating, setUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState(null);
+  const [updateSuccess, setUpdateSuccess] = useState(null);
+  const [auctionGateModal, setAuctionGateModal] = useState(null);
+  /** TB_MOM_MEMBER 처리 후 동일 건에 재청약 방지 */
+  const [bidLockedAfterMom, setBidLockedAfterMom] = useState(false);
 
-const RES_STAT_LABEL = { REQ: '요청', CONFIRM: '확정', DONE: '완료', TRAVELER_CANCEL: '여행자 취소', DRIVER_CANCEL: '버스기사 취소', CANCELLATION_OF_BID: '입찰 취소', CANCELLATION_OF_AUCTION: '역경매 취소' };
-const RES_STAT_COLOR = { REQ: 'text-blue-600 bg-blue-50', CONFIRM: 'text-green-600 bg-green-50', DONE: 'text-slate-600 bg-slate-100', TRAVELER_CANCEL: 'text-red-600 bg-red-50', DRIVER_CANCEL: 'text-orange-600 bg-orange-50', CANCELLATION_OF_BID: 'text-rose-600 bg-rose-50', CANCELLATION_OF_AUCTION: 'text-purple-600 bg-purple-50' };
+  useEffect(() => {
+    setBidLockedAfterMom(false);
+  }, [reqId, reqBusSeq]);
 
-const TravelerQuoteRequestDetails = ({ close, reqId, currentUser }) => {
-    const [loading, setLoading]         = useState(true);
-    const [loadError, setLoadError]     = useState(null);
-    const [data, setData]               = useState(null);
+  const fetchData = useCallback(async () => {
+    if (!reqId) return;
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const q = new URLSearchParams({ reqId: String(reqId).trim() });
+      if (custId) q.set('custId', custId);
+      q.set('reqBusSeq', String(reqBusSeq));
+      const res = await fetch(`${API_BASE}/api/traveler-quote-request-details?${q.toString()}`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof json?.error === 'string' ? json.error : `오류 (${res.status})`);
+      }
+      setData(json);
+    } catch (e) {
+      setLoadError(e.message || '불러오지 못했습니다.');
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [reqId, custId, reqBusSeq]);
 
-    // 예약 상태 (TB_BUS_RESERVATION)
-    const [resId, setResId]             = useState(null);
-    const [resStat, setResStat]         = useState('REQ');
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
-    // 입찰 가격 및 슬롯 선택
-    const [bidPrice, setBidPrice]         = useState('');
-    const [prevBidPrice, setPrevBidPrice] = useState(0); 
-    const [selectedBusSeq, setSelectedBusSeq] = useState(null); 
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      if (auctionGateModal) {
+        setAuctionGateModal(null);
+        return;
+      }
+      close?.();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [close, auctionGateModal]);
 
-    // 액션 상태
-    const [updating, setUpdating]           = useState(false);
-    const [updateError, setUpdateError]     = useState(null);
-    const [updateSuccess, setUpdateSuccess] = useState(false);
-    const [cancelling, setCancelling]       = useState(false);
-    const [cancelPopup, setCancelPopup]     = useState(null);
-    const [cancelSuccess, setCancelSuccess] = useState(false);
+  const resStat = data?.resStat ?? null;
+  const editOk = canEditBid(custId, resStat);
+  const badgeLabel = resStat != null ? RES_STAT_LABEL[String(resStat).toUpperCase()] ?? resStat : '';
 
-    const fetchData = useCallback(async () => {
-        if (!reqId) return;
-        setLoading(true);
-        setLoadError(null);
-        try {
-            const custId = currentUser?.custId || '';
-            const url = `${API_BASE}/api/traveler-quote-request-details?reqId=${encodeURIComponent(reqId)}${custId ? `&custId=${encodeURIComponent(custId)}` : ''}`;
-            const res  = await fetch(url);
-            if (!res.ok) throw new Error('데이터를 불러오지 못했습니다.');
-            const json = await res.json();
-            setData(json);
+  const sortedVia = [...(data?.viaPoints || [])].sort(
+    (a, b) => Number(a.viaSeq) - Number(b.viaSeq)
+  );
 
-            setPrevBidPrice(Number(json.prevBidPrice) || 0);
-
-            if (json.resStat === 'CANCELLATION_OF_BID') {
-                setPrevBidPrice(Number(json.driverBiddingPrice) || 0);
-                setBidPrice('');
-                setResId(null);
-                setResStat('REQ');
-            } else {
-                setResId(json.resId || null);
-                setResStat(json.resStat || 'REQ');
-                if (json.driverBiddingPrice > 0) {
-                    setBidPrice(Number(json.driverBiddingPrice).toLocaleString('ko-KR'));
-                }
-            }
-
-            // 첫 번째 슬롯 자동 선택
-            if (json.buses?.length > 0 && !selectedBusSeq) {
-                setSelectedBusSeq(json.buses[0].reqBusSeq);
-            }
-        } catch (e) {
-            setLoadError(e.message);
-        } finally {
-            setLoading(false);
+  const submitBid = async () => {
+    if (!custId || !editOk || updating) return;
+    setUpdating(true);
+    setUpdateError(null);
+    setUpdateSuccess(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/traveler-quote-request-details/bid`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reqId: String(reqId).trim(),
+          custId,
+          reqBusSeq,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.status === 409 && (json?.code === 'REQ_BUS_NOT_AUCTION' || String(json?.error || '').includes('견적 응찰'))) {
+        setAuctionGateModal(String(json.error || ''));
+        return;
+      }
+      if (!res.ok && Array.isArray(json.modalLines) && json.modalLines.length > 0) {
+        setAuctionGateModal(json.modalLines.join('\n'));
+        return;
+      }
+      if (!res.ok) {
+        throw new Error(typeof json?.error === 'string' ? json.error : `오류 (${res.status})`);
+      }
+      if (json?.success) {
+        const mom = json.momMember;
+        if (mom?.disableFurtherBid === true) {
+          setBidLockedAfterMom(true);
         }
-    }, [reqId, currentUser, selectedBusSeq]);
-
-    useEffect(() => { fetchData(); }, [fetchData]);
-
-    const handleBidUpdate = async () => {
-        if (resStat !== 'REQ' && resStat !== 'BIDDING') {
-            setUpdateError('현재 상태에서는 입찰할 수 없습니다.');
-            return;
-        }
-        const bidPriceNum = Number(String(bidPrice).replace(/,/g, ''));
-        if (!bidPriceNum || bidPriceNum <= 0) {
-            setUpdateError('유효한 입찰가를 입력해 주세요.');
-            return;
-        }
-        if (!selectedBusSeq) {
-            setUpdateError('입찰할 버스 슬롯을 선택해 주세요.');
-            return;
-        }
-
-        setUpdating(true);
-        setUpdateError(null);
-        try {
-            const body = { 
-                reqId, 
-                reqBusSeq: selectedBusSeq, 
-                custId: currentUser?.custId, 
-                bidPrice: bidPriceNum 
-            };
-            const res = await fetch(`${API_BASE}/api/traveler-quote-request-details/bid`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-            });
-            const json = await res.json();
-            if (!res.ok) throw new Error(json.error || '입찰 중 오류가 발생했습니다.');
-            
-            setUpdateSuccess(true);
-            setTimeout(() => setUpdateSuccess(false), 3000);
+        setUpdateSuccess(mom?.ackMessage || json.message || '처리되었습니다.');
+        if (json.isNewReservation === true) {
+          window.setTimeout(() => {
+            onBidInsertSuccess?.();
+            close?.();
+          }, 5000);
+        } else {
+          window.setTimeout(() => {
+            setUpdateSuccess(null);
             fetchData();
-        } catch (e) {
-            setUpdateError(e.message);
-        } finally {
-            setUpdating(false);
+          }, 3000);
         }
-    };
+      }
+    } catch (e) {
+      setUpdateError(e.message || '저장에 실패했습니다.');
+    } finally {
+      setUpdating(false);
+    }
+  };
 
-    const handleBidCancel = () => {
-        if (resStat !== 'REQ' && resStat !== 'BIDDING') {
-            alert('취소할 수 없는 상태입니다.');
-            return;
-        }
-        setCancelPopup({ type: 'confirm', message: '입찰을 취소하시겠습니까?' });
-    };
+  return (
+    <>
+      {auctionGateModal && (
+        <div className="fixed inset-0 z-[310] flex items-center justify-center bg-black/45 backdrop-blur-sm p-4">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="auction-gate-title"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col gap-6"
+          >
+            <div className="flex items-start gap-4">
+              <span className="material-symbols-outlined text-red-500 text-4xl shrink-0">error</span>
+              <div>
+                <h3 id="auction-gate-title" className="text-lg font-bold text-gray-900">
+                  안내
+                </h3>
+                <p className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{auctionGateModal}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAuctionGateModal(null)}
+              className="w-full py-3 rounded-full bg-teal-600 text-white text-sm font-black hover:bg-teal-700"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
 
-    const executeBidCancel = async () => {
-        setCancelPopup(null);
-        setCancelling(true);
-        try {
-            const body = { reqId, reqBusSeq: selectedBusSeq, custId: currentUser?.custId };
-            const res = await fetch(`${API_BASE}/api/traveler-quote-request-details/bid-cancel`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-            });
-            if (!res.ok) throw new Error('취소 처리 중 오류가 발생했습니다.');
-            setCancelSuccess(true);
-            setTimeout(() => setCancelSuccess(false), 3000);
-            fetchData();
-        } catch (e) {
-            alert(e.message);
-        } finally {
-            setCancelling(false);
-        }
-    };
+      <div
+        className="fixed inset-0 z-[200] overflow-y-auto p-4 flex items-start justify-center bg-gray-900/50 backdrop-blur-sm animate-in fade-in duration-200"
+        style={{ fontFamily: "'Manrope', 'Plus Jakarta Sans', sans-serif" }}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="traveler-quote-detail-title"
+          className="relative my-4 w-full max-w-6xl min-h-[600px] max-h-[95vh] flex flex-col rounded-3xl bg-white shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="shrink-0 flex items-center justify-between px-8 py-5 border-b border-gray-100">
+            <div>
+              <p
+                className="text-xs font-semibold text-teal-600 uppercase tracking-widest mb-0.5"
+                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              >
+                Traveler Quote Detail
+              </p>
+              <h2 id="traveler-quote-detail-title" className="text-xl font-bold text-gray-900 font-headline">
+                여행자 견적 상세
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={close}
+              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500"
+              aria-label="닫기"
+            >
+              <span className="material-symbols-outlined text-2xl">close</span>
+            </button>
+          </div>
 
-    const buildRoute = () => {
-        if (!data) return '-';
-        const parts = [data.startAddr];
-        if (data.waypoints?.length > 0) {
-            [...data.waypoints]
-                .sort((a, b) => a.sortOrder - b.sortOrder)
-                .forEach(v => parts.push(v.waypointAddr));
-        }
-        parts.push(data.endAddr);
-        return parts.join(' → ');
-    };
-
-    return (
-        <>
-            {cancelPopup && (
-                <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl">
-                        <p className="text-lg font-bold mb-6">{cancelPopup.message}</p>
-                        <div className="flex justify-end gap-3">
-                            <button onClick={executeBidCancel} className="px-6 py-2 bg-red-500 text-white rounded-full font-bold">확인</button>
-                            <button onClick={() => setCancelPopup(null)} className="px-6 py-2 bg-slate-100 rounded-full font-bold">닫기</button>
-                        </div>
-                    </div>
-                </div>
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-8 py-6">
+            {loading && (
+              <div className="flex flex-col items-center justify-center py-20 gap-3">
+                <span className="material-symbols-outlined text-teal-600 text-5xl animate-spin">progress_activity</span>
+                <p className="text-sm font-bold text-gray-600">데이터를 불러오는 중...</p>
+              </div>
             )}
 
-            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
-                <div className="relative w-full max-w-6xl max-h-[95vh] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden">
-                    <button onClick={close} className="absolute top-4 right-4 z-10 w-10 h-10 flex items-center justify-center hover:bg-slate-100 rounded-full">
-                        <span className="material-symbols-outlined">close</span>
-                    </button>
+            {!loading && loadError && (
+              <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <span className="material-symbols-outlined text-red-400 text-5xl">error</span>
+                <p className="text-sm font-bold text-red-600">{loadError}</p>
+                <button
+                  type="button"
+                  onClick={fetchData}
+                  className="px-6 py-2 rounded-full bg-teal-600 text-white text-sm font-bold"
+                >
+                  다시 시도
+                </button>
+              </div>
+            )}
 
-                    <div className="flex-1 overflow-y-auto p-8 lg:p-12">
-                        {loading ? (
-                            <div className="py-20 text-center font-bold">로딩 중...</div>
-                        ) : (
-                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                                <div className="lg:col-span-8 space-y-8">
-                                    <header className="mb-8">
-                                        <h1 className="text-3xl font-black mb-2">{data?.startAddr} → {data?.endAddr}</h1>
-                                        <p className="text-slate-500">{data?.tripTitle}</p>
-                                    </header>
-
-                                    <section className="bg-slate-50 p-6 rounded-2xl space-y-4">
-                                        <div className="flex items-center gap-3">
-                                            <span className="material-symbols-outlined text-primary">route</span>
-                                            <span className="font-bold">{buildRoute()}</span>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <span className="material-symbols-outlined text-primary">calendar_month</span>
-                                            <span className="font-bold">{new Date(data?.startDt).toLocaleDateString()} - {new Date(data?.endDt).toLocaleDateString()}</span>
-                                        </div>
-                                    </section>
-
-                                    <section className="space-y-4">
-                                        <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest">차량 슬롯 선택</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {data?.buses?.map(bus => (
-                                                <button
-                                                    key={bus.reqBusSeq}
-                                                    onClick={() => setSelectedBusSeq(bus.reqBusSeq)}
-                                                    className={`p-4 rounded-xl border-2 text-left transition-all ${selectedBusSeq === bus.reqBusSeq ? 'border-primary bg-primary/5' : 'border-slate-100 bg-white'}`}
-                                                >
-                                                    <p className="font-bold">{bus.busType}</p>
-                                                    <div className="flex justify-between items-end mt-2">
-                                                        <span className="text-xs text-slate-400">슬롯: {bus.reqBusSeq}</span>
-                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${bus.busStat === 'AUCTION' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
-                                                            {bus.busStat === 'AUCTION' ? '입찰대기' : '응찰진행'}
-                                                        </span>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </section>
-
-                                    <section className="bg-white border border-slate-100 p-8 rounded-3xl shadow-sm">
-                                        <h2 className="text-xl font-black mb-6">입찰가 입력</h2>
-                                        <div className="relative mb-8">
-                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">₩</span>
-                                            <input
-                                                type="text"
-                                                value={bidPrice}
-                                                onChange={(e) => {
-                                                    const raw = e.target.value.replace(/[^0-9]/g, '');
-                                                    setBidPrice(raw === '' ? '' : Number(raw).toLocaleString());
-                                                }}
-                                                className="w-full pl-10 pr-4 py-4 bg-slate-50 rounded-2xl text-2xl font-black focus:ring-2 focus:ring-primary outline-none"
-                                                placeholder="0"
-                                            />
-                                        </div>
-                                        
-                                        {updateError && <p className="text-red-500 text-sm font-bold mb-4">{updateError}</p>}
-                                        {updateSuccess && <p className="text-green-500 text-sm font-bold mb-4">성공적으로 반영되었습니다.</p>}
-
-                                        <div className="flex gap-4">
-                                            <button onClick={handleBidUpdate} disabled={updating} className="flex-1 py-4 bg-primary text-white rounded-full font-black shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all">
-                                                {updating ? '처리 중...' : '입찰 등록/수정'}
-                                            </button>
-                                            <button onClick={handleBidCancel} className="px-8 py-4 text-red-500 font-bold border border-red-100 rounded-full hover:bg-red-50">
-                                                입찰 취소
-                                            </button>
-                                        </div>
-                                    </section>
-                                </div>
-
-                                <div className="lg:col-span-4 space-y-6">
-                                    <div className="bg-slate-900 text-white p-8 rounded-3xl">
-                                        <h3 className="text-xs font-bold text-slate-400 uppercase mb-4">가격 요약</h3>
-                                        <div className="space-y-4">
-                                            <div className="flex justify-between">
-                                                <span className="text-slate-400">여행자 제시가</span>
-                                                <span className="font-bold">₩{Number(data?.estTotalServicePrice).toLocaleString()}</span>
-                                            </div>
-                                            <div className="pt-4 border-t border-white/10 flex justify-between items-end">
-                                                <span className="text-sm">현재 입찰가</span>
-                                                <span className="text-2xl font-black text-primary">₩{bidPrice || '0'}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+            {!loading && !loadError && data && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <div className="lg:col-span-8">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">요청 요약</p>
+                  <div className="rounded-2xl border border-gray-100 shadow-sm p-8 border-l-4 border-l-teal-500 flex flex-col min-h-[340px]">
+                    <div className="flex items-center gap-2 mb-4 shrink-0">
+                      <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center text-teal-600">
+                        <span className="material-symbols-outlined">route</span>
+                      </div>
+                      <span className="text-xs font-bold text-slate-500 uppercase">노선</span>
                     </div>
+                    {sortedVia.length === 0 ? (
+                      <p className="text-base font-semibold text-slate-400">-</p>
+                    ) : (
+                      <div className="min-h-[14rem] max-h-72 overflow-y-auto overscroll-contain pr-2 space-y-2 shrink-0">
+                        {sortedVia.map((p) => {
+                          const vt = String(p.viaType || '').toUpperCase();
+                          const prefix = viaTypeColonPrefix(p.viaType);
+                          const addr = (p.viaAddr && String(p.viaAddr).trim()) || '—';
+                          const addrClass =
+                            vt === 'START_WAY'
+                              ? 'text-blue-600'
+                              : vt === 'END_WAY'
+                                ? 'text-red-600'
+                                : 'text-gray-900';
+                          return (
+                            <p
+                              key={`${p.viaSeq}-${String(p.viaType)}`}
+                              className="text-base font-bold"
+                            >
+                              <span className="text-gray-900">{prefix} </span>
+                              <span className={addrClass}>{addr}</span>
+                            </p>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
-            </div>
-        </>
-    );
+
+                <div className="lg:col-span-4 space-y-8">
+                  <div>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">차량 및 경유지</p>
+                    <div className="rounded-2xl border border-gray-100 p-6 space-y-6 shadow-sm">
+                      <div className="flex gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center text-gray-600 shrink-0">
+                          <span className="material-symbols-outlined">calendar_month</span>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 font-semibold">날짜</p>
+                          <p className="text-lg font-bold text-gray-900">
+                            {formatDtShort(data.startDt)} - {formatDtShort(data.endDt)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center text-gray-600 shrink-0">
+                          <span className="material-symbols-outlined">airport_shuttle</span>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 font-semibold">차량 유형</p>
+                          <p className="text-lg font-bold text-gray-900">
+                            {data.busTypeName != null && String(data.busTypeName).trim() !== ''
+                              ? String(data.busTypeName).trim()
+                              : '여행 🚌'}
+                            {Number(data.busCnt) > 1 ? ` × ${data.busCnt}대` : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center text-gray-600 shrink-0">
+                          <span className="material-symbols-outlined">group</span>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 font-semibold">인원</p>
+                          <p className="text-lg font-bold text-gray-900">{data.passengerCnt ?? '-'}명</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {!custId && (
+                      <div className="flex gap-2 rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900">
+                        <span className="material-symbols-outlined shrink-0">warning</span>
+                        <span>기사 식별(CUST_ID)이 없어 입찰을 등록할 수 없습니다.</span>
+                      </div>
+                    )}
+                    {custId && !editOk && (
+                      <div className="flex gap-2 rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900">
+                        <span className="material-symbols-outlined shrink-0">lock</span>
+                        <span>
+                          현재 예약 상태에서는 입찰을 수정할 수 없습니다.
+                          {badgeLabel ? ` (${badgeLabel})` : ''}
+                        </span>
+                      </div>
+                    )}
+                    {updateError && (
+                      <div className="flex gap-2 rounded-xl bg-red-50 border border-red-100 p-4 text-sm text-red-800">
+                        <span className="material-symbols-outlined shrink-0">error</span>
+                        <span>{updateError}</span>
+                      </div>
+                    )}
+                    {updateSuccess && (
+                      <div className="flex gap-2 rounded-xl bg-teal-50 border border-teal-100 p-4 text-sm text-teal-900">
+                        <span className="material-symbols-outlined shrink-0">check_circle</span>
+                        <span>{updateSuccess}</span>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      disabled={updating || !editOk || !custId || bidLockedAfterMom}
+                      onClick={submitBid}
+                      className="w-full py-4 rounded-full text-base font-black bg-teal-600 text-white shadow-lg hover:bg-teal-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {updating ? '저장 중...' : '청약 정보 등록'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  );
 };
 
 export default TravelerQuoteRequestDetails;

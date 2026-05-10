@@ -1,6 +1,6 @@
 /**
  * 채팅 메시지 수신 알림 — Firebase Cloud Messaging
- * `TB_USER_DEVICE_TOKEN`: `server.js` 부트스트랩은 `USER_ID`(VARCHAR(256)) — `TB_USER.CUST_ID`로 토큰 조회
+ * `TB_USER_DEVICE_TOKEN`: `CUST_ID` 기준 조회 (`BusTaams_Project 테이블 설계.md`)
  */
 const admin = require('firebase-admin');
 
@@ -17,12 +17,9 @@ function getMessagingSafe() {
 async function fetchFcmTokensByCustId(pool, custId) {
     if (!custId) return [];
     const cid = String(custId).trim();
-    const [u] = await pool.execute(`SELECT USER_ID FROM TB_USER WHERE CUST_ID = ? LIMIT 1`, [cid]);
-    const userId = u[0]?.USER_ID;
-    if (!userId) return [];
     const [rows] = await pool.execute(
-        `SELECT FCM_TOKEN FROM TB_USER_DEVICE_TOKEN WHERE USER_ID = ?`,
-        [userId]
+        `SELECT FCM_TOKEN FROM TB_USER_DEVICE_TOKEN WHERE CUST_ID = ?`,
+        [cid]
     );
     return (rows || []).map((r) => r.FCM_TOKEN).filter(Boolean);
 }

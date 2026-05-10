@@ -1,4 +1,5 @@
 const { plainOrLegacyDecrypt } = require('../crypto');
+const { canonicalFileMasterFileId } = require('./bustaamsIds');
 
 const DEFAULT_CANCEL = {
     cancelCnt: 0,
@@ -143,7 +144,7 @@ function buildPostLoginUserDto({ user, cancelRow, subscriptionRow }, opts = {}) 
         hpNo,
         email: user.email || user.EMAIL || '',
         snsType: user.SNS_TYPE || 'NONE',
-        profileFileId: user.PROFILE_FILE_ID != null ? String(user.PROFILE_FILE_ID) : null,
+        profileFileId: canonicalFileMasterFileId(user.PROFILE_FILE_ID),
         profileImgPath: user.PROFILE_IMG_PATH || null,
         smsAuthYn: user.SMS_AUTH_YN || 'N',
         userStat: user.USER_STAT || 'ACTIVE',

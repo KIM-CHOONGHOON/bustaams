@@ -30,11 +30,19 @@ function daysBetweenYmd(fromStr, toStr) {
   return Math.round((t1 - t0) / 86400000);
 }
 
-/** From 기준 To 상한 (포함 365일 구간: from + 365일) */
+/** From 기준 To 상한 (from~to 구간 일수 ≤ 365이 되도록 to 최댓값) */
 function maxToForFrom(fromStr) {
   const [y, m, d] = fromStr.split('-').map(Number);
   const dt = new Date(y, m - 1, d);
   dt.setDate(dt.getDate() + 365);
+  return toYYYYMMDD(dt);
+}
+
+/** To 기준 From 하한 (from~to 구간 일수 ≤ 365이 되도록 from 최솟값) */
+function minFromForTo(toStr) {
+  const [y, m, d] = toStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() - 365);
   return toYYYYMMDD(dt);
 }
 
@@ -65,7 +73,7 @@ function tripLabel(item) {
 }
 
 /**
- * 버스 운행 완료 목록 — `버스 운행 완료 목록 화면.md`
+ * 버스 여행 완료 목록 — `버스 여행 완료 목록 화면.md`
  * GET /api/bus-operation-completion-list?driverId=&from=&to=  (userId·driverUuid 동의어는 서버가 수용)
  */
 const BusOperationCompletionList = ({ open, onClose, driverId, driverUuid }) => {
@@ -175,6 +183,7 @@ const BusOperationCompletionList = ({ open, onClose, driverId, driverUuid }) => 
 
   const total = items.length;
   const toMax = from ? maxToForFrom(from) : '';
+  const fromMin = to ? minFromForTo(to) : '';
 
   return (
     <>
@@ -239,12 +248,8 @@ const BusOperationCompletionList = ({ open, onClose, driverId, driverUuid }) => 
         <div className="p-8 pt-14 border-b border-slate-100">
           <span className="text-primary font-bold tracking-widest uppercase text-xs">운행 기록</span>
           <h2 id="bus-op-completion-title" className="text-2xl font-headline font-extrabold text-on-surface mt-1">
-            버스 운행 완료 목록
+            버스 여행 완료 목록
           </h2>
-          <p className="text-on-surface-variant text-sm mt-2">
-            완료(DONE) 처리된 예약만 표시됩니다. 기간은 견적 <strong className="text-on-surface">도착 예정일(END_DT)</strong> 기준입니다.{' '}
-            <span className="text-slate-500">조회 구간은 최대 365일(1년)입니다.</span>
-          </p>
 
           <div className="mt-6 flex flex-wrap items-end gap-4">
             <label className="flex flex-col gap-1 text-xs font-bold text-slate-500">
@@ -252,16 +257,27 @@ const BusOperationCompletionList = ({ open, onClose, driverId, driverUuid }) => 
               <input
                 type="date"
                 value={from}
+                min={fromMin || undefined}
                 max={to || undefined}
                 onChange={(e) => {
                   const nf = e.target.value;
-                  setFrom(nf);
-                  if (!nf) return;
-                  const cap = maxToForFrom(nf);
-                  if (to) {
-                    if (to < nf) setTo(nf);
-                    else if (to > cap) setTo(cap);
+                  if (!nf) {
+                    setFrom('');
+                    return;
                   }
+                  const cap = maxToForFrom(nf);
+                  let nextFrom = nf;
+                  let nextTo = to;
+                  if (to) {
+                    if (to < nf) nextTo = nf;
+                    else if (to > cap) nextTo = cap;
+                    const floor = minFromForTo(nextTo);
+                    if (nextFrom < floor) nextFrom = floor;
+                    const cap2 = maxToForFrom(nextFrom);
+                    if (nextTo > cap2) nextTo = cap2;
+                  }
+                  setFrom(nextFrom);
+                  setTo(nextTo);
                 }}
                 className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-on-surface"
               />
@@ -275,21 +291,27 @@ const BusOperationCompletionList = ({ open, onClose, driverId, driverUuid }) => 
                 max={toMax || undefined}
                 onChange={(e) => {
                   const nt = e.target.value;
+                  if (!nt) {
+                    setTo('');
+                    return;
+                  }
                   if (!from) {
                     setTo(nt);
                     return;
                   }
-                  if (nt && nt < from) {
-                    setTo(from);
-                    return;
+                  let nextTo = nt;
+                  if (nt < from) nextTo = from;
+                  else {
+                    const cap = maxToForFrom(from);
+                    if (nt > cap) nextTo = cap;
                   }
-                  const cap = maxToForFrom(from);
-                  if (nt && nt > cap) {
-                    setTo(cap);
-                    setRangeAlert(RANGE_ERROR_MSG);
-                    return;
-                  }
-                  setTo(nt);
+                  const floor = minFromForTo(nextTo);
+                  let nextFrom = from;
+                  if (nextFrom < floor) nextFrom = floor;
+                  const cap2 = maxToForFrom(nextFrom);
+                  if (nextTo > cap2) nextTo = cap2;
+                  setFrom(nextFrom);
+                  setTo(nextTo);
                 }}
                 className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-on-surface"
               />

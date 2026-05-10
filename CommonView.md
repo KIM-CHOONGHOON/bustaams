@@ -84,7 +84,7 @@ CommonView는 props에 따라 두 가지 모드로 동작합니다.
 | 이미지 (jpg/jpeg/png/webp/gif) | `<img id="common-view-doc-img" src={streamUrl}>` |
 | 미지원 형식 | 다운로드 유도 버튼 표시 |
 
-스트림 URL: `GET /api/driver/bus-documents/file?userUuid=...&fileUuid=...` (기존 인라인 스트리밍 엔드포인트)
+스트림 URL: `GET /api/driver/bus-documents/file?custId=...&fileId=...`
 
 일반 모드 캔버스: 샘플 계약서 HTML, 페이지네이션 (`id="common-view-pagination"`)
 
@@ -95,9 +95,8 @@ CommonView는 props에 따라 두 가지 모드로 동작합니다.
 ### 5.1 권한 제어
 
 - **본인 파일만** 출력·다운로드 가능.
-- 서버가 `userUuid`와 `fileUuid`를 `canAccessBusFile()` 함수로 교차 검증:
-  - `TB_BUS_DRIVER_VEHICLE` 에서 해당 기사 소유 버스의 서류 UUID 일치 여부 확인
-  - `TB_BUS_DRIVER_VEHICLE_FILE_HIST` 이력에서도 추가 검증
+- 서버가 `custId`와 `fileId`를 `canAccessBusFile()`로 검증:
+  - `TB_BUS_DRIVER_VEHICLE`에서 해당 기사(`CUST_ID`) 소유 차량 행의 `BIZ_REG_FILE_ID`, `TRANS_LIC_FILE_ID`, `INS_CERT_FILE_ID`, `VEHICLE_PHOTOS_JSON`에 포함된 `FILE_ID`만 허용
   - 불일치 시 `403 Forbidden` 반환 → 프론트에서 에러 표시
 
 ### 5.2 출력 (`handlePrint`)
@@ -111,7 +110,7 @@ CommonView는 props에 따라 두 가지 모드로 동작합니다.
 
 | 항목 | 내용 |
 |------|------|
-| **엔드포인트** | `GET /api/common-view/bus-document/download?userUuid=&fileUuid=` |
+| **엔드포인트** | `GET /api/common-view/bus-document/download?custId=&fileId=` |
 | **Content-Disposition** | `attachment; filename*=UTF-8''ORG_FILE_NM.FILE_EXT` |
 | **파일명 규칙** | `TB_FILE_MASTER.ORG_FILE_NM` + **"."** + `TB_FILE_MASTER.FILE_EXT` |
 | **예시** | `business_license.pdf` |
@@ -145,12 +144,12 @@ CommonView는 props에 따라 두 가지 모드로 동작합니다.
 
 | 쿼리 파라미터 | 필수 | 설명 |
 |---------------|------|------|
-| `userUuid` | ✅ | 로그인 기사 UUID |
-| `fileUuid` | ✅ | 조회할 파일 UUID |
+| `custId` | ✅ | 로그인 기사 `TB_USER.CUST_ID` |
+| `fileId` | ✅ | `TB_FILE_MASTER.FILE_ID`(20자 패딩) |
 
 | 응답 필드 | 설명 |
 |-----------|------|
-| `fileUuid` | 파일 UUID |
+| `fileId` | 파일 ID |
 | `fileCategory` | 파일 카테고리 코드 |
 | `orgFileNm` | 원본 파일명 (확장자 미포함, `TB_FILE_MASTER.ORG_FILE_NM`) |
 | `fileExt` | 파일 확장자 (`TB_FILE_MASTER.FILE_EXT`) |
@@ -166,15 +165,15 @@ CommonView는 props에 따라 두 가지 모드로 동작합니다.
 
 | 쿼리 파라미터 | 필수 | 설명 |
 |---------------|------|------|
-| `userUuid` | ✅ | 로그인 기사 UUID |
-| `fileUuid` | ✅ | 다운로드할 파일 UUID |
+| `custId` | ✅ | 로그인 기사 `TB_USER.CUST_ID` |
+| `fileId` | ✅ | 다운로드할 `TB_FILE_MASTER.FILE_ID` |
 
 - `Content-Disposition: attachment; filename*=UTF-8''ORG_FILE_NM.FILE_EXT`
 - GCS에서 파일을 스트리밍해 클라이언트에 전달.
 
 ### 6.4 GET `/api/driver/bus-documents/file` (기존)
 
-인라인 파일 스트리밍 (뷰어 iframe/img 표시용). `Content-Disposition: inline`.
+인라인 파일 스트리밍 (뷰어 iframe/img 표시용). `Content-Disposition: inline`. 쿼리: `custId`, `fileId`(필수).
 
 ---
 

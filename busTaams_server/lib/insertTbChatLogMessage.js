@@ -1,6 +1,6 @@
 /**
- * 견적·예약 연동 채팅 — `BusTaams 테이블.md` §3
- * `TB_CHAT_LOG`(방) + `TB_CHAT_LOG_PART`(참가) + `TB_CHAT_LOG_HIST`(메시지)
+ * 견적·예약 연동 채팅 — `TB_CHAT_LOG`(방) + `TB_CHAT_LOG_PART`(참가) + `TB_CHAT_LOG_HIST`(메시지)
+ * 정본 컬럼: `CHAT_LOG_SEQ` (`busTaams_server/sql/tb_chat_log_room_hist_part.sql`)
  */
 
 /**
@@ -11,7 +11,7 @@
 async function getOrCreateTripChatRoom(connection, p) {
     const { reqId, resId, travelerCustId, driverCustId, chatTitle } = p;
     const [ex] = await connection.execute(
-        `SELECT CHAT_SEQ AS chatSeq FROM TB_CHAT_LOG WHERE REQ_ID = ? AND RES_ID = ? LIMIT 1`,
+        `SELECT CHAT_LOG_SEQ AS chatSeq FROM TB_CHAT_LOG WHERE REQ_ID = ? AND RES_ID = ? LIMIT 1`,
         [reqId, resId]
     );
     if (ex[0]?.chatSeq != null) {
@@ -21,11 +21,11 @@ async function getOrCreateTripChatRoom(connection, p) {
     const [ins] = await connection.execute(
         `INSERT INTO TB_CHAT_LOG (ROOM_KIND, CHAT_TITLE, REQ_ID, RES_ID, CREATED_BY_CUST_ID)
          VALUES ('TRAVELER', ?, ?, ?, ?)`,
-        [title, reqId, resId, travelerCustId]
+        [title, reqId, resId, driverCustId]
     );
     const chatSeq = ins.insertId;
     await connection.execute(
-        `INSERT IGNORE INTO TB_CHAT_LOG_PART (CHAT_SEQ, CUST_ID, PART_TYPE) VALUES (?, ?, 'TRAVELER'), (?, ?, 'DRIVER')`,
+        `INSERT IGNORE INTO TB_CHAT_LOG_PART (CHAT_LOG_SEQ, CUST_ID, PART_TYPE) VALUES (?, ?, 'TRAVELER'), (?, ?, 'DRIVER')`,
         [chatSeq, travelerCustId, chatSeq, driverCustId]
     );
     return { chatSeq, created: true };
@@ -39,7 +39,7 @@ async function getOrCreateTripChatRoom(connection, p) {
  */
 async function ensureTripChatParticipants(connection, chatSeq, travelerCustId, driverCustId) {
     await connection.execute(
-        `INSERT IGNORE INTO TB_CHAT_LOG_PART (CHAT_SEQ, CUST_ID, PART_TYPE) VALUES (?, ?, 'TRAVELER'), (?, ?, 'DRIVER')`,
+        `INSERT IGNORE INTO TB_CHAT_LOG_PART (CHAT_LOG_SEQ, CUST_ID, PART_TYPE) VALUES (?, ?, 'TRAVELER'), (?, ?, 'DRIVER')`,
         [chatSeq, travelerCustId, chatSeq, driverCustId]
     );
 }
@@ -60,15 +60,12 @@ async function insertTripChatMessage(connection, p) {
     });
     await ensureTripChatParticipants(connection, chatSeq, travelerCustId, driverCustId);
     const [ins] = await connection.execute(
-        `INSERT INTO TB_CHAT_LOG_HIST (CHAT_SEQ, SENDER_CUST_ID, SENDER_ROLE, MSG_KIND, MSG_BODY)
+        `INSERT INTO TB_CHAT_LOG_HIST (CHAT_LOG_SEQ, SENDER_CUST_ID, SENDER_ROLE, MSG_KIND, MSG_BODY)
          VALUES (?, ?, ?, 'TEXT', ?)`,
         [chatSeq, senderCustId, senderRole, text]
     );
     const histSeq = ins.insertId;
-    await connection.execute(
-        `UPDATE TB_CHAT_LOG SET LAST_MSG_DT = CURRENT_TIMESTAMP WHERE CHAT_SEQ = ?`,
-        [chatSeq]
-    );
+    await connection.execute(`UPDATE TB_CHAT_LOG SET LAST_MSG_DT = CURRENT_TIMESTAMP WHERE CHAT_LOG_SEQ = ?`, [chatSeq]);
     return { histSeq, chatSeq };
 }
 

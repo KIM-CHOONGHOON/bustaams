@@ -12,10 +12,10 @@ import DriverDashboard from './components/DriverDashboard/DriverDashboard';
 import DriverProfileSetup from './components/DriverProfileSetup/DriverProfileSetup';
 import BusInformationSetup from './components/BusInformationSetup/BusInformationSetup';
 import ListOfTravelerQuotations from './components/ListOfTravelerQuotations/ListOfTravelerQuotations';
-import TravelerQuoteRequestDetails from './components/TravelerQuoteRequestDetails/TravelerQuoteRequestDetails';
+import DriversListOfBids from './components/DriversListOfBids/DriversListOfBids';
 import LiveChatTraveler from './components/LiveChatTraveler/LiveChatTraveler';
 import busLogo from './assets/images/BUSTAAM_FULL_LOGO.png';
-import bustaamsNameLogo from './assets/images/BUSTAAMS_NAME_LOGO.png';
+import bustaamsNameLogo from './assets/images/BUSTAAMS_LAND_LOGO.png';
 import { registerWebFcmTokenIfPossible } from './firebaseMessagingRegister';
 
 import { phoneAuth, RecaptchaVerifier, signInWithPhoneNumber } from './firebasePhoneVerify';
@@ -188,16 +188,23 @@ function Hero({ user, setShowLoginModal }) {
       <div className="absolute inset-0 z-0">
         <img alt="" className="h-full w-full object-cover opacity-60 mix-blend-multiply" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBy7X950jpLbFXsnVk30hsoWpEMUy8HXnJwvGfUM5LDRtVbX3HAwVq00-L_tcSyLv4QwVWnYMTNHcxHTXE_WGn2WCfp4Og7WoXmrn2rzsJfR7JeDOoXULk6Z44CkHpKplp0JL9T6UUoLPnjVTuuW-wWR-rmrdZihaw4l6DUGU17IEU9BYYTYwV9ji9XhYXFdNcxS3rbVbTYAUiIQZ04T-w2iw4oIMt-qlFYwH7-Pa2lEjP67EAEVB5b7KcNgYQBOTpdJglnWX5qVSg" />
       </div>
-      <div className="relative z-10 mx-auto grid w-full max-w-7xl items-center gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:grid-cols-2 lg:gap-10">
-        <div className="min-w-0">
-          <h1 className="font-display text-3xl font-bold leading-[1.15] tracking-tight text-gray-900 sm:text-4xl md:text-5xl lg:text-[2.75rem] lg:leading-[1.1]">
-            여행의 시작,<br />
-            <span className="text-secondary bg-clip-text">busTaams</span>와 함께
+      <div className="relative z-10 mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+        <div className="w-full">
+          <h1 className="w-full text-left font-display text-[clamp(1.125rem,2.85vw+0.65rem,2.75rem)] font-bold leading-[1.15] tracking-tight text-gray-900 lg:leading-[1.1]">
+            <span className="block whitespace-nowrap">
+              <span className="inline-block bg-gradient-to-r from-primary via-primary-container to-teal-500 bg-clip-text font-bold text-transparent">
+                여행자는 가격 제안
+              </span>
+              , 기사님은 청약 확정!
+            </span>
+            <span className="mt-2 block whitespace-nowrap sm:mt-3">
+              거품 없는 버스 대절은{' '}
+              <span className="inline-block bg-gradient-to-r from-gray-900 from-0% via-gray-900 via-[52%] to-teal-300 bg-clip-text font-black tracking-tight text-transparent uppercase sm:tracking-tighter">
+                BUSTAAMS
+              </span>
+              에서
+            </span>
           </h1>
-          <p className="mt-4 max-w-lg font-body text-base leading-relaxed text-gray-800 sm:mt-5 sm:text-lg md:text-xl">
-            전국 어디든, 가장 합리적인 가격으로<br className="hidden sm:inline" />
-            당신의 특별한 여행을 완성하세요.
-          </p>
         </div>
       </div>
     </section>
@@ -769,9 +776,9 @@ function App() {
 
   const [showBusInfoModal, setShowBusInfoModal] = React.useState(false);
   const [showProfileSetupModal, setShowProfileSetupModal] = React.useState(false);
-  const [showQuotationModal, setShowQuotationModal] = React.useState(false);
-  /** 실시간 입찰 기회 카드 → 여행자 견적 요청 상세 */
-  const [travelerQuoteReqId, setTravelerQuoteReqId] = React.useState(null);
+  /** null | { presentation: 'traveler' | 'quoteRequest' } — 기사 여행자 견적 목록 모달 */
+  const [travelerQuotationModal, setTravelerQuotationModal] = React.useState(null);
+  const [showDriversListOfBids, setShowDriversListOfBids] = React.useState(false);
   const [driverView, setDriverView] = React.useState('dashboard');
   const [customerView, setCustomerView] = React.useState('dashboard');
   const [showBusRegisterModal, setShowBusRegisterModal] = React.useState(false);
@@ -816,7 +823,6 @@ function App() {
     setShowBusRegisterModal(false);
     setShowAccountSettings(false); // 내 정보 창 닫기 추가
     setDriverView('dashboard');
-    setTravelerQuoteReqId(null);
     setShowLiveChatTraveler(false);
   };
 
@@ -827,8 +833,6 @@ function App() {
     setShowBusRegisterModal(false);
     setShowBusInfoModal(false);
     setShowProfileSetupModal(false);
-    setTravelerQuoteReqId(null);
-    setTravelerQuoteReqId(null);
     setShowLiveChatTraveler(false);
     setShowConfirmedListModal(false);
     setCurrentView('home');
@@ -884,8 +888,8 @@ function App() {
                   currentUser={user} 
                   onProfileSetup={() => setShowProfileSetupModal(true)}
                   onBusInfoSetup={() => setShowBusInfoModal(true)}
-                  onQuotationList={() => setShowQuotationModal(true)}
-                  onTravelerQuoteDetail={(reqId) => setTravelerQuoteReqId(reqId)}
+                  onQuotationList={() => setTravelerQuotationModal({ presentation: 'traveler' })}
+                  onDriversListOfBids={() => setShowDriversListOfBids(true)}
                 />
             ) : user.userType === 'SALES' || user.userType === 'PARTNER' ? (
                 <PartnerDashboard currentUser={user} onLogout={handleLogout} />
@@ -931,14 +935,19 @@ function App() {
       {showSignUpModal && <SignUpModal close={() => setShowSignUpModal(false)} />}
       {showBusInfoModal && <BusInformationSetup close={() => setShowBusInfoModal(false)} currentUser={user} />}
       {showProfileSetupModal && <DriverProfileSetup close={() => setShowProfileSetupModal(false)} currentUser={user} />}
-      {showQuotationModal && <ListOfTravelerQuotations close={() => setShowQuotationModal(false)} currentUser={user} />}
-      {travelerQuoteReqId && (
-        <TravelerQuoteRequestDetails
-          reqId={travelerQuoteReqId}
-          close={() => setTravelerQuoteReqId(null)}
+      {travelerQuotationModal && (
+        <ListOfTravelerQuotations
+          key={travelerQuotationModal.presentation}
+          close={() => setTravelerQuotationModal(null)}
           currentUser={user}
+          presentation={travelerQuotationModal.presentation}
         />
       )}
+      <DriversListOfBids
+        open={showDriversListOfBids}
+        onClose={() => setShowDriversListOfBids(false)}
+        driverId={user?.custId || user?.userId}
+      />
       <LiveChatTraveler
         open={showLiveChatTraveler}
         onClose={() => setShowLiveChatTraveler(false)}

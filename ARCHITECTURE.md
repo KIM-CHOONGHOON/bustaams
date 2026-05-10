@@ -78,7 +78,7 @@ bustaams/
 ### 💡 풀스택 구조에서의 정확한 역할 (쉽게 정리한 상태)
 새로운 Node.js 기반 환경에서는 **`busTaams_server` 폴더 하나가 백엔드의 모든 역할(비즈니스 로직 처리 + REST API 라우팅)을 통째로 전담**합니다. 
 - **`busTaams_web`**: 껍데기(UI) 화면을 유저에게 보여주며, 유저 클릭 등의 액션 발생 시 `busTaams_server`로 API 요청(문서)을 보냅니다.
-- **`busTaams_server`**: 유저의 요청을 받아들여(REST API 수신) 유효성을 확인하고, DB(`TB_USER` 등)를 조작한 뒤 그 결과값을 다시 JSON의 형태로 프론트엔드에 응답해 주는 "완전한 뒷단 서버" 역할을 수행합니다. 
+- **`busTaams_server`**: 유저의 요청을 받아들여(REST API 수신) 유효성을 확인하고, DB(`TB_USER`의 **`USER_ID`·`CUST_ID`** 등 주요 식별자를 사용한 회원 행 조회 포함)를 조작한 뒤 그 결과값을 다시 JSON의 형태로 프론트엔드에 응답해 주는 "완전한 뒷단 서버" 역할을 수행합니다. 
 - **(🚫 기존 `busTaams_api` 폴더 제한)**: Node.js로의 백엔드 통합 변경에 따라, 기존 Java 기반의 `busTaams_api`는 사용하지 않고 영구 폐기(또는 아카이브 보관)합니다. 즉 앞으로의 모든 DB 연동 및 API 코딩은 오직 **`busTaams_server`** 폴더 안에서 진행됩니다.
 
 ---
@@ -237,11 +237,22 @@ A bespoke card for bus auctions.
 
 ## 🧾 비즈니스 식별자(ID) 규격 및 채번
 
+### `TB_USER.USER_ID` (로그인 식별)
+
+프론트엔드·백엔드 연동 및 SQL에서는 회원 로그인 ID 문맥에서 **컬럼명과 값의 정본을 `USER_ID`로 통일**한다.
+
+- **SQL·MySQL:** `SELECT`/`INSERT`/`UPDATE`/`JOIN`/`WHERE` 등에서는 **`TB_USER`**의 로그인 식별 컬럼명 **`USER_ID`**를 사용한다. 동일 목적을 위한 다른 컬럼명은 두지 않는다.
+- **백엔드 (`busTaams_server`):** 회원 행 매핑·요청 처리·파라미터 바인딩 시 로그인 문자열은 **`USER_ID`** 값으로 다룬다.
+- **프론트엔드 (`busTaams_web` 등):** 세션·REST 요청으로 주고받는 로그인 문자열도 **`TB_USER.USER_ID`**와 동일해야 하며, 본 문서에서는 해당 값을 **`USER_ID`**로만 호칭한다.
+
+**길이 상한:** `VARCHAR(256)` 이하. `normalizeVarcharId()` 및 `busTaams_web/src/App.jsx`의 `clipBizVarcharId()` 등으로 문자열 길이 상한을 맞춘다. **`USER_ID`**는 **10자리 순번 채번(`padStart(10, '0')`) 규칙과 별개**다.
+
+---
+
 - **10자리 순번 PK (VARCHAR(10)):** `CUST_ID`, `REQ_ID`, `BUS_ID`, `RES_ID` 등 — 기존 최대값 +1 후 `padStart(10, '0')`.
-- **파일 식별자 (VARCHAR(20)):** `FILE_ID` — 0패딩 20자리(예: `00000000000000000001`). `BusTaams 테이블.md`·`BUSTAAMS_테이블 생성 쿼리 전체.md` 정본 우선.
-- **로그인·세션용 문자열:** 업무 키는 **`VARCHAR(256)` 이하** (예: `TB_USER.USER_ID`) — `normalizeVarcharId()` / `App.jsx` `clipBizVarcharId()`로 상한 통일. 순번 규칙의 예외가 될 수 있음.
-- **구현:** `server.js`·`lib/idConstants.js`·`lib/bustaamsIds.js` (프로젝트에 맞는 모듈 사용) — `idGenerator.js` 명이 문서·브랜치에 따라 다를 수 있음.
-- **DDL:** 위 두 MD와 스키마가 어긋나면 **DDL·마이그레이션**을 기준으로 본 절을 맞출 것.
+- **파일 식별자 (VARCHAR(20)):** `FILE_ID` — 0패딩 20자리(예: `00000000000000000001`). 테이블·컬럼 정의는 [`BusTaams_Project 테이블 설계.md`](./BusTaams_Project%20테이블%20설계.md)를 참고합니다.
+- **구현:** `USER_ID`(로그인)와 숫자 ID 채번은 `busTaams_server/server.js`·`lib/idConstants.js`·`lib/bustaamsIds.js` 등 프로젝트 모듈로 구현된다. 파일명은 브랜치에 따라 `idGenerator.js` 형태일 수 있다.
+- **DDL:** [`BusTaams_Project 테이블 설계.md`](./BusTaams_Project%20테이블%20설계.md) 및 실제 DB 스키마가 본 절과 어긋나면 **DDL·마이그레이션**을 우선하여 본 절을 맞출 것.
 
 ---
 

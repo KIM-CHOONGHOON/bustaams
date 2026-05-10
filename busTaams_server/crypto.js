@@ -8,13 +8,18 @@
  * 레거시: 과거 USER_NM·HP_NO 등에 동일 포맷으로 저장된 행은 plainOrLegacyDecrypt()로 평문 복원 시도.
  */
 
-require('dotenv').config();
+require('./loadEnv');
 const crypto = require('crypto');
 
 const ALGORITHM = 'aes-256-gcm';
-const KEY = Buffer.from(process.env.ENCRYPTION_KEY, 'hex');
-
-if (!process.env.ENCRYPTION_KEY || KEY.length !== 32) {
+const encRaw = process.env.ENCRYPTION_KEY;
+if (!encRaw || typeof encRaw !== 'string' || String(encRaw).trim() === '') {
+    throw new Error(
+        '[FATAL] ENCRYPTION_KEY가 비어 있습니다. busTaams_server/.env에 64자리 hex(32바이트)를 설정하세요.'
+    );
+}
+const KEY = Buffer.from(String(encRaw).trim(), 'hex');
+if (KEY.length !== 32) {
     throw new Error('[FATAL] ENCRYPTION_KEY가 .env에 설정되지 않았거나 32바이트가 아닙니다. 서버를 시작할 수 없습니다.');
 }
 
