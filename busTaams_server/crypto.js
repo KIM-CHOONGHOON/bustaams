@@ -24,9 +24,8 @@ if (KEY.length !== 32) {
 }
 
 /**
- * 평문을 AES-256-GCM으로 암호화하여 DB 저장 가능한 문자열로 반환
- * @param {string} plainText - 암호화할 원본 텍스트
- * @returns {string} "iv:authTag:cipherText" 형태의 hex 문자열
+ * 데이터 암호화 (AES-256-GCM)
+ * 결과 포맷: {iv}:{authTag}:{encryptedData}
  */
 function encrypt(plainText) {
     if (plainText === null || plainText === undefined) return plainText;
@@ -38,9 +37,7 @@ function encrypt(plainText) {
 }
 
 /**
- * DB에서 읽어온 암호화 문자열을 원본 텍스트로 복호화
- * @param {string} encryptedText - "iv:authTag:cipherText" 형태의 hex 문자열
- * @returns {string} 복호화된 원본 텍스트
+ * 데이터 복호화 (AES-256-GCM)
  */
 function decrypt(encryptedText) {
     if (!encryptedText || !encryptedText.includes(':')) return encryptedText;
@@ -51,31 +48,29 @@ function decrypt(encryptedText) {
 }
 
 /** TB_USER.RESIDENT_NO_ENC 전용 (동작은 encrypt와 동일) */
-function encryptResidentNo(plain) {
-    return encrypt(plain);
+function encryptResidentNo(plainText) {
+    return encrypt(plainText);
 }
 
-function decryptResidentNo(enc) {
-    return decrypt(enc);
+/** TB_USER.RESIDENT_NO_ENC 전용 (동작은 decrypt와 동일) */
+function decryptResidentNo(encryptedText) {
+    return decrypt(encryptedText);
 }
 
 /**
- * 평문이면 그대로, AES-GCM 저장 포맷이면 복호화 (레거시 암호화 행 호환)
- * @param {string|null|undefined} val
+ * 평문이면 그대로, 암호화된 포맷(: 포함)이면 복호화하여 반환
+ * (기존 데이터 호환용)
  */
-function plainOrLegacyDecrypt(val) {
-    if (val == null || val === '') return '';
-    const s = String(val);
-    if (!s.includes(':')) return s;
-    const parts = s.split(':');
-    if (parts.length < 3) return s;
-    const [ivHex] = parts;
-    if (!/^[0-9a-f]+$/i.test(ivHex) || ivHex.length !== 24) return s;
-    try {
-        return decrypt(s);
-    } catch (_) {
-        return s;
+function plainOrLegacyDecrypt(text) {
+    if (!text) return text;
+    if (text.includes(':')) {
+        try {
+            return decrypt(text);
+        } catch (e) {
+            return text;
+        }
     }
+    return text;
 }
 
 module.exports = {

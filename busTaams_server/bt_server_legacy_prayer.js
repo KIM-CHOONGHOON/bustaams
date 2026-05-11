@@ -1,7 +1,7 @@
-require('./loadEnv');
 const express = require('express');
 console.log('📦 server.js 로딩 중...');
 const cors = require('cors');
+require('dotenv').config();
 const pool = require('./db');
 const path = require('path');
 const admin = require('firebase-admin');
@@ -9,16 +9,19 @@ const { Storage } = require('@google-cloud/storage');
 const bcrypt = require('bcrypt');
 const { encrypt, decrypt } = require('./crypto');
 
-const { 
-    generateNextNumericId, 
-    formatDateYmd, 
-    parseDataUrlPayload, 
-    sendAlimTalkAndLog 
-} = require('./lib/bt_common_utils');
-const { runDriverVerificationsForProfileSetup } = require('./driverVerification');
-const { canonicalFileMasterFileId, fileIdMatchCandidates, custIdMatchCandidates } = require('./lib/bustaamsIds');
+/**
+ * 가변 길이 0-패딩 숫자 ID 생성기
+ * @param {number|string} currentMax 순자값 또는 문자열
+ * @param {number} length 패딩 길이 (기본 10)
+ * @returns {string} 패딩된 다음 ID
+ */
+function generateNextNumericId(currentMax, length = 10) {
+    const nextVal = (parseInt(currentMax || 0, 10)) + 1;
+    return String(nextVal).padStart(length, '0');
+}
+// const { runDriverVerificationsForProfileSetup } = require('./driverVerification');
 const fs = require('fs');
-const createCommonLiveChatRouter = require('./routes/commonLiveChat');
+const createLiveChatBusDriverRouter = require('./routes/liveChatBusDriver');
 const createLiveChatTravelerRouter = require('./routes/liveChatTraveler');
 const createUserDeviceTokenRouter = require('./routes/userDeviceToken');
 const { 
@@ -26,17 +29,6 @@ const {
     fetchCancelManageForUser, 
     fetchSubscriptionForDriver 
 } = require('./lib/loginPayload');
-const createAuthRouter = require('./routes/bt_auth_api');
-const createAuctionTripRouter = require('./routes/bt_auction_trip_api');
-
-const {
-    canAccessDriverCancelProofFile,
-    resolveGcsObjectKey,
-} = require('./lib/driverCancelProofAccess');
-
-const { BILLING_SUBSCRIPTION_ID } = require('./lib/billingSubscriptionId');
-const { buildBillingSubscriptionPayload } = require('./lib/billingSubscriptionPayload');
-const { applyMomMemberAfterBid } = require('./lib/driverBidMomMember');
 
 const app = express();
 
@@ -50,21 +42,7 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-require('./routes/busDriverCreditCardRegistrationRoute')(app, pool);
-/** 기사님 응찰 목록 — `app.get('/api/DriversListOfBids', DriversListOfBids)` (multer 등보다 먼저 등록) */
-require('./routes/driversListOfBids')(app, pool);
-require('./routes/cancellationOfBid')(app, pool);
-app.use('/api/CommonLiveChat', createCommonLiveChatRouter(pool));
-app.use('/api/live-chat-traveler', createLiveChatTravelerRouter(pool));
-app.use('/api/user/device-token', createUserDeviceTokenRouter(pool));
-
 const PORT = process.env.PORT || 8080;
-
-// [DEBUG] 서버 생존 확인용 테스트 라우트
-app.get('/api/debug-test', (req, res) => {
-    console.log('📢 [DEBUG] 서버가 살아있습니다! 요청 수신 성공!');
-    res.json({ message: 'Server is ALIVE!', port: PORT, time: new Date().toLocaleString() });
-});
 
 // Global request logger - Enhanced for better visibility
 app.use((req, res, next) => {
@@ -114,19 +92,15 @@ const storage = new Storage();
 const bucketName = process.env.GCS_BUCKET_NAME || 'bustaams-secure-data';
 const bucket = storage.bucket(bucketName);
 
-/** `verify-sms` 성공 번호 보관 (회원가입/프로필설정 공유) */
+/** Firebase 서비스 계정이 있으면 true — 이 경우에만 클라이언트 Firebase ID 토큰 검증을 강제 */
+function firebaseAdminConfigured() {
+    return !!(process.env.FIREBASE_SERVICE_ACCOUNT_PATH && fs.existsSync(path.resolve(__dirname, process.env.FIREBASE_SERVICE_ACCOUNT_PATH)));
+}
+
+/** `verify-sms` 성공 번호 — 회원가입 시 Firebase 토큰 없이 매칭 (아래 `smsCodeStore`와 함께 유지) */
 const smsVerifiedPhoneStore = new Map();
 const SMS_VERIFIED_TTL_MS = 15 * 60 * 1000;
 
-// 3. Auth Router 설정
-const authRouter = createAuthRouter(pool, admin, smsVerifiedPhoneStore, bucket, bucketName);
-app.use('/api/auth', authRouter);
-app.use('/api/users', authRouter); // 기존 /api/users/login 호환용
-
-// 4. Auction/Trip Router 설정
-const auctionTripRouter = createAuctionTripRouter(pool, admin, bucket, bucketName);
-app.use('/api/auction', auctionTripRouter);
-app.use('/api/traveler-quote-request-details', auctionTripRouter);
 /**
  * 회원가입(`POST /api/auth/register`)·기사정보(`POST /api/driver/profile-setup`) 공통.
  * Admin 미설정: 검증 생략(로컬 개발). 설정됨: Firebase `idToken` 또는 SMS 서버 인증 완료 번호.
@@ -169,82 +143,7 @@ function formatDateYmd(v) {
     return s.length >= 10 ? s.slice(0, 10) : s;
 }
 
-/** 진위 검증 생략 비교용 — TB_DRIVER_DETAIL 기존 행(면허·자격 컬럼) */
-async function fetchDriverDetailLicenseRow(connection, loginUserId) {
-    if (!loginUserId) return null;
-    try {
-        const [rows] = await connection.execute(
-            `SELECT LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO, LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT,
-                    QUAL_CERT_NO, QUAL_CERT_VERIFY_STATUS
-             FROM TB_DRIVER_DETAIL WHERE USER_ID = ? LIMIT 1`,
-            [loginUserId]
-        );
-        return rows[0] || null;
-    } catch (e) {
-        if (e.code === 'ER_BAD_FIELD_ERROR') return null;
-        throw e;
-    }
-}
 
-/** GET profile-setup용 — 면허·자격 컬럼이 없으면(구 스키마) 주소 블록만 조회 후 면허 필드 기본값 */
-async function selectDriverDetailForProfileSetup(connection, loginUserId) {
-    const fullSql = `SELECT ZIPCODE, ADDRESS, DETAIL_ADDRESS, ADDR_TYPE, ADDR_NAME,
-                            BIRTH_YMD, SEX, COALESCE(SELF_INTRO, '') AS SELF_INTRO,
-                            LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO,
-                            LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT, QUAL_CERT_NO,
-                            IFNULL(QUAL_CERT_VERIFY_STATUS, 'UNVERIFIED') AS QUAL_CERT_VERIFY_STATUS,
-                            QUAL_CERT_VERIFY_DT
-                     FROM TB_DRIVER_DETAIL WHERE USER_ID = ? LIMIT 1`;
-    const baseSql = `SELECT ZIPCODE, ADDRESS, DETAIL_ADDRESS, ADDR_TYPE, ADDR_NAME,
-                            BIRTH_YMD, SEX, COALESCE(SELF_INTRO, '') AS SELF_INTRO
-                     FROM TB_DRIVER_DETAIL WHERE USER_ID = ? LIMIT 1`;
-    try {
-        const [dr] = await connection.execute(fullSql, [loginUserId]);
-        return dr[0] || null;
-    } catch (e) {
-        if (e.code === 'ER_BAD_FIELD_ERROR') {
-            const [dr2] = await connection.execute(baseSql, [loginUserId]);
-            const r = dr2[0];
-            if (!r) return null;
-            return {
-                ...r,
-                LICENSE_TYPE: null,
-                LICENSE_NO: null,
-                LICENSE_SERIAL_NO: null,
-                LICENSE_ISSUE_DT: null,
-                LICENSE_EXPIRY_DT: null,
-                QUAL_CERT_NO: null,
-                QUAL_CERT_VERIFY_STATUS: 'UNVERIFIED',
-                QUAL_CERT_VERIFY_DT: null
-            };
-        }
-        throw e;
-    }
-}
-
-/** TB_COMMON_CODE DDL — 로컬 전용. 운영/Cloud SQL 앱 사용자는 보통 CREATE 권한이 없음. */
-async function ensureTbCommonCodeTable(connection) {
-    await connection.execute(`
-        CREATE TABLE IF NOT EXISTS TB_COMMON_CODE (
-            GRP_CD varchar(30) NOT NULL COMMENT '그룹 코드 (예: USER_STAT, BUS_TYPE)',
-            DTL_CD varchar(30) NOT NULL COMMENT '상세 코드 (예: ACTIVE, PREMIUM_28)',
-            CD_NM_KO varchar(100) NOT NULL COMMENT '코드 한글명',
-            CD_NM_EN varchar(100) DEFAULT NULL COMMENT '코드 영문명',
-            CD_FNUM decimal(13,3) DEFAULT 0.000 COMMENT '코드 시작값에 해당하는 참고숫자',
-            CD_TNUM decimal(13,3) DEFAULT 0.000 COMMENT '코드 종료값에 해당하는 참고숫자',
-            USE_YN enum('Y','N') DEFAULT 'Y' COMMENT '사용 여부',
-            DISP_ORD int DEFAULT 0 COMMENT '출력 순서',
-            CD_DESC text COMMENT '코드 상세 설명',
-            REG_DT datetime DEFAULT CURRENT_TIMESTAMP COMMENT '등록 일시',
-            REG_ID varchar(30) DEFAULT NULL COMMENT '등록자 ID',
-            MOD_DT datetime DEFAULT CURRENT_TIMESTAMP COMMENT '수정 일시',
-            MOD_ID varchar(30) DEFAULT NULL COMMENT '수정자 ID',
-            PRIMARY KEY (GRP_CD, DTL_CD)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            COMMENT='시스템 공통 코드 관리 테이블'
-    `);
-}
->>>>>>> a322f87c965c90c5f6b4f0a3cf567e4a0779b88f
 
 async function seedBusTypeCodesIfEmpty(connection) {
     const [rows] = await connection.execute(
@@ -268,37 +167,24 @@ async function seedBusTypeCodesIfEmpty(connection) {
 
 
 
-
-/** 업로드 원본명 → TB_FILE_MASTER 용 (확장자 제외 이름 + 확장자) */
-function orgFileNmAndExt(fileNameHint, parsed) {
-    const hint = (fileNameHint || parsed.orgName || 'file').trim();
-    const leaf = hint.replace(/\\/g, '/').split('/').pop() || 'file';
-    const idx = leaf.lastIndexOf('.');
-    let base = leaf;
-    let ext = String(parsed.ext || '')
-        .replace(/^\./, '')
-        .toLowerCase()
-        .trim();
-    if (idx > 0) {
-        base = leaf.slice(0, idx);
-        const fromName = leaf.slice(idx + 1).toLowerCase();
-        if (fromName) ext = fromName;
-    }
-    if (!ext) ext = 'bin';
-    const orgFileNm = base.replace(/[^a-zA-Z0-9._-가-힣]/g, '_').replace(/\.+$/, '') || 'file';
-    return { orgFileNm, fileExt: ext };
+function parseDataUrlPayload(dataUrl, fileNameHint = 'file') {
+    if (!dataUrl || typeof dataUrl !== 'string') return null;
+    const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/s);
+    if (!m) return null;
+    const mime = m[1];
+    const buf = Buffer.from(m[2], 'base64');
+    let ext = 'bin';
+    if (mime.includes('pdf')) ext = 'pdf';
+    else if (mime.includes('jpeg') || mime.includes('jpg')) ext = 'jpg';
+    else if (mime.includes('png')) ext = 'png';
+    else if (mime.includes('webp')) ext = 'webp';
+    else if (mime.includes('gif')) ext = 'gif';
+    const safe = String(fileNameHint || 'file').replace(/[^a-zA-Z0-9._-가-힣]/g, '_');
+    return { buffer: buf, ext, mime, orgName: safe };
 }
 
-const BUS_DOC_FILE_CATEGORY = {
-    BIZ_REG: 'BIZ_REG',
-    TRANSPORT_PERMIT: 'TRANSPORT_PERMIT',
-    INSURANCE: 'INSURANCE',
-};
-const BUS_PHOTO_FILE_CATEGORY = 'VEHICLE_PHOTO';
-
-/** GCS 업로드 + `TB_FILE_MASTER` 행 추가 (`BusTaams_Project 테이블 설계.md` 범위) */
-async function insertBusFileMaster(connection, {
-    fileId, category, gcsPath, buffer, orgFileNm, fileExt, fileSize, contentType
+async function insertBusFileAndHist(connection, {
+    busId, fileId, category, gcsPath, buffer, orgFileNm, fileExt, fileSize, contentType
 }) {
     const gcsFile = bucket.file(gcsPath);
     await gcsFile.save(buffer, { metadata: { contentType: contentType || 'application/octet-stream' }, resumable: false });
@@ -306,6 +192,12 @@ async function insertBusFileMaster(connection, {
         `INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT)
          VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
         [fileId, category, bucketName, gcsPath, orgFileNm, fileExt, fileSize]
+    );
+    const histId = generateNextNumericId('0', 10); // 10자리 숫자
+    await connection.execute(
+        `INSERT INTO TB_BUS_DRIVER_VEHICLE_FILE_HIST (HIST_ID, BUS_ID, FILE_ID, FILE_CATEGORY, REG_DT)
+         VALUES (?, ?, ?, ?, NOW())`,
+        [histId, busId, fileId, category]
     );
 }
 
@@ -337,120 +229,15 @@ async function fileMetaById(connection, fileId) {
 }
 
 /** 기사 소유 차량에 연결된 파일만 스트리밍 허용 */
-/** `TB_DRIVER_DOCS.DOC_TYPE` — 버스운전 자격증(운송종사) 사본 행. DDL ENUM:
- *  LICENSE, QUALIFICATION, APTITUDE, BIZ_REG, TRANSPORT_PERMIT, INSURANCE, DRIVER_PHOTO, VEHICLE_PHOTO,
- *  TERMS_OF_USE, PRIVACY_CONSENT, MARKETING_CONSENT, DRIVER_CONTRACT, TRAVELER_CONTRACT,
- *  PARTNER_CONTRACT, TERMS_INTEGRATED
- */
-const QUALIFICATION_DOC_TYPE = 'QUALIFICATION';
-const DRIVER_QUAL_GCS_BUCKET = 'bustaams-secure-data';
-
-async function tableColumnExists(connection, tableName, columnName) {
-    const [rows] = await connection.execute(
-        `SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
-         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1`,
-        [tableName, columnName]
-    );
-    return rows.length > 0;
-}
-
-async function ensureDriverDetailProfileColumns(connection) {
-    const cols = [
-        ['ADDR_TYPE', "VARCHAR(20) NULL COMMENT 'HOME|OFFICE|OTHER'"],
-        ['ADDR_NAME', "VARCHAR(40) NULL COMMENT 'OTHER address label'"],
-        ['BIRTH_YMD', "VARCHAR(6) NULL COMMENT 'YYMMDD (=주민등록 앞 6자리)'"],
-        ['SEX', "CHAR(1) NULL COMMENT 'RRN gender digit'"],
-        ['SELF_INTRO', 'TEXT NULL']
-    ];
-    for (const [name, ddl] of cols) {
-        if (!(await tableColumnExists(connection, 'TB_DRIVER_DETAIL', name))) {
-            await connection.execute(`ALTER TABLE TB_DRIVER_DETAIL ADD COLUMN \`${name}\` ${ddl}`);
-        }
-    }
-}
-
-async function ensureDriverDocsFileSizeColumn(connection) {
-    if (!(await tableColumnExists(connection, 'TB_DRIVER_DOCS', 'FILE_SIZE'))) {
-        await connection.execute(
-            'ALTER TABLE TB_DRIVER_DOCS ADD COLUMN `FILE_SIZE` BIGINT NULL COMMENT \'bytes\''
-        );
-    }
-}
-
-/** TB_DRIVER_DOCS — 운수종사 자격 사본: fileId = LPAD(DOC_TYPE_SEQ,20,\'0\') */
+/** TB_DRIVER_DOCS 소유 확인 */
 async function canAccessQualCertFile(connection, custId, fileId) {
-    if (!custId || fileId === undefined || fileId === null) return false;
-    const fid = String(fileId).trim();
+    if (!custId || !fileId) return false;
     const [rows] = await connection.execute(
         `SELECT 1 FROM TB_DRIVER_DOCS
-         WHERE CUST_ID = ? AND DOC_TYPE = ? AND LPAD(DOC_TYPE_SEQ, 20, '0') = ?
-         LIMIT 1`,
-        [custId, QUALIFICATION_DOC_TYPE, fid]
+         WHERE CUST_ID = ? AND FILE_ID = ? LIMIT 1`,
+        [custId, fileId]
     );
     return rows.length > 0;
-}
-
-async function fetchQualCertDocRow(connection, custId, fileId) {
-    const fid = String(fileId).trim();
-    const [rows] = await connection.execute(
-        `SELECT GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, ORG_FILE_EXT, FILE_SIZE, REG_DT
-         FROM TB_DRIVER_DOCS
-         WHERE CUST_ID = ? AND DOC_TYPE = ? AND LPAD(DOC_TYPE_SEQ, 20, '0') = ?
-         LIMIT 1`,
-        [custId, QUALIFICATION_DOC_TYPE, fid]
-    );
-    return rows[0] || null;
-}
-
-/**
- * TB_FILE_MASTER.GCS_PATH 정본은 버킷 **밖의** 객체 키 단독값.
- * 레거시: gs:// 또는 https://storage… URL 통째 저장, 선행 '/', 이스케이프 등 보정.
- * @returns {string} 버킷에 넘길 객체 키 (빈 문자열이면 무효)
- */
-function normalizeGcsObjectPath(pathRaw) {
-    if (pathRaw == null || pathRaw === undefined) return '';
-    let p = Buffer.isBuffer(pathRaw) ? pathRaw.toString('utf8') : String(pathRaw);
-    p = p.trim().replace(/\r?\n/g, '').replace(/^[\s\uFEFF]+|[\s\uFEFF]+$/g, '');
-    if (!p) return '';
-    p = p.replace(/\\/g, '/');
-
-    const gsMatch = /^gs:\/\/[^/]+\/(.+)$/i.exec(p);
-    if (gsMatch) return gsMatch[1].replace(/^\/+/, '');
-
-    const httpsMatch =
-        /^https?:\/\/storage\.googleapis\.com\/[^/]+\/(.+)$/i.exec(p)
-        || /^https?:\/\/storage\.cloud\.google\.com\/[^/]+\/(.+)$/i.exec(p);
-    if (httpsMatch) {
-        try {
-            return decodeURIComponent(httpsMatch[1].replace(/^\/+/, ''));
-        } catch (_) {
-            return httpsMatch[1].replace(/^\/+/, '');
-        }
-    }
-
-    p = p.replace(/^\/+/, '');
-    try {
-        if (/%[0-9A-Fa-f]{2}/.test(p)) {
-            const d = decodeURIComponent(p);
-            if (d) return d.replace(/^\/+/, '');
-        }
-    } catch (_) {
-        /* keep p */
-    }
-    return p;
-}
-
-/** GCS exists() 순으로 시도할 객체 키 후보 */
-function gcsObjectPathCandidates(pathRaw) {
-    const raw = Buffer.isBuffer(pathRaw) ? pathRaw.toString('utf8') : pathRaw != null ? String(pathRaw) : '';
-    const trimmed = raw.trim().replace(/\r?\n/g, '');
-    const norm = normalizeGcsObjectPath(pathRaw);
-    return [...new Set([norm, trimmed, trimmed.replace(/^\/+/, ''), norm ? norm.replace(/^\/+/, '') : ''].filter(Boolean))];
-}
-
-function bucketForName(name) {
-    const n = (name || '').trim() || bucketName;
-    return n === bucketName ? bucket : storage.bucket(n);
 }
 
 async function canAccessBusFile(connection, custId, fileId) {
@@ -467,12 +254,140 @@ async function canAccessBusFile(connection, custId, fileId) {
         }
         if (Array.isArray(photos) && photos.some((p) => String(p) === String(fileId))) return true;
     }
-    return false;
+    const [hist] = await connection.execute(
+        `SELECT 1 FROM TB_BUS_DRIVER_VEHICLE_FILE_HIST h
+         INNER JOIN TB_BUS_DRIVER_VEHICLE b ON b.BUS_ID = h.BUS_ID AND b.CUST_ID = ?
+         WHERE h.FILE_ID = ? LIMIT 1`,
+        [custId, fileId]
+    );
+    return hist.length > 0;
 }
 
 // ---------------------------------------------------------------------------
 // REST APIs
 // ---------------------------------------------------------------------------
+
+// API 1-0: 아이디 중복 검사
+app.get('/api/auth/check-id', async (req, res) => {
+    let connection;
+    try {
+        const { userId } = req.query; // 사용자가 입력한 아이디
+        if (!userId) return res.status(400).json({ error: 'userId(Login ID) query parameter is required' });
+
+        connection = await pool.getConnection();
+        
+        // USER_ID 컬럼에서 중복 체크
+        const [rows] = await connection.execute('SELECT USER_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        
+        if (rows.length > 0) {
+            return res.status(409).json({ isAvailable: false, message: '이미 사용 중인 아이디입니다.' });
+        }
+        return res.status(200).json({ isAvailable: true, message: '사용 가능한 아이디입니다.' });
+    } catch (error) {
+        console.error('❌ [ID_CHECK_ERROR]', error);
+        res.status(500).json({
+            error: '아이디 중복 확인 중 서버 오류가 발생했습니다.',
+            detail: error.message
+        });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// API 1-2: 전화번호 중복 검사
+app.get('/api/auth/check-phone', async (req, res) => {
+    let connection;
+    try {
+        const { phoneNo } = req.query;
+        if (!phoneNo) return res.status(400).json({ error: 'phoneNo query parameter is required' });
+
+        connection = await pool.getConnection();
+        
+        // [보안] 휴대폰 번호는 DB에 암호화된 상태로 저장되므로, 전체 스캔 후 복호화 비교
+        const [rows] = await connection.execute('SELECT HP_NO FROM TB_USER');
+        const isDuplicate = rows.some((row) => {
+            try {
+                return decrypt(row.HP_NO) === phoneNo;
+            } catch (e) {
+                return false;
+            }
+        });
+        if (isDuplicate) {
+            return res.status(409).json({ isAvailable: false, message: '이미 가입된 휴대폰 번호입니다.' });
+        }
+        return res.status(200).json({ isAvailable: true });
+    } catch (error) {
+        console.error('Check phone error:', error.code || error.message, error);
+        if (error.code === 'ER_NO_SUCH_TABLE') {
+            return res.status(200).json({ isAvailable: true });
+        }
+        res.status(500).json({
+            error: '서버 오류가 발생했습니다.',
+            detail: process.env.NODE_ENV !== 'production' ? String(error.message) : undefined
+        });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// ── SMS 인증 코드 인메모리 저장소 (개발용, 실운영시 Redis 권장) ──────────────
+const smsCodeStore = new Map(); // key: phoneNumber, value: { code, expiresAt }
+
+// API 1-3: SMS 인증번호 전송
+app.post('/api/auth/send-sms', async (req, res) => {
+    try {
+        const { phoneNumber } = req.body;
+        if (!phoneNumber) return res.status(400).json({ error: '휴대폰 번호를 입력해주세요.' });
+        const cleaned = phoneNumber.replace(/-/g, '');
+        if (!/^01[016789]\d{7,8}$/.test(cleaned)) {
+            return res.status(400).json({ error: '올바른 휴대폰 번호 형식이 아닙니다.' });
+        }
+
+        // 개발 모드: 고정 인증번호 123456 사용
+        const code = '123456';
+        const expiresAt = Date.now() + 3 * 60 * 1000; // 3분
+        smsCodeStore.set(cleaned, { code, expiresAt });
+
+        console.log(`[SMS] 인증번호 발송 (개발모드): ${cleaned} → ${code}`);
+
+        // TODO: 실 운영시 Firebase Admin SMS 또는 외부 SMS API 연동
+        // const message = { text: `[busTaams] 인증번호: ${code}`, phone: `+82${cleaned.slice(1)}` };
+
+        return res.status(200).json({ message: `인증번호가 전송되었습니다. (개발모드: ${code})` });
+
+    } catch (error) {
+        console.error('SMS 전송 에러:', error.message);
+        res.status(500).json({ error: 'SMS 전송 중 오류가 발생했습니다.' });
+    }
+});
+
+// API 1-4: SMS 인증번호 확인
+app.post('/api/auth/verify-sms', async (req, res) => {
+    try {
+        const { phoneNumber, code } = req.body;
+        if (!phoneNumber || !code) return res.status(400).json({ error: '휴대폰 번호와 인증번호를 입력해주세요.' });
+        const cleaned = phoneNumber.replace(/-/g, '');
+
+        const stored = smsCodeStore.get(cleaned);
+        if (!stored) return res.status(400).json({ verified: false, error: '인증번호를 먼저 요청해주세요.' });
+        if (Date.now() > stored.expiresAt) {
+            smsCodeStore.delete(cleaned);
+            return res.status(400).json({ verified: false, error: '인증번호가 만료되었습니다. 다시 요청해주세요.' });
+        }
+        if (stored.code !== code.trim()) {
+            return res.status(400).json({ verified: false, error: '인증번호가 일치하지 않습니다.' });
+        }
+
+        smsCodeStore.delete(cleaned); // 사용 후 삭제
+        smsVerifiedPhoneStore.set(cleaned, { expiresAt: Date.now() + SMS_VERIFIED_TTL_MS });
+        console.log(`[SMS] 인증 성공: ${cleaned}`);
+        return res.status(200).json({ verified: true, message: '휴대폰 인증이 완료되었습니다.' });
+
+    } catch (error) {
+        console.error('SMS 인증 에러:', error.message);
+        res.status(500).json({ error: 'SMS 인증 중 오류가 발생했습니다.' });
+    }
+});
 
 
 // API 2: 최신 약관 목록 조회
@@ -510,8 +425,269 @@ app.get('/api/terms/active', async (req, res) => {
 });
 
 // API 3: 회원 가입 및 서명 최종 전송 (Transaction)
+app.post('/api/auth/register', async (req, res) => {
+    let connection;
+    let uploadedFiles = []; // 롤백을 위한 업로드 파일 목록
+    try {
+        const {
+            userId, email, password, userName, phoneNo, userType,
+            firebaseIdToken, mktAgreeYn, signatureBase64, photoBase64, photoName, agreedTerms,
+            recomCode
+        } = req.body;
+
+        // [DEBUG LOG] 데이터 수신 확인
+        const fs = require('fs');
+        const debugInfo = `
+[${new Date().toISOString()}] Register Request
+- userId: ${userId}
+- userType: ${userType}
+- hasPhoto: ${!!photoBase64}
+- photoLength: ${photoBase64 ? photoBase64.length : 0}
+- photoPreviewPrefix: ${photoBase64 ? photoBase64.substring(0, 50) : 'none'}
+- hasSignature: ${!!signatureBase64}
+`;
+        fs.appendFileSync('d:/project_bustaams/busTaams_server/scratch/register_debug.log', debugInfo);
+
+        if (!userId || !password || !userName || !phoneNo || !signatureBase64 || !agreedTerms || !userType) {
+            return res.status(400).json({ error: '필수 항목이 누락되었습니다.' });
+        }
+
+        // 1. [보안] 휴대폰 인증 확인
+        const cleanedPhoneForVerify = String(phoneNo).replace(/-/g, '');
+        const phoneVerify = await verifyFirebasePhoneIdTokenIfRequired(firebaseIdToken, {
+            smsVerifiedPhone: cleanedPhoneForVerify,
+        });
+        if (!phoneVerify.ok) {
+            return res.status(400).json({ error: phoneVerify.error });
+        }
+        const smsAuthYn = 'Y';
+
+        // 2. 비밀번호 해싱
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+        // 3. DB 트랜잭션 준비
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        try {
+            // 3-1. [ID 생성] 10자리 숫자 ID (CUST_ID)
+            const [maxUserRows] = await connection.execute('SELECT MAX(CUST_ID) as maxId FROM TB_USER');
+            const nextCustId = generateNextNumericId(maxUserRows[0].maxId || '0', 10);
+
+            // 3-2. [ID 생성] 20자리 숫자 ID (FILE_ID for Signature & Profile)
+            const [maxFileRows] = await connection.execute("SELECT MAX(FILE_ID) as maxFileId FROM TB_FILE_MASTER WHERE FILE_ID REGEXP '^[0-9]+$'");
+            const baseFileId = maxFileRows[0].maxFileId || '0';
+            const nextFileId = generateNextNumericId(baseFileId, 20);
+            const nextProfileFileId = generateNextNumericId(nextFileId, 20); // 서명 ID 다음 번호
+
+            // UserType Mapping
+            let mappedUserType = 'TRAVELER';
+            if (userType === 'CONSUMER' || userType === 'TRAVELER') mappedUserType = 'TRAVELER';
+            else if (userType === 'SALES' || userType === 'SALESPERSON' || userType === 'PARTNER') mappedUserType = 'PARTNER';
+            else if (userType === 'DRIVER') mappedUserType = 'DRIVER';
+
+            // [DB] TB_USER INSERT
+            const userQuery = `
+                INSERT INTO TB_USER (
+                    CUST_ID, USER_ID, EMAIL, PASSWORD, USER_NM, HP_NO, SNS_TYPE, 
+                    SMS_AUTH_YN, USER_TYPE, RECOM_CODE, SIGNATURE_FILE_ID, PROFILE_FILE_ID,
+                    JOIN_DT, USER_STAT, MOD_DT, MOD_ID
+                ) VALUES (?, ?, ?, ?, ?, ?, 'NONE', 'Y', ?, ?, ?, ?, NOW(), 'ACTIVE', NOW(), ?)
+            `;
+
+            await connection.execute(userQuery, [
+                nextCustId, 
+                userId, 
+                email, 
+                hashedPassword, 
+                userName, 
+                phoneNo,
+                mappedUserType, 
+                mappedUserType === 'DRIVER' ? recomCode : null,
+                nextFileId,
+                (mappedUserType === 'DRIVER' && photoBase64) ? nextProfileFileId : null,
+                nextCustId
+            ]);
+
+            // 3-3. [DB] TB_USER_CANCEL_MANAGE INSERT (초기 취소 관리 레코드 생성)
+            console.log(`[DEBUG] Creating cancel management record for CUST_ID: ${nextCustId}`);
+            await connection.execute(`
+                INSERT IGNORE INTO TB_USER_CANCEL_MANAGE (
+                    CUST_ID, CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, 
+                    CANCEL_TRAVELER_ALL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, 
+                    TRADE_RESTRICT_YN, REG_DT, REG_ID, MOD_DT, MOD_ID
+                ) VALUES (?, 0, 0, 0, 0, 'N', NOW(), ?, NOW(), ?)
+            `, [nextCustId, nextCustId, nextCustId]);
+
+            // 4. 전자 서명 이미지 처리 (GCS & TB_FILE_MASTER)
+            const base64Data = signatureBase64.replace(/^data:image\/png;base64,/, "");
+            const buffer = Buffer.from(base64Data, 'base64');
+            const fileNameWithoutExt = nextFileId; // 파일ID명을 파일명으로 사용
+            const fileExt = 'png';
+            const fileName = `${nextFileId}.${fileExt}`;
+            const gcsPathForDB = `https://storage.googleapis.com/${bucketName}/signatures/${fileName}`;
+            const actualGcsPath = `signatures/${fileName}`;
+            const gcsFile = bucket.file(actualGcsPath);
+            
+            // GCS 업로드
+            await gcsFile.save(buffer, { metadata: { contentType: 'image/png' }, resumable: false });
+            uploadedFiles.push(gcsFile);
+
+            // [DB] TB_FILE_MASTER INSERT (Signature)
+            await connection.execute(`
+                INSERT INTO TB_FILE_MASTER (
+                    FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, 
+                    ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT, REG_ID, MOD_DT, MOD_ID
+                ) VALUES (?, 'SIGNATURE', ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)
+            `, [nextFileId, bucketName, gcsPathForDB, fileNameWithoutExt, fileExt, buffer.length, nextCustId, nextCustId]);
+
+            // 4-1. 프로필 사진 이미지 처리 (GCS & TB_FILE_MASTER) - 기사 전용
+            if (mappedUserType === 'DRIVER' && photoBase64) {
+                const photoData = photoBase64.replace(/^data:image\/\w+;base64,/, "");
+                const photoBuffer = Buffer.from(photoData, 'base64');
+                const photoExt = photoBase64.match(/data:image\/(\w+);base64/)?.[1] || 'png';
+                const photoFileName = `${nextProfileFileId}.${photoExt}`;
+                const bucketName = process.env.GCS_BUCKET_NAME || 'bustaams-secure-data';
+                const photoGcsPathForDB = `https://storage.googleapis.com/${bucketName}/profiles/${photoFileName}`;
+                const photoActualGcsPath = `profiles/${photoFileName}`;
+                const photoGcsFile = bucket.file(photoActualGcsPath);
+
+                await photoGcsFile.save(photoBuffer, { metadata: { contentType: `image/${photoExt}` }, resumable: false });
+                uploadedFiles.push(photoGcsFile);
+
+                await connection.execute(`
+                    INSERT INTO TB_FILE_MASTER (
+                        FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, 
+                        ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT, REG_ID, MOD_DT, MOD_ID
+                    ) VALUES (?, 'PROFILE', ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)
+                `, [nextProfileFileId, bucketName, photoGcsPathForDB, photoName || photoFileName, photoExt, photoBuffer.length, nextCustId, nextCustId]);
+            }
+
+            // 5. 약관 동의 이력 저장 (TB_USER_TERMS_HIST)
+            const termsMapping = {
+                1: 'SERVICE',
+                2: 'PRIVACY',
+                3: 'MARKETING',
+                4: mappedUserType === 'DRIVER' ? 'DRIVER_SERVICE' : 
+                   mappedUserType === 'PARTNER' ? 'PARTNER_CONTRACT' : 'TRAVELER_SERVICE'
+            };
+
+            let termSeq = 1;
+            for (const termId of agreedTerms) {
+                const termsType = termsMapping[termId];
+                if (!termsType) continue;
+
+                // 마케팅 동의일 경우 관련 플래그들을 'Y'로 설정
+                const isMarketing = (termsType === 'MARKETING');
+                const mktVal = isMarketing ? 'Y' : 'N';
+
+                await connection.execute(`
+                    INSERT INTO TB_USER_TERMS_HIST (
+                        CUST_ID, TERMS_HIST_SEQ, TERMS_TYPE, TERMS_VER, 
+                        AGREE_YN, MKT_SMS_YN, MKT_PUSH_YN, MKT_EMAIL_YN, MKT_TEL_YN,
+                        SIGN_FILE_ID, AGREE_DT
+                    ) VALUES (?, ?, ?, '1.0', 'Y', ?, ?, ?, ?, ?, NOW())
+                `, [nextCustId, termSeq++, termsType, mktVal, mktVal, mktVal, mktVal, nextFileId]);
+            }
+
+            await connection.commit();
+            smsVerifiedPhoneStore.delete(cleanedPhoneForVerify);
+
+            // [알림톡] 발송
+            try {
+                await sendAlimTalkAndLog({
+                    receiverId: nextCustId,
+                    receiverPhone: phoneNo,
+                    category: 'JOIN',
+                    content: `[busTaams] ${userName}님, 회원가입을 감사드립니다. 고품격 버스 여행의 시작, busTaams와 함께하세요!`
+                });
+            } catch (alimError) {
+                console.error('AlimTalk Error (Ignored):', alimError.message);
+            }
+
+            res.status(201).json({ message: "회원가입 완료", userId, custId: nextCustId });
+
+        } catch (dbError) {
+            console.error('❌ [REGISTER_DB_ERROR]', dbError);
+            if (connection) await connection.rollback();
+            
+            // 업로드된 파일들 롤백
+            for (const f of uploadedFiles) {
+                f.delete().catch(() => {});
+            }
+
+            res.status(500).json({ 
+                error: '데이터베이스 저장 중 오류가 발생했습니다.', 
+                detail: dbError.message 
+            });
+        } finally {
+            if (connection) connection.release();
+        }
+
+    } catch (error) {
+        console.error('❌ [REGISTER_SYSTEM_ERROR]', error);
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({ error: '이미 존재하는 사용자입니다.' });
+        }
+        res.status(500).json({ error: '시스템 오류가 발생했습니다.' });
+    }
+});
  
 // 로그인 API (POST /api/auth/login 또는 /api/users/login - 팀원 호환성 유지용 별칭)
+app.post(['/api/auth/login', '/api/users/login'], async (req, res) => {
+    try {
+        const { userId, password } = req.body;
+
+        if (!userId || !password) {
+            return res.status(400).json({ error: '아이디와 비밀번호를 입력해주세요.' });
+        }
+
+        // USER_ID(평문)로 사용자 조회
+        const [rows] = await pool.execute('SELECT * FROM TB_USER WHERE USER_ID = ?', [userId]);
+        const user = rows[0];
+
+        if (!user) {
+            return res.status(401).json({ error: '아이디 또는 비밀번호가 일치하지 않습니다.' });
+        }
+
+        const isPasswordMatch = await bcrypt.compare(password, user.PASSWORD);
+        if (!isPasswordMatch) {
+            return res.status(401).json({ error: '아이디 또는 비밀번호가 일치하지 않습니다.' });
+        }
+
+        // [신규] 취소 관리 및 구독 정보 조회 (CUST_ID 기반)
+        const custId = user.CUST_ID;
+        const [cancelRow, subscriptionRow] = await Promise.all([
+            fetchCancelManageForUser(pool, user),
+            user.USER_TYPE === 'DRIVER' ? fetchSubscriptionForDriver(pool, custId) : Promise.resolve(null)
+        ]);
+
+        // [체크] 거래 제한 여부 확인
+        if (cancelRow && (cancelRow.TRADE_RESTRICT_YN === 'Y' || cancelRow.tradeRestrictYn === 'Y')) {
+            return res.status(403).json({ 
+                error: '거래가 제한된 사용자입니다. 취소 건수 초과 등으로 인해 서비스 이용이 일시적으로 중지되었습니다. 고객센터에 문의해주세요.',
+                type: 'TRADE_RESTRICTED'
+            });
+        }
+
+        // [신규] DTO 생성 (복호화 및 구조화된 데이터 포함)
+        const userDto = buildPostLoginUserDto({
+            user,
+            cancelRow,
+            subscriptionRow
+        });
+
+        res.status(200).json({
+            message: '로그인 성공',
+            user: userDto
+        });
+
+    } catch (error) {
+        console.error('로그인 에러:', error ? error.stack : 'Unknown error');
+        res.status(500).json({ error: '로그인 중 서버 오류가 발생했습니다.', details: error ? error.toString() : 'Unknown error' });
+    }
+});
 
 // 사용자 통합 정보 수정 API (이메일, 휴대폰, 비밀번호)
 app.put('/api/user/profile', async (req, res) => {
@@ -787,27 +963,17 @@ app.post('/api/driver/profile', async (req, res) => {
  
 // API: 기사 프로필 조회 (폼 채우기)
 app.get('/api/driver/profile-setup', async (req, res) => {
-    let connection;
     try {
-        const custIdParam = req.query.custId != null ? String(req.query.custId).trim() : '';
-        if (!custIdParam) {
-            return res.status(400).json({ error: 'custId is required' });
-        }
+        const { custId } = req.query;
+        if (!custId) return res.status(400).json({ error: 'custId is required' });
 
-        const custCands = custIdMatchCandidates(custIdParam);
-        if (!custCands.length) return res.status(400).json({ error: 'custId is required' });
-
-        const custIn = custCands.map(() => '?').join(', ');
         const [uRows] = await pool.execute(
-            `SELECT CUST_ID, USER_ID, USER_NM, HP_NO, PROFILE_FILE_ID, RESIDENT_NO_ENC FROM TB_USER
-             WHERE TRIM(CUST_ID) IN (${custIn}) LIMIT 1`,
-            custCands
+            `SELECT USER_NM, HP_NO FROM TB_USER WHERE CUST_ID = ?`,
+            [custId]
         );
         if (!uRows.length) return res.status(404).json({ error: '회원을 찾을 수 없습니다.' });
 
         const u = uRows[0];
-        const resolvedCustId = String(u.CUST_ID ?? '').trim();
-        const loginUserId = u.USER_ID;
         let userName = '';
         let phoneNo = '';
         try {
@@ -821,77 +987,42 @@ app.get('/api/driver/profile-setup', async (req, res) => {
             phoneNo = '';
         }
 
-        const profileCanon = canonicalFileMasterFileId(u.PROFILE_FILE_ID);
-
-        connection = await pool.getConnection();
-        await ensureDriverDetailProfileColumns(connection);
-
-        let detail = null;
+        let dRows;
         try {
-            detail = await selectDriverDetailForProfileSetup(connection, loginUserId);
-        } catch (e) {
-            if (e.code !== 'ER_NO_SUCH_TABLE') throw e;
-            detail = null;
-        }
-
-        let qualDocRow = null;
-        try {
-            const [qr] = await connection.execute(
-                `SELECT DOC_TYPE_SEQ, ORG_FILE_NM, ORG_FILE_EXT, FILE_SIZE
-                 FROM TB_DRIVER_DOCS
-                 WHERE CUST_ID = ? AND DOC_TYPE = ? ORDER BY DOC_TYPE_SEQ DESC LIMIT 1`,
-                [resolvedCustId, QUALIFICATION_DOC_TYPE]
+            // 기사 정보 조회 (TB_DRIVER_DETAIL + TB_USER)
+            const [dr] = await pool.execute(
+                `SELECT 
+                    u.PROFILE_FILE_ID as PROFILE_PHOTO_ID,
+                    di.SELF_INTRO as BIO_TEXT,
+                    -- 나머지 정보들은 TB_DRIVER_DOCS 등에서 필요시 별도 조회해야 함
+                    NULL as RRN_ENC, NULL as LICENSE_TYPE, NULL as LICENSE_NO, NULL as LICENSE_SERIAL_NO,
+                    NULL as LICENSE_ISSUE_DT, NULL as LICENSE_EXPIRY_DT, NULL as QUAL_CERT_NO,
+                    'UNVERIFIED' as QUAL_CERT_VERIFY_STATUS, NULL as QUAL_CERT_VERIFY_DT,
+                    NULL as QUAL_CERT_FILE_ID
+                 FROM TB_USER u
+                 LEFT JOIN TB_DRIVER_DETAIL di ON u.CUST_ID = di.USER_ID
+                 WHERE u.CUST_ID = ?`,
+                [custId]
             );
-            qualDocRow = qr[0] || null;
-        } catch (_) {
-            qualDocRow = null;
-        }
-        const latestQualSeq = qualDocRow?.DOC_TYPE_SEQ;
-        const qualCertFileId = latestQualSeq != null ? String(latestQualSeq).padStart(20, '0') : null;
-        const qualCertOrgFileNm =
-            qualDocRow?.ORG_FILE_NM != null ? String(qualDocRow.ORG_FILE_NM).trim() : '';
-        let qualCertFileExt = '';
-        if (qualDocRow?.ORG_FILE_EXT != null) {
-            qualCertFileExt = String(qualDocRow.ORG_FILE_EXT).replace(/^\./, '').trim().toLowerCase();
-        }
-        const qualCertExtras = {
-            hasQualCertFile: !!qualCertFileId,
-            qualCertFileId,
-            qualCertOrgFileNm,
-            qualCertFileExt,
-            qualCertFileSize: qualDocRow?.FILE_SIZE != null ? Number(qualDocRow.FILE_SIZE) : null
-        };
-
-        const baseExtras = {
-            userName,
-            phoneNo,
-            hasProfilePhoto: !!profileCanon,
-            profilePhotoFileId: profileCanon,
-            profilePhotoId: profileCanon,
-            ...qualCertExtras
-        };
-
-        if (!detail) {
-            return res.json({
-                exists: false,
-                ...baseExtras,
-                addrType: 'HOME',
-                addrName: '',
-                zipcode: '',
-                address: '',
-                detailAddress: '',
-                bioText: ''
-            });
+            dRows = dr;
+        } catch (e) {
+            console.error('Fetch driver detail error:', e);
+            return res.json({ exists: false, userName, phoneNo });
         }
 
+        if (!dRows.length) {
+            return res.json({ exists: false, userName, phoneNo });
+        }
+
+        const d = dRows[0];
         let rrnFront = '';
         let rrnBack = '';
         try {
-            const plain = u.RESIDENT_NO_ENC ? decrypt(u.RESIDENT_NO_ENC) : '';
+            const plain = d.RRN_ENC ? decrypt(d.RRN_ENC) : '';
             const parts = String(plain).trim().split('-');
             if (parts.length >= 2 && parts[0].length === 6) {
                 rrnFront = parts[0];
-                rrnBack = String(parts[1] || '').replace(/\D/g, '').slice(0, 7);
+                rrnBack = String(parts[1]).charAt(0) || '';
             }
         } catch (_) {
             /* ignore */
@@ -899,104 +1030,55 @@ app.get('/api/driver/profile-setup', async (req, res) => {
 
         return res.json({
             exists: true,
-            ...baseExtras,
+            userName,
+            phoneNo,
             rrnFront,
             rrnBack,
-            licenseType: detail.LICENSE_TYPE || '',
-            licenseNo: detail.LICENSE_NO || '',
-            licenseSerialNo: detail.LICENSE_SERIAL_NO || '',
-            licenseIssueDt: formatDateYmd(detail.LICENSE_ISSUE_DT),
-            licenseExpiryDt: formatDateYmd(detail.LICENSE_EXPIRY_DT),
-            qualCertNo: detail.QUAL_CERT_NO || '',
-            bioText: detail.SELF_INTRO || '',
-            qualCertVerifyStatus: detail.QUAL_CERT_VERIFY_STATUS || 'UNVERIFIED',
-            qualCertVerifyDt: detail.QUAL_CERT_VERIFY_DT
-                ? new Date(detail.QUAL_CERT_VERIFY_DT).toISOString()
-                : null,
-            addrType: detail.ADDR_TYPE || 'HOME',
-            addrName: detail.ADDR_NAME || '',
-            zipcode: detail.ZIPCODE || '',
-            address: detail.ADDRESS || '',
-            detailAddress: detail.DETAIL_ADDRESS || ''
+            licenseType: d.LICENSE_TYPE || '',
+            licenseNo: d.LICENSE_NO || '',
+            licenseSerialNo: d.LICENSE_SERIAL_NO || '',
+            licenseIssueDt: formatDateYmd(d.LICENSE_ISSUE_DT),
+            licenseExpiryDt: formatDateYmd(d.LICENSE_EXPIRY_DT),
+            qualCertNo: d.QUAL_CERT_NO || '',
+            bioText: d.BIO_TEXT || '',
+            hasProfilePhoto: !!d.PROFILE_PHOTO_ID,
+            profilePhotoId: d.PROFILE_PHOTO_ID || null,
+            hasQualCertFile: !!d.QUAL_CERT_FILE_ID,
+            qualCertFileId: d.QUAL_CERT_FILE_ID || null,
+            qualCertVerifyStatus: d.QUAL_CERT_VERIFY_STATUS || 'UNVERIFIED',
+            qualCertVerifyDt: d.QUAL_CERT_VERIFY_DT
+                ? new Date(d.QUAL_CERT_VERIFY_DT).toISOString()
+                : null
         });
     } catch (error) {
         console.error('GET driver profile-setup error:', error);
         res.status(500).json({ error: error.message });
-    } finally {
-        if (connection) connection.release();
     }
 });
 
-/** 프로필 사진: 요청 custId와 일치하는 TB_USER 행에서 PROFILE_FILE_ID를 얻은 뒤,
- * TB_FILE_MASTER에서 GCS_BUCKET_NM·GCS_PATH를 조회해 버킷+객체 스트림으로 응답한다. */
+/** GCS 파일 ID를 통한 이미지 데이터 확인 */
 app.get('/api/driver/profile-photo', async (req, res) => {
     try {
         const { custId, fileId } = req.query;
-        if (!custId || fileId === undefined || fileId === null || String(fileId).trim() === '') {
-            return res.status(400).json({ error: 'custId and fileId are required' });
-        }
+        if (!custId || !fileId) return res.status(400).json({ error: 'custId and fileId are required' });
 
-        const custCands = custIdMatchCandidates(custId);
-        if (!custCands.length) {
-            return res.status(400).json({ error: 'custId and fileId are required' });
-        }
-
-        const cand = fileIdMatchCandidates(fileId);
-        if (!cand.length) {
-            return res.status(400).json({ error: 'custId and fileId are required' });
-        }
-        const inList = cand.map(() => '?').join(', ');
-        const custIn = custCands.map(() => '?').join(', ');
         const [rows] = await pool.execute(
-            `SELECT 1 FROM TB_USER WHERE TRIM(CUST_ID) IN (${custIn}) AND PROFILE_FILE_ID IS NOT NULL
-             AND TRIM(PROFILE_FILE_ID) IN (${inList}) LIMIT 1`,
-            [...custCands, ...cand]
+            `SELECT PROFILE_FILE_ID FROM TB_USER
+             WHERE CUST_ID = ? AND PROFILE_FILE_ID = ?`,
+            [custId, fileId]
         );
         if (!rows.length) return res.status(403).json({ error: '접근할 수 없는 파일입니다.' });
 
         const [fRows] = await pool.execute(
-            `SELECT GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT FROM TB_FILE_MASTER
-             WHERE TRIM(FILE_ID) IN (${inList}) LIMIT 1`,
-            cand
+            `SELECT GCS_PATH, ORG_FILE_NM, FILE_EXT FROM TB_FILE_MASTER WHERE FILE_ID = ?`,
+            [fileId]
         );
-        if (!fRows.length) {
-            console.warn('[profile-photo] TB_FILE_MASTER 없음 fileId 후보=', cand.join(', '));
-            return res.status(404).json({
-                error: '파일을 찾을 수 없습니다.',
-                code: 'FILE_MASTER_NOT_FOUND'
-            });
-        }
+        if (!fRows.length) return res.status(404).json({ error: '파일을 찾을 수 없습니다.' });
+        const { GCS_PATH, ORG_FILE_NM, FILE_EXT } = fRows[0];
 
-        let { GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT } = fRows[0];
-        if (Buffer.isBuffer(GCS_PATH)) GCS_PATH = GCS_PATH.toString('utf8');
-
-        const bktNm = GCS_BUCKET_NM != null ? String(GCS_BUCKET_NM).trim() : '';
-        const pathCandidates = gcsObjectPathCandidates(GCS_PATH);
-        let gcsFile = null;
-        for (const key of pathCandidates) {
-            const f = bucketForName(bktNm).file(key);
-            try {
-                const [ex] = await f.exists();
-                if (ex) {
-                    gcsFile = f;
-                    break;
-                }
-            } catch (e) {
-                console.warn('[profile-photo] GCS exists() 확인 실패:', key, e.message || e);
-            }
-        }
-        if (!gcsFile) {
-            console.warn('[profile-photo] GCS 객체 없음', {
-                fileId: cand[0],
-                bucket: bktNm || '(default)',
-                pathRaw: String(GCS_PATH).slice(0, 220),
-                tried: pathCandidates
-            });
-            return res.status(404).json({
-                error: '스토리지에 파일이 없습니다.',
-                code: 'GCS_OBJECT_NOT_FOUND'
-            });
-        }
+        const gcsFile = bucket.file(GCS_PATH);
+        const [exists] = await gcsFile.exists();
+        if (!exists) return res.status(404).json({ error: '스토리지에 파일이 없습니다.' });
 
         const ext = (FILE_EXT || 'png').toLowerCase();
         const ctMap = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' };
@@ -1073,13 +1155,402 @@ app.get('/api/user/profile-image', async (req, res) => {
     }
 });
 
-// ---------------------------------------------------------------------------
-// REST APIs (Modularized to bt_auction_trip_api.js)
-// ---------------------------------------------------------------------------
+// API: 견적 요청 저장 (POST /api/auction/request)
+app.post('/api/auction/request', async (req, res) => {
+    let connection;
+    try {
+        const {
+            custId, userId, tripTitle, startAddr, endAddr, startDt, endDt,
+            passengerCnt, totalAmount, waypoints, vehicles
+        } = req.body;
 
-// Dashboard & Confirmation APIs (Modularized to bt_auction_trip_api.js)
+        console.log('--- BUS REGISTRATION START ---');
+        console.log('REQ_BODY:', JSON.stringify(req.body, null, 2));
 
+        if (!custId || !tripTitle || !startAddr || !endAddr || !startDt || !endDt) {
+            return res.status(400).json({ error: '필수 항목이 누락되었습니다.' });
+        }
 
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        try {
+            // Helper to trim address to City/District
+            const trimAddress = (addr) => {
+                if (!addr || typeof addr !== 'string') return '';
+                return addr.trim().split(/\s+/).slice(0, 2).join(' ');
+            };
+
+            const [maxReqRows] = await connection.execute('SELECT MAX(REQ_ID) as maxId FROM TB_AUCTION_REQ');
+            const reqId = generateNextNumericId(maxReqRows[0].maxId);
+            
+            const secureRegId = String(custId || 'unknown').substring(0, 10);
+            
+            // 1. TB_AUCTION_REQ (Master) Insert
+            // END_ADDR should be the Destination (ROUND_TRIP) in waypoints
+            const destWp = waypoints && waypoints.find(wp => wp.type === 'ROUND_TRIP');
+            const targetEndAddr = destWp ? (destWp.address || destWp.addr) : endAddr;
+
+            const masterQuery = `
+                INSERT INTO TB_AUCTION_REQ (
+                    REQ_ID, TRAVELER_ID, TRIP_TITLE, START_ADDR, END_ADDR, 
+                    START_DT, END_DT, PASSENGER_CNT, DATA_STAT, EXPIRE_DT, 
+                    REQ_AMT, REG_DT, REG_ID, MOD_DT, MOD_ID
+                ) VALUES (
+                    ?, ?, ?, ?, ?, 
+                    ?, ?, ?, 'AUCTION', DATE_SUB(?, INTERVAL 1 DAY), 
+                    ?, NOW(), ?, NOW(), ?
+                )
+            `;
+            
+            await connection.execute(masterQuery, [
+                reqId, 
+                custId, 
+                tripTitle, 
+                trimAddress(startAddr), 
+                trimAddress(targetEndAddr),
+                startDt, 
+                endDt, 
+                passengerCnt || 0, 
+                startDt,
+                totalAmount || 0, 
+                secureRegId,
+                secureRegId // MOD_ID
+            ]);
+
+            // 2. TB_AUCTION_REQ_BUS (Vehicles) Insert
+            if (vehicles && vehicles.length > 0) {
+                const busQuery = `
+                    INSERT INTO TB_AUCTION_REQ_BUS (
+                        REQ_ID, REQ_BUS_SEQ, BUS_TYPE_CD, 
+                        FUEL_COST, TOLLS_AMT, RES_BUS_AMT,
+                        RES_FEE_TOTAL_AMT, RES_FEE_REFUND_AMT, RES_FEE_ATTRIBUTION_AMT,
+                        REG_DT, REG_ID, MOD_DT, MOD_ID, DATA_STAT
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?, 'AUCTION')
+                `;
+                
+                let busSeq = 1;
+                for (const bus of vehicles) {
+                    const qty = bus.qty || 0;
+                    const finalPrice = Number(bus.price) || 0;
+                    const fuelCost = Number(bus.fuelCost) || 0;
+                    const tollsAmt = 0; // 향후 자동계산 로직 추가 가능
+
+                    for (let i = 0; i < qty; i++) {
+                        const totalFee = Math.floor(finalPrice * 0.066);
+                        const refundFee = Math.floor(finalPrice * 0.055);
+                        const attributionFee = totalFee - refundFee;
+
+                        await connection.execute(busQuery, [
+                            reqId, 
+                            busSeq++, 
+                            bus.type, 
+                            fuelCost,
+                            tollsAmt,
+                            finalPrice,
+                            totalFee, 
+                            refundFee, 
+                            attributionFee, 
+                            secureRegId,
+                            secureRegId
+                        ]);
+                    }
+                }
+            }
+
+            // 3. TB_AUCTION_REQ_VIA (Unified Path) Insert
+            const viaQuery = `
+                INSERT INTO TB_AUCTION_REQ_VIA (
+                    REQ_ID, VIA_SEQ, VIA_ADDR, VIA_TYPE, STOP_TIME_MIN, REG_DT, REG_ID, MOD_DT, MOD_ID
+                ) VALUES (?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)
+            `;
+            
+            let viaSeq = 1;
+            let currentOrd = 1;
+            if (waypoints && waypoints.length > 0) {
+                for (let i = 0; i < waypoints.length; i++) {
+                    const wp = waypoints[i];
+                    
+                    let forcedType = wp.type || 'START_WAY';
+                    if (currentOrd === 1) forcedType = 'START_NODE';
+                    else if (forcedType === 'START_NODE') forcedType = 'START_WAY';
+
+                    const addr = wp.address || wp.addr;
+                    
+                    console.log(`[VIA_INSERT] Ord: ${currentOrd}, Type: ${forcedType}, Addr: ${addr}`);
+
+                    await connection.execute(viaQuery, [
+                        reqId, 
+                        viaSeq++, 
+                        addr, 
+                        forcedType, 
+                        wp.stopTime || 0, 
+                        secureRegId,
+                        secureRegId // MOD_ID
+                    ]);
+                    currentOrd++;
+                }
+            }
+
+            await connection.commit();
+            res.status(201).json({ message: '견적 요청이 성공적으로 등록되었습니다.', reqId });
+
+            // [비동기] 해당 종류의 버스를 소유한 모든 기사님께 알림톡 발송 및 로그 기록
+            (async () => {
+                try {
+                // 1. 등록한 고객의 성함 조회
+                const [uRows] = await pool.execute('SELECT USER_NM FROM TB_USER WHERE CUST_ID = ?', [custId]);
+                let userName = '고객님';
+                if (uRows.length > 0) {
+                    userName = uRows[0].USER_NM;
+                }
+
+                    // 2. 해당 차종을 보유한 기사님들의 연락처 정보 조회
+                    const busTypes = vehicles.filter(v => v.qty > 0).map(v => v.type);
+                    if (busTypes.length === 0) return;
+
+                    const [drivers] = await pool.query(`
+                        SELECT DISTINCT u.CUST_ID as driverId, u.HP_NO 
+                        FROM TB_USER u
+                        INNER JOIN TB_BUS_DRIVER_VEHICLE v ON u.CUST_ID = v.CUST_ID
+                        WHERE v.SERVICE_CLASS IN (?) AND u.USER_TYPE = 'DRIVER' AND u.USER_STAT = 'ACTIVE'
+                    `, [busTypes]);
+
+                    // 3. 각 기사님께 알림톡 발송 및 이력 저장
+                    for (const driver of drivers) {
+                        const alimContent = `[busTaams] 신규 견적 요청 알림\n\n` +
+                                            `■ 여정명: ${tripTitle}\n` +
+                                            `■ 출발지: ${startAddr}\n` +
+                                            `■ 도착지: ${targetEndAddr}\n` +
+                                            `■ 요청차량: ${busTypes.join(', ')}\n\n` +
+                                            `해당 차량의 새로운 견적 요청이 등록되었습니다. 지금 앱에서 확인 후 바로 입찰에 참여해 보세요!`;
+                        
+                        await sendAlimTalkAndLog({
+                            reqId,
+                            receiverId: driver.driverId,
+                            receiverPhone: driver.HP_NO,
+                            content: alimContent,
+                            category: 'REQ_REG'
+                        });
+                    }
+                } catch (alimErr) {
+                    console.error('Background AlimTalk sending error:', alimErr);
+                }
+            })();
+
+        } catch (dbError) {
+            await connection.rollback();
+            throw dbError;
+        } finally {
+            connection.release();
+        }
+
+    } catch (error) {
+        console.error('Auction Request Error:', error);
+        res.status(500).json({ error: '견적 요청 저장 중 오류가 발생했습니다.' });
+    }
+});
+
+// 최근 견적 요청 조회 (GET /api/auction/recent/:custId)
+app.get('/api/auction/recent/:custId', async (req, res) => {
+    try {
+        const { custId } = req.params;
+        if (!custId) {
+            return res.status(400).json({ error: 'custId is required' });
+        }
+
+        const query = `
+            SELECT 
+                REQ_ID, 
+                TRIP_TITLE, START_ADDR, END_ADDR, 
+                START_DT, END_DT, PASSENGER_CNT, DATA_STAT, REQ_AMT
+            FROM TB_AUCTION_REQ 
+            WHERE TRAVELER_ID = ? 
+            ORDER BY REG_DT DESC 
+            LIMIT 1
+        `;
+        
+        const [rows] = await pool.execute(query, [custId]);
+        
+        if (rows.length === 0) {
+            return res.status(404).json({ message: '최근 요청이 없습니다.' });
+        }
+
+        const recent = rows[0];
+
+        // 차량 정보 가져오기
+        const busQuery = `
+            SELECT BUS_TYPE_CD
+            FROM TB_AUCTION_REQ_BUS 
+            WHERE REQ_ID = ?
+        `;
+        const [buses] = await pool.execute(busQuery, [recent.REQ_ID]);
+        recent.vehicles = buses;
+
+        // 경유지 정보 가져오기
+        const viaQuery = `
+            SELECT VIA_ADDR as address, VIA_SEQ 
+            FROM TB_AUCTION_REQ_VIA 
+            WHERE REQ_ID = ? 
+            ORDER BY VIA_SEQ ASC
+        `;
+        const [vias] = await pool.execute(viaQuery, [recent.REQ_ID]);
+        recent.waypoints = vias;
+
+        res.status(200).json(recent);
+
+    } catch (error) {
+        console.error('Fetch Recent Request Error:', error);
+        res.status(500).json({ error: '최근 요청 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 사용자의 모든 견적 요청 목록 조회 (GET /api/auction/user/:custId)
+app.get('/api/auction/user/:custId', async (req, res) => {
+    try {
+        const { custId } = req.params;
+        if (!custId) {
+            return res.status(400).json({ error: 'custId is required' });
+        }
+
+        const query = `
+            SELECT 
+                r.REQ_ID, 
+                r.TRIP_TITLE, r.START_ADDR, r.END_ADDR, 
+                r.START_DT, r.END_DT, r.PASSENGER_CNT, r.DATA_STAT, r.REQ_AMT,
+                (SELECT GROUP_CONCAT(CONCAT(BUS_TYPE_CD, ':', CAST(COALESCE(RES_BUS_AMT, RES_FEE_TOTAL_AMT, 0) AS CHAR))) FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT IN ('AUCTION', 'BIDDING', 'CONFIRM')) as ALL_BUS_TYPES,
+                (SELECT COUNT(*) FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT IN ('AUCTION', 'BIDDING', 'CONFIRM')) as TOTAL_BUS_CNT,
+                (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'START_WAY' ORDER BY VIA_SEQ ASC LIMIT 1) as VIA_START_ADDR,
+                (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' ORDER BY VIA_SEQ ASC LIMIT 1) as VIA_END_ADDR
+            FROM TB_AUCTION_REQ r
+            WHERE r.TRAVELER_ID = ? 
+              AND r.DATA_STAT NOT IN ('DONE', 'TRAVELER_CANCEL')
+              AND r.START_DT > NOW()
+              AND EXISTS (
+                  SELECT 1 FROM TB_AUCTION_REQ_BUS 
+                  WHERE REQ_ID = r.REQ_ID 
+                    AND DATA_STAT IN ('AUCTION', 'BIDDING', 'CONFIRM')
+              )
+            ORDER BY r.REG_DT DESC
+        `;
+        
+        const [rows] = await pool.execute(query, [custId]);
+        
+        // 각 예약 건의 경유지 정보 추가
+        for (let row of rows) {
+            const viaQuery = `
+                SELECT VIA_ADDR as address, VIA_SEQ 
+                FROM TB_AUCTION_REQ_VIA 
+                WHERE REQ_ID = ? 
+                ORDER BY VIA_SEQ ASC
+            `;
+            const [vias] = await pool.execute(viaQuery, [row.REQ_ID]);
+            row.waypoints = vias;
+        }
+
+        res.status(200).json(rows);
+
+    } catch (error) {
+        console.error('Fetch User Requests Error:', error);
+        res.status(500).json({ error: '사용자 예약 내역 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 특정 예약 요청에 속한 버스 목록 조회 (있는 그대로)
+app.get('/api/auction/req-buses/:reqId', async (req, res) => {
+    try {
+        const { reqId } = req.params;
+        const [rows] = await pool.execute(
+            `SELECT 
+                BUS_TYPE_CD, 
+                RES_BUS_AMT as UNIT_REQ_AMT, 
+                DATA_STAT as BUS_STAT 
+             FROM TB_AUCTION_REQ_BUS 
+             WHERE REQ_ID = ? AND DATA_STAT IN ('AUCTION', 'BIDDING', 'CONFIRM')`,
+            [reqId]
+        );
+        res.status(200).json(rows);
+    } catch (error) {
+        console.error('Fetch Req Buses Error:', error);
+        res.status(500).json({ error: '버스 목록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 사용자의 확정된 예약 목록 조회 (GET /api/auction/confirmed/:custId)
+app.get('/api/auction/confirmed/:custId', async (req, res) => {
+    let connection;
+    try {
+        const { custId } = req.params;
+        if (!custId) return res.status(400).json({ error: 'custId is required' });
+
+        connection = await pool.getConnection();
+        
+        // 사용자의 '확정된' 예약 목록 조회 (TB_AUCTION_REQ 기반, DATA_STAT = 'CONFIRM')
+        // REQ_STAT이 'CONFIRM'인 경우만 도출 (요구사항 0)
+        const masterQuery = `
+            SELECT 
+                r.REQ_ID, 
+                r.TRIP_TITLE, r.START_ADDR, r.END_ADDR, 
+                r.START_DT, r.END_DT, r.PASSENGER_CNT, r.DATA_STAT, r.REQ_AMT
+            FROM TB_AUCTION_REQ r
+            WHERE r.TRAVELER_ID = ?
+              AND r.DATA_STAT = 'CONFIRM'
+              AND r.START_DT >= DATE_SUB(NOW(), INTERVAL 1 MONTH)
+            ORDER BY r.REG_DT DESC
+        `;
+        
+        const [masters] = await connection.execute(masterQuery, [custId]);
+        
+        // 2. 각 여정별로 포함된 모든 확정 차량 상세 정보 가져오기
+        for (let master of masters) {
+            const busQuery = `
+                SELECT 
+                    ab.REQ_ID,
+                    ab.REQ_BUS_SEQ,
+                    v.SERVICE_CLASS as BUS_TYPE_CD, 
+                    v.MODEL_NM as BUS_MODEL,
+                    v.VEHICLE_NO as BUS_NO,
+                    res.DRIVER_BIDDING_PRICE as FINAL_AMT,
+                    res.DATA_STAT as RES_STAT,
+                    u.USER_NM as DRIVER_NAME,
+                    u.HP_NO as DRIVER_PHONE
+                FROM TB_AUCTION_REQ_BUS ab
+                LEFT JOIN TB_BUS_RESERVATION res ON ab.REQ_ID = res.REQ_ID 
+                    AND LPAD(ab.REQ_BUS_SEQ, 10, '0') = res.REQ_BUS_SEQ
+                    AND res.DATA_STAT IN ('CONFIRM', 'TRAVELER_CANCEL')
+                LEFT JOIN TB_BUS_DRIVER_VEHICLE v ON res.BUS_ID = v.BUS_ID
+                LEFT JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID
+                WHERE ab.REQ_ID = ?
+            `;
+            const [buses] = await connection.execute(busQuery, [master.REQ_ID]);
+            
+            // 드라이버 이름 복호화 처리
+            const processedBuses = buses.map(bus => {
+                let name = bus.DRIVER_NAME || '정보 없음';
+                try { if (name.includes(':')) name = decrypt(name); } catch(e) {}
+                return { ...bus, DRIVER_NAME: name };
+            });
+
+            master.vehicles = processedBuses;
+
+            // 경유지 정보도 함께 가져오기
+            const viaQuery = `
+                SELECT VIA_ADDR as address, VIA_SEQ 
+                FROM TB_AUCTION_REQ_VIA 
+                WHERE REQ_ID = ? 
+                ORDER BY VIA_SEQ ASC
+            `;
+            const [vias] = await connection.execute(viaQuery, [master.REQ_ID]);
+            master.waypoints = vias;
+        }
+
+        res.status(200).json(masters);
+
+    } catch (error) {
+        console.error('Fetch Confirmed Requests Error:', error);
+        res.status(500).json({ error: '확정 예약 내역 조회 중 오류가 발생했습니다.' });
+    }
+});
 
 // POST /api/auction/cancel-bus
 app.post('/api/auction/cancel-bus', async (req, res) => {
@@ -1506,9 +1977,9 @@ app.post('/api/auction/bus-cancel', async (req, res) => {
         // 4. TB_BUS_RESERVATION 무효화 (기존 확정 데이터를 BUS_CHANGE로 변경)
         // 무효화 하기 전에 기사 정보를 가져와서 알림 발송 및 패널티 부여 준비
         const [driverInfoRows] = await connection.execute(
-            `SELECT r.DRIVER_ID, u.HP_NO AS DRIVER_HP_ENC, u.USER_NM AS DRIVER_NM_ENC
+            `SELECT r.DRIVER_ID, d.HP_NO as DRIVER_HP, d.USER_NM as DRIVER_NM 
              FROM TB_BUS_RESERVATION r
-             INNER JOIN TB_USER u ON r.DRIVER_ID = u.CUST_ID
+             JOIN TB_USER d ON r.DRIVER_ID = d.CUST_ID
              WHERE r.REQ_ID = ? AND r.REQ_BUS_SEQ = ? AND r.DATA_STAT NOT IN ('BUS_CHANGE', 'TRAVELER_CANCEL')`,
             [reqId, String(reqBusSeq)]
         );
@@ -1537,27 +2008,15 @@ app.post('/api/auction/bus-cancel', async (req, res) => {
         // 5. 알림톡 발송 (트랜잭션 완료 후 비동기 처리)
         if (driverInfoRows.length > 0) {
             const driver = driverInfoRows[0];
-            let driverPhone = '';
-            let driverNm = '';
             try {
-                driverPhone = driver.DRIVER_HP_ENC ? decrypt(driver.DRIVER_HP_ENC) : '';
-            } catch (_) {
-                driverPhone = '';
-            }
-            try {
-                driverNm = driver.DRIVER_NM_ENC ? decrypt(driver.DRIVER_NM_ENC) : '';
-            } catch (_) {
-                driverNm = '';
-            }
-            try {
-                await sendAlimTalkAndLog(pool, {
+                await sendAlimTalkAndLog({
                     reqId: reqId,
                     receiverId: driver.DRIVER_ID,
-                    receiverPhone: driverPhone,
+                    receiverPhone: driver.DRIVER_HP,
                     content: `[busTaams] 예약 취소 안내\n\n기사님, 예약된 여정(요청번호: ${reqId})이 고객님의 요청으로 취소되었습니다.`,
                     category: 'DRIVER_CHANGE_NOTICE'
                 });
-                console.log(`[ALIMTALK] Driver Change notification sent to ${driverNm}(${driverPhone})`);
+                console.log(`[ALIMTALK] Driver Change notification sent to ${driver.DRIVER_NM}(${driver.DRIVER_HP})`);
             } catch (alimError) {
                 console.error('[ALIMTALK ERROR] Failed to send driver change notice:', alimError.message);
             }
@@ -1963,94 +2422,38 @@ app.get('/api/auction/bid-detail/:bidId', async (req, res) => {
     }
 });
 
-function graphemeSlices(s, max) {
-    const a = [...String(s)];
-    return a.slice(0, max).join('');
-}
-
 // API: 기사 프로필 설정 (Profile Setup)
 app.post('/api/driver/profile-setup', async (req, res) => {
     let connection;
     try {
         const {
-            userId: loginUserIdBody,
-            rrn,
-            licenseType,
-            licenseNo,
-            licenseIssueDt,
-            licenseExpiryDt,
+            custId, rrn, licenseType, licenseNo, licenseIssueDt, licenseExpiryDt,
             licenseSerialNo,
-            qualCertNo,
-            bioText,
-            qualCertBase64,
-            driverName,
-            addrType,
-            addrName,
-            zipcode,
-            address,
-            detailAddress
+            qualCertNo, bioText, profilePhotoBase64, qualCertBase64,
+            phoneIdToken,
+            driverName
         } = req.body;
 
-        const loginUserId = (loginUserIdBody || '').trim();
-        if (!loginUserId) return res.status(400).json({ error: 'userId is required' });
-
-        const [uResolve] = await pool.execute(
-            `SELECT CUST_ID, USER_ID FROM TB_USER WHERE USER_ID = ? LIMIT 1`,
-            [loginUserId]
-        );
-        if (!uResolve.length) {
-            return res.status(404).json({ error: '회원을 찾을 수 없습니다.' });
-        }
-        const custId = uResolve[0].CUST_ID;
-        const loginUserIdResolved = uResolve[0].USER_ID;
-
-        const addrT = String(addrType || '').trim().toUpperCase();
-        if (!['HOME', 'OFFICE', 'OTHER'].includes(addrT)) {
-            return res.status(400).json({ error: 'addrType은 HOME, OFFICE, OTHER 중 하나여야 합니다.' });
-        }
-        const zipTrim = String(zipcode || '').trim();
-        const addrRoad = String(address || '').trim();
-        const detailRaw = detailAddress ?? '';
-        const detailTrim = graphemeSlices(detailRaw, 100).trim();
-
-        let addrNm = '';
-        if (addrT === 'OTHER') {
-            addrNm = graphemeSlices(addrName ?? '', 10).trim();
-            if (!addrNm) return res.status(400).json({ error: '주소 구분이 OTHER일 때 주소구분명칭은 필수입니다(최대 10자).' });
-        }
+        if (!custId) return res.status(400).json({ error: 'custId is required' });
 
         const rrnNorm = (rrn || '').trim();
-        const rrnM = /^(\d{6})-(\d{7})$/.exec(rrnNorm);
-        if (!rrnM) {
+        if (!/^\d{6}-\d{1}$/.test(rrnNorm)) {
             return res.status(400).json({
-                error: '주민등록번호는 앞 6자리, 하이픈, 뒤 7자리 숫자 형식으로 입력해 주세요. (예: 900101-1234567)'
+                error: '주민등록번호는 앞 6자리와 뒤 1자리만 입력해 주세요. (예: 900101-1)'
             });
         }
-        const rrnFront6 = rrnM[1];
-        const rrnBack7 = rrnM[2];
-        const rrnForVerify = `${rrnFront6}-${rrnBack7}`;
-        const rrnForEncrypt = `${rrnFront6}-${rrnBack7.charAt(0)}`;
-        const sexDigit = rrnBack7.charAt(0);
-        /** `TB_DRIVER_DETAIL.BIRTH_YMD` — 스키마 `varchar(6)` (주민 앞자리와 동일한 YYMMDD) */
-        const birthYmdYyMmDd = rrnFront6;
 
         const phoneVerify = await verifyFirebasePhoneIdTokenIfRequired(phoneIdToken);
         if (!phoneVerify.ok) {
             return res.status(400).json({ error: phoneVerify.error });
         }
 
-        connection = await pool.getConnection();
-        await ensureDriverDetailProfileColumns(connection);
-        await ensureDriverDocsFileSizeColumn(connection);
-
-        const hasLicenseCols = await tableColumnExists(connection, 'TB_DRIVER_DETAIL', 'LICENSE_TYPE');
-        const existingDriverRow = hasLicenseCols
-            ? await fetchDriverDetailLicenseRow(connection, loginUserIdResolved)
-            : null;
+        // 기존 기사 정보 비교 생략 (필요 시 TB_DRIVER_DETAIL 조회로 대체 가능)
+        const existingDriverRow = null; 
 
         const extVerify = await runDriverVerificationsForProfileSetup({
             driverName: (driverName || '').trim(),
-            rrn: rrnForVerify,
+            rrn: rrnNorm,
             licenseNo,
             licenseSerialNo,
             qualCertNo,
@@ -2060,235 +2463,107 @@ app.post('/api/driver/profile-setup', async (req, res) => {
             existingRow: existingDriverRow
         });
         if (!extVerify.ok) {
-            connection.release();
             return res.status(400).json({
                 error: extVerify.message || '면허·자격 진위 확인에 실패했습니다.',
                 detail: extVerify.detail
             });
         }
 
+        // 자격번호 검증 상태 계산
+        // tsOn=false(비활성) → SKIPPED, tsOn+unchanged → 기존 DB 값 유지, tsOn+신규/변경 검증 통과 → VERIFIED
         const tsOn = extVerify.results?.qual?.tsVerifyEnabled ?? false;
-        const skipTs =
-            extVerify.results?.qual?.skipped && extVerify.results?.qual?.reason === 'unchanged_from_db';
+        const skipTs = extVerify.results?.qual?.skipped && extVerify.results?.qual?.reason === 'unchanged_from_db';
         let qualCertVerifyStatus;
         if (!tsOn) {
             qualCertVerifyStatus = 'SKIPPED';
         } else if (skipTs) {
+            // 자격번호 변경 없음 — 기존 상태 유지 (없으면 VERIFIED로 간주: 이미 통과된 이력)
             qualCertVerifyStatus = existingDriverRow?.QUAL_CERT_VERIFY_STATUS || 'VERIFIED';
         } else {
+            // TS API 실제 검증 통과
             qualCertVerifyStatus = 'VERIFIED';
         }
         const qualCertVerifyDt = qualCertVerifyStatus === 'VERIFIED' ? new Date() : null;
 
+        connection = await pool.getConnection();
+
+        /* DDL은 암시적 커밋이 있을 수 있어 트랜잭션 시작 전에 실행 */
+        await ensureDriverInfoTable(connection);
+        await ensureTbFileMasterTable(connection);
+        await ensureDriverInfoLicenseSerialColumn(connection);
+        await ensureDriverInfoQualVerifyColumns(connection);
+
         await connection.beginTransaction();
 
         try {
-            const encryptedRrn = encrypt(rrnForEncrypt);
-            let latestQualSeqPadded = null;
+            const encryptedRrn = encrypt(rrnNorm);
+            let profilePhotoId = null;
+            let qualCertId = null;
 
-            await connection.execute(
-                `UPDATE TB_USER SET RESIDENT_NO_ENC = ? WHERE CUST_ID = ?`,
-                [encryptedRrn, custId]
-            );
+            const ym = new Date().toISOString().slice(0, 7);
 
-            const detailAddrNameDb = addrT === 'OTHER' ? addrNm : null;
+            // 1. 프로필 사진 — ARCHITECTURE: gs://bustaams-secure-data/profiles/driver/{YYYY-MM}/
+            if (profilePhotoBase64 && profilePhotoBase64.startsWith('data:image')) {
+                profilePhotoId = generateNextNumericId('0', 20);
+                const buffer = Buffer.from(profilePhotoBase64.replace(/^data:image\/\w+;base64,/, ""), 'base64');
+                const gcsPath = `profiles/driver/${ym}/${profilePhotoId}.png`;
+                const file = bucket.file(gcsPath);
+                await file.save(buffer, { metadata: { contentType: 'image/png' }, resumable: false });
 
-            if (!hasLicenseCols) {
+                await connection.execute(`
+                    INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT)
+                    VALUES (?, 'DRIVER_PROFILE_PHOTO', ?, ?, 'profile.png', 'png', ?, NOW())
+                `, [profilePhotoId, bucketName, gcsPath, buffer.length]);
+            }
+
+            // 2. 운송종사자 자격증 사본 — ARCHITECTURE: gs://bustaams-secure-data/certificates/bus_licenses/
+            if (qualCertBase64 && qualCertBase64.startsWith('data:')) {
+                qualCertId = generateNextNumericId('0', 20);
+                const isPdf = qualCertBase64.includes('pdf');
+                const ext = isPdf ? 'pdf' : 'png';
+                const buffer = Buffer.from(qualCertBase64.replace(/^data:[\w\/]+;base64,/, ""), 'base64');
+                const gcsPath = `certificates/bus_licenses/${ym}/${qualCertId}.${ext}`;
+                const file = bucket.file(gcsPath);
+                await file.save(buffer, { metadata: { contentType: isPdf ? 'application/pdf' : 'image/png' }, resumable: false });
+
+                await connection.execute(`
+                    INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT)
+                    VALUES (?, 'BUS_QUAL_CERT', ?, ?, ?, ?, ?, NOW())
+                `, [qualCertId, bucketName, gcsPath, `qual_cert.${ext}`, ext, buffer.length]);
+            }
+
+            // 3. TB_USER 프로필 사진 업데이트
+            if (profilePhotoId) {
                 await connection.execute(
-                    `
-                    INSERT INTO TB_DRIVER_DETAIL (
-                        USER_ID, ZIPCODE, ADDRESS, DETAIL_ADDRESS, ADDR_TYPE, ADDR_NAME,
-                        BIRTH_YMD, SEX, SELF_INTRO
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE
-                        ZIPCODE = VALUES(ZIPCODE),
-                        ADDRESS = VALUES(ADDRESS),
-                        DETAIL_ADDRESS = VALUES(DETAIL_ADDRESS),
-                        ADDR_TYPE = VALUES(ADDR_TYPE),
-                        ADDR_NAME = VALUES(ADDR_NAME),
-                        BIRTH_YMD = VALUES(BIRTH_YMD),
-                        SEX = VALUES(SEX),
-                        SELF_INTRO = VALUES(SELF_INTRO),
-                        MOD_DT = NOW()
-                    `,
-                    [
-                        loginUserIdResolved,
-                        zipTrim || null,
-                        addrRoad || null,
-                        detailTrim || null,
-                        addrT,
-                        detailAddrNameDb,
-                        birthYmdYyMmDd || null,
-                        sexDigit,
-                        bioText ?? ''
-                    ]
-                );
-            } else {
-                await connection.execute(
-                    `
-                    INSERT INTO TB_DRIVER_DETAIL (
-                        USER_ID, ZIPCODE, ADDRESS, DETAIL_ADDRESS, ADDR_TYPE, ADDR_NAME,
-                        BIRTH_YMD, SEX, SELF_INTRO,
-                        LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO, LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT,
-                        QUAL_CERT_NO, QUAL_CERT_VERIFY_STATUS, QUAL_CERT_VERIFY_DT
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE
-                        ZIPCODE = VALUES(ZIPCODE),
-                        ADDRESS = VALUES(ADDRESS),
-                        DETAIL_ADDRESS = VALUES(DETAIL_ADDRESS),
-                        ADDR_TYPE = VALUES(ADDR_TYPE),
-                        ADDR_NAME = VALUES(ADDR_NAME),
-                        BIRTH_YMD = VALUES(BIRTH_YMD),
-                        SEX = VALUES(SEX),
-                        SELF_INTRO = VALUES(SELF_INTRO),
-                        LICENSE_TYPE = VALUES(LICENSE_TYPE),
-                        LICENSE_NO = VALUES(LICENSE_NO),
-                        LICENSE_SERIAL_NO = VALUES(LICENSE_SERIAL_NO),
-                        LICENSE_ISSUE_DT = VALUES(LICENSE_ISSUE_DT),
-                        LICENSE_EXPIRY_DT = VALUES(LICENSE_EXPIRY_DT),
-                        QUAL_CERT_NO = VALUES(QUAL_CERT_NO),
-                        QUAL_CERT_VERIFY_STATUS = VALUES(QUAL_CERT_VERIFY_STATUS),
-                        QUAL_CERT_VERIFY_DT = COALESCE(VALUES(QUAL_CERT_VERIFY_DT), QUAL_CERT_VERIFY_DT),
-                        MOD_DT = NOW()
-                    `,
-                    [
-                        loginUserIdResolved,
-                        zipTrim || null,
-                        addrRoad || null,
-                        detailTrim || null,
-                        addrT,
-                        detailAddrNameDb,
-                        birthYmdYyMmDd || null,
-                        sexDigit,
-                        bioText ?? '',
-                        licenseType,
-                        licenseNo,
-                        licenseSerialNo || null,
-                        licenseIssueDt,
-                        licenseExpiryDt,
-                        qualCertNo,
-                        qualCertVerifyStatus,
-                        qualCertVerifyDt
-                    ]
+                    `UPDATE TB_USER SET PROFILE_FILE_ID = ?, MOD_DT = NOW() WHERE CUST_ID = ?`,
+                    [profilePhotoId, custId]
                 );
             }
 
-            if (qualCertBase64 && String(qualCertBase64).startsWith('data:')) {
-                const parsed = parseDataUrlPayload(String(qualCertBase64), 'qualification');
-                if (parsed?.buffer?.length) {
-                    const MAX_DOC = 10 * 1024 * 1024;
-                    if (parsed.buffer.length > MAX_DOC) {
-                        await connection.rollback();
-                        return res.status(400).json({ error: '자격증 파일은 10MB를 초과할 수 없습니다.' });
-                    }
-
-                    let nextSeq = 1;
-                    try {
-                        const [sq] = await connection.execute(
-                            `SELECT COALESCE(MAX(DOC_TYPE_SEQ), 0) + 1 AS n
-                             FROM TB_DRIVER_DOCS WHERE CUST_ID = ? AND DOC_TYPE = ?`,
-                            [custId, QUALIFICATION_DOC_TYPE]
-                        );
-                        nextSeq = sq[0]?.n != null ? Number(sq[0].n) : 1;
-                    } catch (seqErr) {
-                        console.error(seqErr);
-                    }
-
-                    const seqPadded = String(nextSeq).padStart(20, '0');
-                    const gcsRelPath = `QUALIFICATION/${seqPadded}.${parsed.ext}`;
-                    const orgBase = path.parse(parsed.orgName || `qual.${parsed.ext}`).name || 'qual';
-
-                    const qualBuckets = bucketForName(DRIVER_QUAL_GCS_BUCKET);
-                    const gcsFile = qualBuckets.file(gcsRelPath);
-                    await gcsFile.save(parsed.buffer, {
-                        metadata: { contentType: parsed.mime || 'application/octet-stream' },
-                        resumable: false
-                    });
-
-                    await connection.execute(
-                        `
-                        INSERT INTO TB_DRIVER_DOCS (
-                            CUST_ID, DOC_TYPE, DOC_TYPE_SEQ, GCS_BUCKET_NM, GCS_PATH,
-                            ORG_FILE_NM, ORG_FILE_EXT, FILE_SIZE, REG_DT
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
-                        `,
-                        [
-                            custId,
-                            QUALIFICATION_DOC_TYPE,
-                            nextSeq,
-                            DRIVER_QUAL_GCS_BUCKET,
-                            gcsRelPath,
-                            orgBase,
-                            parsed.ext,
-                            parsed.buffer.length
-                        ]
-                    );
-                    latestQualSeqPadded = seqPadded;
-                }
-            }
-
-            if (!latestQualSeqPadded && qualCertBase64) {
-                const [lq] = await connection.execute(
-                    `SELECT DOC_TYPE_SEQ FROM TB_DRIVER_DOCS
-                     WHERE CUST_ID = ? AND DOC_TYPE = ? ORDER BY DOC_TYPE_SEQ DESC LIMIT 1`,
-                    [custId, QUALIFICATION_DOC_TYPE]
-                );
-                if (lq.length) latestQualSeqPadded = String(lq[0].DOC_TYPE_SEQ).padStart(20, '0');
-            }
+            // 4. TB_DRIVER_DETAIL 저장 (Upsert)
+            const detailQuery = `
+                INSERT INTO TB_DRIVER_DETAIL (
+                    USER_ID, LICENSE_NO, SELF_INTRO, REG_ID, MOD_ID
+                ) VALUES (?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE 
+                    LICENSE_NO = VALUES(LICENSE_NO),
+                    SELF_INTRO = VALUES(SELF_INTRO),
+                    MOD_ID = VALUES(MOD_ID),
+                    MOD_DT = NOW()
+            `;
+            await connection.execute(detailQuery, [custId, licenseNo || '', bioText || '', custId, custId]);
 
             await connection.commit();
-
-            let qualCertFileIdOut = latestQualSeqPadded;
-            if (!qualCertFileIdOut) {
-                const [lqAfter] = await pool.execute(
-                    `SELECT DOC_TYPE_SEQ FROM TB_DRIVER_DOCS
-                     WHERE CUST_ID = ? AND DOC_TYPE = ? ORDER BY DOC_TYPE_SEQ DESC LIMIT 1`,
-                    [custId, QUALIFICATION_DOC_TYPE]
-                );
-                if (lqAfter.length) qualCertFileIdOut = String(lqAfter[0].DOC_TYPE_SEQ).padStart(20, '0');
-            }
-
-            let qualPostMeta = {};
-            if (qualCertFileIdOut) {
-                try {
-                    const [metaRows] = await pool.execute(
-                        `SELECT ORG_FILE_NM, ORG_FILE_EXT, FILE_SIZE FROM TB_DRIVER_DOCS
-                         WHERE CUST_ID = ? AND DOC_TYPE = ? AND LPAD(DOC_TYPE_SEQ, 20, '0') = ? LIMIT 1`,
-                        [custId, QUALIFICATION_DOC_TYPE, qualCertFileIdOut]
-                    );
-                    if (metaRows[0]) {
-                        const ex = String(metaRows[0].ORG_FILE_EXT || '')
-                            .replace(/^\./, '')
-                            .trim()
-                            .toLowerCase();
-                        qualPostMeta = {
-                            hasQualCertFile: true,
-                            qualCertOrgFileNm:
-                                metaRows[0].ORG_FILE_NM != null
-                                    ? String(metaRows[0].ORG_FILE_NM).trim()
-                                    : '',
-                            qualCertFileExt: ex,
-                            qualCertFileSize:
-                                metaRows[0].FILE_SIZE != null ? Number(metaRows[0].FILE_SIZE) : null
-                        };
-                    }
-                } catch (_) {
-                    /* ignore */
-                }
-            }
-
             res.status(200).json({
-                message: '기사 프로필 설정이 완료되었습니다.',
+                message: "기사 프로필 설정이 완료되었습니다.",
                 qualCertVerifyStatus,
-                qualCertFileId: qualCertFileIdOut || null,
-                custId,
-                ...qualPostMeta
+                qualCertFileId: qualCertId || null
             });
         } catch (error) {
             if (connection) await connection.rollback();
             throw error;
-        } finally {
-            connection.release();
+        } finally { 
+            if (connection) connection.release(); 
         }
     } catch (error) {
         console.error('Profile setup error:', error);
@@ -2619,23 +2894,7 @@ app.get('/api/common-codes', async (req, res) => {
         const { grpCd } = req.query;
         if (!grpCd) return res.status(400).json({ error: 'grpCd is required' });
         connection = await pool.getConnection();
-        const autoEnsure =
-            ['1', 'true', 'yes'].includes(String(process.env.BUSTAAMS_AUTO_ENSURE_TABLES || '').toLowerCase());
-        if (autoEnsure) {
-            try {
-                await ensureTbCommonCodeTable(connection);
-            } catch (e) {
-                const denied =
-                    e.errno === 1142 ||
-                    e.code === 'ER_TABLEACCESS_DENIED_ERROR' ||
-                    (e.sqlMessage || e.message || '').includes('CREATE command denied');
-                if (!denied) throw e;
-                console.warn(
-                    '[api/common-codes] ensureTbCommonCodeTable skipped (no CREATE privilege):',
-                    e.sqlMessage || e.message
-                );
-            }
-        }
+        await ensureTbCommonCodeTable(connection);
         await seedBusTypeCodesIfEmpty(connection);
         const [rows] = await connection.execute(
             `SELECT DTL_CD AS dtlCd, CD_NM_KO AS cdNmKo, CD_FNUM AS cdFnum
@@ -2665,28 +2924,32 @@ app.get('/api/driver/qual-cert/meta', async (req, res) => {
         connection = await pool.getConnection();
         const ok = await canAccessQualCertFile(connection, custId, fileId);
         if (!ok) return res.status(403).json({ error: '접근할 수 없는 파일입니다.' });
-        const doc = await fetchQualCertDocRow(connection, custId, fileId);
-        if (!doc) return res.status(404).json({ error: '파일 메타를 찾을 수 없습니다.' });
-        const sizeBytes = Number(doc.FILE_SIZE) || 0;
-        const ext = (doc.ORG_FILE_EXT || '').toLowerCase().replace(/^\./, '');
+        const [rows] = await connection.execute(
+            `SELECT FILE_ID AS fileId,
+                    FILE_CATEGORY AS fileCategory,
+                    ORG_FILE_NM  AS orgFileNm,
+                    FILE_EXT     AS fileExt,
+                    FILE_SIZE    AS fileSizeBytes,
+                    DATE_FORMAT(REG_DT, '%Y년 %m월 %d일') AS regDtLabel
+             FROM TB_FILE_MASTER WHERE FILE_ID = ?`,
+            [fileId]
+        );
+        if (rows.length === 0) return res.status(404).json({ error: '파일 메타를 찾을 수 없습니다.' });
+        const row = rows[0];
+        const sizeBytes = Number(row.fileSizeBytes) || 0;
         const fileSizeLabel = sizeBytes >= 1048576
             ? `${(sizeBytes / 1048576).toFixed(1)}MB`
             : sizeBytes >= 1024
               ? `${(sizeBytes / 1024).toFixed(0)}KB`
               : `${sizeBytes}B`;
-        let regDtLabel = '';
-        if (doc.REG_DT && !Number.isNaN(new Date(doc.REG_DT).getTime())) {
-            const dt = new Date(doc.REG_DT);
-            regDtLabel = `${dt.getFullYear()}년 ${String(dt.getMonth() + 1).padStart(2, '0')}월 ${String(dt.getDate()).padStart(2, '0')}일`;
-        }
         res.json({
-            fileId: String(fileId),
-            fileCategory: 'BUS_QUAL_CERT',
-            orgFileNm: doc.ORG_FILE_NM || '',
-            fileExt: ext,
+            fileId: row.fileId,
+            fileCategory: row.fileCategory,
+            orgFileNm: row.orgFileNm,
+            fileExt: row.fileExt,
             fileSizeBytes: sizeBytes,
             fileSizeLabel,
-            regDtLabel
+            regDtLabel: row.regDtLabel,
         });
     } catch (e) {
         console.error('qual-cert/meta:', e);
@@ -2708,14 +2971,16 @@ app.get('/api/driver/qual-cert/file', async (req, res) => {
         connection = await pool.getConnection();
         const ok = await canAccessQualCertFile(connection, custId, fileId);
         if (!ok) return res.status(403).json({ error: '접근할 수 없는 파일입니다.' });
-        const doc = await fetchQualCertDocRow(connection, custId, fileId);
-        if (!doc) return res.status(404).json({ error: '파일을 찾을 수 없습니다.' });
-        const { GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, ORG_FILE_EXT } = doc;
-        const gcsFile = bucketForName(GCS_BUCKET_NM).file(GCS_PATH);
+        const [rows] = await connection.execute(
+            `SELECT GCS_PATH, ORG_FILE_NM, FILE_EXT FROM TB_FILE_MASTER WHERE FILE_ID = ?`,
+            [fileId]
+        );
+        if (rows.length === 0) return res.status(404).json({ error: '파일을 찾을 수 없습니다.' });
+        const { GCS_PATH, ORG_FILE_NM, FILE_EXT } = rows[0];
+        const gcsFile = bucket.file(GCS_PATH);
         const [exists] = await gcsFile.exists();
         if (!exists) return res.status(404).json({ error: '스토리지에 파일이 없습니다.' });
-        const extRaw = ((ORG_FILE_EXT || '').startsWith('.') ? (ORG_FILE_EXT || '').slice(1) : (ORG_FILE_EXT || '')).toLowerCase();
-        const ext = extRaw.replace(/^\./, '');
+        const ext = (FILE_EXT || '').toLowerCase();
         let ct = 'application/octet-stream';
         if (ext === 'pdf') ct = 'application/pdf';
         else if (ext === 'png') ct = 'image/png';
@@ -2748,13 +3013,16 @@ app.get('/api/driver/qual-cert/download', async (req, res) => {
         connection = await pool.getConnection();
         const ok = await canAccessQualCertFile(connection, custId, fileId);
         if (!ok) return res.status(403).json({ error: '접근할 수 없는 파일입니다.' });
-        const doc = await fetchQualCertDocRow(connection, custId, fileId);
-        if (!doc) return res.status(404).json({ error: '파일을 찾을 수 없습니다.' });
-        const { GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, ORG_FILE_EXT } = doc;
-        const gcsFile = bucketForName(GCS_BUCKET_NM).file(GCS_PATH);
+        const [rows] = await connection.execute(
+            `SELECT GCS_PATH, ORG_FILE_NM, FILE_EXT FROM TB_FILE_MASTER WHERE FILE_ID = ?`,
+            [fileId]
+        );
+        if (rows.length === 0) return res.status(404).json({ error: '파일을 찾을 수 없습니다.' });
+        const { GCS_PATH, ORG_FILE_NM, FILE_EXT } = rows[0];
+        const gcsFile = bucket.file(GCS_PATH);
         const [exists] = await gcsFile.exists();
         if (!exists) return res.status(404).json({ error: '스토리지에 파일이 없습니다.' });
-        const safeNm = `${ORG_FILE_NM || 'qual_cert'}.${((ORG_FILE_EXT || '').replace(/^\./, '') || 'file')}`;
+        const safeNm = `${ORG_FILE_NM || 'qual_cert'}.${FILE_EXT || 'file'}`;
         res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(safeNm)}`);
         gcsFile.createReadStream().on('error', (err) => {
             console.error('GCS download (qual-cert):', err);
@@ -2850,12 +3118,12 @@ app.get('/api/common-view/bus-document/download', async (req, res) => {
         const ok = await canAccessBusFile(connection, custId, fileId);
         if (!ok) return res.status(403).json({ error: '접근할 수 없는 파일입니다.' });
         const [rows] = await connection.execute(
-            `SELECT GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT FROM TB_FILE_MASTER WHERE FILE_ID = ?`,
+            `SELECT GCS_PATH, ORG_FILE_NM, FILE_EXT FROM TB_FILE_MASTER WHERE FILE_ID = ?`,
             [fileId]
         );
         if (rows.length === 0) return res.status(404).json({ error: '파일을 찾을 수 없습니다.' });
-        const { GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT } = rows[0];
-        const gcsFile = bucketForName(GCS_BUCKET_NM).file(GCS_PATH);
+        const { GCS_PATH, ORG_FILE_NM, FILE_EXT } = rows[0];
+        const gcsFile = bucket.file(GCS_PATH);
         const [exists] = await gcsFile.exists();
         if (!exists) return res.status(404).json({ error: '스토리지에 파일이 없습니다.' });
 
@@ -2881,7 +3149,7 @@ app.get('/api/common-view/bus-document/download', async (req, res) => {
     }
 });
 
-// 기사 소유 차량 조회
+// 기사 소유 차량 조회 (모달 기본값)
 app.get('/api/driver/bus', async (req, res) => {
     let connection;
     try {
@@ -2905,7 +3173,6 @@ app.get('/api/driver/bus', async (req, res) => {
         res.json({
             bus: {
                 busId: row.busId,
-                custId: row.custId,
                 vehicleNo: row.VEHICLE_NO,
                 modelNm: row.MODEL_NM,
                 manufactureYear: row.MANUFACTURE_YEAR,
@@ -2971,143 +3238,6 @@ app.get('/api/driver/bus-documents/file', async (req, res) => {
     }
 });
 
-/**
- * CommonView — 청약 취소 증빙 메타 (최신 TB_USER_CANCEL_HIST 의 REASON_DOC_FILE_NM 에 등록된 파일만)
- * GET /api/common-view/driver-cancel-proof/meta?custId=&fileId=
- */
-app.get('/api/common-view/driver-cancel-proof/meta', async (req, res) => {
-    let connection;
-    try {
-        const { custId, fileId } = req.query;
-        if (!custId || !fileId) return res.status(400).json({ error: 'custId and fileId are required' });
-        connection = await pool.getConnection();
-        const ok = await canAccessDriverCancelProofFile(connection, custId, fileId);
-        if (!ok) return res.status(403).json({ error: '접근할 수 없는 파일입니다.' });
-        const [rows] = await connection.execute(
-            `SELECT FILE_ID AS fileId,
-                    FILE_CATEGORY AS fileCategory,
-                    ORG_FILE_NM  AS orgFileNm,
-                    FILE_EXT     AS fileExt,
-                    FILE_SIZE    AS fileSizeBytes,
-                    DATE_FORMAT(REG_DT, '%Y년 %m월 %d일') AS regDtLabel
-             FROM TB_FILE_MASTER WHERE FILE_ID = ?`,
-            [fileId]
-        );
-        if (rows.length === 0) return res.status(404).json({ error: '파일 메타를 찾을 수 없습니다.' });
-        const row = rows[0];
-        const sizeBytes = Number(row.fileSizeBytes) || 0;
-        const fileSizeLabel = sizeBytes >= 1048576
-            ? `${(sizeBytes / 1048576).toFixed(1)}MB`
-            : sizeBytes >= 1024
-              ? `${(sizeBytes / 1024).toFixed(0)}KB`
-              : `${sizeBytes}B`;
-        res.json({
-            fileId: row.fileId,
-            fileCategory: row.fileCategory,
-            orgFileNm: row.orgFileNm,
-            fileExt: row.fileExt,
-            fileSizeBytes: sizeBytes,
-            fileSizeLabel,
-            regDtLabel: row.regDtLabel,
-        });
-    } catch (e) {
-        console.error('common-view/driver-cancel-proof/meta:', e);
-        res.status(500).json({ error: e.message });
-    } finally {
-        if (connection) connection.release();
-    }
-});
-
-/**
- * CommonView — 청약 취소 증빙 다운로드
- * GET /api/common-view/driver-cancel-proof/download?custId=&fileId=
- */
-app.get('/api/common-view/driver-cancel-proof/download', async (req, res) => {
-    let connection;
-    try {
-        const { custId, fileId } = req.query;
-        if (!custId || !fileId) return res.status(400).json({ error: 'custId and fileId are required' });
-        connection = await pool.getConnection();
-        const ok = await canAccessDriverCancelProofFile(connection, custId, fileId);
-        if (!ok) return res.status(403).json({ error: '접근할 수 없는 파일입니다.' });
-        const [rows] = await connection.execute(
-            `SELECT GCS_BUCKET_NM, GCS_PATH, FILE_CATEGORY, ORG_FILE_NM, FILE_EXT FROM TB_FILE_MASTER WHERE FILE_ID = ?`,
-            [fileId]
-        );
-        if (rows.length === 0) return res.status(404).json({ error: '파일을 찾을 수 없습니다.' });
-        const row = rows[0];
-        const objectKey = resolveGcsObjectKey(row, fileId);
-        const gcsFile = bucketForName(row.GCS_BUCKET_NM).file(objectKey);
-        const [exists] = await gcsFile.exists();
-        if (!exists) return res.status(404).json({ error: '스토리지에 파일이 없습니다.' });
-
-        const ext = (row.FILE_EXT || '').toLowerCase();
-        let ct = 'application/octet-stream';
-        if (ext === 'pdf') ct = 'application/pdf';
-        else if (ext === 'png') ct = 'image/png';
-        else if (ext === 'jpg' || ext === 'jpeg') ct = 'image/jpeg';
-        else if (ext === 'webp') ct = 'image/webp';
-
-        const downloadName = `${row.ORG_FILE_NM || 'file'}.${ext}`;
-        res.setHeader('Content-Type', ct);
-        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(downloadName)}`);
-        gcsFile.createReadStream().on('error', (err) => {
-            console.error('GCS read (driver-cancel-proof download):', err);
-            if (!res.headersSent) res.status(500).end();
-        }).pipe(res);
-    } catch (e) {
-        console.error('common-view/driver-cancel-proof/download:', e);
-        res.status(500).json({ error: e.message });
-    } finally {
-        if (connection) connection.release();
-    }
-});
-
-/**
- * 청약 취소 증빙 스트리밍 (CommonView iframe/img)
- * GET /api/driver/driver-cancel-proof/file?custId=&fileId=
- */
-app.get('/api/driver/driver-cancel-proof/file', async (req, res) => {
-    let connection;
-    try {
-        const { custId, fileId } = req.query;
-        if (!custId || !fileId) return res.status(400).json({ error: 'custId and fileId are required' });
-        connection = await pool.getConnection();
-        const ok = await canAccessDriverCancelProofFile(connection, custId, fileId);
-        if (!ok) return res.status(403).json({ error: '접근할 수 없는 파일입니다.' });
-
-        const [rows] = await connection.execute(
-            `SELECT GCS_PATH, FILE_CATEGORY, ORG_FILE_NM, FILE_EXT, GCS_BUCKET_NM FROM TB_FILE_MASTER WHERE FILE_ID = ?`,
-            [fileId]
-        );
-        if (rows.length === 0) return res.status(404).json({ error: '파일을 찾을 수 없습니다.' });
-        const row = rows[0];
-        const objectKey = resolveGcsObjectKey(row, fileId);
-        const gcsFile = bucketForName(row.GCS_BUCKET_NM).file(objectKey);
-        const [exists] = await gcsFile.exists();
-        if (!exists) return res.status(404).json({ error: '스토리지에 파일이 없습니다.' });
-
-        const ext = (row.FILE_EXT || '').toLowerCase();
-        let ct = 'application/octet-stream';
-        if (ext === 'pdf') ct = 'application/pdf';
-        else if (ext === 'png') ct = 'image/png';
-        else if (ext === 'jpg' || ext === 'jpeg') ct = 'image/jpeg';
-        else if (ext === 'webp') ct = 'image/webp';
-
-        res.setHeader('Content-Type', ct);
-        res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(row.ORG_FILE_NM || 'file')}`);
-        gcsFile.createReadStream().on('error', (err) => {
-            console.error('GCS read (driver-cancel-proof):', err);
-            if (!res.headersSent) res.status(500).end();
-        }).pipe(res);
-    } catch (e) {
-        console.error('driver-cancel-proof/file:', e);
-        res.status(500).json({ error: e.message });
-    } finally {
-        if (connection) connection.release();
-    }
-});
-
 // CustomerDashboard API
 app.get('/api/customer/active-request', async (req, res) => {
     const { custId } = req.query;
@@ -3164,6 +3294,7 @@ app.post('/api/driver/bus', async (req, res) => {
         const [maxRows] = await connection.execute('SELECT MAX(BUS_ID) as maxId FROM TB_BUS_DRIVER_VEHICLE');
         const busId = generateNextNumericId(maxRows[0].maxId || '0', 10);
 
+        const ym = new Date().toISOString().slice(0, 7);
         const adasYn = hasAdas === true || hasAdas === 'Y' ? 'Y' : 'N';
         const amenObj = { ...(amenities || {}), adas: adasYn === 'Y' };
 
@@ -3183,11 +3314,12 @@ app.post('/api/driver/bus', async (req, res) => {
 
             const fileIds = {};
             const docMap = [
-                { key: 'biz', field: businessLicenseBase64, name: businessLicenseFileName, cat: BUS_DOC_FILE_CATEGORY.BIZ_REG, col: 'BIZ_REG_FILE_ID' },
-                { key: 'trans', field: transportationLicenseBase64, name: transportationLicenseFileName, cat: BUS_DOC_FILE_CATEGORY.TRANSPORT_PERMIT, col: 'TRANS_LIC_FILE_ID' },
-                { key: 'ins', field: insurancePolicyBase64, name: insurancePolicyFileName, cat: BUS_DOC_FILE_CATEGORY.INSURANCE, col: 'INS_CERT_FILE_ID' },
+                { key: 'biz', field: businessLicenseBase64, name: businessLicenseFileName, cat: 'Business_License', col: 'BIZ_REG_FILE_ID' },
+                { key: 'trans', field: transportationLicenseBase64, name: transportationLicenseFileName, cat: 'Transportation_Business_License', col: 'TRANS_LIC_FILE_ID' },
+                { key: 'ins', field: insurancePolicyBase64, name: insurancePolicyFileName, cat: 'Insurance_Policy', col: 'INS_CERT_FILE_ID' }
             ];
 
+            // 최신 FILE_ID 시드
             const [maxFileRows] = await connection.execute('SELECT MAX(FILE_ID) as maxId FROM TB_FILE_MASTER');
             let currentMaxFileId = maxFileRows[0].maxId || '00000000000000000000';
 
@@ -3195,21 +3327,21 @@ app.post('/api/driver/bus', async (req, res) => {
                 if (!d.field || typeof d.field !== 'string') continue;
                 const parsed = parseDataUrlPayload(d.field, d.name || 'doc');
                 if (!parsed) continue;
-
+                
                 const fid = generateNextNumericId(currentMaxFileId, 20);
                 currentMaxFileId = fid;
-                const { orgFileNm, fileExt } = orgFileNmAndExt(d.name, parsed);
-                const gcsPath = `${d.cat}/${custId}/${fid}.${fileExt}`;
-
-                await insertBusFileMaster(connection, {
+                
+                const gcsPath = `vehicle_docs/${ym}/${fid}.${parsed.ext}`;
+                await insertBusFileAndHist(connection, {
+                    busId: busId,
                     fileId: fid,
                     category: d.cat,
                     gcsPath,
                     buffer: parsed.buffer,
-                    orgFileNm,
-                    fileExt,
+                    orgFileNm: parsed.orgName || `doc.${parsed.ext}`,
+                    fileExt: parsed.ext,
                     fileSize: parsed.buffer.length,
-                    contentType: parsed.mime,
+                    contentType: parsed.mime
                 });
                 fileIds[d.key] = fid;
                 await connection.execute(
@@ -3227,21 +3359,21 @@ app.post('/api/driver/bus', async (req, res) => {
                     if (!raw) continue;
                     const parsed = parseDataUrlPayload(typeof raw === 'string' && raw.startsWith('data:') ? raw : `data:image/jpeg;base64,${raw}`, nm);
                     if (!parsed) continue;
-
+                    
                     const fid = generateNextNumericId(currentMaxFileId, 20);
                     currentMaxFileId = fid;
-                    const { orgFileNm, fileExt } = orgFileNmAndExt(nm, parsed);
-                    const gcsPath = `${BUS_PHOTO_FILE_CATEGORY}/${custId}/${fid}.${fileExt}`;
-
-                    await insertBusFileMaster(connection, {
+                    
+                    const gcsPath = `vehicle_docs/${ym}/bus_photo_${fid}.${parsed.ext}`;
+                    await insertBusFileAndHist(connection, {
+                        busId: busId,
                         fileId: fid,
-                        category: BUS_PHOTO_FILE_CATEGORY,
+                        category: 'BUS_PHOTO',
                         gcsPath,
                         buffer: parsed.buffer,
-                        orgFileNm,
-                        fileExt,
+                        orgFileNm: parsed.orgName || `photo.${parsed.ext}`,
+                        fileExt: parsed.ext,
                         fileSize: parsed.buffer.length,
-                        contentType: parsed.mime,
+                        contentType: parsed.mime
                     });
                     photoIdList.push(fid);
                 }
@@ -3270,125 +3402,44 @@ app.post('/api/driver/bus', async (req, res) => {
     }
 });
 
-
-// PATCH: 차량 기본 정보(스칼라) 수정
-app.patch('/api/driver/bus', async (req, res) => {
+// API: 버스 서류 정보 조회
+app.get('/api/driver/bus', async (req, res) => {
     let connection;
     try {
-        const { custId, busId, vehicleNo, modelNm, manufactureYear, mileage, serviceClass, amenities, hasAdas, lastInspectDt, insuranceExpDt } =
-            req.body || {};
+        const { custId } = req.query;
         if (!custId) return res.status(400).json({ error: 'custId is required' });
-        if (!busId) return res.status(400).json({ error: 'busId is required' });
-        if (!vehicleNo || !serviceClass) {
-            return res.status(400).json({ error: 'vehicleNo and serviceClass are required' });
-        }
-
         connection = await pool.getConnection();
+        await ensureTbBusDriverVehicleSchema(connection);
         const row = await fetchBusRowForUser(connection, custId);
-        if (!row || String(row.busId) !== String(busId)) {
-            return res.status(404).json({ error: '차량 정보를 찾을 수 없습니다.' });
+        if (!row) return res.json({ bus: null });
+
+        const amenities = typeof row.AMENITIES === 'string' ? JSON.parse(row.AMENITIES || '{}') : (row.AMENITIES || {});
+        let photoIds = row.VEHICLE_PHOTOS_JSON;
+        if (typeof photoIds === 'string') {
+            try { photoIds = JSON.parse(photoIds); } catch (e) { photoIds = []; }
         }
+        if (!Array.isArray(photoIds)) photoIds = [];
 
-        const adasYn = hasAdas === true || hasAdas === 'Y' ? 'Y' : 'N';
-        const amenObj = { ...(amenities || {}), adas: adasYn === 'Y' };
-
-        await connection.execute(
-            `UPDATE TB_BUS_DRIVER_VEHICLE
-             SET VEHICLE_NO = ?, MODEL_NM = ?, MANUFACTURE_YEAR = ?, MILEAGE = ?, SERVICE_CLASS = ?,
-                 AMENITIES = ?, HAS_ADAS = ?, LAST_INSPECT_DT = ?, INSURANCE_EXP_DT = ?
-             WHERE BUS_ID = ? AND CUST_ID = ?`,
-            [
-                vehicleNo,
-                modelNm || '',
-                manufactureYear || '',
-                Number(mileage) || 0,
-                serviceClass,
-                JSON.stringify(amenObj),
-                adasYn,
-                lastInspectDt || null,
-                insuranceExpDt || null,
-                busId,
-                custId,
-            ]
-        );
-        res.json({ message: '차량 정보가 수정되었습니다.' });
-    } catch (e) {
-        console.error('PATCH driver/bus:', e);
-        res.status(500).json({ error: e.message });
-    } finally {
-        if (connection) connection.release();
-    }
-});
-
-
-// PATCH: 차량 서류만 갱신
-app.patch('/api/driver/bus/documents', async (req, res) => {
-    let connection;
-    try {
-        const {
-            custId,
-            busId,
-            businessLicenseBase64,
-            businessLicenseFileName,
-            transportationLicenseBase64,
-            transportationLicenseFileName,
-            insurancePolicyBase64,
-            insurancePolicyFileName,
-        } = req.body || {};
-        if (!custId || !busId) return res.status(400).json({ error: 'custId and busId are required' });
-
-        connection = await pool.getConnection();
-        const row = await fetchBusRowForUser(connection, custId);
-        if (!row || String(row.busId) !== String(busId)) {
-            return res.status(404).json({ error: '차량 정보를 찾을 수 없습니다.' });
-        }
-
-        const docMap = [
-            { field: businessLicenseBase64, name: businessLicenseFileName, cat: BUS_DOC_FILE_CATEGORY.BIZ_REG, col: 'BIZ_REG_FILE_ID' },
-            { field: transportationLicenseBase64, name: transportationLicenseFileName, cat: BUS_DOC_FILE_CATEGORY.TRANSPORT_PERMIT, col: 'TRANS_LIC_FILE_ID' },
-            { field: insurancePolicyBase64, name: insurancePolicyFileName, cat: BUS_DOC_FILE_CATEGORY.INSURANCE, col: 'INS_CERT_FILE_ID' },
-        ];
-
-        const hasAny = docMap.some((d) => d.field && typeof d.field === 'string');
-        if (!hasAny) return res.status(400).json({ error: '갱신할 서류(base64)가 없습니다.' });
-
-        const [maxFileRows] = await connection.execute('SELECT MAX(FILE_ID) as maxId FROM TB_FILE_MASTER');
-        let currentMaxFileId = maxFileRows[0].maxId || '00000000000000000000';
-        const fileIds = {};
-
-        await connection.beginTransaction();
-        try {
-            for (const d of docMap) {
-                if (!d.field || typeof d.field !== 'string') continue;
-                const parsed = parseDataUrlPayload(d.field, d.name || 'doc');
-                if (!parsed) continue;
-                const fid = generateNextNumericId(currentMaxFileId, 20);
-                currentMaxFileId = fid;
-                const { orgFileNm, fileExt } = orgFileNmAndExt(d.name, parsed);
-                const gcsPath = `${d.cat}/${custId}/${fid}.${fileExt}`;
-                await insertBusFileMaster(connection, {
-                    fileId: fid,
-                    category: d.cat,
-                    gcsPath,
-                    buffer: parsed.buffer,
-                    orgFileNm,
-                    fileExt,
-                    fileSize: parsed.buffer.length,
-                    contentType: parsed.mime,
-                });
-                if (d.col === 'BIZ_REG_FILE_ID') fileIds.biz = fid;
-                if (d.col === 'TRANS_LIC_FILE_ID') fileIds.trans = fid;
-                if (d.col === 'INS_CERT_FILE_ID') fileIds.ins = fid;
-                await connection.execute(`UPDATE TB_BUS_DRIVER_VEHICLE SET ${d.col} = ? WHERE BUS_ID = ?`, [fid, busId]);
+        res.json({
+            bus: {
+                busId: row.busId,
+                vehicleNo: row.VEHICLE_NO,
+                modelNm: row.MODEL_NM,
+                manufactureYear: row.MANUFACTURE_YEAR,
+                mileage: row.MILEAGE,
+                serviceClass: row.SERVICE_CLASS,
+                amenities,
+                hasAdas: row.HAS_ADAS === 'Y',
+                lastInspectDt: row.lastInspectDt || '',
+                insuranceExpDt: row.insuranceExpDt || '',
+                bizRegFileId: row.bizRegId,
+                transLicFileId: row.transLicId,
+                insCertFileId: row.insCertId,
+                vehiclePhotoFileIds: photoIds
             }
-            await connection.commit();
-            res.json({ message: '차량 서류가 갱신되었습니다.', fileIds: Object.keys(fileIds).length ? fileIds : undefined });
-        } catch (err) {
-            await connection.rollback();
-            throw err;
-        }
+        });
     } catch (e) {
-        console.error('PATCH driver/bus/documents:', e);
+        console.error('GET driver/bus:', e);
         res.status(500).json({ error: e.message });
     } finally {
         if (connection) connection.release();
@@ -3404,33 +3455,21 @@ app.patch('/api/driver/bus/photos', async (req, res) => {
         if (!custId || !busId) return res.status(400).json({ error: 'custId and busId are required' });
         connection = await pool.getConnection();
         const row = await fetchBusRowForUser(connection, custId);
-        if (!row || String(row.busId) !== String(busId)) return res.status(404).json({ error: '차량 정보를 찾을 수 없습니다.' });
+        if (!row || row.busId !== busId) return res.status(404).json({ error: '차량 정보를 찾을 수 없습니다.' });
 
+        const ym = new Date().toISOString().slice(0, 7);
         const outList = [];
-        const [maxFileRows] = await connection.execute('SELECT MAX(FILE_ID) as maxId FROM TB_FILE_MASTER');
-        let currentMaxFileId = maxFileRows[0].maxId || '00000000000000000000';
         await connection.beginTransaction();
         try {
             for (const ph of (vehiclePhotos || []).slice(0, 8)) {
-                if (ph.fileId && !ph.base64 && !ph.dataUrl) {
-                    outList.push(String(ph.fileId));
-                    continue;
-                }
+                if (ph.fileId && !ph.base64) { outList.push(ph.fileId); continue; }
                 const parsed = parseDataUrlPayload(ph.base64 || ph.dataUrl, ph.fileName || 'photo');
                 if (!parsed) continue;
-                const fid = generateNextNumericId(currentMaxFileId, 20);
-                currentMaxFileId = fid;
-                const { orgFileNm, fileExt } = orgFileNmAndExt(ph.fileName || 'photo', parsed);
-                const gcsPath = `${BUS_PHOTO_FILE_CATEGORY}/${custId}/${fid}.${fileExt}`;
-                await insertBusFileMaster(connection, {
-                    fileId: fid,
-                    category: BUS_PHOTO_FILE_CATEGORY,
-                    gcsPath,
-                    buffer: parsed.buffer,
-                    orgFileNm,
-                    fileExt,
-                    fileSize: parsed.buffer.length,
-                    contentType: parsed.mime,
+                const fid = generateNextNumericId('0', 10);
+                await insertBusFileAndHist(connection, {
+                    busId, fileId: fid, category: 'BUS_PHOTO', gcsPath: `bus_photos/${ym}/${fid}.${parsed.ext}`,
+                    buffer: parsed.buffer, orgFileNm: parsed.orgName, fileExt: parsed.ext,
+                    fileSize: parsed.buffer.length, contentType: parsed.mime
                 });
                 outList.push(fid);
             }
@@ -3442,278 +3481,137 @@ app.patch('/api/driver/bus/photos', async (req, res) => {
     finally { if (connection) connection.release(); }
 });
 
-// ─── 여행자 견적 요청 상세 — 입찰 등록/수정 · 입찰 취소(선택 API) ───────────────────
+// ─── [AESTHETIC POLISH] Auction Bid PUT / Cancel APIs ────────────────────────
 
 app.put('/api/traveler-quote-request-details/bid', async (req, res) => {
-    const REQ_BUS_NOT_AUCTION_MSG = '버스 요청 상태가 아닙니다. 여행자 견적 목록 조회후 견적 응찰하세요';
     let connection;
     try {
-        const { reqId, custId, reqBusSeq } = req.body;
-        const busSeqNum = Number(reqBusSeq);
-        if (!reqId || !custId) return res.status(400).json({ error: 'reqId와 custId가 필요합니다.' });
-        if (reqBusSeq === undefined || reqBusSeq === null || Number.isNaN(busSeqNum) || busSeqNum < 0) {
-            return res.status(400).json({ error: 'reqBusSeq가 필요합니다.' });
-        }
+        const { reqId, reqBusSeq, custId, bidPrice } = req.body;
+        const bidPriceNum = Number(bidPrice);
+        if (!bidPriceNum || isNaN(bidPriceNum)) return res.status(400).json({ error: '올바른 입찰 가격을 입력해 주세요.' });
+        if (!reqBusSeq) return res.status(400).json({ error: 'reqBusSeq가 필요합니다.' });
 
         connection = await pool.getConnection();
-        await connection.beginTransaction();
 
-        const [auctionRows] = await connection.execute(
-            `SELECT TRAVELER_ID AS travelerId FROM TB_AUCTION_REQ WHERE REQ_ID = ? LIMIT 1`,
-            [reqId]
+        // [페널티 체크] 기사 취소 건수가 3건 이상인 경우 입찰 불가 (설계서 정책 준수)
+        const [cancelRows] = await connection.execute(
+            `SELECT CANCEL_BUS_DRIVER_CNT, TRADE_RESTRICT_YN FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ?`,
+            [custId]
         );
-        const auction = auctionRows[0];
-        if (!auction) {
-            await connection.rollback();
-            return res.status(404).json({ error: '견적 요청을 찾을 수 없습니다.' });
-        }
-
-        const [busRows] = await connection.execute(
-            `SELECT REQ_BUS_SEQ AS reqBusSeq, DATA_STAT AS dataStat,
-                    COALESCE(RES_BUS_AMT, 0) AS resBusAmt,
-                    COALESCE(RES_FEE_TOTAL_AMT, 0) AS resFeeTotalAmt,
-                    COALESCE(RES_FEE_REFUND_AMT, 0) AS resFeeRefundAmt,
-                    COALESCE(RES_FEE_ATTRIBUTION_AMT, 0) AS resFeeAttributionAmt
-               FROM TB_AUCTION_REQ_BUS
-              WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?`,
-            [reqId, busSeqNum]
-        );
-        if (busRows.length === 0) {
-            await connection.rollback();
-            return res.status(404).json({ error: '요청 차량 정보(TB_AUCTION_REQ_BUS)가 없습니다.' });
-        }
-        const br = busRows[0];
-
-        const [existingRes] = await connection.execute(
-            `SELECT RES_ID AS resId, DATA_STAT AS dataStat
-               FROM TB_BUS_RESERVATION
-              WHERE REQ_ID = ? AND DRIVER_ID = ?
-              ORDER BY REG_DT DESC
-              LIMIT 1`,
-            [reqId, custId]
-        );
-        const cur = existingRes[0];
-        const editableStats = new Set(['BIDDING', 'AUCTION', 'REQ']);
-        const isUpdate = cur != null && editableStats.has(cur.dataStat);
-
-        if (br.dataStat !== 'AUCTION') {
-            await connection.rollback();
-            return res.status(409).json({
-                error: REQ_BUS_NOT_AUCTION_MSG,
-                code: 'REQ_BUS_NOT_AUCTION',
-            });
-        }
-
-        const drvVehicle = await fetchBusRowForUser(connection, custId);
-        const busIdFromSpec = drvVehicle?.SERVICE_CLASS != null ? String(drvVehicle.SERVICE_CLASS) : null;
-        const driverBiddingPrice = Number(br.resBusAmt) || 0;
-        const feeTotal = Number(br.resFeeTotalAmt) || 0;
-        const feeRefund = Number(br.resFeeRefundAmt) || 0;
-        const feeAttr = Number(br.resFeeAttributionAmt) || 0;
-
-        let outResId;
-        let okMessage;
-        let isNewReservation = false;
-
-        const modId = String(custId).trim();
-
-        if (isUpdate) {
-            await connection.execute(
-                `UPDATE TB_AUCTION_REQ_BUS
-                    SET DATA_STAT = 'BIDDING', MOD_DT = NOW(), MOD_ID = ?
-                  WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?`,
-                [modId, reqId, busSeqNum]
-            );
-            await connection.execute(
-                `UPDATE TB_BUS_RESERVATION SET
-                    DRIVER_BIDDING_PRICE = ?,
-                    RES_FEE_TOTAL_AMT = ?, RES_FEE_REFUND_AMT = ?, RES_FEE_ATTRIBUTION_AMT = ?,
-                    BUS_ID = ?, MOD_DT = NOW(), MOD_ID = ?
-                  WHERE RES_ID = ?`,
-                [driverBiddingPrice, feeTotal, feeRefund, feeAttr, busIdFromSpec, modId, cur.resId]
-            );
-            outResId = cur.resId;
-            okMessage = '입찰 정보가 갱신되었습니다.';
-        } else {
-            const blockNewBid = new Set(['CONFIRM', 'DONE', 'TRAVELER_CANCEL', 'BUS_CHANGE', 'BUS_CANCEL']);
-            if (cur && blockNewBid.has(cur.dataStat)) {
-                await connection.rollback();
-                return res.status(409).json({ error: `현재 상태(${cur.dataStat})에서는 입찰를 등록할 수 없습니다.`, resStat: cur.dataStat });
+        if (cancelRows.length > 0) {
+            const { CANCEL_BUS_DRIVER_CNT, TRADE_RESTRICT_YN } = cancelRows[0];
+            if (CANCEL_BUS_DRIVER_CNT >= 3 || TRADE_RESTRICT_YN === 'Y') {
+                return res.status(403).json({ 
+                    error: '누적 취소 건수 초과로 인해 입찰 참여가 제한되었습니다.',
+                    cancelCnt: CANCEL_BUS_DRIVER_CNT
+                });
             }
-
-            await connection.execute(
-                `UPDATE TB_AUCTION_REQ_BUS
-                    SET DATA_STAT = 'BIDDING', MOD_DT = NOW(), MOD_ID = ?
-                  WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?`,
-                [modId, reqId, busSeqNum]
-            );
-
-            const [maxNumRows] = await connection.execute(
-                `SELECT COALESCE(MAX(CAST(RES_ID AS UNSIGNED)), 0) AS maxNum FROM TB_BUS_RESERVATION`
-            );
-            const maxRowNum = maxNumRows[0]?.maxNum ?? 0;
-            const newResId = generateNextNumericId(maxRowNum, 10);
-
-            await connection.execute(
-                `INSERT INTO TB_BUS_RESERVATION (
-                    RES_ID, REQ_ID, REQ_BUS_SEQ, TRAVELER_ID, DRIVER_ID, BUS_ID,
-                    DRIVER_BIDDING_PRICE, RES_FEE_TOTAL_AMT, RES_FEE_REFUND_AMT, RES_FEE_ATTRIBUTION_AMT,
-                    DATA_STAT, REG_DT, REG_ID, MOD_DT, MOD_ID
-                 ) VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, ?, 'BIDDING', NOW(), ?, NOW(), ?)`,
-                [
-                    newResId,
-                    reqId,
-                    auction.travelerId,
-                    custId,
-                    busIdFromSpec,
-                    driverBiddingPrice,
-                    feeTotal,
-                    feeRefund,
-                    feeAttr,
-                    modId,
-                    modId,
-                ]
-            );
-            outResId = newResId;
-            okMessage = '입찰 정보가 등록되었습니다.';
-            isNewReservation = true;
         }
 
-        const [cntAggRows] = await connection.execute(
-            `SELECT COUNT(*) AS total,
-                    SUM(CASE WHEN DATA_STAT = 'BIDDING' THEN 1 ELSE 0 END) AS biddingCnt
-               FROM TB_AUCTION_REQ_BUS
-              WHERE REQ_ID = ?`,
-            [reqId]
+        const [rows] = await connection.execute(
+            `SELECT RES_ID, DATA_STAT FROM TB_BUS_RESERVATION WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DRIVER_ID = ? LIMIT 1`,
+            [reqId, reqBusSeq, custId]
         );
-        const cntAgg = cntAggRows[0];
-        if (Number(cntAgg.total) > 0 && Number(cntAgg.biddingCnt) === Number(cntAgg.total)) {
+        const currentBid = rows[0];
+        const resStat = currentBid ? currentBid.DATA_STAT : null;
+
+        if (currentBid && resStat !== 'CANCELLATION_OF_BID') {
+            if (resStat !== 'BIDDING' && resStat !== 'REQ') {
+                return res.status(409).json({ error: `현재 상태(${resStat})에서는 입찰가를 수정할 수 없습니다.`, resStat });
+            }
+            await connection.execute(`UPDATE TB_BUS_RESERVATION SET DRIVER_BIDDING_PRICE = ?, MOD_DT = NOW() WHERE RES_ID = ?`, [bidPriceNum, currentBid.RES_ID]);
+            res.json({ success: true, message: '입찰가가 수정되었습니다.' });
+        } else {
+            // [추가] REQ_ID로부터 TRAVELER_ID 가져오기
+            const [reqRows] = await connection.execute(`SELECT TRAVELER_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ?`, [reqId]);
+            const travelerId = reqRows.length > 0 ? reqRows[0].TRAVELER_ID : null;
+
+            const newResId = generateNextNumericId('0', 10);
+            const busRow = await fetchBusRowForUser(connection, custId);
             await connection.execute(
-                `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'BIDDING', MOD_DT = NOW(), MOD_ID = ? WHERE REQ_ID = ?`,
-                [modId, reqId]
+                `INSERT INTO TB_BUS_RESERVATION (RES_ID, REQ_ID, REQ_BUS_SEQ, TRAVELER_ID, DRIVER_ID, BUS_ID, DRIVER_BIDDING_PRICE, DATA_STAT, REG_DT, MOD_DT)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 'BIDDING', NOW(), NOW())`,
+                [newResId, reqId, reqBusSeq, travelerId, custId, busRow ? busRow.busId : null, bidPriceNum]
             );
-        }
 
-        const momR = await applyMomMemberAfterBid(connection, custId);
-        if (!momR.ok) {
-            await connection.rollback();
-            return res.status(momR.status).json({
-                error: momR.lines.join('\n'),
-                errorCode: momR.code,
-                modalLines: momR.lines,
-            });
-        }
+            // [상태 동기화] 기사가 응찰했으므로 마스터 및 차량 상세 상태를 'BIDDING'으로 업데이트
+            await connection.execute(
+                `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'BIDDING', MOD_DT = NOW() WHERE REQ_ID = ?`,
+                [reqId]
+            );
+            // 모든 차량 상세도 'BIDDING'으로 전환 (최소 1명이 응찰했으므로 진행 중인 상태임)
+            await connection.execute(
+                `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'BIDDING', MOD_DT = NOW() WHERE REQ_ID = ? AND DATA_STAT = 'AUCTION'`,
+                [reqId]
+            );
 
-        await connection.commit();
-        res.json({
-            success: true,
-            message: okMessage,
-            resId: outResId,
-            isNewReservation,
-            momMember: momR.payload,
-        });
-    } catch (e) {
-        if (connection) {
-            try { await connection.rollback(); } catch (_) { /* noop */ }
+            res.json({ success: true, message: '입찰이 등록되었습니다.', resId: newResId });
         }
-        res.status(500).json({ error: e.message });
-    } finally {
-        if (connection) connection.release();
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
+    finally { if (connection) connection.release(); }
 });
 
-/** (화면 미노출) 기사 입찰 철회 — 설계 ENUM 기준 DRIVER_CANCEL */
 app.put('/api/traveler-quote-request-details/bid-cancel', async (req, res) => {
     let connection;
     try {
         const { reqId, custId } = req.body;
-        if (!reqId || !custId) return res.status(400).json({ error: 'reqId와 custId가 필요합니다.' });
         connection = await pool.getConnection();
-        const [rows] = await connection.execute(
-            `SELECT RES_ID, DATA_STAT FROM TB_BUS_RESERVATION
-              WHERE REQ_ID = ? AND DRIVER_ID = ?
-              ORDER BY REG_DT DESC LIMIT 1`,
-            [reqId, custId]
-        );
+        const [rows] = await connection.execute(`SELECT RES_ID, DATA_STAT FROM TB_BUS_RESERVATION WHERE REQ_ID = ? AND DRIVER_ID = ? ORDER BY BID_SEQ DESC LIMIT 1`, [reqId, custId]);
         const row = rows[0];
         if (!row) return res.status(404).json({ error: '입찰 정보를 찾을 수 없습니다.' });
-        if (row.DATA_STAT !== 'BIDDING' && row.DATA_STAT !== 'AUCTION') {
-            return res.status(409).json({ error: `현재 상태(${row.DATA_STAT})에서는 취소할 수 없습니다.` });
-        }
-        await connection.execute(
-            `UPDATE TB_BUS_RESERVATION SET DATA_STAT = 'DRIVER_CANCEL', MOD_DT = NOW() WHERE RES_ID = ?`,
-            [row.RES_ID]
-        );
+        if (row.DATA_STAT !== 'BIDDING' && row.DATA_STAT !== 'REQ') return res.status(409).json({ error: `현재 상태(${row.DATA_STAT})에서는 취소할 수 없습니다.` });
+        await connection.execute(`UPDATE TB_BUS_RESERVATION SET DATA_STAT = 'CANCELLATION_OF_BID', MOD_DT = NOW() WHERE RES_ID = ?`, [row.RES_ID]);
         res.json({ success: true, message: '입찰이 취소되었습니다.' });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    } finally {
-        if (connection) connection.release();
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
+    finally { if (connection) connection.release(); }
 });
 
-/**
- * `BusTaams_Project 테이블 설계.md`: TB_BUS_RESERVATION.DRIVER_ID = TB_USER.CUST_ID.
- * 쿼리 문자열이 로그인 ID(USER_ID)인 경우 CUST_ID로 맞춘다.
- */
-async function resolveDriverCustIdForReservations(connection, raw) {
-    const s = String(raw || '').trim();
-    if (!s) return '';
-    const [rows] = await connection.execute(
-        `SELECT CUST_ID FROM TB_USER WHERE CUST_ID = ? OR USER_ID = ? LIMIT 1`,
-        [s, s]
-    );
-    if (rows[0]?.CUST_ID != null && String(rows[0].CUST_ID).trim() !== '') {
-        return String(rows[0].CUST_ID).trim();
-    }
-    return s;
-}
 
 /**
- * TB_BUS_RESERVATION.DRIVER_ID 가 CUST_ID(0패딩 10자) / 숫자만 등으로 혼재할 수 있어 IN 매칭에 사용한다.
+ * 기사 메인 대시보드 요약
  */
-function collectDriverReservationIdVariants(...candidates) {
-    const out = new Set();
-    for (const c of candidates) {
-        const s = c != null ? String(c).trim() : '';
-        if (!s) continue;
-        out.add(s);
-        if (/^[0-9]+$/.test(s)) {
-            const n = parseInt(s, 10);
-            if (Number.isFinite(n)) {
-                out.add(String(n));
-                out.add(String(n).padStart(10, '0'));
-            }
-        }
-    }
-    return [...out];
-}
+app.get('/api/driver/dashboard', async (req, res) => {
+    const { custId } = req.query;
+    if (!custId) return res.status(400).json({ error: 'custId가 필요합니다.' });
+    let connection;
+    try {
+        connection = await pool.getConnection();
+        const [[prevSum]] = await connection.execute(
+            `SELECT COALESCE(SUM(DRIVER_BIDDING_PRICE), 0) AS total FROM TB_BUS_RESERVATION
+              WHERE DRIVER_ID = ? AND DATA_STAT = 'DONE'
+                AND MOD_DT >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+                AND MOD_DT < DATE_FORMAT(CURDATE(), '%Y-%m-01')`, [custId]
+        );
+        const [[currSum]] = await connection.execute(
+            `SELECT COALESCE(SUM(DRIVER_BIDDING_PRICE), 0) AS total FROM TB_BUS_RESERVATION
+              WHERE DRIVER_ID = ? AND DATA_STAT = 'DONE'
+                AND MOD_DT >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND DATE(MOD_DT) <= CURDATE()`, [custId]
+        );
+        const [[agg]] = await connection.execute(
+            `SELECT COALESCE(SUM(CASE WHEN DATA_STAT IN ('REQ', 'BIDDING') THEN 1 ELSE 0 END), 0) AS bidCount,
+                    COALESCE(SUM(CASE WHEN DATA_STAT IN ('REQ', 'BIDDING') THEN DRIVER_BIDDING_PRICE ELSE 0 END), 0) AS bidAmountSum,
+                    COALESCE(SUM(CASE WHEN DATA_STAT = 'CONFIRM' THEN 1 ELSE 0 END), 0) AS confirmCount,
+                    COALESCE(SUM(CASE WHEN DATA_STAT = 'CONFIRM' THEN DRIVER_BIDDING_PRICE ELSE 0 END), 0) AS confirmAmountSum
+               FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ?`, [custId]
+        );
 
-async function driverReservationDriverKeys(connection, raw) {
-    const s = String(raw || '').trim();
-    if (!s) return [];
-    const [rows] = await connection.execute(
-        `SELECT CUST_ID, USER_ID FROM TB_USER WHERE CUST_ID = ? OR USER_ID = ? LIMIT 1`,
-        [s, s]
-    );
-    /** @type {string[]} */
-    const cands = [s];
-    const u = rows[0];
-    if (u) {
-        if (u.CUST_ID != null && String(u.CUST_ID).trim() !== '') {
-            cands.push(String(u.CUST_ID).trim());
-        }
-        if (u.USER_ID != null && String(u.USER_ID).trim() !== '') {
-            cands.push(String(u.USER_ID).trim());
-        }
-    }
-    return collectDriverReservationIdVariants(...cands);
-}
+        const now = new Date();
+        res.json({
+            year: now.getFullYear(), month: now.getMonth() + 1,
+            currentMonthTotal: Number(currSum.total), previousMonthTotal: Number(prevSum.total),
+            diffFromPrevious: Number(currSum.total) - Number(prevSum.total),
+            bidCount: Number(agg.bidCount), bidAmountSum: Number(agg.bidAmountSum),
+            confirmCount: Number(agg.confirmCount), confirmAmountSum: Number(agg.confirmAmountSum)
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+    finally { if (connection) connection.release(); }
+});
+
+
 
 /**
  * 여행자 견적 목록 (역경매)
  * GET /api/list-of-traveler-quotations?driverId=
- * - TB_AUCTION_REQ.DATA_STAT = 'AUCTION', waypointCount = VIA IN (START_WAY, END_WAY)
  */
 app.get('/api/list-of-traveler-quotations', async (req, res) => {
     let connection;
@@ -3748,16 +3646,11 @@ app.get('/api/list-of-traveler-quotations', async (req, res) => {
                 COALESCE(r.REQ_AMT, 0)           AS estTotalServicePrice,
                 r.EXPIRE_DT                      AS expireDt,
                 r.REG_DT                         AS regDt,
-                (SELECT GROUP_CONCAT(BUS_TYPE_CD) FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID) AS busType,
-                (SELECT COUNT(*) FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID) AS busCnt,
-                (SELECT br.REQ_BUS_SEQ FROM TB_AUCTION_REQ_BUS br WHERE br.REQ_ID = r.REQ_ID ORDER BY br.REQ_BUS_SEQ ASC LIMIT 1) AS reqBusSeq,
-                (SELECT COUNT(*)
-                   FROM TB_AUCTION_REQ_VIA v
-                  WHERE v.REQ_ID = r.REQ_ID
-                    AND v.VIA_TYPE IN ('START_WAY', 'END_WAY')
-                ) as waypointCount
+                (SELECT GROUP_CONCAT(BUS_TYPE_CD) FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID) as busType,
+                (SELECT COUNT(*) FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID) as busCnt,
+                (SELECT COUNT(*) FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID) as waypointCount
              FROM TB_AUCTION_REQ r
-             WHERE r.DATA_STAT = 'AUCTION'
+             WHERE r.DATA_STAT = 'BIDDING'
                AND DATE(r.START_DT) > CURDATE()
              ${sameDayBlock}
              ORDER BY r.REG_DT DESC`,
@@ -3775,7 +3668,6 @@ app.get('/api/list-of-traveler-quotations', async (req, res) => {
 /**
  * 실시간 입찰 기회 (운전기사 대시보드 AuctionList)
  * GET /api/auction-list?driverId=
- * - TB_AUCTION_REQ.DATA_STAT = 'AUCTION' (여행자 견적 목록 API와 마스터 조건 동일)
  */
 app.get('/api/auction-list', async (req, res) => {
     const { driverId } = req.query;
@@ -3798,9 +3690,8 @@ app.get('/api/auction-list', async (req, res) => {
                 COALESCE(r.REQ_AMT, 0)           AS reqAmt,
                 r.EXPIRE_DT                      AS expireDt,
                 r.REG_DT                         AS regDt,
-                (SELECT BUS_TYPE_CD FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID ORDER BY REQ_BUS_SEQ ASC LIMIT 1) AS busType,
+                (SELECT BUS_TYPE_CD FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID LIMIT 1) AS busType,
                 (SELECT COUNT(*) FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID) AS busCnt,
-                (SELECT br.REQ_BUS_SEQ FROM TB_AUCTION_REQ_BUS br WHERE br.REQ_ID = r.REQ_ID ORDER BY br.REQ_BUS_SEQ ASC LIMIT 1) AS reqBusSeq,
                 (SELECT res.DATA_STAT
                    FROM TB_BUS_RESERVATION res
                   WHERE res.REQ_ID = r.REQ_ID
@@ -3809,7 +3700,7 @@ app.get('/api/auction-list', async (req, res) => {
                   LIMIT 1
                 )                                AS myBidStat
              FROM TB_AUCTION_REQ r
-             WHERE r.DATA_STAT = 'AUCTION'
+             WHERE r.DATA_STAT = 'BIDDING'
                AND DATE(r.START_DT) > CURDATE()
                AND NOT EXISTS (
                     SELECT 1
@@ -3832,370 +3723,27 @@ app.get('/api/auction-list', async (req, res) => {
     }
 });
 
-/**
- * 운행 예정 목록 (기사 Dashboard — UpcomingTripsModal)
- * GET /api/upcoming-trips?driverId= | custId= | uuid=
- * - TB_BUS_RESERVATION DATA_STAT='CONFIRM' + TB_AUCTION_REQ REQ_ID 조인
- * - 출발일 당일·이후만 (DATE(START_DT) >= CURDATE())
- */
-app.get('/api/upcoming-trips', async (req, res) => {
-    const raw =
-        req.query.driverId != null ? String(req.query.driverId).trim()
-            : req.query.custId != null ? String(req.query.custId).trim()
-                : req.query.uuid != null ? String(req.query.uuid).trim()
-                    : '';
-    if (!raw) {
-        return res.status(400).json({ error: 'driverId(또는 custId·uuid)가 필요합니다.' });
-    }
-    let connection;
-    try {
-        connection = await pool.getConnection();
-        const driverKey = await resolveDriverCustIdForReservations(connection, raw);
-        const [rows] = await connection.execute(
-            `SELECT
-                r.REQ_ID                              AS reqId,
-                res.REQ_BUS_SEQ                       AS reqBusSeq,
-                r.TRIP_TITLE                           AS tripTitle,
-                r.START_ADDR                           AS startAddr,
-                r.END_ADDR                             AS endAddr,
-                r.START_DT                             AS startDt,
-                r.END_DT                               AS endDt,
-                r.PASSENGER_CNT                        AS passengerCnt,
-                COALESCE(res.DRIVER_BIDDING_PRICE, 0) AS contractAmount
-             FROM TB_BUS_RESERVATION res
-             INNER JOIN TB_AUCTION_REQ r ON r.REQ_ID = res.REQ_ID
-             WHERE res.DRIVER_ID = ?
-               AND res.DATA_STAT = 'CONFIRM'
-               AND DATE(r.START_DT) >= CURDATE()
-             ORDER BY r.START_DT ASC`,
-            [driverKey]
-        );
-        const items = (rows || []).map((row) => ({
-            ...row,
-            reqBusSeq:
-                row.reqBusSeq != null && row.reqBusSeq !== ''
-                    ? Number(row.reqBusSeq)
-                    : 1,
-            contractAmount:
-                row.contractAmount != null ? Number(row.contractAmount) || 0 : 0,
-        }));
-        const payload = { total: items.length, items };
-        if (items.length === 0) {
-            payload.emptyMessage = '등록된 운행 예정 일정이 없습니다.';
-        }
-        res.status(200).json(payload);
-    } catch (error) {
-        console.error('upcoming-trips:', error);
-        res.status(500).json({ error: error.message });
-    } finally {
-        if (connection) connection.release();
-    }
-});
 
-/**
- * 기사 Dashboard — 오늘의 일정 (당일 확정 1건 표시용)
- * GET /api/driver/schedule/today?custId=  (호환: driverId, uuid)
- * — `upcoming-trips` 와 동일 조인·컬럼 체계, `DATE(r.START_DT) = CURDATE()` 만 추가
- */
-app.get('/api/driver/schedule/today', async (req, res) => {
-    const raw =
-        req.query.custId != null ? String(req.query.custId).trim()
-            : req.query.driverId != null ? String(req.query.driverId).trim()
-                : req.query.uuid != null ? String(req.query.uuid).trim()
-                    : '';
-    if (!raw) {
-        return res.status(400).json({ error: 'custId(또는 driverId)가 필요합니다.' });
-    }
-    let connection;
-    try {
-        connection = await pool.getConnection();
-        const driverKey = await resolveDriverCustIdForReservations(connection, raw);
-        const [rows] = await connection.execute(
-            `SELECT
-                r.REQ_ID                              AS reqId,
-                res.REQ_BUS_SEQ                       AS reqBusSeq,
-                r.TRIP_TITLE                           AS tripTitle,
-                r.START_ADDR                           AS startAddr,
-                r.END_ADDR                             AS endAddr,
-                r.START_DT                             AS startDt,
-                r.END_DT                               AS endDt,
-                r.PASSENGER_CNT                        AS passengerCnt,
-                COALESCE(res.DRIVER_BIDDING_PRICE, 0) AS contractAmount
-             FROM TB_BUS_RESERVATION res
-             INNER JOIN TB_AUCTION_REQ r ON r.REQ_ID = res.REQ_ID
-             WHERE res.DRIVER_ID = ?
-               AND res.DATA_STAT = 'CONFIRM'
-               AND DATE(r.START_DT) = CURDATE()
-             ORDER BY r.START_DT ASC`,
-            [driverKey]
-        );
-        const items = (rows || []).map((row) => {
-            const reqBusSeq =
-                row.reqBusSeq != null && row.reqBusSeq !== ''
-                    ? Number(row.reqBusSeq)
-                    : 1;
-            const reqId = row.reqId != null ? String(row.reqId) : '';
-            return {
-                ...row,
-                reqBusSeq,
-                reqUuid: reqId,
-                busLabel: null,
-                statusLabel: '운행 예정',
-                contractAmount:
-                    row.contractAmount != null ? Number(row.contractAmount) || 0 : 0,
-            };
-        });
-        res.status(200).json({ total: items.length, items });
-    } catch (error) {
-        console.error('driver/schedule/today:', error);
-        if (error.code === 'ER_NO_SUCH_TABLE') {
-            return res.status(503).json({ error: '일정 조회에 필요한 테이블이 없습니다.' });
-        }
-        res.status(500).json({ error: error.message });
-    } finally {
-        if (connection) connection.release();
-    }
-});
 
-/**
- * 기사 Dashboard — 여행 일정 캘린더 (도착일 = TB_AUCTION_REQ.END_DT, 표시 월 포함)
- * GET /api/driver/schedule/calendar?custId=&year=2026&month=5
- */
-app.get('/api/driver/schedule/calendar', async (req, res) => {
-    const raw =
-        req.query.custId != null ? String(req.query.custId).trim()
-            : req.query.driverId != null ? String(req.query.driverId).trim()
-                : req.query.uuid != null ? String(req.query.uuid).trim()
-                    : '';
-    const y = parseInt(String(req.query.year || ''), 10);
-    const mo = parseInt(String(req.query.month || ''), 10);
-    if (!raw) {
-        return res.status(400).json({ error: 'custId(또는 driverId·uuid)가 필요합니다.' });
-    }
-    if (!Number.isFinite(y) || !Number.isFinite(mo) || mo < 1 || mo > 12) {
-        return res.status(400).json({ error: 'year, month(1-12)가 필요합니다.' });
-    }
-    let connection;
-    try {
-        connection = await pool.getConnection();
-        const driverKeys = await driverReservationDriverKeys(connection, raw);
-        if (!driverKeys.length) {
-            return res.status(400).json({ error: 'custId(또는 driverId·uuid)가 필요합니다.' });
-        }
-        const monthStart = `${y}-${String(mo).padStart(2, '0')}-01`;
-        const nextMo = mo === 12 ? 1 : mo + 1;
-        const nextY = mo === 12 ? y + 1 : y;
-        const monthEndExclusive = `${nextY}-${String(nextMo).padStart(2, '0')}-01`;
-        const drvPh = driverKeys.map(() => '?').join(', ');
 
-        const [rows] = await connection.execute(
-            `SELECT res.REQ_ID                              AS reqId,
-                    res.RES_ID                              AS resId,
-                    res.REQ_BUS_SEQ                         AS reqBusSeq,
-                    res.DATA_STAT                           AS dataStat,
-                    DATE_FORMAT(r.END_DT, '%Y%m%d')         AS endYmd,
-                    r.END_DT                                AS endDt,
-                    r.TRIP_TITLE                            AS tripTitle
-               FROM TB_BUS_RESERVATION res
-               INNER JOIN TB_AUCTION_REQ r ON r.REQ_ID = res.REQ_ID
-              WHERE res.DRIVER_ID IN (${drvPh})
-                AND res.DATA_STAT IN ('BIDDING', 'CONFIRM', 'DONE')
-                AND r.END_DT IS NOT NULL
-                AND DATE(r.END_DT) >= DATE(?)
-                AND DATE(r.END_DT) < DATE(?)
-              ORDER BY r.END_DT ASC, res.REG_DT ASC`,
-            [...driverKeys, monthStart, monthEndExclusive]
-        );
-        const items = (rows || []).map((row) => ({
-            reqId: row.reqId != null ? String(row.reqId) : '',
-            resId: row.resId != null ? String(row.resId) : '',
-            reqBusSeq: row.reqBusSeq != null ? Number(row.reqBusSeq) : 0,
-            dataStat: row.dataStat != null ? String(row.dataStat) : '',
-            endYmd: row.endYmd != null ? String(row.endYmd) : '',
-            endDt: row.endDt,
-            tripTitle: row.tripTitle != null ? String(row.tripTitle) : '',
-        }));
-        res.status(200).json({ year: y, month: mo, items });
-    } catch (error) {
-        console.error('driver/schedule/calendar:', error);
-        res.status(500).json({ error: error.message });
-    } finally {
-        if (connection) connection.release();
-    }
-});
 
-/**
- * 기사 Dashboard — 여행 상세
- * GET /api/driver/trip-detail?custId=&reqId=&resId=&reqBusSeq=
- */
-app.get('/api/driver/trip-detail', async (req, res) => {
-    const raw =
-        req.query.custId != null ? String(req.query.custId).trim()
-            : req.query.driverId != null ? String(req.query.driverId).trim()
-                : req.query.uuid != null ? String(req.query.uuid).trim()
-                    : '';
-    const reqId = req.query.reqId != null ? String(req.query.reqId).trim() : '';
-    const resId = req.query.resId != null ? String(req.query.resId).trim() : '';
-    const reqBusSeqRaw = req.query.reqBusSeq != null ? parseInt(String(req.query.reqBusSeq), 10) : NaN;
-    if (!raw || !reqId || !resId || !Number.isFinite(reqBusSeqRaw)) {
-        return res.status(400).json({ error: 'custId(또는 driverId·uuid), reqId, resId, reqBusSeq가 필요합니다.' });
-    }
-    let connection;
-    try {
-        connection = await pool.getConnection();
-        const driverKeys = await driverReservationDriverKeys(connection, raw);
-        if (!driverKeys.length) {
-            return res.status(400).json({ error: 'custId(또는 driverId·uuid)가 필요합니다.' });
-        }
-        const drvPh = driverKeys.map(() => '?').join(', ');
-        const [masterRows] = await connection.execute(
-            `SELECT res.DATA_STAT               AS dataStat,
-                    res.REQ_ID                  AS reqId,
-                    res.RES_ID                  AS resId,
-                    res.REQ_BUS_SEQ             AS reqBusSeq,
-                    r.START_DT                  AS startDt,
-                    r.END_DT                    AS endDt,
-                    r.TRIP_TITLE                AS tripTitle,
-                    b.BUS_TYPE_CD               AS busTypeCd
-               FROM TB_BUS_RESERVATION res
-               INNER JOIN TB_AUCTION_REQ r ON r.REQ_ID = res.REQ_ID
-               LEFT JOIN TB_AUCTION_REQ_BUS b
-                      ON b.REQ_ID = res.REQ_ID AND b.REQ_BUS_SEQ = res.REQ_BUS_SEQ
-              WHERE res.DRIVER_ID IN (${drvPh})
-                AND res.REQ_ID = ?
-                AND res.RES_ID = ?
-                AND res.REQ_BUS_SEQ = ?
-                AND res.DATA_STAT IN ('BIDDING', 'CONFIRM', 'DONE')
-              LIMIT 1`,
-            [...driverKeys, reqId, resId, reqBusSeqRaw]
-        );
-        if (!masterRows.length) {
-            return res.status(404).json({ error: '해당 여행 정보를 찾을 수 없습니다.' });
-        }
-        const m = masterRows[0];
-        const [viaRows] = await connection.execute(
-            `SELECT VIA_SEQ AS viaSeq, VIA_TYPE AS viaType, VIA_ADDR AS viaAddr
-               FROM TB_AUCTION_REQ_VIA
-              WHERE REQ_ID = ?
-              ORDER BY VIA_SEQ ASC`,
-            [reqId]
-        );
-        const viaPoints = (viaRows || []).map((v) => ({
-            viaSeq: v.viaSeq != null ? Number(v.viaSeq) : 0,
-            viaType: v.viaType != null ? String(v.viaType) : '',
-            viaAddr: v.viaAddr != null ? String(v.viaAddr) : '',
-        }));
-        res.status(200).json({
-            dataStat: m.dataStat != null ? String(m.dataStat) : '',
-            reqId: m.reqId != null ? String(m.reqId) : '',
-            resId: m.resId != null ? String(m.resId) : '',
-            reqBusSeq: m.reqBusSeq != null ? Number(m.reqBusSeq) : reqBusSeqRaw,
-            startDt: m.startDt,
-            endDt: m.endDt,
-            tripTitle: m.tripTitle != null ? String(m.tripTitle) : '',
-            busTypeCd: m.busTypeCd != null ? String(m.busTypeCd) : null,
-            viaPoints,
-        });
-    } catch (error) {
-        console.error('driver/trip-detail:', error);
-        res.status(500).json({ error: error.message });
-    } finally {
-        if (connection) connection.release();
-    }
-});
-
-/**
- * 기사 카드·월회비·결제 이력 (BillingSubscription)
- * GET /api/billing-subscription?driverId=
- * — 월 회비: TB_DRIVER_DETAIL.FEE_POLICY + TB_COMMON_CODE(GRP_CD=FEE_POLICY).CD_FNUM. 등급/코드 없으면 monthlyFeeKrw 는 null (고정 33,000 스텁 제거).
- * 응답 루트 키: BillingSubscription
- */
-app.get('/api/billing-subscription', async (req, res) => {
-    const raw = req.query.driverId != null ? String(req.query.driverId).trim() : '';
-    if (!raw) {
-        return res.status(400).json({ error: 'driverId가 필요합니다.' });
-    }
-    try {
-        const payload = await buildBillingSubscriptionPayload(pool, raw, BILLING_SUBSCRIPTION_ID);
-        res.status(200).json({ BillingSubscription: payload });
-    } catch (error) {
-        console.error('billing-subscription:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-/**
- * 메인 결제 카드 변경 — TB_PAYMENT_CARD.IS_PRIMARY 일괄(한 명의 기사 CUST_ID 기준)
- * PATCH /api/billing-subscription/primary-card  body: { driverId, cardSeq }
- */
-app.patch('/api/billing-subscription/primary-card', async (req, res) => {
-    const driverRaw = req.body?.driverId != null ? String(req.body.driverId).trim() : '';
-    const cardSeq = req.body?.cardSeq != null ? parseInt(String(req.body.cardSeq), 10) : NaN;
-    if (!driverRaw || !Number.isFinite(cardSeq)) {
-        return res.status(400).json({ error: 'driverId와 cardSeq가 필요합니다.' });
-    }
-    let conn;
-    try {
-        conn = await pool.getConnection();
-        await conn.beginTransaction();
-        const [userRows] = await conn.execute(
-            `SELECT CUST_ID, USER_ID FROM TB_USER WHERE CUST_ID = ? OR USER_ID = ? LIMIT 1`,
-            [driverRaw, driverRaw]
-        );
-        const user = userRows[0];
-        if (!user) {
-            await conn.rollback();
-            return res.status(404).json({ error: '기사(회원)를 찾을 수 없습니다.' });
-        }
-        const custId = String(user.CUST_ID || '').trim();
-        const [have] = await conn.execute(
-            `SELECT 1 FROM TB_PAYMENT_CARD WHERE CUST_ID = ? AND CARD_SEQ = ? LIMIT 1`,
-            [custId, cardSeq]
-        );
-        if (!have.length) {
-            await conn.rollback();
-            return res.status(404).json({ error: '해당 카드가 없습니다.' });
-        }
-        await conn.execute(`UPDATE TB_PAYMENT_CARD SET IS_PRIMARY = 'N' WHERE CUST_ID = ?`, [custId]);
-        await conn.execute(
-            `UPDATE TB_PAYMENT_CARD SET IS_PRIMARY = 'Y' WHERE CUST_ID = ? AND CARD_SEQ = ?`,
-            [custId, cardSeq]
-        );
-        await conn.commit();
-        const payload = await buildBillingSubscriptionPayload(pool, driverRaw, BILLING_SUBSCRIPTION_ID);
-        res.status(200).json({ BillingSubscription: payload });
-    } catch (error) {
-        if (conn) try { await conn.rollback(); } catch (_) { /* ignore */ }
-        console.error('billing-subscription primary-card:', error);
-        if (error.code === 'ER_NO_SUCH_TABLE') {
-            return res.status(503).json({ error: 'TB_PAYMENT_CARD 테이블이 없습니다.' });
-        }
-        res.status(500).json({ error: error.message });
-    } finally {
-        if (conn) conn.release();
-    }
-});
 
 /**
  * 여행자 견적 요청 상세 조회
- * GET /api/traveler-quote-request-details?reqId=&custId=&reqBusSeq=
- * - TB_AUCTION_REQ 마스터, TB_AUCTION_REQ_BUS(요청 REQ_BUS_SEQ 행) + TB_COMMON_CODE(GRP_CD=BUS_TYPE) 차량명
- * - TB_AUCTION_REQ_VIA (REQ_ID, VIA_SEQ ASC)
- * - TB_BUS_RESERVATION: custId 있으면 REQ_ID+DRIVER_ID, REQ_BUS_SEQ 일치 우선(없으면 0 — 기존 INSERT 호환)
+ * GET /api/traveler-quote-request-details?reqId=&driverId=
+ * - TB_AUCTION_REQ (마스터) + TB_AUCTION_REQ_BUS (차량) + TB_AUCTION_REQ_VIA (경유지) 조회
+ * - TB_BUS_RESERVATION — 기사 입찰가 / 상태 / 회차 별도 조회
+ * - 데이터 없을 경우 개발용 더미 데이터 반환
  */
 app.get('/api/traveler-quote-request-details', async (req, res) => {
     let connection;
     try {
-        const { reqId, custId, reqBusSeq } = req.query;
+        const { reqId, custId } = req.query;
         if (!reqId) return res.status(400).json({ error: 'reqId가 필요합니다.' });
-
-        const reqBusSeqNum =
-            reqBusSeq != null && String(reqBusSeq).trim() !== ''
-                ? parseInt(String(reqBusSeq).trim(), 10)
-                : null;
 
         connection = await pool.getConnection();
 
+        // 1. TB_AUCTION_REQ 마스터 조회
         const [rows] = await connection.execute(
             `SELECT
                 r.REQ_ID                     AS reqId,
@@ -4215,118 +3763,68 @@ app.get('/api/traveler-quote-request-details', async (req, res) => {
             [reqId]
         );
 
+        // 2. TB_BUS_RESERVATION 별도 조회 (특정 버스 슬롯에 대한 기사의 입찰 정보)
+        // (참고: 이 API는 특정 슬롯이 아닌 전체 여정 조리용이므로, 기사가 입찰한 모든 슬롯 정보를 가져오거나 첫 번째 슬롯 정보를 가져옴)
+        let resId = null, driverBiddingPrice = 0, resStat = 'REQ', prevBidPrice = 0;
+        if (custId) {
+            const [resRows] = await connection.execute(
+                `SELECT RES_ID                            AS resId,
+                        COALESCE(DRIVER_BIDDING_PRICE, 0) AS driverBiddingPrice,
+                        COALESCE(DATA_STAT, 'REQ')        AS resStat
+                   FROM TB_BUS_RESERVATION
+                  WHERE REQ_ID = ? AND DRIVER_ID = ?
+                  LIMIT 1`,
+                [reqId, custId]
+            );
+            if (resRows.length > 0) {
+                resId              = resRows[0].resId;
+                driverBiddingPrice = Number(resRows[0].driverBiddingPrice) || 0;
+                resStat            = resRows[0].resStat || 'REQ';
+            }
+        }
+
         if (rows.length === 0) {
             return res.status(404).json({ error: '견적 요청 정보를 찾을 수 없습니다.' });
         }
 
         const master = rows[0];
 
-        let busSeqResolved = reqBusSeqNum;
-        if (busSeqResolved == null || !Number.isFinite(busSeqResolved) || busSeqResolved < 0) {
-            const [fb] = await connection.execute(
-                `SELECT REQ_BUS_SEQ AS seq FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ? ORDER BY REQ_BUS_SEQ ASC LIMIT 1`,
-                [reqId]
-            );
-            busSeqResolved = fb[0]?.seq != null ? Number(fb[0].seq) : 0;
-        }
-
-        const [busSlotRows] = await connection.execute(
-            `SELECT BUS_TYPE_CD AS busTypeCd FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? LIMIT 1`,
-            [reqId, busSeqResolved]
-        );
-        const busTypeCd =
-            busSlotRows[0]?.busTypeCd != null ? String(busSlotRows[0].busTypeCd).trim() : '';
-
-        let busTypeName = null;
-        if (busTypeCd) {
-            try {
-                const [cRows] = await connection.execute(
-                    `SELECT CD_NM_KO AS cdNmKo FROM TB_COMMON_CODE
-                      WHERE GRP_CD = 'BUS_TYPE' AND DTL_CD = ? AND (USE_YN = 'Y' OR USE_YN IS NULL)
-                      LIMIT 1`,
-                    [busTypeCd]
-                );
-                if (cRows.length > 0 && cRows[0].cdNmKo != null && String(cRows[0].cdNmKo).trim() !== '') {
-                    busTypeName = String(cRows[0].cdNmKo).trim();
-                }
-            } catch (_) {
-                /* TB_COMMON_CODE 없거나 컬럼 불일치 시 차량명만 비움 */
-            }
-        }
-
-        const [busCountRows] = await connection.execute(
-            `SELECT COUNT(*) AS c FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ?`,
+        // 3. TB_AUCTION_REQ_BUS 차량 상세 슬롯 조회 (개별 슬롯별 입찰 가능하도록)
+        const [busRows] = await connection.execute(
+            `SELECT 
+                REQ_BUS_SEQ AS reqBusSeq,
+                BUS_TYPE_CD AS busType, 
+                DATA_STAT   AS busStat,
+                COALESCE(RES_BUS_AMT, 0) AS resBusAmt
+             FROM TB_AUCTION_REQ_BUS
+             WHERE REQ_ID = ?`,
             [reqId]
         );
-        const busCnt = Math.max(1, Number(busCountRows[0]?.c) || 1);
 
-        let resId = null;
-        let driverBiddingPrice = 0;
-        let resStat = null;
-
-        if (custId) {
-            const cid = String(custId).trim();
-            const loadRes = async (seq) => {
-                const [resRows] = await connection.execute(
-                    `SELECT RES_ID                            AS resId,
-                            COALESCE(DRIVER_BIDDING_PRICE, 0) AS driverBiddingPrice,
-                            DATA_STAT                         AS resStat
-                       FROM TB_BUS_RESERVATION
-                      WHERE REQ_ID = ? AND DRIVER_ID = ? AND REQ_BUS_SEQ = ?
-                      ORDER BY REG_DT DESC
-                      LIMIT 1`,
-                    [reqId, cid, seq]
-                );
-                return resRows[0] || null;
-            };
-
-            if (reqBusSeqNum != null && Number.isFinite(reqBusSeqNum) && reqBusSeqNum >= 0) {
-                let r0 = await loadRes(reqBusSeqNum);
-                if (!r0 && reqBusSeqNum !== 0) {
-                    r0 = await loadRes(0);
-                }
-                if (r0) {
-                    resId = r0.resId;
-                    driverBiddingPrice = Number(r0.driverBiddingPrice) || 0;
-                    resStat = r0.resStat;
-                }
-            } else {
-                const [resRows] = await connection.execute(
-                    `SELECT RES_ID                            AS resId,
-                            COALESCE(DRIVER_BIDDING_PRICE, 0) AS driverBiddingPrice,
-                            DATA_STAT                         AS resStat
-                       FROM TB_BUS_RESERVATION
-                      WHERE REQ_ID = ? AND DRIVER_ID = ?
-                      ORDER BY REG_DT DESC
-                      LIMIT 1`,
-                    [reqId, cid]
-                );
-                if (resRows.length > 0) {
-                    resId = resRows[0].resId;
-                    driverBiddingPrice = Number(resRows[0].driverBiddingPrice) || 0;
-                    resStat = resRows[0].resStat;
-                }
-            }
-        }
-
+        // 4. TB_AUCTION_REQ_VIA 경유지 조회
         const [viaRows] = await connection.execute(
-            `SELECT VIA_SEQ AS viaSeq, VIA_TYPE AS viaType, VIA_ADDR AS viaAddr
-               FROM TB_AUCTION_REQ_VIA
-              WHERE REQ_ID = ?
-              ORDER BY VIA_SEQ ASC`,
+            `SELECT
+                VIA_SEQ       AS sortOrder,
+                VIA_ADDR      AS waypointAddr,
+                STOP_TIME_MIN AS stopTimeMin
+             FROM TB_AUCTION_REQ_VIA
+             WHERE REQ_ID = ?
+             ORDER BY VIA_SEQ`,
             [reqId]
         );
+
+        // 5. 가격 가이드
+        const priceGuide = { avgBid: null };
 
         res.status(200).json({
             ...master,
-            busType: busTypeCd,
-            busTypeCd,
-            busTypeName,
-            busCnt,
+            buses:    busRows,
             resId,
             driverBiddingPrice,
             resStat,
-            viaPoints: viaRows,
+            prevBidPrice,
+            waypoints: viaRows,
+            priceGuide,
         });
     } catch (error) {
         console.error('traveler-quote-request-details:', error);
@@ -4337,7 +3835,7 @@ app.get('/api/traveler-quote-request-details', async (req, res) => {
 });
 
 /**
- * 기사 입찰 정보 등록 / 갱신
+ * 기사 입찰가 수정 / 신규 등록
  * PUT /api/traveler-quote-request-details/bid
  * Body: { reqId, reqBusSeq, driverId, bidPrice, busId }
  */
@@ -4463,3 +3961,68 @@ app.listen(PORT, () => {
     }
 })();
 
+/**
+ * [공통] 카카오 알림톡 발송 및 이력 저장 유틸리티
+ * @param {string} reqId 견적 요청 ID (선택사항)
+ * @param {string} receiverId 수신자 ID
+ * @param {string} receiverPhone 수신 휴대폰 번호
+ * @param {string} content 메시지 내용
+ * @param {string} category 발송 상황 구분 (REQ_REG, CONFIRM, JOIN 등)
+ */
+async function sendAlimTalkAndLog({ reqId, receiverId, receiverPhone, content, category }) {
+    let connection;
+    try {
+        console.log(`[ALIMTALK SENDING] To: ${receiverPhone}, Category: ${category}`);
+        console.log(`[CONTENT] \n${content}`);
+
+        /**
+         * [TODO] 실제 카카오 알림톡 발송 업체 API 호출부 (솔라피, 알리고 등)
+         * 예시 (SOLAPI 기준):
+         * const { SolapiMessageService } = require('solapi-sdk');
+         * const messageService = new SolapiMessageService('YOUR_API_KEY', 'YOUR_API_SECRET');
+         * await messageService.sendOne({
+         *   to: receiverPhone,
+         *   from: '01012345678', // 발신번호 (발신번호 등록 필수)
+         *   text: content,
+         *   kakaoOptions: {
+         *     pfId: 'YOUR_PF_ID', // 플러스친구 ID
+         *     templateId: 'YOUR_TEMPLATE_ID' // 템플릿 ID
+         *   }
+         * });
+         */
+        const sendStat = 'SUCCESS'; 
+
+        connection = await pool.getConnection();
+
+        // [ID 생성] 최신 16자리 숫자 ID 생성 (문자 포함된 ID 제외하고 숫자 규격만 필터링)
+        const [[{ maxLogId }]] = await connection.execute("SELECT MAX(LOG_ID) AS maxLogId FROM TB_SMS_LOG WHERE LOG_ID REGEXP '^[0-9]+$'");
+        const logId = generateNextNumericId(maxLogId || '0', 16);
+
+        const query = `
+            INSERT INTO TB_SMS_LOG (
+                LOG_ID, REQ_ID, RECEIVER_ID, RECEIVER_PHONE, 
+                MSG_CONTENT, MSG_TYPE, SEND_STAT, SEND_CATEGORY, REG_DT
+            ) VALUES (
+                ?, ?, ?, ?, ?, 'ALIMTALK', ?, ?, NOW()
+            )
+        `;
+
+        const params = [
+            logId, 
+            reqId || null, 
+            receiverId, 
+            receiverPhone, 
+            content, 
+            sendStat, 
+            category
+        ];
+
+        await connection.execute(query, params);
+        console.log(`[ALIMTALK LOG SAVED] LogID: ${logId}`);
+
+    } catch (err) {
+        console.error('AlimTalk Send or Log Error:', err);
+    } finally {
+        if (connection) connection.release();
+    }
+}
