@@ -9,14 +9,28 @@ const { Storage } = require('@google-cloud/storage');
 const bcrypt = require('bcrypt');
 const { encrypt, decrypt } = require('./crypto');
 
-const { 
-    generateNextNumericId, 
-    formatDateYmd, 
-    parseDataUrlPayload, 
-    sendAlimTalkAndLog 
-} = require('./lib/bt_common_utils');
-const { runDriverVerificationsForProfileSetup } = require('./driverVerification');
+/**
+ * 가변 길이 0-패딩 숫자 ID 생성기
+ * @param {number|string} currentMax 순자값 또는 문자열
+ * @param {number} length 패딩 길이 (기본 10)
+ * @returns {string} 패딩된 다음 ID
+ */
+function generateNextNumericId(currentMax, length = 10) {
+    const nextVal = (parseInt(currentMax || 0, 10)) + 1;
+    return String(nextVal).padStart(length, '0');
+}
+const {
+    runDriverVerificationsForProfileSetup,
+    isQualCertUnchanged,
+} = require('./driverVerification');
 const { canonicalFileMasterFileId, fileIdMatchCandidates, custIdMatchCandidates } = require('./lib/bustaamsIds');
+const {
+    DRIVER_FEE_POLICY_DTL_CDS,
+    DRIVER_FEE_POLICY_DTL_CDS_SQL_IN,
+    normalizeDriverFeePolicyDtlCd,
+    isCanonicalDriverFeePolicyDtlCd,
+    sqlFeePolicyCntJoinOnP,
+} = require('./lib/feePolicyDtl');
 const fs = require('fs');
 const createCommonLiveChatRouter = require('./routes/commonLiveChat');
 const createLiveChatTravelerRouter = require('./routes/liveChatTraveler');
@@ -172,28 +186,64 @@ function formatDateYmd(v) {
 /** 진위 검증 생략 비교용 — TB_DRIVER_DETAIL 기존 행(면허·자격 컬럼) */
 async function fetchDriverDetailLicenseRow(connection, loginUserId) {
     if (!loginUserId) return null;
-    try {
-        const [rows] = await connection.execute(
-            `SELECT LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO, LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT,
+    const withBirth = `SELECT LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO, LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT,
+                    QUAL_CERT_NO, QUAL_CERT_VERIFY_STATUS,
+                    BIRTH_YMD, SEX
+             FROM TB_DRIVER_DETAIL WHERE USER_ID = ? LIMIT 1`;
+    const base = `SELECT LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO, LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT,
                     QUAL_CERT_NO, QUAL_CERT_VERIFY_STATUS
-             FROM TB_DRIVER_DETAIL WHERE USER_ID = ? LIMIT 1`,
-            [loginUserId]
-        );
+             FROM TB_DRIVER_DETAIL WHERE USER_ID = ? LIMIT 1`;
+    try {
+        const [rows] = await connection.execute(withBirth, [loginUserId]);
         return rows[0] || null;
     } catch (e) {
-        if (e.code === 'ER_BAD_FIELD_ERROR') return null;
+        if (e.code === 'ER_BAD_FIELD_ERROR') {
+            try {
+                const [rows2] = await connection.execute(base, [loginUserId]);
+                return rows2[0] || null;
+            } catch (e2) {
+                if (e2.code === 'ER_BAD_FIELD_ERROR') return null;
+                throw e2;
+            }
+        }
         throw e;
     }
 }
 
-/** GET profile-setup용 — 면허·자격 컬럼이 없으면(구 스키마) 주소 블록만 조회 후 면허 필드 기본값 */
+/** 프로필 저장 시 자격번호·생년 분기 — LICENSE_TYPE 유무와 무관하게 조회 */
+async function fetchDriverDetailQualBirthRow(connection, loginUserId) {
+    if (!loginUserId) return null;
+    const attempts = [
+        `SELECT QUAL_CERT_NO, IFNULL(QUAL_CERT_VERIFY_STATUS, 'UNVERIFIED') AS QUAL_CERT_VERIFY_STATUS,
+                BIRTH_YMD, SEX
+         FROM TB_DRIVER_DETAIL WHERE USER_ID = ? LIMIT 1`,
+        `SELECT QUAL_CERT_NO, IFNULL(QUAL_CERT_VERIFY_STATUS, 'UNVERIFIED') AS QUAL_CERT_VERIFY_STATUS
+         FROM TB_DRIVER_DETAIL WHERE USER_ID = ? LIMIT 1`
+    ];
+    for (const sql of attempts) {
+        try {
+            const [rows] = await connection.execute(sql, [loginUserId]);
+            return rows[0] || null;
+        } catch (e) {
+            if (e.code !== 'ER_BAD_FIELD_ERROR') throw e;
+        }
+    }
+    return null;
+}
+
+/** GET profile-setup용 — 면허·자격 컬럼이 없으면(구 스키마) 주소+생년·회원등급 등 단계적 조회 후 면허 필드 기본값 */
 async function selectDriverDetailForProfileSetup(connection, loginUserId) {
     const fullSql = `SELECT ZIPCODE, ADDRESS, DETAIL_ADDRESS, ADDR_TYPE, ADDR_NAME,
                             BIRTH_YMD, SEX, COALESCE(SELF_INTRO, '') AS SELF_INTRO,
                             LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO,
                             LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT, QUAL_CERT_NO,
                             IFNULL(QUAL_CERT_VERIFY_STATUS, 'UNVERIFIED') AS QUAL_CERT_VERIFY_STATUS,
-                            QUAL_CERT_VERIFY_DT
+                            QUAL_CERT_VERIFY_DT,
+                            FEE_POLICY
+                     FROM TB_DRIVER_DETAIL WHERE USER_ID = ? LIMIT 1`;
+    const baseSqlWithFee = `SELECT ZIPCODE, ADDRESS, DETAIL_ADDRESS, ADDR_TYPE, ADDR_NAME,
+                            BIRTH_YMD, SEX, COALESCE(SELF_INTRO, '') AS SELF_INTRO,
+                            FEE_POLICY
                      FROM TB_DRIVER_DETAIL WHERE USER_ID = ? LIMIT 1`;
     const baseSql = `SELECT ZIPCODE, ADDRESS, DETAIL_ADDRESS, ADDR_TYPE, ADDR_NAME,
                             BIRTH_YMD, SEX, COALESCE(SELF_INTRO, '') AS SELF_INTRO
@@ -202,21 +252,80 @@ async function selectDriverDetailForProfileSetup(connection, loginUserId) {
         const [dr] = await connection.execute(fullSql, [loginUserId]);
         return dr[0] || null;
     } catch (e) {
-        if (e.code === 'ER_BAD_FIELD_ERROR') {
-            const [dr2] = await connection.execute(baseSql, [loginUserId]);
-            const r = dr2[0];
-            if (!r) return null;
-            return {
-                ...r,
-                LICENSE_TYPE: null,
-                LICENSE_NO: null,
-                LICENSE_SERIAL_NO: null,
-                LICENSE_ISSUE_DT: null,
-                LICENSE_EXPIRY_DT: null,
-                QUAL_CERT_NO: null,
-                QUAL_CERT_VERIFY_STATUS: 'UNVERIFIED',
-                QUAL_CERT_VERIFY_DT: null
-            };
+        if (e.code !== 'ER_BAD_FIELD_ERROR') throw e;
+        let r = null;
+        try {
+            const [dr2] = await connection.execute(baseSqlWithFee, [loginUserId]);
+            r = dr2[0] || null;
+        } catch (e2) {
+            if (e2.code !== 'ER_BAD_FIELD_ERROR') throw e2;
+            const [dr3] = await connection.execute(baseSql, [loginUserId]);
+            r = dr3[0] || null;
+        }
+        if (!r) return null;
+        if (!pickFeePolicyRawFromRow(r)) {
+            try {
+                const [fr] = await connection.execute(
+                    `SELECT FEE_POLICY FROM TB_DRIVER_DETAIL WHERE USER_ID = ? LIMIT 1`,
+                    [loginUserId]
+                );
+                const fv = fr[0]?.FEE_POLICY ?? fr[0]?.fee_policy;
+                if (fv != null && String(fv).trim() !== '') {
+                    r = { ...r, FEE_POLICY: fv };
+                }
+            } catch (_) {
+                /* FEE_POLICY 컬럼 없음 */
+            }
+        }
+        return {
+            ...r,
+            LICENSE_TYPE: null,
+            LICENSE_NO: null,
+            LICENSE_SERIAL_NO: null,
+            LICENSE_ISSUE_DT: null,
+            LICENSE_EXPIRY_DT: null,
+            QUAL_CERT_NO: null,
+            QUAL_CERT_VERIFY_STATUS: 'UNVERIFIED',
+            QUAL_CERT_VERIFY_DT: null
+        };
+    }
+}
+
+/** TB_DRIVER_DETAIL / TB_MOM_MEMBER 행에서 회원등급 원문 추출 (mysql2·ENUM·버퍼 대응) */
+function pickFeePolicyRawFromRow(row) {
+    if (!row) return '';
+    const v =
+        row.FEE_POLICY !== undefined && row.FEE_POLICY !== null && row.FEE_POLICY !== ''
+            ? row.FEE_POLICY
+            : row.fee_policy;
+    if (v == null || v === '') return '';
+    if (typeof Buffer !== 'undefined' && Buffer.isBuffer(v)) return v.toString('utf8').trim();
+    return String(v).trim();
+}
+
+/**
+ * 프로필 모달 회원등급: TB_DRIVER_DETAIL 우선, 없으면 TB_MOM_MEMBER 최신 월 행
+ */
+async function resolveDriverProfileFeePolicy(connection, resolvedCustId, detailRow) {
+    const fromDetail = pickFeePolicyRawFromRow(detailRow);
+    if (fromDetail) return normalizeDriverFeePolicyDtlCd(fromDetail);
+    const custCands = custIdMatchCandidates(resolvedCustId);
+    if (!custCands.length || !connection) return '';
+    try {
+        const inPh = custCands.map(() => '?').join(', ');
+        const [mr] = await connection.execute(
+            `SELECT FEE_POLICY FROM TB_MOM_MEMBER WHERE TRIM(CUST_ID) IN (${inPh}) ORDER BY YYYYMM DESC LIMIT 1`,
+            custCands
+        );
+        return normalizeDriverFeePolicyDtlCd(pickFeePolicyRawFromRow(mr[0]));
+    } catch (e) {
+        if (
+            e.code === 'ER_NO_SUCH_TABLE' ||
+            e.code === 'ER_BAD_FIELD_ERROR' ||
+            e.errno === 1146 ||
+            e.errno === 1054
+        ) {
+            return '';
         }
         throw e;
     }
@@ -354,13 +463,22 @@ async function tableColumnExists(connection, tableName, columnName) {
     return rows.length > 0;
 }
 
+function formatCommonCodeFnumForLabel(v) {
+    if (v == null || v === '') return '-';
+    const n = Number(v);
+    if (!Number.isFinite(n)) return String(v).trim();
+    if (Math.abs(n - Math.round(n)) < 1e-9) return String(Math.round(n));
+    return String(n);
+}
+
 async function ensureDriverDetailProfileColumns(connection) {
     const cols = [
         ['ADDR_TYPE', "VARCHAR(20) NULL COMMENT 'HOME|OFFICE|OTHER'"],
         ['ADDR_NAME', "VARCHAR(40) NULL COMMENT 'OTHER address label'"],
         ['BIRTH_YMD', "VARCHAR(6) NULL COMMENT 'YYMMDD (=주민등록 앞 6자리)'"],
         ['SEX', "CHAR(1) NULL COMMENT 'RRN gender digit'"],
-        ['SELF_INTRO', 'TEXT NULL']
+        ['SELF_INTRO', 'TEXT NULL'],
+        ['FEE_POLICY', "VARCHAR(30) NULL COMMENT 'TB_COMMON_CODE GRP_CD=FEE_POLICY DTL_CD'"]
     ];
     for (const [name, ddl] of cols) {
         if (!(await tableColumnExists(connection, 'TB_DRIVER_DETAIL', name))) {
@@ -440,12 +558,30 @@ function normalizeGcsObjectPath(pathRaw) {
     return p;
 }
 
-/** GCS exists() 순으로 시도할 객체 키 후보 */
+/** GCS exists() 순으로 시도할 객체 키 후보 (전체 URL 문자열은 객체 키가 아니므로 제외) */
 function gcsObjectPathCandidates(pathRaw) {
     const raw = Buffer.isBuffer(pathRaw) ? pathRaw.toString('utf8') : pathRaw != null ? String(pathRaw) : '';
     const trimmed = raw.trim().replace(/\r?\n/g, '');
     const norm = normalizeGcsObjectPath(pathRaw);
-    return [...new Set([norm, trimmed, trimmed.replace(/^\/+/, ''), norm ? norm.replace(/^\/+/, '') : ''].filter(Boolean))];
+    const baseList = [norm, trimmed.replace(/^\/+/, ''), norm ? norm.replace(/^\/+/, '') : ''].filter(Boolean);
+    return [...new Set(baseList.filter((c) => c && !/^https?:\/\//i.test(c) && !/^gs:\/\//i.test(c)))];
+}
+
+/** 프로필 사진: 객체 키에 확장자 없이 저장된 레거시·FILE_EXT 조합 시도 */
+function expandGcsKeysWithImageExt(pathCandidates, fileExt) {
+    const ext = String(fileExt || '').replace(/^\./, '').trim().toLowerCase();
+    const fallbacks = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+    const out = [];
+    for (const key of pathCandidates) {
+        if (!key || /^https?:\/\//i.test(key)) continue;
+        out.push(key);
+        if (/\.(jpe?g|png|webp|gif)$/i.test(key)) continue;
+        const exts = ext ? [...new Set([ext, ...fallbacks])] : fallbacks;
+        for (const e of exts) {
+            if (e) out.push(`${key}.${e}`);
+        }
+    }
+    return [...new Set(out)];
 }
 
 function bucketForName(name) {
@@ -872,9 +1008,15 @@ app.get('/api/driver/profile-setup', async (req, res) => {
         };
 
         if (!detail) {
+            const feePolicyResolved = await resolveDriverProfileFeePolicy(
+                connection,
+                resolvedCustId,
+                null
+            );
             return res.json({
                 exists: false,
                 ...baseExtras,
+                feePolicy: feePolicyResolved,
                 addrType: 'HOME',
                 addrName: '',
                 zipcode: '',
@@ -897,6 +1039,8 @@ app.get('/api/driver/profile-setup', async (req, res) => {
             /* ignore */
         }
 
+        const feePolicyResolved = await resolveDriverProfileFeePolicy(connection, resolvedCustId, detail);
+
         return res.json({
             exists: true,
             ...baseExtras,
@@ -913,6 +1057,7 @@ app.get('/api/driver/profile-setup', async (req, res) => {
             qualCertVerifyDt: detail.QUAL_CERT_VERIFY_DT
                 ? new Date(detail.QUAL_CERT_VERIFY_DT).toISOString()
                 : null,
+            feePolicy: feePolicyResolved,
             addrType: detail.ADDR_TYPE || 'HOME',
             addrName: detail.ADDR_NAME || '',
             zipcode: detail.ZIPCODE || '',
@@ -924,6 +1069,76 @@ app.get('/api/driver/profile-setup', async (req, res) => {
         res.status(500).json({ error: error.message });
     } finally {
         if (connection) connection.release();
+    }
+});
+
+/** 기사 프로필 — 회원등급(FEE_POLICY) 콤보: TB_COMMON_CODE FEE_POLICY + FEE_POLICY_CNT */
+app.get('/api/driver/fee-policy-options', async (req, res) => {
+    try {
+        const inPh = DRIVER_FEE_POLICY_DTL_CDS_SQL_IN.map(() => '?').join(', ');
+        const joinCond = sqlFeePolicyCntJoinOnP();
+        const [rows] = await pool.execute(
+            `SELECT p.DTL_CD AS dtlCd, p.CD_NM_KO AS cdNmKo, p.CD_FNUM AS feeFnum, p.DISP_ORD AS dispOrd,
+                    c.CD_FNUM AS cntFnum
+             FROM TB_COMMON_CODE p
+             LEFT JOIN TB_COMMON_CODE c
+               ON c.GRP_CD = 'FEE_POLICY_CNT' AND ${joinCond}
+               AND (c.USE_YN = 'Y' OR c.USE_YN IS NULL)
+             WHERE p.GRP_CD = 'FEE_POLICY'
+               AND TRIM(p.DTL_CD) IN (${inPh})
+               AND (p.USE_YN = 'Y' OR p.USE_YN IS NULL)
+             ORDER BY p.DISP_ORD ASC, p.DTL_CD ASC`,
+            [...DRIVER_FEE_POLICY_DTL_CDS_SQL_IN]
+        );
+        const bestByCanon = new Map();
+        for (const r of rows || []) {
+            const rawDtl =
+                r.dtlCd != null
+                    ? String(r.dtlCd).trim()
+                    : r.DTL_CD != null
+                      ? String(r.DTL_CD).trim()
+                      : '';
+            const canon = normalizeDriverFeePolicyDtlCd(rawDtl);
+            if (!isCanonicalDriverFeePolicyDtlCd(canon)) continue;
+            const dispOrd = Number(r.dispOrd ?? r.DISP_ORD ?? 1e9);
+            const prev = bestByCanon.get(canon);
+            let replace = !prev || dispOrd < prev.dispOrd;
+            if (!replace && prev && dispOrd === prev.dispOrd) {
+                if (prev.rawDtl === 'DRIVER_GENNERAL' && rawDtl === 'DRIVER_GENERAL') replace = true;
+            }
+            if (replace) {
+                bestByCanon.set(canon, { r, rawDtl, dispOrd });
+            }
+        }
+        const ordered = [...bestByCanon.entries()]
+            .map(([canon, { r, dispOrd }]) => ({ canon, r, dispOrd }))
+            .sort((a, b) =>
+                a.dispOrd !== b.dispOrd ? a.dispOrd - b.dispOrd : a.canon.localeCompare(b.canon)
+            );
+        const items = ordered.map(({ canon, r }) => {
+            const cdNmKo =
+                r.cdNmKo != null
+                    ? String(r.cdNmKo).trim()
+                    : r.CD_NM_KO != null
+                      ? String(r.CD_NM_KO).trim()
+                      : '';
+            const feeRaw = r.feeFnum !== undefined ? r.feeFnum : r.FEE_FNUM;
+            const cntRaw = r.cntFnum !== undefined ? r.cntFnum : r.CNT_FNUM;
+            const feePart = formatCommonCodeFnumForLabel(feeRaw);
+            const cntPart = formatCommonCodeFnumForLabel(cntRaw);
+            const label = `${cdNmKo} ( 월 회비 : ${feePart} 월 청약 건수 : ${cntPart} )`;
+            return { dtlCd: canon, label };
+        });
+        res.json({ items });
+    } catch (e) {
+        if (e.code === 'ER_NO_SUCH_TABLE') {
+            return res.status(503).json({
+                error: 'TB_COMMON_CODE 테이블을 확인할 수 없습니다.',
+                items: []
+            });
+        }
+        console.error('fee-policy-options:', e);
+        res.status(500).json({ error: e.message });
     }
 });
 
@@ -969,9 +1184,13 @@ app.get('/api/driver/profile-photo', async (req, res) => {
 
         let { GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT } = fRows[0];
         if (Buffer.isBuffer(GCS_PATH)) GCS_PATH = GCS_PATH.toString('utf8');
+        if (Buffer.isBuffer(FILE_EXT)) FILE_EXT = FILE_EXT.toString('utf8');
 
         const bktNm = GCS_BUCKET_NM != null ? String(GCS_BUCKET_NM).trim() : '';
-        const pathCandidates = gcsObjectPathCandidates(GCS_PATH);
+        const pathCandidates = expandGcsKeysWithImageExt(
+            gcsObjectPathCandidates(GCS_PATH),
+            FILE_EXT
+        );
         let gcsFile = null;
         for (const key of pathCandidates) {
             const f = bucketForName(bktNm).file(key);
@@ -1994,6 +2213,16 @@ app.post('/api/driver/profile-setup', async (req, res) => {
         const loginUserId = (loginUserIdBody || '').trim();
         if (!loginUserId) return res.status(400).json({ error: 'userId is required' });
 
+        const feePolicyTrim = normalizeDriverFeePolicyDtlCd(
+            req.body.feePolicy != null ? String(req.body.feePolicy).trim() : ''
+        );
+        if (!feePolicyTrim) {
+            return res.status(400).json({ error: '회원등급(FEE_POLICY)을 선택해 주세요.' });
+        }
+        if (!DRIVER_FEE_POLICY_DTL_CDS.includes(feePolicyTrim)) {
+            return res.status(400).json({ error: '유효하지 않은 회원등급(FEE_POLICY)입니다.' });
+        }
+
         const [uResolve] = await pool.execute(
             `SELECT CUST_ID, USER_ID FROM TB_USER WHERE USER_ID = ? LIMIT 1`,
             [loginUserId]
@@ -2019,34 +2248,86 @@ app.post('/api/driver/profile-setup', async (req, res) => {
             if (!addrNm) return res.status(400).json({ error: '주소 구분이 OTHER일 때 주소구분명칭은 필수입니다(최대 10자).' });
         }
 
-        const rrnNorm = (rrn || '').trim();
-        const rrnM = /^(\d{6})-(\d{7})$/.exec(rrnNorm);
-        if (!rrnM) {
-            return res.status(400).json({
-                error: '주민등록번호는 앞 6자리, 하이픈, 뒤 7자리 숫자 형식으로 입력해 주세요. (예: 900101-1234567)'
-            });
-        }
-        const rrnFront6 = rrnM[1];
-        const rrnBack7 = rrnM[2];
-        const rrnForVerify = `${rrnFront6}-${rrnBack7}`;
-        const rrnForEncrypt = `${rrnFront6}-${rrnBack7.charAt(0)}`;
-        const sexDigit = rrnBack7.charAt(0);
-        /** `TB_DRIVER_DETAIL.BIRTH_YMD` — 스키마 `varchar(6)` (주민 앞자리와 동일한 YYMMDD) */
-        const birthYmdYyMmDd = rrnFront6;
-
-        const phoneVerify = await verifyFirebasePhoneIdTokenIfRequired(phoneIdToken);
-        if (!phoneVerify.ok) {
-            return res.status(400).json({ error: phoneVerify.error });
-        }
-
         connection = await pool.getConnection();
         await ensureDriverDetailProfileColumns(connection);
         await ensureDriverDocsFileSizeColumn(connection);
 
         const hasLicenseCols = await tableColumnExists(connection, 'TB_DRIVER_DETAIL', 'LICENSE_TYPE');
-        const existingDriverRow = hasLicenseCols
+        const licenseRowForVerify = hasLicenseCols
             ? await fetchDriverDetailLicenseRow(connection, loginUserIdResolved)
             : null;
+        const qualBirthRow = await fetchDriverDetailQualBirthRow(connection, loginUserIdResolved);
+        const existingDriverRow = licenseRowForVerify || qualBirthRow;
+
+        const qualUnchanged =
+            qualBirthRow && isQualCertUnchanged(qualBirthRow, { qualCertNo });
+
+        const rrnNorm = (rrn || '').trim();
+        const rrnM = /^(\d{6})-(\d{7})$/.exec(rrnNorm);
+
+        let rrnFront6;
+        let rrnBack7;
+        let rrnForVerify;
+        /** TB_USER.RESIDENT_NO_ENC 갱신용(앞6+뒤첫자만 저장). 자격번호 미변경·주민 미입력 시 null → TB_USER 유지 */
+        let rrnForEncrypt;
+        let sexDigit;
+        /** TB_DRIVER_DETAIL.BIRTH_YMD — varchar(6) YYMMDD */
+        let birthYmdYyMmDd;
+
+        if (!qualUnchanged) {
+            if (!rrnM) {
+                connection.release();
+                connection = undefined;
+                return res.status(400).json({
+                    error: '주민등록번호는 앞 6자리, 하이픈, 뒤 7자리 숫자 형식으로 입력해 주세요. (예: 900101-1234567)'
+                });
+            }
+            rrnFront6 = rrnM[1];
+            rrnBack7 = rrnM[2];
+            rrnForVerify = `${rrnFront6}-${rrnBack7}`;
+            rrnForEncrypt = `${rrnFront6}-${rrnBack7.charAt(0)}`;
+            sexDigit = rrnBack7.charAt(0);
+            birthYmdYyMmDd = rrnFront6;
+        } else if (rrnM) {
+            rrnFront6 = rrnM[1];
+            rrnBack7 = rrnM[2];
+            rrnForVerify = `${rrnFront6}-${rrnBack7}`;
+            rrnForEncrypt = `${rrnFront6}-${rrnBack7.charAt(0)}`;
+            sexDigit = rrnBack7.charAt(0);
+            birthYmdYyMmDd = rrnFront6;
+        } else {
+            rrnForEncrypt = null;
+            const birthSource = qualBirthRow || licenseRowForVerify;
+            if (!birthSource) {
+                connection.release();
+                connection = undefined;
+                return res.status(400).json({
+                    error: '저장된 기사 정보가 없을 때는 주민등록번호를 입력해 주세요.'
+                });
+            }
+            birthYmdYyMmDd = String(
+                birthSource.BIRTH_YMD != null
+                    ? birthSource.BIRTH_YMD
+                    : birthSource.birth_ymd != null
+                      ? birthSource.birth_ymd
+                      : ''
+            ).trim().slice(0, 6);
+            sexDigit = String(
+                birthSource.SEX != null ? birthSource.SEX : birthSource.sex != null ? birthSource.sex : ''
+            )
+                .trim()
+                .charAt(0);
+            if (!/^\d{6}$/.test(birthYmdYyMmDd) || !sexDigit) {
+                connection.release();
+                connection = undefined;
+                return res.status(400).json({
+                    error:
+                        '버스운전 자격번호를 변경하지 않은 경우에도 주민등록번호 6+7자리 또는 저장된 생년월일 정보가 필요합니다. 주민번호를 입력해 주세요.'
+                });
+            }
+            rrnBack7 = `${sexDigit}000000`;
+            rrnForVerify = `${birthYmdYyMmDd}-${rrnBack7}`;
+        }
 
         const extVerify = await runDriverVerificationsForProfileSetup({
             driverName: (driverName || '').trim(),
@@ -2083,13 +2364,15 @@ app.post('/api/driver/profile-setup', async (req, res) => {
         await connection.beginTransaction();
 
         try {
-            const encryptedRrn = encrypt(rrnForEncrypt);
             let latestQualSeqPadded = null;
 
-            await connection.execute(
-                `UPDATE TB_USER SET RESIDENT_NO_ENC = ? WHERE CUST_ID = ?`,
-                [encryptedRrn, custId]
-            );
+            if (rrnForEncrypt != null && String(rrnForEncrypt).trim() !== '') {
+                const encryptedRrn = encrypt(rrnForEncrypt);
+                await connection.execute(
+                    `UPDATE TB_USER SET RESIDENT_NO_ENC = ? WHERE CUST_ID = ?`,
+                    [encryptedRrn, custId]
+                );
+            }
 
             const detailAddrNameDb = addrT === 'OTHER' ? addrNm : null;
 
@@ -2098,8 +2381,8 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                     `
                     INSERT INTO TB_DRIVER_DETAIL (
                         USER_ID, ZIPCODE, ADDRESS, DETAIL_ADDRESS, ADDR_TYPE, ADDR_NAME,
-                        BIRTH_YMD, SEX, SELF_INTRO
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        BIRTH_YMD, SEX, SELF_INTRO, FEE_POLICY
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE
                         ZIPCODE = VALUES(ZIPCODE),
                         ADDRESS = VALUES(ADDRESS),
@@ -2109,6 +2392,7 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                         BIRTH_YMD = VALUES(BIRTH_YMD),
                         SEX = VALUES(SEX),
                         SELF_INTRO = VALUES(SELF_INTRO),
+                        FEE_POLICY = VALUES(FEE_POLICY),
                         MOD_DT = NOW()
                     `,
                     [
@@ -2120,7 +2404,8 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                         detailAddrNameDb,
                         birthYmdYyMmDd || null,
                         sexDigit,
-                        bioText ?? ''
+                        bioText ?? '',
+                        feePolicyTrim
                     ]
                 );
             } else {
@@ -2128,10 +2413,10 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                     `
                     INSERT INTO TB_DRIVER_DETAIL (
                         USER_ID, ZIPCODE, ADDRESS, DETAIL_ADDRESS, ADDR_TYPE, ADDR_NAME,
-                        BIRTH_YMD, SEX, SELF_INTRO,
+                        BIRTH_YMD, SEX, SELF_INTRO, FEE_POLICY,
                         LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO, LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT,
                         QUAL_CERT_NO, QUAL_CERT_VERIFY_STATUS, QUAL_CERT_VERIFY_DT
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE
                         ZIPCODE = VALUES(ZIPCODE),
                         ADDRESS = VALUES(ADDRESS),
@@ -2141,6 +2426,7 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                         BIRTH_YMD = VALUES(BIRTH_YMD),
                         SEX = VALUES(SEX),
                         SELF_INTRO = VALUES(SELF_INTRO),
+                        FEE_POLICY = VALUES(FEE_POLICY),
                         LICENSE_TYPE = VALUES(LICENSE_TYPE),
                         LICENSE_NO = VALUES(LICENSE_NO),
                         LICENSE_SERIAL_NO = VALUES(LICENSE_SERIAL_NO),
@@ -2161,6 +2447,7 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                         birthYmdYyMmDd || null,
                         sexDigit,
                         bioText ?? '',
+                        feePolicyTrim,
                         licenseType,
                         licenseNo,
                         licenseSerialNo || null,

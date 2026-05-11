@@ -279,9 +279,12 @@ function isLicenseUnchanged(existingRow, incoming) {
  */
 function isQualCertUnchanged(existingRow, incoming) {
     if (!existingRow) return false;
+    const dbQual =
+        existingRow.QUAL_CERT_NO !== undefined && existingRow.QUAL_CERT_NO !== null
+            ? existingRow.QUAL_CERT_NO
+            : existingRow.qual_cert_no;
     return (
-        normQualCertForCompare(existingRow.QUAL_CERT_NO) ===
-        normQualCertForCompare(incoming.qualCertNo)
+        normQualCertForCompare(dbQual) === normQualCertForCompare(incoming.qualCertNo)
     );
 }
 
