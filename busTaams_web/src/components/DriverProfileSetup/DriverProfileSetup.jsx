@@ -57,6 +57,11 @@ function qualServerDisplayFilename(orgNm, ext) {
   return e ? `${base}.${e}` : base;
 }
 
+/** 운송자격번호 비교용(서버 isQualCertUnchanged 와 동일 규칙: 하이픈·공백 무시) */
+function normQualCertBaseline(s) {
+  return String(s ?? '').replace(/[\s-]/g, '').trim();
+}
+
 /** ScrollSpy / 앵커 스크롤용 단계 (좌측 네비) */
 const STEPS = [
   { id: 1, label: '기본 인적사항' },
@@ -81,7 +86,9 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
     licenseIssueDt: '2023-01-01',
     licenseExpiryDt: '2033-01-01',
     qualCertNo: '',
-    bioText: ''
+    bioText: '',
+    /** 회원등급 TB_COMMON_CODE FEE_POLICY.DTL_CD */
+    FEE_POLICY: ''
   });
 
   const profilePhotoBlobRef = useRef(null);
@@ -110,6 +117,8 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
   const [successModal, setSuccessModal] = useState({ open: false, message: '' });
   /** 1: 기본 인적사항(프로필사진~인적) 2: 면허 3: 운송자격+자기소개+제출 */
   const [activeStep, setActiveStep] = useState(1);
+  /** TB_COMMON_CODE 기반 회원등급 콤보 */
+  const [feePolicyOptions, setFeePolicyOptions] = useState([]);
 
   const certInputRef = useRef(null);
   const scrollRef = useRef(null);
@@ -120,6 +129,8 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
   const title1Ref = useRef(null);
   const title2Ref = useRef(null);
   const title3Ref = useRef(null);
+  /** 서버에 저장된 자격번호 스냅샷 — 변경 없으면 주민 6+7 검증 생략 */
+  const qualCertBaselineRef = useRef('');
 
   const scrollToSection = useCallback((step) => {
     setActiveStep(step);
@@ -185,6 +196,24 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
     };
   }, []);
 
+  /** 회원등급(FEE_POLICY) 콤보 — TB_COMMON_CODE FEE_POLICY + FEE_POLICY_CNT */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/driver/fee-policy-options`);
+        const data = await res.json().catch(() => ({}));
+        if (cancelled || !res.ok) return;
+        setFeePolicyOptions(Array.isArray(data.items) ? data.items : []);
+      } catch {
+        if (!cancelled) setFeePolicyOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   /** 저장된 기사 정보 GET → 폼 채움 (`custId` 필수) */
   useEffect(() => {
     const custId = currentUser?.custId != null ? String(currentUser.custId).trim() : '';
@@ -213,26 +242,40 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
           typeof data.qualCertFileSize === 'number' ? data.qualCertFileSize : null
         );
 
-        if (data.userNm || data.userName || data.phoneNo || data.hpNo) {
-          const rawPhone = (
-            data.hpNo ||
-            data.phoneNo ||
-            currentUser?.hpNo ||
-            currentUser?.phoneNo ||
-            ''
-          ).replace(/\D/g, '');
-          setFormData((prev) => ({
-            ...prev,
-            name: data.userNm || data.userName || prev.name,
-            phoneNo: rawPhone.slice(0, 11),
-            addrType: data.addrType || prev.addrType,
-            addrOtherLabel: data.addrName || '',
-            zipcode: data.zipcode ?? '',
-            streetAddress: data.address ?? '',
-            detailAddress: data.detailAddress ?? '',
-            bioText: data.bioText ?? prev.bioText,
-          }));
-        }
+        const feePolicyFromApi = data.feePolicy != null ? String(data.feePolicy).trim() : '';
+        const feePolicyFromSession =
+          currentUser?.subscription?.feePolicy != null
+            ? String(currentUser.subscription.feePolicy).trim()
+            : '';
+        const feePolicyLoaded = (() => {
+          let v = feePolicyFromApi || feePolicyFromSession;
+          if (v === 'DRIVER_GENNERAL') v = 'DRIVER_GENERAL';
+          return v || '';
+        })();
+        setFormData((prev) => ({
+          ...prev,
+          FEE_POLICY: feePolicyLoaded,
+          ...(data.userNm || data.userName || data.phoneNo || data.hpNo
+            ? {
+                name: data.userNm || data.userName || prev.name,
+                phoneNo: (
+                  data.hpNo ||
+                  data.phoneNo ||
+                  currentUser?.hpNo ||
+                  currentUser?.phoneNo ||
+                  ''
+                )
+                  .replace(/\D/g, '')
+                  .slice(0, 11),
+                addrType: data.addrType || prev.addrType,
+                addrOtherLabel: data.addrName || '',
+                zipcode: data.zipcode ?? '',
+                streetAddress: data.address ?? '',
+                detailAddress: data.detailAddress ?? '',
+                bioText: data.bioText ?? prev.bioText,
+              }
+            : {}),
+        }));
 
         /** TB_USER.PROFILE_FILE_ID → GET /profile-photo (서버에서 TB_FILE_MASTER·GCS) — exists 무관 */
         setHasProfilePhotoOnServer(!!data.hasProfilePhoto);
@@ -310,6 +353,7 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
           setProfileExistsOnServer(false);
           setLicenseFieldsLocked(false);
           setQualFieldsLocked(false);
+          qualCertBaselineRef.current = '';
           await applyProfilePhotoBlob(profileFidResolved);
           return;
         }
@@ -317,8 +361,12 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
         setQualCertVerifyStatus(data.qualCertVerifyStatus || 'UNVERIFIED');
         setLicenseFieldsLocked(true);
         setQualFieldsLocked(true);
+        qualCertBaselineRef.current = normQualCertBaseline(
+          data.qualCertNo != null ? data.qualCertNo : ''
+        );
         setFormData((prev) => ({
           ...prev,
+          FEE_POLICY: feePolicyLoaded,
           name: data.userNm || data.userName || prev.name,
           phoneNo: (data.hpNo || data.phoneNo || prev.phoneNo || '').replace(/\D/g, '').slice(0, 11),
           addrType: data.addrType || prev.addrType,
@@ -334,7 +382,7 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
           licenseIssueDt: data.licenseIssueDt || prev.licenseIssueDt,
           licenseExpiryDt: data.licenseExpiryDt || prev.licenseExpiryDt,
           qualCertNo: data.qualCertNo ?? '',
-          bioText: data.bioText ?? prev.bioText
+          bioText: data.bioText ?? prev.bioText,
         }));
 
         await applyProfilePhotoBlob(profileFidResolved);
@@ -519,9 +567,14 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
       return;
     }
     const rrnBack = String(formData.rrnBack || '').replace(/\D/g, '');
-    if (!/^\d{6}$/.test(formData.rrnFront || '') || !/^\d{7}$/.test(rrnBack)) {
-      alert('주민등록번호는 앞 6자리·뒤 7자리 숫자를 모두 입력해 주세요.');
-      return;
+    const qualChangedForRrn =
+      normQualCertBaseline(formData.qualCertNo) !== normQualCertBaseline(qualCertBaselineRef.current);
+    const needFullRrn = !profileExistsOnServer || qualChangedForRrn;
+    if (needFullRrn) {
+      if (!/^\d{6}$/.test(formData.rrnFront || '') || !/^\d{7}$/.test(rrnBack)) {
+        alert('주민등록번호는 앞 6자리·뒤 7자리 숫자를 모두 입력해 주세요.');
+        return;
+      }
     }
     if (!['HOME', 'OFFICE', 'OTHER'].includes(formData.addrType || '')) {
       alert('주소 구분을 선택해 주세요.');
@@ -537,14 +590,31 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
       alert('우편번호와 기본 주소는 주소 검색으로 입력해 주세요.');
       return;
     }
+    const feePol = String(formData.FEE_POLICY || '').trim();
+    if (!feePol) {
+      alert('회원등급을 선택해 주세요.');
+      return;
+    }
     setIsSubmitting(true);
     const wasExistingProfile = profileExistsOnServer;
+
+    const rrnPayload = (() => {
+      if (needFullRrn) {
+        return `${formData.rrnFront}-${rrnBack}`;
+      }
+      const rf = String(formData.rrnFront || '').replace(/\D/g, '');
+      const rb = String(formData.rrnBack || '').replace(/\D/g, '');
+      if (rf.length === 6 && rb.length === 7) {
+        return `${rf}-${rb}`;
+      }
+      return '';
+    })();
 
     try {
       const payload = {
         userId: loginId,
         driverName: (formData.name || '').trim(),
-        rrn: `${formData.rrnFront}-${rrnBack}`,
+        rrn: rrnPayload,
         licenseType: formData.licenseType,
         licenseNo: formData.licenseNo,
         licenseSerialNo: formData.licenseSerialNo || undefined,
@@ -558,6 +628,7 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
         zipcode: zip,
         address: addrLine,
         detailAddress: formData.detailAddress || '',
+        feePolicy: feePol,
         qualCertBase64:
           qualCert && String(qualCert).startsWith('data:') ? qualCert : undefined
       };
@@ -570,6 +641,8 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '프로필 저장 실패');
+
+      qualCertBaselineRef.current = normQualCertBaseline(formData.qualCertNo);
 
       if (!wasExistingProfile) {
         setProfileExistsOnServer(true);
@@ -855,7 +928,27 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
                       />
                     </div>
                   </div>
-                  <div className="md:col-span-2 space-y-2">
+                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label htmlFor="driver-fee-policy" className="text-sm font-bold text-on-surface-variant px-1">
+                      회원등급
+                    </label>
+                    <select
+                      id="driver-fee-policy"
+                      name="FEE_POLICY"
+                      value={formData.FEE_POLICY}
+                      onChange={handleChange}
+                      className="w-full h-14 px-5 rounded-xl bg-surface-container-high border-none focus:ring-2 focus:ring-primary/20 font-bold"
+                    >
+                      <option value="">등급 선택</option>
+                      {feePolicyOptions.map((opt) => (
+                        <option key={opt.dtlCd} value={opt.dtlCd}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
                     <label className="text-sm font-bold text-on-surface-variant px-1">휴대전화 번호</label>
                     <input 
                       readOnly
@@ -866,10 +959,8 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
                       type="text" 
                       aria-readonly="true"
                     />
-                    <p className="text-xs text-on-surface-variant px-1">
-                      표시 형식만 적용합니다. 번호 수정은 회원 정보 메뉴에서 진행합니다.
-                    </p>
                   </div>
+                </div>
                   <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                     <div className="space-y-2 md:col-span-2 flex flex-wrap items-end gap-3">
                       <div className="flex-1 min-w-[220px] space-y-2">

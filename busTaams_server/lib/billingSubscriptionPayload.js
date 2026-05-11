@@ -1,4 +1,5 @@
 const { plainOrLegacyDecrypt } = require('../crypto');
+const { normalizeDriverFeePolicyDtlCd } = require('./feePolicyDtl');
 
 function cardLastFourFromEnc(enc) {
     if (enc == null || String(enc).trim() === '') return '';
@@ -20,17 +21,24 @@ function truncateUserNmKo(userNm, maxLen = 10) {
  * TB_COMMON_CODE 등에서 월 회비(원) 조회. 없으면 null.
  */
 async function resolveMonthlyFeeKrw(connection, feePolicyRaw) {
-    const code = feePolicyRaw != null ? String(feePolicyRaw).trim() : '';
+    let code = feePolicyRaw != null ? String(feePolicyRaw).trim() : '';
+    code = normalizeDriverFeePolicyDtlCd(code);
     if (!code) return { monthlyFeeKrw: null, feePolicy: null, feePolicyLabelKo: null };
 
     try {
-        const [rows] = await connection.execute(
-            `SELECT CD_FNUM, CD_NM_KO FROM TB_COMMON_CODE
-             WHERE GRP_CD = 'FEE_POLICY' AND DTL_CD = ? AND (USE_YN = 'Y' OR USE_YN IS NULL)
-             LIMIT 1`,
-            [code]
-        );
-        const row = rows[0];
+        const tryCodes =
+            code === 'DRIVER_GENERAL' ? ['DRIVER_GENERAL', 'DRIVER_GENNERAL'] : [code];
+        let row;
+        for (const dtl of tryCodes) {
+            const [rows] = await connection.execute(
+                `SELECT CD_FNUM, CD_NM_KO FROM TB_COMMON_CODE
+                 WHERE GRP_CD = 'FEE_POLICY' AND DTL_CD = ? AND (USE_YN = 'Y' OR USE_YN IS NULL)
+                 LIMIT 1`,
+                [dtl]
+            );
+            row = rows[0];
+            if (row) break;
+        }
         if (!row) {
             return { monthlyFeeKrw: null, feePolicy: code, feePolicyLabelKo: null };
         }

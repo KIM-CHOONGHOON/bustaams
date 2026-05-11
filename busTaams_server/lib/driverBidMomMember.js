@@ -3,6 +3,7 @@
  * 테이블·ENUM 정본: 사용자 요구(TB_MOM_MEMBER, FEE_POLICY_CNT, …)
  */
 const { getCurrentYyyyMm } = require('./loginPayload');
+const { normalizeDriverFeePolicyDtlCd } = require('./feePolicyDtl');
 
 /** @typedef {{ ackMessage: string, disableFurtherBid: boolean, remainingCnt: number, useCnt: number, basicCnt: number }} MomMemberOk */
 
@@ -64,17 +65,23 @@ async function applyMomMemberAfterBid(connection, custId) {
     }
 
     const fetchBasicCntFromCommon = async (dtlCd) => {
-        const dtl = String(dtlCd || '').trim();
+        const dtl = normalizeDriverFeePolicyDtlCd(String(dtlCd || '').trim());
         if (!dtl) {
             return { ok: false, lines: ['등급 코드가 비어 있습니다.'], code: 'FEE_POLICY_EMPTY' };
         }
-        const [cRows] = await connection.execute(
-            `SELECT CD_FNUM AS cdFnum
-               FROM TB_COMMON_CODE
-              WHERE GRP_CD = 'FEE_POLICY_CNT' AND DTL_CD = ? AND (USE_YN = 'Y' OR USE_YN IS NULL)
-              LIMIT 1`,
-            [dtl]
-        );
+        const tryCodes = dtl === 'DRIVER_GENERAL' ? ['DRIVER_GENERAL', 'DRIVER_GENNERAL'] : [dtl];
+        let cRows = [];
+        for (const code of tryCodes) {
+            const [r] = await connection.execute(
+                `SELECT CD_FNUM AS cdFnum
+                   FROM TB_COMMON_CODE
+                  WHERE GRP_CD = 'FEE_POLICY_CNT' AND DTL_CD = ? AND (USE_YN = 'Y' OR USE_YN IS NULL)
+                  LIMIT 1`,
+                [code]
+            );
+            cRows = r;
+            if (cRows.length) break;
+        }
         if (!cRows.length) {
             return {
                 ok: false,
@@ -168,7 +175,9 @@ async function applyMomMemberAfterBid(connection, custId) {
         };
     }
 
-    let feePolicy = detailRows[0].feePolicy != null ? String(detailRows[0].feePolicy).trim() : '';
+    let feePolicy = normalizeDriverFeePolicyDtlCd(
+        detailRows[0].feePolicy != null ? String(detailRows[0].feePolicy).trim() : ''
+    );
     if (!feePolicy) {
         feePolicy = 'DRIVER';
         try {
