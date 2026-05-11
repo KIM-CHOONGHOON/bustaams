@@ -559,12 +559,21 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
     reader.readAsDataURL(file);
   };
 
-  const handleSubmit = async () => {
-    if (isSubmitting) return;
+  /**
+   * @param {{ successMessage?: string }} [opts]
+   * @returns {Promise<boolean>} 저장·검증 성공 시 true
+   */
+  const handleSubmit = async (opts = {}) => {
+    if (isSubmitting) return false;
     const loginId = (currentUser?.userId != null && String(currentUser.userId).trim()) || '';
     if (!loginId) {
       alert('로그인 ID가 없습니다. 다시 로그인해 주세요.');
-      return;
+      return false;
+    }
+    const nameTrim = (formData.name || '').trim();
+    if (!nameTrim) {
+      alert('성명을 입력해 주세요. 자격 진위 연동 시에도 성명이 필요합니다.');
+      return false;
     }
     const rrnBack = String(formData.rrnBack || '').replace(/\D/g, '');
     const qualChangedForRrn =
@@ -573,27 +582,27 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
     if (needFullRrn) {
       if (!/^\d{6}$/.test(formData.rrnFront || '') || !/^\d{7}$/.test(rrnBack)) {
         alert('주민등록번호는 앞 6자리·뒤 7자리 숫자를 모두 입력해 주세요.');
-        return;
+        return false;
       }
     }
     if (!['HOME', 'OFFICE', 'OTHER'].includes(formData.addrType || '')) {
       alert('주소 구분을 선택해 주세요.');
-      return;
+      return false;
     }
     if (formData.addrType === 'OTHER' && !String(formData.addrOtherLabel || '').trim()) {
       alert('주소 구분이 OTHER일 때 주소구분명칭을 입력해 주세요(최대 10자).');
-      return;
+      return false;
     }
     const addrLine = String(formData.streetAddress || '').trim();
     const zip = String(formData.zipcode || '').trim();
     if (!zip || !addrLine) {
       alert('우편번호와 기본 주소는 주소 검색으로 입력해 주세요.');
-      return;
+      return false;
     }
     const feePol = String(formData.FEE_POLICY || '').trim();
     if (!feePol) {
       alert('회원등급을 선택해 주세요.');
-      return;
+      return false;
     }
     setIsSubmitting(true);
     const wasExistingProfile = profileExistsOnServer;
@@ -613,14 +622,14 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
     try {
       const payload = {
         userId: loginId,
-        driverName: (formData.name || '').trim(),
+        driverName: nameTrim,
         rrn: rrnPayload,
         licenseType: formData.licenseType,
         licenseNo: formData.licenseNo,
         licenseSerialNo: formData.licenseSerialNo || undefined,
         licenseIssueDt: formData.licenseIssueDt,
         licenseExpiryDt: formData.licenseExpiryDt,
-        qualCertNo: formData.qualCertNo,
+        qualCertNo: String(formData.qualCertNo ?? '').trim(),
         bioText: formData.bioText,
         addrType: formData.addrType,
         addrName:
@@ -677,13 +686,18 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
       setQualCertPickLabel('');
       setSuccessModal({
         open: true,
-        message: wasExistingProfile
-          ? '버스 기사 기본 정보가 수정 되었습니다.'
-          : '버스 기사 기본 정보가 등록되었습니다.',
+        message:
+          opts.successMessage != null && String(opts.successMessage).trim() !== ''
+            ? opts.successMessage
+            : wasExistingProfile
+              ? '버스 기사 기본 정보가 수정 되었습니다.'
+              : '버스 기사 기본 정보가 등록되었습니다.',
       });
+      return true;
     } catch (error) {
       console.error('Submit error:', error);
       alert(`오류: ${error.message}`);
+      return false;
     } finally {
       setIsSubmitting(false);
     }
@@ -1142,7 +1156,24 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
                   {profileExistsOnServer && (
                     <button
                       type="button"
-                      onClick={() => setQualFieldsLocked((v) => !v)}
+                      onClick={async () => {
+                        if (qualFieldsLocked) {
+                          setQualFieldsLocked(false);
+                          return;
+                        }
+                        const qualChanged =
+                          normQualCertBaseline(formData.qualCertNo) !==
+                          normQualCertBaseline(qualCertBaselineRef.current);
+                        if (qualChanged) {
+                          const ok = await handleSubmit({
+                            successMessage:
+                              '운송종사자 자격번호가 저장되었습니다. 변경된 경우 자격 진위 검증이 서버에서 수행됩니다.',
+                          });
+                          if (ok) setQualFieldsLocked(true);
+                        } else {
+                          setQualFieldsLocked(true);
+                        }
+                      }}
                       className="shrink-0 rounded-full border border-primary/30 bg-white px-4 py-2 text-sm font-bold text-primary transition-colors hover:bg-primary/5"
                     >
                       {qualFieldsLocked ? '수정' : '수정 완료'}
