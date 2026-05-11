@@ -1,6 +1,6 @@
--- 실시간 채팅 로그 (기사–여행자, 견적 REQ 단위)
--- 조건: TB_AUCTION_REQ.REQ_STAT = 'BIDDING' 이고 TB_BUS_RESERVATION 이 동일 TRAVELER/REQ 로 매칭되며 RES_STAT IN ('REQ','CONFIRM','DONE')
-
+-- ⚠️ 레거시 스키마: 메시지 1행 = TB_CHAT_LOG 1행(UUID PK). 신규 운영은 `BusTaams 테이블.md` 의 TB_CHAT_LOG(방) + TB_CHAT_LOG_PART + TB_CHAT_LOG_HIST 3분할을 사용합니다.
+-- `insertTripChatMessage`(Node) 경로와 호환되지 않습니다. 새 DB에는 본 파일 대신 정본 SQL을 적용하세요.
+-- (과거 주석) 조건: TB_AUCTION_REQ.REQ_STAT = 'BIDDING' …
 CREATE TABLE IF NOT EXISTS TB_CHAT_LOG (
     CHAT_LOG_UUID BINARY(16) NOT NULL PRIMARY KEY COMMENT '채팅 로그 PK',
     REQ_UUID BINARY(16) NOT NULL COMMENT 'TB_AUCTION_REQ.REQ_UUID',

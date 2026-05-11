@@ -5,7 +5,7 @@
  * 호출 URL·쿼리 파라미터명을 .env 에 맞춰 넣어야 동작합니다.
  */
 
-require('dotenv').config();
+require('./loadEnv');
 
 /** .env 값에 공백·CRLF가 붙어도 켜짐으로 인식 */
 function isEnvFlagTrue(name) {
@@ -287,7 +287,7 @@ function isQualCertUnchanged(existingRow, incoming) {
 
 /**
  * 프로필 저장 API용: 플래그에 따라 TS·면허 검증 (미설정 시 skipped)
- * existingRow: TB_DRIVER_INFO SELECT 결과(수정 시). 최초 등록 시 null.
+ * existingRow: TB_DRIVER_DETAIL의 면허·자격 컬럼 SELECT 결과(수정 시). 최초 등록 시 null.
  */
 async function runDriverVerificationsForProfileSetup({
     driverName,

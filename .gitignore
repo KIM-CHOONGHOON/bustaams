@@ -21,6 +21,7 @@
 
 # ── 프론트엔드 빌드 산출물 ──────────────────────────────────
 busTaams_web/dist/
+busTaams_web/dist-ssr/
 busTaams_admin/dist/
 
 # ── 에디터 / OS 임시 파일 ───────────────────────────────────
@@ -32,5 +33,19 @@ Thumbs.db
 *.swo
 
 # ── 로그 파일 ───────────────────────────────────────────────
+logs/
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ── Visual Studio / Windows 잡파일 (구 busTaams_web/.gitignore 통합) ──
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# ── 서버 로컬 업로드 (구 busTaams_server/.gitignore 통합) ──
+busTaams_server/uploads/signatures/

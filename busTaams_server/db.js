@@ -1,5 +1,5 @@
+require('./loadEnv');
 const mysql = require('mysql2/promise');
-require('dotenv').config();
 
 const rawPort = String(process.env.DB_PORT ?? '').trim();
 const parsedPort = parseInt(rawPort, 10);

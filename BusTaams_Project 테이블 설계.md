@@ -105,53 +105,51 @@
 
 ## TB_CHAT_LOG
 
+> 스키마 정본: `busTaams_server/sql/tb_chat_log_room_hist_part.sql` — 대화(방) 마스터. 메시지 본문은 `TB_CHAT_LOG_HIST`, 참가자는 `TB_CHAT_LOG_PART`.
+
 | 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **CHAT_LOG_UUID** | binary(16) | NO |  | NULL |  | 채팅 로그 PK |
-| **CHAT_SEQ** | int | NO | PRI | NULL | auto_increment | 대화(방) 일련번호 |
-| **ROOM_KIND** | enum('TRAVELER','DRIVER','PARTNER','EMPL','OTHER') | NO | MUL | NULL |  | 방 구분 (TRAVELER:여행자, DRIVER:기사 등) |
+| **CHAT_LOG_SEQ** | int | NO | PRI | NULL | auto_increment | 대화(방) 일련 — PK |
+| **ROOM_KIND** | enum('TRAVELER','DRIVER','PARTNER','EMPL','OTHER') | NO | MUL |  |  | TRAVELER:여행자, DRIVER:버스기사, PARTNER:영업회원, EMPL:관리직원, OTHER:이외 |
 | **CHAT_TITLE** | varchar(200) | YES |  | NULL |  | 대화(방) 제목 |
-| **CHAT_COVER_FILE_ID** | varchar(20) | YES |  | NULL |  | 대화창 썸네일 |
-| **REQ_ID** | varchar(10) | YES | MUL | NULL |  | 연관 경매 요청 ID |
-| **RES_ID** | varchar(10) | YES |  | NULL |  | 연관 예약 ID |
-| **CREATED_BY_CUST_ID** | varchar(10) | NO | MUL | NULL |  | 방 개설자 CUST_ID |
-| **LAST_MSG_DT** | datetime | YES |  | NULL |  | 마지막 메시지 일시 |
+| **CHAT_COVER_FILE_ID** | varchar(20) | YES |  | NULL |  | 대화창 썸네일 — TB_FILE_MASTER.FILE_ID(선택) |
+| **REQ_ID** | varchar(10) | YES | MUL | NULL |  | TB_AUCTION_REQ — 미연동 시 NULL. UK_CHAT_LOG_RES (REQ_ID, RES_ID) |
+| **RES_ID** | varchar(10) | YES |  | NULL |  | TB_BUS_RESERVATION — 미연동 시 NULL |
+| **CREATED_BY_CUST_ID** | varchar(10) | NO | MUL | NULL |  | 방 개설자 TB_USER.CUST_ID |
+| **LAST_MSG_DT** | datetime | YES |  | NULL |  | 마지막 메시지 시각(TB_CHAT_LOG_HIST 기준 갱신 권장) |
 | **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 등록 일시 |
 | **REG_ID** | varchar(10) | YES |  | NULL |  | 등록자 ID |
 | **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP | 수정 일시 |
 | **MOD_ID** | varchar(10) | YES |  | NULL |  | 수정자 ID |
-| **REQ_UUID** | binary(16) | YES | MUL | NULL |  | TB_AUCTION_REQ.REQ_UUID |
-| **RES_UUID** | binary(16) | YES |  | NULL |  | TB_BUS_RESERVATION.RES_UUID |
-| **TRAVELER_UUID** | binary(16) | YES |  | NULL |  | 여행자 USER_UUID |
-| **DRIVER_UUID** | binary(16) | YES | MUL | NULL |  | 기사 USER_UUID |
-| **SENDER_UUID** | binary(16) | YES |  | NULL |  | 발신자 USER_UUID |
-| **SENDER_ROLE** | enum('TRAVELER','DRIVER','SYSTEM') | YES |  | NULL |  | 발신자 역할 |
-| **MSG_KIND** | varchar(20) | NO |  | TEXT |  | 메시지 종류 |
-| **MSG_BODY** | text | YES |  | NULL |  | 메시지 본문 |
-| **FILE_UUID** | binary(16) | YES |  | NULL |  | 첨부파일 UUID |
+
+**인덱스·제약(요약):** `UK_CHAT_LOG_RES` (`REQ_ID`,`RES_ID`), `IDX_CHAT_LOG_ROOM_KIND`, `IDX_CHAT_LOG_CREATED`, `IDX_CHAT_LOG_REQ_REG`, `CHK_CHAT_LOG_REQ_RES`(REQ·RES 동시 NULL 또는 동시 NOT NULL). FK 없음.
 
 ## TB_CHAT_LOG_HIST
 
 | 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **HIST_SEQ** | int | NO | PRI | NULL | auto_increment | 메시지 일련번호 |
-| **CHAT_SEQ** | int | NO | MUL | NULL |  | 채팅방 번호 |
-| **SENDER_CUST_ID** | varchar(10) | NO | MUL | NULL |  | 발신자 CUST_ID |
-| **SENDER_ROLE** | enum('TRAVELER','DRIVER','PARTNER','EMPL','SYSTEM') | NO |  | NULL |  | 발신자 역할 |
-| **MSG_KIND** | varchar(20) | NO |  | TEXT |  | 메시지 종류 |
+| **HIST_SEQ** | int | NO | PRI | NULL | auto_increment | 메시지 일련 — PK |
+| **CHAT_LOG_SEQ** | int | NO | MUL | NULL |  | TB_CHAT_LOG.CHAT_LOG_SEQ — FK ON DELETE CASCADE |
+| **SENDER_CUST_ID** | varchar(10) | NO | MUL | NULL |  | 발신자 TB_USER.CUST_ID |
+| **SENDER_ROLE** | enum('TRAVELER','DRIVER','PARTNER','EMPL','SYSTEM') | NO |  |  |  | TRAVELER, DRIVER, PARTNER, EMPL, SYSTEM |
+| **MSG_KIND** | varchar(20) | NO |  | 'TEXT' |  | DEFAULT 'TEXT' |
 | **MSG_BODY** | text | YES |  | NULL |  | 메시지 본문 |
-| **FILE_ID** | varchar(20) | YES |  | NULL |  | 첨부파일 ID |
+| **FILE_ID** | varchar(20) | YES |  | NULL |  | 첨부 시 TB_FILE_MASTER.FILE_ID |
 | **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 등록 일시 |
+
+**인덱스·제약(요약):** `IDX_HIST_CHAT` (`CHAT_LOG_SEQ`,`REG_DT`), `IDX_HIST_SENDER`, `FK_HIST_CHAT` → `TB_CHAT_LOG`(`CHAT_LOG_SEQ`).
 
 ## TB_CHAT_LOG_PART
 
 | 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **CHAT_SEQ** | int | NO | PRI | NULL |  | 채팅방 번호 |
-| **CUST_ID** | varchar(10) | NO | PRI | NULL |  | 사용자 CUST_ID |
-| **PART_TYPE** | enum('TRAVELER','DRIVER','PARTNER','EMPL') | NO |  | NULL |  | 참여자 역할 |
-| **JOINED_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 입장 일시 |
-| **INVITER_CUST_ID** | varchar(10) | YES |  | NULL |  | 초대한 사용자 CUST_ID |
+| **CHAT_LOG_SEQ** | int | NO | PRI | NULL |  | TB_CHAT_LOG.CHAT_LOG_SEQ — 복합 PK 1 |
+| **CUST_ID** | varchar(10) | NO | PRI | NULL |  | TB_USER.CUST_ID — 복합 PK 2 |
+| **PART_TYPE** | enum('TRAVELER','DRIVER','PARTNER','EMPL') | NO |  |  |  | 이 방에서의 역할 — 표시·권한 |
+| **JOINED_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 방 입장(등록) 시각 |
+| **INVITER_CUST_ID** | varchar(10) | YES |  | NULL |  | 초대로 입장 시 초대한 CUST_ID |
+
+**인덱스·제약(요약):** `IDX_PART_CUST` (`CUST_ID`,`CHAT_LOG_SEQ`), `FK_PART_CHAT` → `TB_CHAT_LOG`(`CHAT_LOG_SEQ`) ON DELETE CASCADE.
 
 ## TB_COMMON_CODE
 
@@ -216,31 +214,13 @@
 | **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP | 수정 일시 |
 | **MOD_ID** | varchar(30) | YES |  | NULL |  | 수정자 ID |
 
-## TB_DRIVER_INFO
-
-| 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **USER_ID** | varchar(256) | NO | PRI | NULL |  | 사용자 ID |
-| **RRN_ENC** | varchar(512) | NO |  | NULL |  | 주민번호 (암호화) |
-| **LICENSE_TYPE** | varchar(50) | YES |  | NULL |  | 면허 종류 |
-| **LICENSE_NO** | varchar(100) | YES |  | NULL |  | 면허 번호 |
-| **LICENSE_SERIAL_NO** | varchar(100) | YES |  | NULL |  | 면허 일련번호 |
-| **LICENSE_ISSUE_DT** | date | YES |  | NULL |  | 면허 발급일 |
-| **LICENSE_EXPIRY_DT** | date | YES |  | NULL |  | 면허 만료일 |
-| **QUAL_CERT_NO** | varchar(100) | YES |  | NULL |  | 자격증 번호 |
-| **QUAL_CERT_VERIFY_STATUS** | varchar(20) | NO |  | UNVERIFIED |  | 자격증 검증 상태 |
-| **QUAL_CERT_VERIFY_DT** | datetime | YES |  | NULL |  | 자격증 검증 일시 |
-| **QUAL_CERT_FILE_ID** | varchar(20) | YES |  | NULL |  | 자격증 파일 ID |
-| **PROFILE_PHOTO_ID** | varchar(20) | YES |  | NULL |  | 프로필 사진 ID |
-| **BIO_TEXT** | text | YES |  | NULL |  | 기사 소개글 |
-| **CREATE_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 등록 일시 |
-| **UPDATE_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP | 수정 일시 |
+**`TB_DRIVER_INFO`**: 본 프로젝트에서는 **미사용**(스키마에서 제거됨). 주민번호는 **`TB_USER.RESIDENT_NO_ENC`**, 면허·자격·주소·소개는 **`TB_DRIVER_DETAIL`**·**`TB_DRIVER_DOCS`**를 따른다.
 
 ## TB_FILE_MASTER
 
 | 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **FILE_ID** | varchar(20) | NO | PRI | NULL |  | 파일 고유 식별자 |
+| **FILE_ID** | varchar(20) | NO | PRI | NULL |  | PK. 숫자 채번 시 **20자리 왼쪽 0패딩**(예 `00000000000000000001`) 정본 |
 | **FILE_CATEGORY** | varchar(50) | NO |  | NULL |  | 파일 카테고리 |
 | **GCS_BUCKET_NM** | varchar(100) | YES |  | bustaams-secure-data |  | GCS 버킷명 |
 | **GCS_PATH** | varchar(255) | NO |  | NULL |  | GCS 물리 경로 |
@@ -287,19 +267,54 @@
 
 ## TB_PAYMENT_CARD
 
+> `bustaams` 스키마 정본: [`busTaams_server/sql/tb_payment_card.sql`](busTaams_server/sql/tb_payment_card.sql). 기존 DB에 컬럼 추가 시: [`busTaams_server/sql/alter_tb_payment_card_card_billing_key_enc.sql`](busTaams_server/sql/alter_tb_payment_card_card_billing_key_enc.sql). PK `(CUST_ID, CARD_SEQ)`, FK `FK_TPC_USER`: `CUST_ID` → `TB_USER(CUST_ID)`. PG **빌링키·결제 토큰**은 `CARD_BILLING_KEY_ENC`(AES-GCM), **발급 카드 명칭**은 `ORIGINAL_CARD_NAME`. 월 회비 **자동결제 일정 메타**(`AUTO_PAY_*`) 포함. `TB_DRIVER_PAYMENT_HIST` 가 `(CARD_CUST_ID, CARD_SEQ)` 로 본 테이블을 참조한다.
+
 | 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **CUST_ID** | varchar(10) | NO | PRI | NULL |  | 사용자 CUST_ID |
-| **CARD_SEQ** | int | NO | PRI | NULL |  | 카드 순번 |
-| **CARD_NICKNAME** | varchar(50) | YES |  | NULL |  | 카드 별칭 |
-| **CARD_NO_ENC** | varchar(255) | NO |  | NULL |  | 카드번호 (암호화) |
-| **EXP_MONTH** | char(2) | NO |  | NULL |  | 유효월 |
-| **EXP_YEAR** | char(2) | NO |  | NULL |  | 유효년 |
-| **IS_PRIMARY** | enum('Y','N') | YES |  | N |  | 주 결제카드 여부 |
-| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 등록 일시 |
-| **REG_ID** | varchar(10) | YES |  | NULL |  | 등록자 ID |
-| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 수정 일시 |
-| **MOD_ID** | varchar(10) | YES |  | NULL |  | 수정자 ID |
+| **CUST_ID** | varchar(10) | NO | PRI | NULL | | 카드정보 등록 사용자 `TB_USER.CUST_ID` |
+| **CARD_SEQ** | int | NO | PRI | NULL | | 사용자의 카드 등록 SEQ |
+| **CARD_NICKNAME** | varchar(50) | YES | | NULL | | 카드 별칭 |
+| **CARD_NO_ENC** | varchar(255) | NO | | NULL | | 카드번호 ENC정보 |
+| **CARD_BILLING_KEY_ENC** | varchar(512) | YES | | NULL | | PG 빌링키·결제토큰 AES-GCM (미사용 시 NULL) |
+| **ORIGINAL_CARD_NAME** | varchar(50) | YES | | NULL | | 발급 카드 명칭 |
+| **EXP_MONTH** | char(2) | NO | | NULL | | 유효기간 월 |
+| **EXP_YEAR** | char(2) | NO | | NULL | | 유효기간 년도 |
+| **IS_PRIMARY** | enum('Y','N') | YES | | N | | 메인 카드여부 |
+| **AUTO_PAY_START_DT** | datetime | YES | | NULL | | 자동결제(월 회비 등) 시작 일시, NULL=이 카드로 자동결제 미등록 |
+| **AUTO_PAY_END_DT** | datetime | YES | | NULL | | 자동결제 종료 일시, NULL=시작 후 아직 종료 전(진행·중단 처리 시각) |
+| **AUTO_PAY_DAY** | tinyint unsigned | NO | | 1 | | 매월 자동결제 처리일(1~31, 기본 1일; 29~31일은 해당 월 일수에 맞게 배치에서 보정) |
+| **REG_DT** | datetime | YES | | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 등록 일시 |
+| **REG_ID** | varchar(10) | YES | | NULL | | 등록자 ID |
+| **MOD_DT** | datetime | YES | | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 수정 일시 |
+| **MOD_ID** | varchar(10) | YES | | NULL | | 수정자 ID |
+
+**인덱스·CHECK·기타:** `IDX_TPC_CUST_PRIMARY` (`CUST_ID`, `IS_PRIMARY`), `IDX_TPC_AUTO_PAY_ACTIVE` (`CUST_ID`, `AUTO_PAY_START_DT`, `AUTO_PAY_END_DT`); `CHK_TB_PAYMENT_CARD_AUTO_PAY_DAY`, `CHK_TB_PAYMENT_CARD_AUTO_PAY_RANGE` (`AUTO_PAY_END_DT` 가 있으면 `AUTO_PAY_START_DT` 필수 및 `END >= START`). 테이블 코멘트: 등록된 신용/체크카드 결제 수단. 엔진 InnoDB, `utf8mb4` / `utf8mb4_0900_ai_ci`.
+
+## TB_DRIVER_PAYMENT_HIST
+
+> `bustaams` 정합 DDL: [`busTaams_server/sql/tb_driver_payment_hist.sql`](busTaams_server/sql/tb_driver_payment_hist.sql). 버스기사 **월 회비 자동결제 납부 이력**. FK `DRIVER_ID` → `TB_USER(USER_ID)`; `FK_DSP_PAY_CARD`: `(CARD_CUST_ID, CARD_SEQ)` → `TB_PAYMENT_CARD` ON DELETE SET NULL. `CARD_CUST_ID`/`CARD_SEQ` 는 둘 다 NULL 또는 둘 다 NOT NULL 로 입력(반쪽 쌍 금지는 DB CHECK 미사용, MySQL 3823). 귀속 월은 `TB_SUBSCRIPTION.YYYYMM` 과 동일 `YYYYMM` 체계.
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **PAY_HIST_SEQ** | bigint unsigned | NO | PRI | NULL | auto_increment | 납부 이력 일련번호 |
+| **DRIVER_ID** | varchar(255) | NO | MUL | NULL | | 기사 `TB_USER.USER_ID` |
+| **CARD_CUST_ID** | varchar(10) | YES | MUL | NULL | | 결제에 사용한 카드 `TB_PAYMENT_CARD.CUST_ID` |
+| **CARD_SEQ** | int | YES | | NULL | | 결제에 사용한 카드 `TB_PAYMENT_CARD.CARD_SEQ` |
+| **BILLING_YYYYMM** | varchar(6) | NO | | NULL | | 청구·귀속 월(`YYYYMM`) |
+| **PAY_AMT** | decimal(13,0) | NO | | NULL | | 청구 금액(원) |
+| **PAY_STAT** | enum('PENDING','SUCCESS','FAILED','REFUNDED','CANCELLED') | NO | MUL | PENDING | | 결제 상태 |
+| **PAY_REQ_DT** | datetime | NO | | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 자동결제 요청(시도) 일시 |
+| **PAY_COMPLETED_DT** | datetime | YES | | NULL | | 승인 완료 일시 |
+| **PG_TXN_ID** | varchar(120) | YES | | NULL | | PG 거래·승인 식별자 |
+| **FAIL_MSG** | varchar(500) | YES | | NULL | | 실패 사유(PG/내부) |
+| **CARD_NICKNAME_SNAPSHOT** | varchar(50) | YES | | NULL | | 결제 시점 카드 별칭(카드 삭제 후 조회용) |
+| **CARD_LAST_FOUR_SNAPSHOT** | char(4) | YES | | NULL | | 결제 시점 카드 끝 4자리 |
+| **REG_DT** | datetime | YES | | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 등록 일시 |
+| **REG_ID** | varchar(10) | YES | | NULL | | 등록자 ID |
+| **MOD_DT** | datetime | YES | | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 수정 일시 |
+| **MOD_ID** | varchar(10) | YES | | NULL | | 수정자 ID |
+
+**인덱스:** `IDX_DSP_DRIVER_MONTH` (`DRIVER_ID`, `BILLING_YYYYMM`), `IDX_DSP_PAY_STAT_REQ` (`PAY_STAT`, `PAY_REQ_DT`), `IDX_DSP_CARD_REF` (`CARD_CUST_ID`, `CARD_SEQ`).
 
 ## TB_SMS_LOG
 
@@ -365,7 +380,7 @@
 | **HP_NO** | varchar(255) | YES |  | NULL |  | 휴대폰번호 |
 | **USER_IMAGE** | varchar(255) | YES |  | NULL |  | 사용자 이미지 |
 | **SIGNATURE_FILE_ID** | varchar(20) | YES |  | NULL |  | 서명 파일 ID |
-| **PROFILE_FILE_ID** | varchar(20) | YES |  | NULL |  | 프로필 사진 ID |
+| **PROFILE_FILE_ID** | varchar(20) | YES |  | NULL |  | **`TB_FILE_MASTER.FILE_ID`와 동일 문자열**(20자 패딩 권장) |
 | **SMS_AUTH_YN** | enum('Y','N') | YES |  | N |  | SMS 인증 여부 |
 | **RECOM_CODE** | varchar(20) | YES |  | NULL |  | 추천인 코드 |
 | **JOIN_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 가입 일시 |
