@@ -9,6 +9,22 @@ const ReviewDetailCustomer = () => {
     const { id } = useParams();
     const [review, setReview] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [profileImage, setProfileImage] = useState(null);
+    const [imageVersion, setImageVersion] = useState(Date.now());
+
+    useEffect(() => {
+        const fetchProfile = async () => {
+            try {
+                const response = await api.get('/app/customer/profile');
+                if (response.success && response.data) {
+                    setProfileImage(response.data.profileImage);
+                }
+            } catch (error) {
+                console.error('Fetch profile error:', error);
+            }
+        };
+        fetchProfile();
+    }, []);
 
     useEffect(() => {
         const fetchReview = async () => {
@@ -86,7 +102,30 @@ const ReviewDetailCustomer = () => {
                     <button onClick={() => navigate(-1)} className="material-symbols-outlined text-[#1E293B] p-2 hover:bg-slate-50 rounded-full transition-all">arrow_back</button>
                     <h1 className="font-bold text-[17px] text-[#1E293B]">나의 리뷰 상세</h1>
                 </div>
-                <div className="w-10"></div>
+                <div 
+                    className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center overflow-hidden border border-slate-100 cursor-pointer transition-transform active:scale-95 shadow-sm"
+                    onClick={() => navigate('/profile-customer')}
+                >
+                    {profileImage ? (
+                        <img 
+                            alt="Customer Profile" 
+                            src={profileImage.startsWith('http') ? 
+                                `${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                `${import.meta.env.VITE_API_BASE_URL || ''}${profileImage.startsWith('/') ? '' : '/'}${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                            className="w-full h-full object-cover" 
+                            onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.style.display = 'none';
+                                if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                            }}
+                        />
+                    ) : (
+                        <span className="material-symbols-outlined text-slate-400 text-2xl">account_circle</span>
+                    )}
+                    {profileImage && (
+                        <span className="material-symbols-outlined text-slate-400 text-2xl hidden items-center justify-center w-full h-full">account_circle</span>
+                    )}
+                </div>
             </header>
 
             <main className="max-w-xl mx-auto px-6 pt-24 space-y-8">

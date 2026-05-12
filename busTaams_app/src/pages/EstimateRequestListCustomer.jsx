@@ -12,6 +12,8 @@ const EstimateRequestListCustomer = () => {
 
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [profileImage, setProfileImage] = useState(null);
+    const [imageVersion, setImageVersion] = useState(Date.now());
 
     const getStatusInfo = (type) => {
         switch(type) {
@@ -76,20 +78,63 @@ const EstimateRequestListCustomer = () => {
                 setLoading(false);
             }
         };
+
+        const fetchProfile = async () => {
+            try {
+                const profileRes = await api.get('/app/customer/profile');
+                if (profileRes.success && profileRes.data) {
+                    setProfileImage(profileRes.data.profileImage || '');
+                    setImageVersion(Date.now());
+                }
+            } catch (err) {
+                console.error('Fetch profile error:', err);
+            }
+        };
+
         fetchRequests();
+        fetchProfile();
     }, [typeParam]);
 
     return (
         <div className="bg-[#F8FAFC] text-slate-800 min-h-screen pb-32 font-body">
-            {/* Top Bar */}
-            <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100 h-16 flex items-center px-6">
-                <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-slate-100 transition-colors mr-3">
-                    <span className="material-symbols-outlined text-slate-600">arrow_back</span>
-                </button>
-                <h1 className="text-lg font-black tracking-tight">{info.title}</h1>
+            <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl shadow-[0_20px_40px_rgba(0,104,95,0.04)] py-4">
+                <div className="flex items-center justify-between px-6 max-w-7xl mx-auto w-full">
+                    <div className="flex items-center gap-4">
+                        <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-full scale-95 active:scale-90 duration-200">
+                            <span className="material-symbols-outlined text-2xl">arrow_back</span>
+                        </button>
+                        <h1 className="text-xl font-bold text-teal-900 tracking-tight">{info.title}</h1>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <div 
+                            className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors shadow-sm"
+                            onClick={() => navigate('/profile-customer')}
+                        >
+                            {profileImage ? (
+                                <img 
+                                    alt="Profile" 
+                                    src={profileImage.startsWith('http') ? 
+                                        `${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                        `${import.meta.env.VITE_API_BASE_URL || ''}${profileImage.startsWith('/') ? '' : '/'}${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                    className="w-full h-full object-cover" 
+                                    onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.style.display = 'none';
+                                        if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                />
+                            ) : (
+                                <span className="material-symbols-outlined text-slate-500 text-2xl">account_circle</span>
+                            )}
+                            {profileImage && (
+                                <span className="material-symbols-outlined text-slate-500 text-2xl hidden items-center justify-center w-full h-full">account_circle</span>
+                            )}
+                        </div>
+                    </div>
+                </div>
             </header>
 
-            <main className="pt-24 px-6 max-w-4xl mx-auto">
+            <main className="max-w-4xl mx-auto px-6 pt-24 pb-32">
                 {/* Header Section */}
                 <section className="mb-8 space-y-2">
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white shadow-sm border border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">

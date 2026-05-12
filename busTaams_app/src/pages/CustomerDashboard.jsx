@@ -36,6 +36,7 @@ const CustomerDashboard = () => {
                     }
                     if (statsRes.data.profileImage) {
                         setProfileImage(statsRes.data.profileImage);
+                        setImageVersion(Date.now());
                     }
                 }
             } catch (err) {
@@ -52,6 +53,7 @@ const CustomerDashboard = () => {
                     }
                     if (profileRes.data.profileImage) {
                         setProfileImage(profileRes.data.profileImage);
+                        setImageVersion(Date.now());
                     }
                 }
             } catch (err) {
@@ -76,17 +78,25 @@ const CustomerDashboard = () => {
                     <button className="p-2 rounded-full hover:bg-slate-100/50 transition-colors">
                         <span className="material-symbols-outlined text-slate-500">notifications</span>
                     </button>
-                    <div className="w-8 h-8 rounded-full bg-slate-200 overflow-hidden flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => navigate('/profile-customer')}>
                         {profileImage ? (
                             <img 
                                 alt="Profile" 
                                 src={profileImage.startsWith('http') ? 
-                                    `${profileImage}${profileImage.includes('?') ? '&' : '?'}v=${imageVersion}` : 
-                                    `${import.meta.env.VITE_API_BASE_URL || ''}${profileImage}`} 
+                                    `${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                    `${import.meta.env.VITE_API_BASE_URL || ''}${profileImage.startsWith('/') ? '' : '/'}${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
                                 className="w-full h-full object-cover" 
+                                onError={(e) => {
+                                    e.target.onerror = null;
+                                    e.target.style.display = 'none';
+                                    if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                }}
                             />
                         ) : (
-                            <span className="material-symbols-outlined text-slate-400">person</span>
+                            <span className="material-symbols-outlined text-slate-500 text-2xl">account_circle</span>
+                        )}
+                        {profileImage && (
+                            <span className="material-symbols-outlined text-slate-500 text-2xl hidden items-center justify-center w-full h-full">account_circle</span>
                         )}
                     </div>
                 </div>

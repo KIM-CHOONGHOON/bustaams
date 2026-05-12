@@ -7,6 +7,8 @@ const PastTripListCustomer = () => {
     const navigate = useNavigate();
     const [trips, setTrips] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [profileImage, setProfileImage] = useState(null);
+    const [imageVersion, setImageVersion] = useState(Date.now());
 
     useEffect(() => {
         const fetchTrips = async () => {
@@ -22,7 +24,20 @@ const PastTripListCustomer = () => {
             }
         };
 
+        const fetchProfile = async () => {
+            try {
+                const profileRes = await api.get('/app/customer/profile');
+                if (profileRes.success && profileRes.data) {
+                    setProfileImage(profileRes.data.profileImage || '');
+                    setImageVersion(Date.now());
+                }
+            } catch (err) {
+                console.error('Fetch profile error:', err);
+            }
+        };
+
         fetchTrips();
+        fetchProfile();
     }, []);
 
     return (
@@ -33,6 +48,29 @@ const PastTripListCustomer = () => {
                     <div className="flex items-center gap-5">
                         <button onClick={() => navigate(-1)} className="material-symbols-outlined text-teal-800 hover:bg-teal-50 p-2 rounded-full transition-all">arrow_back</button>
                         <h1 className="font-headline font-black tracking-tighter text-3xl text-teal-900 leading-none italic">여행 이력</h1>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => navigate('/profile-customer')}>
+                            {profileImage ? (
+                                <img 
+                                    alt="Profile" 
+                                    src={profileImage.startsWith('http') ? 
+                                        `${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                        `${import.meta.env.VITE_API_BASE_URL || ''}${profileImage.startsWith('/') ? '' : '/'}${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                    className="w-full h-full object-cover" 
+                                    onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.style.display = 'none';
+                                        if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                />
+                            ) : (
+                                <span className="material-symbols-outlined text-slate-500 text-2xl">account_circle</span>
+                            )}
+                            {profileImage && (
+                                <span className="material-symbols-outlined text-slate-500 text-2xl hidden items-center justify-center w-full h-full">account_circle</span>
+                            )}
+                        </div>
                     </div>
                 </div>
             </header>

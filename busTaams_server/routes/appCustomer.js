@@ -773,75 +773,52 @@ router.post('/approve-all', authenticateToken, async (req, res) => {
     }
 });
 
-// 6. 프로필 이미지 업로드 (GCS 연동 및 TB_FILE_MASTER 표준화)
-router.post('/profile/upload-image', authenticateToken, memoryUpload.single('profileImage'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ success: false, error: '파일이 업로드되지 않았습니다.' });
-        }
-
-        const userId = req.user.userId;
-        
-        // 1. CUST_ID 및 기존 PROFILE_FILE_ID 조회
-        const [userRows] = await pool.execute('SELECT CUST_ID, PROFILE_FILE_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
-        if (userRows.length === 0) {
-            return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
-        }
-        const { CUST_ID: custId } = userRows[0];
-        
-        const ext = path.extname(req.file.originalname).replace('.', '') || 'png';
-        // 캐싱 문제를 피하기 위해 항상 새로운 fileId를 생성합니다.
-        const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20);
-        const gcsFileName = `profiles/${fileId}.${ext}`;
-        const file = getBucket().file(gcsFileName);
-
-        // 2. GCS 업로드
-        await file.save(req.file.buffer, {
-            metadata: { contentType: req.file.mimetype }
-        });
-
-        // 파일을 공개로 설정하여 앱에서 직접 접근 가능하게 함
-        try {
-            await file.makePublic();
-        } catch (e) {
-            console.log('GCS makePublic failed (likely uniform bucket-level access):', e.message);
-        }
-
-        const imageUrl = `https://storage.googleapis.com/${bucketName}/${gcsFileName}`;
-
-        // 3. TB_FILE_MASTER 신규 등록 (프로필은 이력을 남기거나 URL 변경을 위해 신규 등록 권장)
-        await pool.execute(
-            `INSERT INTO TB_FILE_MASTER (
-                FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, REG_ID, MOD_ID
-            ) VALUES (?, 'PROFILE', ?, ?, ?, ?, ?, ?)`,
-            [fileId, bucketName, imageUrl, req.file.originalname, ext, custId, custId]
-        );
-
-        // 4. TB_USER 업데이트 (미사용 컬럼 USER_IMAGE 제외, PROFILE_FILE_ID만 반영)
-        await pool.execute(
-            'UPDATE TB_USER SET PROFILE_FILE_ID = ?, MOD_ID = ?, MOD_DT = NOW() WHERE USER_ID = ?',
-            [fileId, custId, userId]
-        );
-
-        // 프론트엔드 즉시 반영을 위해 중계 경로로 변환하여 응답
-        const proxyImageUrl = `/api/common/display-image?path=${encodeURIComponent(imageUrl)}`;
-
-        res.status(200).json({
-            success: true,
-            imageUrl: proxyImageUrl,
-            message: '프로필 이미지가 성공적으로 변경되었습니다.'
-        });
-    } catch (error) {
-        console.error('App profile image upload error:', error);
-        res.status(500).json({ success: false, error: '이미지 업로드 중 서버 오류가 발생했습니다.' });
-    }
-});
-
 // 7. 예약 상세 정보 조회 (TB_AUCTION_REQ + TB_AUCTION_REQ_VIA)
 router.get('/reservation/:id', authenticateToken, async (req, res) => {
     try {
-        const reqId = req.params.id;
+        const idParam = req.params.id;
         const travelerId = req.user.userId;
+
+        console.log(`[App Reservation Detail] Requesting ID: ${idParam} by User: ${travelerId}`);
+
+        // 0. 사용자 CUST_ID 조회 (토큰에 있으면 우선 사용)
+        let custId = req.user.custId;
+        if (!custId) {
+            const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [travelerId]);
+            custId = uRows.length > 0 ? uRows[0].CUST_ID : travelerId;
+        }
+        console.log(`[App Reservation Detail] Final CustID for authorization: ${custId}`);
+
+        // 1. ID 해석 (REQ_ID 인지 RES_ID 인지 구분하며 사용자 권한 연동)
+        let reqId = null;
+        console.log(`[DEBUG] idParam: '${idParam}', length: ${idParam?.length}`);
+        
+        // 우선 요청번호(REQ_ID)가 본인 것인지 확인
+        const [reqCheck] = await pool.execute(
+            'SELECT REQ_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ? AND TRAVELER_ID = ?', 
+            [idParam, custId]
+        );
+        
+        if (reqCheck.length > 0) {
+            reqId = idParam;
+            console.log(`[App Reservation Detail] Found matching REQ_ID: ${idParam}`);
+        } else {
+            // 요청번호로 없거나 본인 것이 아니라면, 예약번호(RES_ID)로 조회 시도 (본인 것인지 포함)
+            const [resCheck] = await pool.execute(
+                'SELECT REQ_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ? AND TRAVELER_ID = ?', 
+                [idParam, custId]
+            );
+            if (resCheck.length > 0) {
+                reqId = resCheck[0].REQ_ID;
+                console.log(`[App Reservation Detail] Resolved REQ_ID ${reqId} from RES_ID ${idParam}`);
+            } else {
+                // 둘 다 아니라면 (혹은 다른 사람의 REQ_ID인 경우)
+                // 보안상 상세 메시지보다는 404로 처리하거나, 기존 로직처럼 reqId를 idParam으로 두고 아래에서 403 처리
+                reqId = idParam; 
+            }
+        }
+
+        console.log(`[DEBUG] Final reqId to query: '${reqId}', length: ${reqId?.length}`);
 
         // [A] 마스터 정보 조회
         const [rows] = await pool.execute(`
@@ -854,7 +831,6 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
                 DATE_FORMAT(END_DT, '%Y-%m-%d %H:%i') as end_date,
                 REQ_AMT as total_price,
                 DATA_STAT as status,
-                REQ_AMT as specialRequest, 
                 PASSENGER_CNT as passengerCount,
                 TRAVELER_ID as ownerId,
                 CASE 
@@ -873,16 +849,18 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
         `, [reqId]);
 
         if (rows.length === 0) {
+            console.warn(`[App Reservation Detail] Reservation NOT FOUND for REQ_ID: '${reqId}'`);
+            // 혹시 모르니 전체 목록에서 이 ID가 있는지 확인하는 로그 추가
+            const [allCheck] = await pool.execute('SELECT REQ_ID FROM TB_AUCTION_REQ LIMIT 5');
+            console.log('[DEBUG] First 5 REQ_IDs in DB:', allCheck.map(r => `'${r.REQ_ID}'`));
             return res.status(404).json({ success: false, error: '해당 예약 번호를 찾을 수 없습니다.' });
         }
 
         const reservation = rows[0];
 
-        // [보안 체크] 소유자 대조 (CUST_ID 기반)
-        const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [travelerId]);
-        const custId = uRows.length > 0 ? uRows[0].CUST_ID : travelerId;
-
+        // [보안 체크] 소유자 대조
         if (reservation.ownerId !== custId) {
+            console.warn(`[App Reservation Detail] Forbidden access by ${custId} to reservation owned by ${reservation.ownerId}`);
             return res.status(403).json({ success: false, error: '본인의 예약 내역만 조회할 수 있습니다.' });
         }
 
@@ -894,16 +872,56 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
             ORDER BY VIA_SEQ ASC
         `, [reqId]);
 
-        const fullRoute = [];
-        fullRoute.push({ type: 'START', addr: reservation.from_addr, title: '출발지', time: reservation.start_date });
+        console.log(`[DEBUG] viaRows for REQ_ID ${reqId}:`, JSON.stringify(viaRows, null, 2));
+
+        let fullRoute = [];
+        if (viaRows.length > 0) {
+            // 경유지 데이터가 있는 경우, 상세 경로를 구성
+            fullRoute = viaRows.map((v, idx) => {
+                let title = '경유지';
+                let type = 'VIA';
+
+                switch(v.type) {
+                    case 'START_NODE':
+                        title = '출발지';
+                        type = 'START';
+                        break;
+                    case 'START_WAY':
+                        title = '출발경유지';
+                        type = 'VIA';
+                        break;
+                    case 'ROUND_TRIP':
+                        title = '목적지';
+                        type = 'DEST';
+                        break;
+                    case 'END_WAY':
+                        title = '도착경유지';
+                        type = 'VIA';
+                        break;
+                    case 'END_NODE':
+                        title = '도착지';
+                        type = 'END';
+                        break;
+                    case 'WAY':
+                    default:
+                        title = '경유지';
+                        type = 'VIA';
+                }
+
+                // 첫 번째 노드에는 출발 시간을, 마지막 노드에는 도착 시간을 추가로 붙여줍니다.
+                let time = null;
+                if (idx === 0) time = reservation.start_date;
+                if (idx === viaRows.length - 1) time = reservation.end_date;
+
+                return { type, addr: v.addr, title, time };
+            });
+        } else {
+            // 경유지 데이터가 전혀 없는 경우 기본 출발/도착지 표시 (Fallback)
+            fullRoute.push({ type: 'START', addr: reservation.from_addr, title: '출발지', time: reservation.start_date });
+            fullRoute.push({ type: 'END', addr: reservation.to_addr, title: '도착지', time: reservation.end_date });
+        }
         
-        viaRows.forEach(v => {
-            if (v.type === 'START_WAY') fullRoute.push({ type: 'WAY', addr: v.addr, title: '출발 경유지' });
-            else if (v.type === 'ROUND_TRIP') fullRoute.push({ type: 'ROUND', addr: v.addr, title: '목적지' });
-            else if (v.type === 'END_WAY') fullRoute.push({ type: 'WAY', addr: v.addr, title: '도착 경유지' });
-        });
-        
-        fullRoute.push({ type: 'END', addr: reservation.from_addr, title: '복귀지', time: reservation.end_date });
+        console.log(`[DEBUG] Final fullRoute for REQ_ID ${reqId}:`, JSON.stringify(fullRoute, null, 2));
         reservation.route = fullRoute;
 
         // [C] 신청 차량 목록 및 입찰 현황 조회 (확정된 기사 정보 포함)
@@ -911,15 +929,20 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
             SELECT 
                 rb.REQ_BUS_SEQ as reqBusUuid,
                 rb.BUS_TYPE_CD as busType,
+                res.RES_ID as resId,
                 rb.DATA_STAT as status,
                 rb.RES_BUS_AMT as price,
                 (SELECT COUNT(*) FROM TB_BUS_RESERVATION b 
                  WHERE b.REQ_ID = rb.REQ_ID AND b.REQ_BUS_SEQ = rb.REQ_BUS_SEQ AND b.DATA_STAT = 'BIDDING') as bidCount,
                 res.DRIVER_ID as driverId,
                 u_driver.USER_NM as driverName,
+                u_driver.HP_NO as driverHp,
+                u_driver.USER_IMAGE as driverAvatar,
                 dv.VEHICLE_NO as busNo,
                 dv.MODEL_NM as busModel,
-                res.OFFER_PRICE as confirmedPrice,
+                dv.VEHICLE_PHOTOS_JSON as busPhotos,
+                dv.AMENITIES as amenities,
+                res.DRIVER_BIDDING_PRICE as confirmedPrice,
                 res.DATA_STAT as resStatus
             FROM TB_AUCTION_REQ_BUS rb
             LEFT JOIN TB_BUS_RESERVATION res ON rb.REQ_ID = res.REQ_ID AND rb.REQ_BUS_SEQ = res.REQ_BUS_SEQ AND res.DATA_STAT = 'CONFIRM'
@@ -928,8 +951,49 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
             WHERE rb.REQ_ID = ?
         `, [reqId]);
 
-        reservation.requestedBuses = busRows;
+        // [D] 차량 이미지 및 기사 아바타 처리
+        for (let bus of busRows) {
+            // 1. 기사 아바타 경로 처리
+            if (bus.driverAvatar && !bus.driverAvatar.startsWith('http') && !bus.driverAvatar.startsWith('/')) {
+                bus.driverAvatar = `/api/common/display-image?path=${encodeURIComponent(bus.driverAvatar)}`;
+            }
 
+            // 2. 차량 이미지 (FILE_ID -> GCS_PATH) 변환
+            if (bus.busPhotos) {
+                try {
+                    let photoIds = (typeof bus.busPhotos === 'string') ? JSON.parse(bus.busPhotos) : bus.busPhotos;
+                    if (Array.isArray(photoIds) && photoIds.length > 0) {
+                        const [fileRows] = await pool.execute(
+                            'SELECT GCS_PATH FROM TB_FILE_MASTER WHERE FILE_ID IN (?)',
+                            [photoIds]
+                        );
+                        
+                        const paths = fileRows.map(f => {
+                            // 이미 풀 URL(https://...) 형태라면 그대로 사용, 아니면 프록시 경로 사용
+                            if (f.GCS_PATH && f.GCS_PATH.startsWith('http')) {
+                                return f.GCS_PATH;
+                            }
+                            return `/api/common/display-image?path=${encodeURIComponent(f.GCS_PATH)}`;
+                        });
+                        
+                        bus.busPhotos = paths;
+                        bus.busImage = paths[0]; // 첫 번째 이미지를 대표 이미지로 설정
+                    } else {
+                        bus.busPhotos = [];
+                        bus.busImage = null;
+                    }
+                } catch (e) {
+                    console.error('[App Reservation Detail] Bus photo resolution error:', e);
+                    bus.busPhotos = [];
+                    bus.busImage = null;
+                }
+            } else {
+                bus.busPhotos = [];
+                bus.busImage = null;
+            }
+        }
+
+        reservation.requestedBuses = busRows;
         res.json({
             success: true,
             data: reservation
@@ -939,6 +1003,69 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
         res.status(500).json({ success: false, error: '상세 정보를 가져오는 데 실패했습니다.' });
     }
 });
+
+
+
+
+/**
+ * [App 전용] 여행 완료 처리 (고객용)
+ * - 해당 요청(REQ_ID)에 속한 모든 예약 및 요청 상태를 'DONE'으로 변경합니다.
+ */
+router.post('/reservation/complete', authenticateToken, async (req, res) => {
+    const connection = await pool.getConnection();
+    try {
+        const { reqId } = req.body;
+        const userId = req.user.userId;
+        const tokenCustId = req.user.custId;
+
+        if (!reqId) {
+            return res.status(400).json({ success: false, error: '요청 ID가 필요합니다.' });
+        }
+
+        // 1. 권한 확인 (본인의 예약인지)
+        let custId = tokenCustId;
+        if (!custId) {
+            const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+            if (uRows.length === 0) return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
+            custId = uRows[0].CUST_ID;
+        }
+
+        const [reqCheck] = await pool.execute(
+            'SELECT REQ_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ? AND TRAVELER_ID = ?',
+            [reqId, custId]
+        );
+
+        if (reqCheck.length === 0) {
+            return res.status(403).json({ success: false, error: '완료 처리 권한이 없습니다.' });
+        }
+
+        await connection.beginTransaction();
+
+        // 2. 상태 변경 (TB_AUCTION_REQ -> DONE)
+        await connection.execute(
+            'UPDATE TB_AUCTION_REQ SET DATA_STAT = "DONE" WHERE REQ_ID = ?',
+            [reqId]
+        );
+
+        // 3. 관련 예약 상태 변경 (TB_BUS_RESERVATION -> DONE)
+        // CONFIRM 상태인 것만 DONE으로 변경
+        await connection.execute(
+            'UPDATE TB_BUS_RESERVATION SET DATA_STAT = "DONE" WHERE REQ_ID = ? AND DATA_STAT = "CONFIRM"',
+            [reqId]
+        );
+
+        await connection.commit();
+        res.json({ success: true, message: '여행이 완료되었습니다.' });
+
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('[App Reservation Complete] Error:', error);
+        res.status(500).json({ success: false, error: '여행 완료 처리 중 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
 
 // 8. 특정 요청/차종에 대한 입찰 목록 조회
 router.get('/received-bids', authenticateToken, async (req, res) => {
@@ -952,7 +1079,7 @@ router.get('/received-bids', authenticateToken, async (req, res) => {
             SELECT 
                 b.RES_ID as id,
                 u.USER_NM as captain,
-                u.PROFILE_IMG_PATH as avatar,
+                u.USER_IMAGE as avatar,
                 db.SERVICE_CLASS as busType,
                 db.MODEL_NM as title,
                 b.DRIVER_BIDDING_PRICE as price,
@@ -1037,7 +1164,7 @@ router.get('/bid-detail/:id', authenticateToken, async (req, res) => {
                 b.RES_ID as id,
                 b.REQ_ID as reqId,
                 u.USER_NM as driverName,
-                u.PROFILE_IMG_PATH as avatar,
+                u.USER_IMAGE as avatar,
                 u.JOIN_DT as joinDt,
                 u.HP_NO as hpNo,
                 db.SERVICE_CLASS as busType,
@@ -1093,17 +1220,42 @@ router.get('/bid-detail/:id', authenticateToken, async (req, res) => {
             bid.amenities = [];
         }
 
-        // 사진 처리
-        let photoPaths = [];
+        // 사진 처리 (FILE_ID를 실제 GCS 경로로 변환)
+        let finalPhotos = [];
         if (bid.photos) {
             try {
-                const photos = typeof bid.photos === 'string' ? JSON.parse(bid.photos) : bid.photos;
-                if (Array.isArray(photos)) {
-                    photoPaths = photos.map(p => processUrl(p.url || p));
+                const photoIds = typeof bid.photos === 'string' ? JSON.parse(bid.photos) : bid.photos;
+                if (Array.isArray(photoIds) && photoIds.length > 0) {
+                    // 유효한 ID들만 필터링
+                    const validIds = photoIds.map(id => String(id).trim()).filter(id => id && id !== 'null');
+                    
+                    if (validIds.length > 0) {
+                        const [fileRows] = await pool.execute(
+                            `SELECT FILE_ID, GCS_PATH FROM TB_FILE_MASTER WHERE FILE_ID IN (${validIds.map(() => '?').join(',')})`,
+                            validIds
+                        );
+                        
+                        // ID별 경로 매핑
+                        const fileMap = {};
+                        fileRows.forEach(f => {
+                            fileMap[String(f.FILE_ID).trim()] = f.GCS_PATH;
+                        });
+                        
+                        // 원본 순서 유지하며 URL 생성
+                        finalPhotos = validIds.map(id => {
+                            const path = fileMap[id];
+                            if (path) {
+                                return `/api/common/display-image?path=${encodeURIComponent(path)}`;
+                            }
+                            return null;
+                        }).filter(p => p !== null);
+                    }
                 }
-            } catch (e) {}
+            } catch (e) {
+                console.error('[JSON Parse Error] Vehicle Photos (estimate-detail):', e);
+            }
         }
-        bid.photos = photoPaths.filter(p => p !== null);
+        bid.photos = finalPhotos;
 
         // 경력 계산
         const joinYear = bid.joinDt ? new Date(bid.joinDt).getFullYear() : new Date().getFullYear();
@@ -1611,17 +1763,16 @@ router.get('/reservations', authenticateToken, async (req, res) => {
         console.log('[App Reservations] Final CustID for query:', custId);
 
         // 2. 예약 내역 조회 (TB_BUS_RESERVATION 기반, CONFIRM인 것만)
-        // REQ_ID 기준으로 그룹화하여 하나의 요청에 여러 대의 버스가 있더라도 리스트에는 하나로 표시 (추후 상세에서 개별 확인)
         const [rows] = await pool.execute(`
             SELECT 
                 r.REQ_ID as id,
                 r.DATA_STAT as requestStat,
                 res.DATA_STAT as statusCode,
-                r.START_ADDR as \`from\`,
-                r.END_ADDR as \`to\`,
-                (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' LIMIT 1) as roundAddr,
+                r.START_ADDR as startAddr,
+                r.END_ADDR as endAddr,
                 DATE_FORMAT(r.START_DT, '%Y/%m/%d') as date,
                 r.TRIP_TITLE as title,
+                MIN(res.RES_ID) as firstResId,
                 COUNT(res.RES_ID) as busCount,
                 SUM(res.DRIVER_BIDDING_PRICE) as totalOfferPrice
             FROM TB_AUCTION_REQ r
@@ -1633,18 +1784,113 @@ router.get('/reservations', authenticateToken, async (req, res) => {
 
         console.log(`[App Reservations] Found ${rows.length} trips for ${custId}`);
 
-        // 3. 각 예약별 버스 상세 정보 보완
-        for (const resObj of rows) {
-            const [buses] = await pool.execute(`
+        // [최적화] 모든 예약의 사진 정보를 한꺼번에 처리하기 위해 관련 데이터 수집
+        const reqIds = rows.map(r => r.id);
+        if (reqIds.length > 0) {
+            // 모든 예약의 경유지/목적지 정보 조회
+            const [allVias] = await pool.execute(`
+                SELECT REQ_ID, VIA_ADDR, VIA_TYPE 
+                FROM TB_AUCTION_REQ_VIA 
+                WHERE REQ_ID IN (${reqIds.map(() => '?').join(',')})
+                ORDER BY REQ_ID, VIA_SEQ ASC
+            `, reqIds);
+
+            // 모든 예약의 확정 차량 및 기사 정보 조회
+            const [allBuses] = await pool.execute(`
                 SELECT 
-                    (SELECT CD_NM_KO FROM TB_COMMON_CODE WHERE GRP_CD = 'BUS_TYPE' AND DTL_CD = B.BUS_TYPE_CD) as busTypeName
-                FROM TB_AUCTION_REQ_BUS B
-                WHERE B.REQ_ID = ?
-            `, [resObj.id]);
-            
-            resObj.busType = buses.map(b => b.busTypeName).filter(Boolean).join(', ');
-            // 기본 이미지
-            resObj.img = 'https://lh3.googleusercontent.com/aida-public/AB6AXuBkFgpCqOKwslyeB-NDZZWgUztAqUL0bfHiOrJqNJJN6DpHr41urNw5IJbiscbKz7SRUeipoTldOC-T9K1hgHX0Ql-j8HNSBG7i7RsroxP2pU55sPH2h18ejgiAIUhlk7ClZgs-q20FqjXXkNpV6ztIhaTC2EUu5gNvLvdKaXaGHKYW2nXvxveE0DY6Z3XOqnvIyAdfKEvapFzLayq9xIjqgGqcuwwu4qmp5WnLSgsnzUNS17N7rvUar-ZpG0fnE-1dIGrFGlPczso';
+                    BR.REQ_ID,
+                    BR.RES_ID,
+                    U.USER_NM as driverName,
+                    U.HP_NO as driverPhone,
+                    (SELECT GCS_PATH FROM TB_FILE_MASTER WHERE FILE_ID = U.PROFILE_FILE_ID) as driverImagePath,
+                    (SELECT CD_NM_KO FROM TB_COMMON_CODE WHERE GRP_CD = 'BUS_TYPE' AND DTL_CD = B.BUS_TYPE_CD) as busTypeName,
+                    V.VEHICLE_NO as vehicleNo,
+                    V.MODEL_NM as modelNm,
+                    V.VEHICLE_PHOTOS_JSON
+                FROM TB_BUS_RESERVATION BR
+                JOIN TB_AUCTION_REQ_BUS B ON BR.REQ_ID = B.REQ_ID AND BR.REQ_BUS_SEQ = B.REQ_BUS_SEQ
+                JOIN TB_USER U ON BR.DRIVER_ID = U.CUST_ID
+                LEFT JOIN TB_BUS_DRIVER_VEHICLE V ON BR.BUS_ID = V.BUS_ID
+                WHERE BR.REQ_ID IN (${reqIds.map(() => '?').join(',')}) AND BR.DATA_STAT = 'CONFIRM'
+            `, reqIds);
+
+            // 사진 ID 수집 및 URL 매핑 (N+1 방지)
+            const allPhotoIds = [];
+            allBuses.forEach(b => {
+                if (b.VEHICLE_PHOTOS_JSON) {
+                    try {
+                        const photos = typeof b.VEHICLE_PHOTOS_JSON === 'string' ? JSON.parse(b.VEHICLE_PHOTOS_JSON) : b.VEHICLE_PHOTOS_JSON;
+                        if (Array.isArray(photos) && photos.length > 0) {
+                            allPhotoIds.push(String(photos[0]).trim());
+                        }
+                    } catch (e) {}
+                }
+            });
+
+            let photoMap = {};
+            if (allPhotoIds.length > 0) {
+                const uniqueIds = [...new Set(allPhotoIds)];
+                const [pRows] = await pool.execute(
+                    `SELECT FILE_ID, GCS_PATH FROM TB_FILE_MASTER WHERE FILE_ID IN (${uniqueIds.map(() => '?').join(',')})`,
+                    uniqueIds
+                );
+                pRows.forEach(p => {
+                    photoMap[String(p.FILE_ID).trim()] = `/api/common/display-image?path=${encodeURIComponent(p.GCS_PATH)}`;
+                });
+            }
+
+            // 결과 데이터 보완
+            rows.forEach(resObj => {
+                // 1. 노선 정보 구성 (DB 데이터 기반 상세 명칭 추출)
+                const vias = allVias.filter(v => v.REQ_ID === resObj.id);
+                
+                // 출발지/도착지 명칭 (주소 전체를 쓰거나 주요 명칭 추출)
+                const startPoint = resObj.startAddr || '출발지';
+                const endPoint = resObj.endAddr || '도착지';
+                
+                // 'ROUND_TRIP' (목적지) 찾기
+                const destination = vias.find(v => v.VIA_TYPE === 'ROUND_TRIP');
+                const destPoint = destination ? destination.VIA_ADDR : null;
+
+                if (destPoint) {
+                    resObj.simplifiedRoute = `${startPoint} → ${destPoint} → ${endPoint}`;
+                    resObj.routeDetail = { start: startPoint, via: destPoint, end: endPoint };
+                } else {
+                    resObj.simplifiedRoute = `${startPoint} → ${endPoint}`;
+                    resObj.routeDetail = { start: startPoint, via: null, end: endPoint };
+                }
+
+                // 2. 차량 및 기사 정보 매핑 (다수 차량 대응)
+                const reservationBuses = allBuses.filter(b => b.REQ_ID === resObj.id);
+                resObj.buses = reservationBuses.map(bus => {
+                    let busImg = null;
+                    if (bus.VEHICLE_PHOTOS_JSON) {
+                        try {
+                            const photos = typeof bus.VEHICLE_PHOTOS_JSON === 'string' ? JSON.parse(bus.VEHICLE_PHOTOS_JSON) : bus.VEHICLE_PHOTOS_JSON;
+                            if (Array.isArray(photos) && photos.length > 0) {
+                                busImg = photoMap[String(photos[0]).trim()];
+                            }
+                        } catch (e) {}
+                    }
+
+                    return {
+                        resId: bus.RES_ID,
+                        driverName: bus.driverName,
+                        driverPhone: bus.driverPhone,
+                        driverImage: bus.driverImagePath ? `/api/common/display-image?path=${encodeURIComponent(bus.driverImagePath)}` : null,
+                        busType: bus.busTypeName,
+                        vehicleNo: bus.vehicleNo,
+                        modelNm: bus.modelNm,
+                        busImage: busImg || 'https://lh3.googleusercontent.com/aida-public/AB6AXuBkFgpCqOKwslyeB-NDZZWgUztAqUL0bfHiOrJqNJJN6DpHr41urNw5IJbiscbKz7SRUeipoTldOC-T9K1hgHX0Ql-j8HNSBG7i7RsroxP2pU55sPH2h18ejgiAIUhlk7ClZgs-q20FqjXXkNpV6ztIhaTC2EUu5gNvLvdKaXaGHKYW2nXvxveE0DY6Z3XOqnvIyAdfKEvapFzLayq9xIjqgGqcuwwu4qmp5WnLSgsnzUNS17N7rvUar-ZpG0fnE-1dIGrFGlPczso'
+                    };
+                });
+
+                // 첫 번째 차량 정보를 기본 정보로 설정 (하위 호환성)
+                if (resObj.buses.length > 0) {
+                    resObj.busType = resObj.buses[0].busType;
+                    resObj.img = resObj.buses[0].busImage;
+                }
+            });
         }
 
         res.json({ success: true, data: rows });

@@ -613,21 +613,7 @@ const Signup = () => {
                         </div>
                     </form>
 
-                    <div className="relative flex items-center justify-center">
-                        <div className="absolute w-full h-[1px] bg-slate-100"></div>
-                        <span className="relative z-10 bg-white px-4 text-[10px] text-outline font-bold uppercase tracking-widest">또는 소셜 계정으로 시작하기</span>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <button className="flex flex-col items-center justify-center gap-2 bg-[#FEE500] py-4 rounded-3xl hover:brightness-95 transition-all">
-                            <span className="material-symbols-outlined text-black text-2xl fill-1">chat</span>
-                            <span className="text-[10px] font-black text-black">카카오</span>
-                        </button>
-                        <button className="flex flex-col items-center justify-center gap-2 bg-[#03C75A] py-4 rounded-3xl hover:brightness-95 transition-all">
-                            <span className="text-white font-black text-2xl">N</span>
-                            <span className="text-[10px] font-black text-white">네이버</span>
-                        </button>
-                    </div>
 
                     <div className="text-center pt-4">
                         <span className="text-sm font-medium text-slate-400">이미 계정이 있으신가요? </span>

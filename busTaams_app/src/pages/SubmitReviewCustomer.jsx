@@ -11,6 +11,8 @@ const SubmitReviewCustomer = () => {
     const [rating, setRating] = useState(5);
     const [comment, setComment] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [profileImage, setProfileImage] = useState(null);
+    const [imageVersion, setImageVersion] = useState(Date.now());
 
     useEffect(() => {
         const fetchDetail = async () => {
@@ -21,18 +23,25 @@ const SubmitReviewCustomer = () => {
                 }
             } catch (error) {
                 console.error('Fetch mission detail error:', error);
-                Swal.fire({
-                    icon: 'error',
-                    title: '데이터 로드 실패',
-                    text: '운행 정보를 불러올 수 없습니다.',
-                    confirmButtonColor: '#0F766E'
-                });
             } finally {
                 setLoading(false);
             }
         };
 
+        const fetchProfile = async () => {
+            try {
+                const res = await api.get('/app/customer/profile');
+                if (res.success && res.data.profileImage) {
+                    setProfileImage(res.data.profileImage);
+                    setImageVersion(Date.now());
+                }
+            } catch (err) {
+                console.error('Fetch profile error:', err);
+            }
+        };
+
         fetchDetail();
+        fetchProfile();
     }, [id]);
 
     const handleSubmit = async () => {
@@ -74,12 +83,54 @@ const SubmitReviewCustomer = () => {
     return (
         <div className="bg-[#F8FAFB] min-h-screen pb-20 text-left font-body">
             {/* Header */}
-            <header className="fixed top-0 w-full z-50 bg-white border-b border-slate-100 px-6 h-16 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <button onClick={() => navigate(-1)} className="material-symbols-outlined text-[#1E293B] p-2 hover:bg-slate-50 rounded-full transition-all">close</button>
-                    <h1 className="font-bold text-[17px] text-[#1E293B]">평점 및 감사글 작성</h1>
+            <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100/50 py-4">
+                <div className="flex justify-between items-center w-full px-6 max-w-xl mx-auto">
+                    <div className="flex items-center gap-4">
+                        <button 
+                            onClick={() => navigate(-1)} 
+                            className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-50 text-teal-700 hover:bg-teal-50 transition-all duration-300 group"
+                        >
+                            <span className="material-symbols-outlined text-2xl group-hover:-translate-x-0.5 transition-transform">close</span>
+                        </button>
+                        <div>
+                            <h1 className="font-headline font-black tracking-tight text-xl text-teal-900">
+                                평점 및 감사글
+                            </h1>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest -mt-1">Write Review</p>
+                        </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                        <div 
+                            className="w-11 h-11 rounded-2xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden"
+                            onClick={() => navigate('/user-profile')}
+                        >
+                            <div className="w-full h-full rounded-[14px] overflow-hidden bg-slate-50 flex items-center justify-center relative group">
+                                {profileImage ? (
+                                    <img 
+                                        alt="Customer Profile" 
+                                        src={profileImage.startsWith('http') ? 
+                                            `${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                            `${import.meta.env.VITE_API_BASE_URL || ''}${profileImage.startsWith('/') ? '' : '/'}${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                                        onError={(e) => {
+                                            e.target.onerror = null;
+                                            e.target.src = '';
+                                            e.target.classList.add('hidden');
+                                            if (e.target.nextSibling) {
+                                                e.target.nextSibling.classList.remove('hidden');
+                                                e.target.nextSibling.classList.add('flex');
+                                            }
+                                        }}
+                                    />
+                                ) : null}
+                                <div className={`${profileImage ? 'hidden' : 'flex'} items-center justify-center w-full h-full bg-teal-50`}>
+                                    <span className="material-symbols-outlined text-teal-600 text-2xl">account_circle</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div className="w-10"></div>
             </header>
 
             <main className="max-w-xl mx-auto px-6 pt-24 space-y-10">

@@ -16,6 +16,8 @@ const EstimateListCustomer = () => {
     const [tripSummary, setTripSummary] = useState(null);
     const [units, setUnits] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [profileImage, setProfileImage] = useState(null);
+    const [imageVersion, setImageVersion] = useState(Date.now());
 
     // 청약 데이터 가져오기
     const fetchEstimates = async () => {
@@ -35,6 +37,19 @@ const EstimateListCustomer = () => {
 
     useEffect(() => {
         fetchEstimates();
+
+        const fetchProfile = async () => {
+            try {
+                const profileRes = await api.get('/app/customer/profile');
+                if (profileRes.success && profileRes.data && profileRes.data.profileImage) {
+                    setProfileImage(profileRes.data.profileImage);
+                    setImageVersion(Date.now());
+                }
+            } catch (err) {
+                console.error('Fetch profile error:', err);
+            }
+        };
+        fetchProfile();
     }, [reqId]);
 
     // 개별 차량 청약 취소
@@ -148,10 +163,30 @@ const EstimateListCustomer = () => {
                         <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-full scale-95 active:scale-90 duration-200">
                             <span className="material-symbols-outlined">arrow_back</span>
                         </button>
-                        <span className="text-xl font-bold text-teal-900 tracking-tight">청약 상세 화면</span>
+                        <h1 className="text-xl font-bold text-teal-900 tracking-tight">청약 상세 화면</h1>
                     </div>
                     <div className="flex items-center gap-4">
-                         <span className="text-sm font-bold text-slate-400">상세 청약 확인</span>
+                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => navigate('/profile-customer')}>
+                            {profileImage ? (
+                                <img 
+                                    alt="Profile" 
+                                    src={profileImage.startsWith('http') ? 
+                                        `${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                        `${import.meta.env.VITE_API_BASE_URL || ''}${profileImage.startsWith('/') ? '' : '/'}${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                    className="w-full h-full object-cover" 
+                                    onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.style.display = 'none';
+                                        if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                />
+                            ) : (
+                                <span className="material-symbols-outlined text-slate-500 text-2xl">account_circle</span>
+                            )}
+                            {profileImage && (
+                                <span className="material-symbols-outlined text-slate-500 text-2xl hidden items-center justify-center w-full h-full">account_circle</span>
+                            )}
+                        </div>
                     </div>
                 </div>
             </header>

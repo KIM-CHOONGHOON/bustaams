@@ -9,7 +9,23 @@ const ApprovalDetailCustomer = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    const [customerProfile, setCustomerProfile] = useState(null);
+    const [imageVersion, setImageVersion] = useState(Date.now());
+
     useEffect(() => {
+        const fetchDashboardData = async () => {
+            try {
+                const profileRes = await api.get('/app/customer/profile');
+                if (profileRes.success) {
+                    setCustomerProfile(profileRes.data);
+                    setImageVersion(Date.now());
+                }
+            } catch (error) {
+                console.error('Error fetching profile:', error);
+            }
+        };
+        fetchDashboardData();
+
         const fetchBidDetail = async () => {
             if (!id) {
                 setError('ID가 유효하지 않습니다.');
@@ -111,7 +127,28 @@ const ApprovalDetailCustomer = () => {
                 <div className="flex items-center justify-between px-6 h-20 w-full max-w-7xl mx-auto py-4">
                     <div className="flex items-center gap-4">
                         <button onClick={() => navigate(-1)} className="material-symbols-outlined text-slate-400 hover:bg-slate-50 p-2 rounded-full transition-all">arrow_back</button>
-                        <h1 className="font-headline text-lg font-black tracking-tighter text-orange-600 italic">승인 처리 상세</h1>
+                        <h1 className="font-headline text-lg font-black tracking-tighter text-orange-600 italic">승인 상세 화면</h1>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 overflow-hidden border-2 border-white shadow-sm transition-transform hover:scale-110 active:scale-95 cursor-pointer" onClick={() => navigate('/profile-customer')}>
+                            {customerProfile?.profileImage ? (
+                                <img 
+                                    src={customerProfile.profileImage.startsWith('http') ? 
+                                        `${customerProfile.profileImage}${customerProfile.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                        `${import.meta.env.VITE_API_BASE_URL || ''}${customerProfile.profileImage.startsWith('/') ? '' : '/'}${customerProfile.profileImage}${customerProfile.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                    alt="Profile" 
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.style.display = 'none';
+                                        if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                />
+                            ) : (
+                                <span className="material-symbols-outlined text-slate-400">account_circle</span>
+                            )}
+                            <span className="material-symbols-outlined text-slate-400 hidden items-center justify-center w-full h-full">account_circle</span>
+                        </div>
                     </div>
                 </div>
             </header>

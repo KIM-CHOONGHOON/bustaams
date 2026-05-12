@@ -115,7 +115,7 @@ const EstimateDetailCustomer = () => {
                 <div className="flex items-center justify-between px-6 h-20 w-full max-w-7xl mx-auto py-4">
                     <div className="flex items-center gap-4">
                         <button onClick={() => navigate(-1)} className="material-symbols-outlined text-slate-400 hover:bg-slate-50 p-2 rounded-full transition-all">arrow_back</button>
-                        <h1 className="font-headline text-lg font-black tracking-tighter text-teal-700 italic">busTaams Premier</h1>
+                        <h1 className="font-headline text-lg font-black tracking-tighter text-teal-700 italic">청약 상세 화면</h1>
                     </div>
                 </div>
             </header>

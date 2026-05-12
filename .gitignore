@@ -22,6 +22,8 @@
 # ── 프론트엔드 빌드 산출물 ──────────────────────────────────
 busTaams_web/dist/
 busTaams_admin/dist/
+busTaams_app/dist/
+busTaams_app/.firebase/
 
 # ── 에디터 / OS 임시 파일 ───────────────────────────────────
 .DS_Store

@@ -893,9 +893,9 @@ router.get('/upcoming-trips', authenticateToken, async (req, res) => {
                 b.DATA_STAT as status
             FROM TB_BUS_RESERVATION b
             LEFT JOIN TB_AUCTION_REQ r 
-                ON b.REQ_ID COLLATE utf8mb4_unicode_ci = r.REQ_ID COLLATE utf8mb4_unicode_ci
+                ON b.REQ_ID = r.REQ_ID
             LEFT JOIN TB_BUS_DRIVER_VEHICLE db 
-                ON b.BUS_ID COLLATE utf8mb4_unicode_ci = db.BUS_ID COLLATE utf8mb4_unicode_ci
+                ON b.BUS_ID = db.BUS_ID
             WHERE b.DRIVER_ID = ? AND b.DATA_STAT = 'CONFIRM'
             ORDER BY r.START_DT ASC
         `, [custId]);
@@ -971,9 +971,9 @@ router.get('/bids/waiting', authenticateToken, async (req, res) => {
                 b.DATA_STAT as status
             FROM TB_BUS_RESERVATION b
             LEFT JOIN TB_AUCTION_REQ r 
-                ON b.REQ_ID COLLATE utf8mb4_unicode_ci = r.REQ_ID COLLATE utf8mb4_unicode_ci
+                ON b.REQ_ID = r.REQ_ID
             LEFT JOIN TB_BUS_DRIVER_VEHICLE db 
-                ON b.BUS_ID COLLATE utf8mb4_unicode_ci = db.BUS_ID COLLATE utf8mb4_unicode_ci
+                ON b.BUS_ID = db.BUS_ID
             WHERE b.DRIVER_ID = ? AND b.DATA_STAT = 'BIDDING'
             ORDER BY b.REG_DT DESC
         `, [custId]);
@@ -1035,10 +1035,10 @@ router.get('/mission-detail/:id', authenticateToken, async (req, res) => {
                 rev.REPLY_TEXT as replyText,
                 DATE_FORMAT(rev.REG_DT, '%Y.%m.%d') as reviewDate
             FROM TB_BUS_RESERVATION b
-            JOIN TB_AUCTION_REQ r ON b.REQ_ID COLLATE utf8mb4_unicode_ci = r.REQ_ID COLLATE utf8mb4_unicode_ci
-            LEFT JOIN TB_USER u ON r.TRAVELER_ID COLLATE utf8mb4_unicode_ci = u.CUST_ID COLLATE utf8mb4_unicode_ci
+            JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID
+            LEFT JOIN TB_USER u ON r.TRAVELER_ID = u.CUST_ID
             LEFT JOIN TB_FILE_MASTER f ON u.PROFILE_FILE_ID = f.FILE_ID
-            LEFT JOIN TB_BUS_DRIVER_VEHICLE db ON b.BUS_ID COLLATE utf8mb4_unicode_ci = db.BUS_ID COLLATE utf8mb4_unicode_ci
+            LEFT JOIN TB_BUS_DRIVER_VEHICLE db ON b.BUS_ID = db.BUS_ID
             LEFT JOIN TB_TRIP_REVIEW rev ON b.RES_ID = rev.RES_ID
             WHERE TRIM(b.RES_ID) = TRIM(?) AND b.DRIVER_ID = ?
         `, [id, custId]);
@@ -1103,7 +1103,7 @@ router.post('/complete-mission/:id', authenticateToken, async (req, res) => {
         const [result] = await pool.execute(
             `UPDATE TB_BUS_RESERVATION 
              SET DATA_STAT = 'DONE', MOD_DT = NOW(), MOD_ID = ?
-             WHERE RES_ID = ? AND DRIVER_ID COLLATE utf8mb4_unicode_ci = ?`,
+             WHERE RES_ID = ? AND DRIVER_ID = ?`,
             [custId, id, custId]
         );
 
@@ -1144,9 +1144,9 @@ router.get('/completed-missions', authenticateToken, async (req, res) => {
                 b.DRIVER_BIDDING_PRICE as price,
                 db.MODEL_NM as model
             FROM TB_BUS_RESERVATION b
-            JOIN TB_AUCTION_REQ r ON b.REQ_ID COLLATE utf8mb4_unicode_ci = r.REQ_ID COLLATE utf8mb4_unicode_ci
-            LEFT JOIN TB_BUS_DRIVER_VEHICLE db ON b.BUS_ID COLLATE utf8mb4_unicode_ci = db.BUS_ID COLLATE utf8mb4_unicode_ci
-            WHERE b.DRIVER_ID COLLATE utf8mb4_unicode_ci = ? AND b.DATA_STAT = 'DONE'
+            JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID
+            LEFT JOIN TB_BUS_DRIVER_VEHICLE db ON b.BUS_ID = db.BUS_ID
+            WHERE b.DRIVER_ID = ? AND b.DATA_STAT = 'DONE'
             ORDER BY r.END_DT DESC
         `, [custId]);
 

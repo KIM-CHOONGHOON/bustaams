@@ -16,12 +16,26 @@ const ChatRoom = () => {
     const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [currentUser, setCurrentUser] = useState(null);
+    const [profileImage, setProfileImage] = useState(null);
+    const [imageVersion, setImageVersion] = useState(Date.now());
     const scrollRef = useRef(null);
 
     // 사용자 정보 로드
     useEffect(() => {
         const user = JSON.parse(localStorage.getItem('user'));
         setCurrentUser(user);
+        
+        const fetchProfile = async () => {
+            try {
+                const response = await api.get('/app/customer/profile');
+                if (response.success && response.data) {
+                    setProfileImage(response.data.profileImage);
+                }
+            } catch (error) {
+                console.error('Fetch profile error:', error);
+            }
+        };
+        fetchProfile();
     }, []);
 
     // 채팅방 정보 및 내역 로드
@@ -132,28 +146,30 @@ const ChatRoom = () => {
                         </div>
                     </div>
 
-                    {/* 상대방 프로필 (마커스 반스 예시 스타일 적용) */}
-                    <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-full shadow-sm border border-gray-50">
-                        <div className="relative w-8 h-8 rounded-full overflow-hidden border border-gray-100">
-                            {chatRoom?.otherUser?.USER_IMAGE ? (
-                                <img 
-                                    src={chatRoom.otherUser.USER_IMAGE.startsWith('http') ? 
-                                        chatRoom.otherUser.USER_IMAGE : 
-                                        `${import.meta.env.VITE_API_BASE_URL || ''}${chatRoom.otherUser.USER_IMAGE}`} 
-                                    alt="Other" 
-                                    className="w-full h-full object-cover"
-                                />
-                            ) : (
-                                <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400">
-                                    <span className="material-symbols-outlined text-xl">person</span>
-                                </div>
-                            )}
-                            <div className="absolute bottom-0 right-0 w-2 h-2 bg-teal-500 rounded-full border border-white"></div>
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-[11px] font-black leading-none">{chatRoom?.otherUser?.USER_NM || '사용자'}</span>
-                            <span className="text-[9px] text-gray-400 font-bold">{chatRoom?.otherUser?.PART_TYPE === 'TRAVELER' ? '여행자' : '파트너'}</span>
-                        </div>
+                    {/* 내 프로필 이미지 (마이페이지 이동) */}
+                    <div 
+                        className="w-10 h-10 rounded-full bg-white flex items-center justify-center overflow-hidden border border-gray-100 cursor-pointer shadow-sm active:scale-95 transition-transform"
+                        onClick={() => navigate('/profile-customer')}
+                    >
+                        {profileImage ? (
+                            <img 
+                                alt="My Profile" 
+                                src={profileImage.startsWith('http') ? 
+                                    `${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                    `${import.meta.env.VITE_API_BASE_URL || ''}${profileImage.startsWith('/') ? '' : '/'}${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                className="w-full h-full object-cover" 
+                                onError={(e) => {
+                                    e.target.onerror = null;
+                                    e.target.style.display = 'none';
+                                    if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                }}
+                            />
+                        ) : (
+                            <span className="material-symbols-outlined text-gray-400 text-2xl">account_circle</span>
+                        )}
+                        {profileImage && (
+                            <span className="material-symbols-outlined text-gray-400 text-2xl hidden items-center justify-center w-full h-full">account_circle</span>
+                        )}
                     </div>
                 </div>
             </header>

@@ -11,7 +11,7 @@ import OrderDetailCustomer from './pages/PastTripDetailCustomer';
 import ReviewPendingList from './pages/ReviewPendingListCustomer';
 import AddReview from './pages/SubmitReviewCustomer';
 import ReviewDetail from './pages/ReviewDetailCustomer';
-import ReservationList from './pages/ReservationList';
+import ReservationList from './pages/ReservationListCustomer';
 import ReservationDetail from './pages/ReservationDetailCustomer';
 import CancelReservation from './pages/CancelReservation';
 import ProfileCustomer from './pages/ProfileCustomer';
@@ -76,13 +76,14 @@ function App() {
         <Route path="/customer-dashboard" element={<CustomerDashboard />} />
         <Route path="/request-bus" element={<RequestBus />} />
         <Route path="/edit-request/:id" element={<RequestBus />} />
-        <Route path="/order-history" element={<OrderHistoryCustomer />} />
+        <Route path="/reservation-detail/:id" element={<ReservationDetail />} />
+        <Route path="/trip-detail/:id" element={<ReservationDetail />} />
         <Route path="/order-detail/:id" element={<OrderDetailCustomer />} />
+        <Route path="/order-history" element={<OrderHistoryCustomer />} />
         <Route path="/review-pending-list" element={<ReviewPendingList />} />
         <Route path="/add-review/:id" element={<AddReview />} />
         <Route path="/review-detail/:id" element={<ReviewDetail />} />
         <Route path="/reservation-list" element={<ReservationList />} />
-        <Route path="/reservation-detail/:id" element={<ReservationDetail />} />
         <Route path="/cancel-reservation" element={<CancelReservation />} />
         <Route path="/user-profile" element={<ProfileCustomer />} />
         <Route path="/estimate-list" element={<EstimateListCustomer />} />

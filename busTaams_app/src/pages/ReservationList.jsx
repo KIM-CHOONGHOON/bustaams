@@ -7,6 +7,8 @@ const ReservationList = () => {
     const navigate = useNavigate();
     const [reservations, setReservations] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [profileImage, setProfileImage] = useState(null);
+    const [imageVersion, setImageVersion] = useState(Date.now());
 
     useEffect(() => {
         const fetchReservations = async () => {
@@ -23,7 +25,21 @@ const ReservationList = () => {
                 setLoading(false);
             }
         };
+
+        const fetchProfile = async () => {
+            try {
+                const res = await api.get('/app/customer/profile');
+                if (res.success && res.data.profileImage) {
+                    setProfileImage(res.data.profileImage);
+                    setImageVersion(Date.now());
+                }
+            } catch (err) {
+                console.error('Fetch profile error:', err);
+            }
+        };
+
         fetchReservations();
+        fetchProfile();
     }, []);
 
     const getStatusLabel = (code) => {
@@ -38,15 +54,51 @@ const ReservationList = () => {
     return (
         <div className="bg-background text-on-surface font-body min-h-screen pb-32">
             {/* TopAppBar */}
-            <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl shadow-[0_20px_40px_rgba(0,104,95,0.04)]">
-                <div className="flex items-center justify-between px-6 py-4 w-full">
-                    <div className="flex items-center gap-4 text-left">
-                        <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-full scale-95 active:scale-90 duration-200">
-                            <span className="material-symbols-outlined">arrow_back</span>
+            <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100/50 py-4">
+                <div className="flex justify-between items-center w-full px-6 max-w-7xl mx-auto">
+                    <div className="flex items-center gap-4">
+                        <button 
+                            onClick={() => navigate(-1)} 
+                            className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-50 text-teal-700 hover:bg-teal-50 transition-all duration-300 group"
+                        >
+                            <span className="material-symbols-outlined text-2xl group-hover:-translate-x-0.5 transition-transform">arrow_back</span>
                         </button>
-                        <h1 className="text-2xl font-black text-teal-800 tracking-tighter font-headline text-[24px]">예약 리스트</h1>
+                        <div>
+                            <h1 className="font-headline font-black tracking-tight text-xl text-teal-900">
+                                예약 리스트
+                            </h1>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest -mt-1">BusTaams Premium</p>
+                        </div>
                     </div>
-                    <div></div>
+                    
+                    <div className="flex items-center gap-3">
+                        <div 
+                            className="w-11 h-11 rounded-2xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden"
+                            onClick={() => navigate('/profile-customer')}
+                        >
+                            <div className="w-full h-full rounded-[14px] overflow-hidden bg-slate-50 flex items-center justify-center relative group">
+                                {profileImage ? (
+                                    <img 
+                                        alt="Customer Profile" 
+                                        src={profileImage.startsWith('http') ? 
+                                            `${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                            `${import.meta.env.VITE_API_BASE_URL || ''}${profileImage.startsWith('/') ? '' : '/'}${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                                        onError={(e) => {
+                                            e.target.onerror = null;
+                                            e.target.style.display = 'none';
+                                            if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                        }}
+                                    />
+                                ) : (
+                                    <span className="material-symbols-outlined text-teal-600 text-2xl">account_circle</span>
+                                )}
+                                {profileImage && (
+                                    <span className="material-symbols-outlined text-teal-600 text-2xl hidden items-center justify-center w-full h-full">account_circle</span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </header>
 
@@ -79,7 +131,11 @@ const ReservationList = () => {
                                 <div className="p-8 flex flex-col md:flex-row gap-8">
                                     <div className="w-full md:w-1/3 h-48 rounded-xl overflow-hidden relative shadow-sm bg-slate-100 flex items-center justify-center">
                                         {res.img ? (
-                                            <img className={`w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 ${res.statusCode === 'DONE' ? 'grayscale' : ''}`} src={res.img} alt="Bus" />
+                                            <img 
+                                                className={`w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 ${res.statusCode === 'DONE' ? 'grayscale' : ''}`} 
+                                                src={res.img.startsWith('http') ? res.img : `${import.meta.env.VITE_API_BASE_URL || ''}${res.img}`} 
+                                                alt="Vehicle" 
+                                            />
                                         ) : (
                                             <span className="material-symbols-outlined text-slate-300 text-6xl">directions_bus</span>
                                         )}
@@ -90,30 +146,29 @@ const ReservationList = () => {
                                     <div className="flex-1 flex flex-col justify-between text-left">
                                         <div>
                                             <div className="flex justify-between items-start mb-4 text-left">
-                                                <div className="text-left">
+                                                <div className="text-left w-full">
                                                     <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1 text-left">운행 노선</p>
-                                                    <h3 className="text-2xl font-headline font-bold text-on-surface flex items-center gap-3 text-[22px]">
-                                                        {res.from} 
-                                                        <span className={`material-symbols-outlined ${res.statusCode === 'DONE' ? 'text-slate-300' : 'text-primary'}`}>arrow_right_alt</span> 
-                                                        {res.to}
+                                                    <h3 className="text-xl font-headline font-bold text-on-surface flex flex-wrap items-center gap-2 leading-tight">
+                                                        <span className="text-teal-900">{res.from}</span>
+                                                        <span className="material-symbols-outlined text-primary text-sm">arrow_forward</span>
+                                                        {res.viaAddr && (
+                                                            <>
+                                                                <span className="text-teal-700">{res.viaAddr}</span>
+                                                                <span className="material-symbols-outlined text-primary text-sm">arrow_forward</span>
+                                                            </>
+                                                        )}
+                                                        <span className="text-teal-900">{res.to}</span>
                                                     </h3>
-                                                </div>
-                                                <div className="text-right">
-                                                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">상태</p>
-                                                    <span className={`${res.statusCode === 'DONE' ? 'text-slate-400' : 'text-primary'} font-bold flex items-center gap-1 text-sm`}>
-                                                        <span className="material-symbols-outlined text-sm" style={{fontVariationSettings: "'FILL' 1"}}>{res.statusCode === 'DONE' ? 'history' : 'check_circle'}</span>
-                                                        {res.statusCode === 'DONE' ? '운행 완료' : '예약 확정'}
-                                                    </span>
                                                 </div>
                                             </div>
                                             <div className="grid grid-cols-2 md:grid-cols-3 gap-6 pt-6 border-t border-slate-50 text-left">
                                                 <div className="text-left">
-                                                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">운행 일자</p>
-                                                    <p className="text-on-surface font-semibold text-sm">{res.date}</p>
+                                                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">차량 정보</p>
+                                                    <p className="text-on-surface font-semibold text-sm">{res.busType || '정보 없음'}</p>
                                                 </div>
                                                 <div className="text-left">
-                                                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">차량 정보</p>
-                                                    <p className="text-on-surface font-semibold text-sm">{res.busCount}대 ({res.busType})</p>
+                                                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">운행 일자</p>
+                                                    <p className="text-on-surface font-semibold text-sm">{res.date}</p>
                                                 </div>
                                                 <div className="text-left">
                                                     <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">총 예약 금액</p>
@@ -122,26 +177,13 @@ const ReservationList = () => {
                                             </div>
                                         </div>
                                         <div className="mt-8 flex gap-4 text-left">
-                                            {res.statusCode !== 'DONE' ? (
-                                                <>
-                                                    <button 
-                                                        onClick={(e) => { e.stopPropagation(); /* 티켓 확인 로직 */ }}
-                                                        className="bg-primary text-white px-8 py-3 rounded-full font-bold text-sm tracking-wide shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all">
-                                                        티켓 확인
-                                                    </button>
-                                                    <button 
-                                                        onClick={(e) => { e.stopPropagation(); navigate(`/edit-request/${res.id}`); }}
-                                                        className="border border-slate-200 text-slate-500 px-8 py-3 rounded-full font-bold text-sm tracking-wide hover:bg-slate-50 transition-all"
-                                                    >
-                                                        변경하기
-                                                    </button>
-                                                </>
-                                            ) : (
-                                                <button className="text-primary font-bold text-sm tracking-wide flex items-center gap-2 hover:underline">
-                                                    <span className="material-symbols-outlined">receipt</span>
-                                                    영수증 다운로드
-                                                </button>
-                                            )}
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); navigate(`/reservation-detail/${res.id}`); }}
+                                                className="bg-primary text-white w-full py-4 rounded-xl font-bold text-sm tracking-wide shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
+                                            >
+                                                <span className="material-symbols-outlined text-sm">visibility</span>
+                                                상세 내역 보기
+                                            </button>
                                         </div>
                                     </div>
                                 </div>

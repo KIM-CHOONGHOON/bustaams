@@ -33,9 +33,11 @@ if (process.env.DB_LOG_CONN !== '0') {
     console.log(`[db] ${dbHost}:${dbPort} / ${dbName} (DB_PORT from env: ${rawPort || '—'} → used ${dbPort})`);
 }
 
-// 모든 연결 세션에 타임존을 한국 시간(+09:00)으로 설정
+// 모든 연결 세션에 타임존을 한국 시간(+09:00) 및 Collation을 utf8mb4_0900_ai_ci로 설정
 pool.on('connection', (connection) => {
+    console.log('[db] New connection session setting...');
     connection.query('SET time_zone = "+09:00"');
+    connection.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci');
 });
 
 // Google Cloud Storage 설정 (Lazy initialization)

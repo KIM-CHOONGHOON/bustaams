@@ -12,6 +12,20 @@ const ApprovalListCustomer = () => {
     const [tripSummary, setTripSummary] = useState(null);
     const [units, setUnits] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [customerProfile, setCustomerProfile] = useState(null);
+    const [imageVersion, setImageVersion] = useState(Date.now());
+
+    const fetchDashboardData = async () => {
+        try {
+            const profileRes = await api.get('/app/customer/profile');
+            if (profileRes.success) {
+                setCustomerProfile(profileRes.data);
+                setImageVersion(Date.now());
+            }
+        } catch (error) {
+            console.error('Error fetching profile:', error);
+        }
+    };
 
     const fetchEstimates = async () => {
         if (!reqId) return;
@@ -29,6 +43,7 @@ const ApprovalListCustomer = () => {
     };
 
     useEffect(() => {
+        fetchDashboardData();
         fetchEstimates();
     }, [reqId]);
 
@@ -73,7 +88,7 @@ const ApprovalListCustomer = () => {
             }
         } catch (error) {
             console.error('Approve all error:', error);
-            notify.error('오류 발생', '전체 승인 처리 중 오류가 발생했습니다.');
+            notify.error('오류 발생', error.response?.data?.error || '전체 승인 처리 중 오류가 발생했습니다.');
         }
     };
 
@@ -110,10 +125,25 @@ const ApprovalListCustomer = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-background">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                    <p className="font-black text-primary animate-pulse tracking-widest uppercase text-xs">Loading Estimates</p>
+            <div className="bg-background text-on-surface min-h-screen font-body text-left">
+                <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl shadow-[0_20px_40px_rgba(0,104,95,0.04)] py-4">
+                    <div className="flex items-center justify-between px-6 max-w-7xl mx-auto w-full">
+                        <div className="flex items-center gap-4">
+                            <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-full scale-95 active:scale-90 duration-200">
+                                <span className="material-symbols-outlined">arrow_back</span>
+                            </button>
+                            <h1 className="text-xl font-bold text-teal-900 tracking-tight">승인 상세 화면</h1>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-full bg-slate-100 animate-pulse"></div>
+                        </div>
+                    </div>
+                </header>
+                <div className="flex items-center justify-center pt-32">
+                    <div className="flex flex-col items-center gap-4">
+                        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                        <p className="font-black text-primary animate-pulse tracking-widest uppercase text-xs">Loading Estimates</p>
+                    </div>
                 </div>
             </div>
         );
@@ -121,10 +151,43 @@ const ApprovalListCustomer = () => {
 
     if (!tripSummary) {
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6 text-center">
-                <span className="material-symbols-outlined text-6xl text-slate-200 mb-4">error</span>
-                <h2 className="text-2xl font-black text-teal-900 mb-2">요청 정보를 찾을 수 없습니다.</h2>
-                <button onClick={() => navigate(-1)} className="mt-4 px-8 py-3 bg-primary text-white rounded-full font-black transition-all hover:bg-slate-900 active:scale-95">뒤로 가기</button>
+            <div className="bg-background text-on-surface min-h-screen font-body text-left">
+                <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl shadow-[0_20px_40px_rgba(0,104,95,0.04)] py-4">
+                    <div className="flex items-center justify-between px-6 max-w-7xl mx-auto w-full">
+                        <div className="flex items-center gap-4">
+                            <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-full scale-95 active:scale-90 duration-200">
+                                <span className="material-symbols-outlined">arrow_back</span>
+                            </button>
+                            <h1 className="text-xl font-bold text-teal-900 tracking-tight">승인 상세 화면</h1>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border-2 border-white shadow-sm transition-transform hover:scale-110 active:scale-95 cursor-pointer" onClick={() => navigate('/profile-customer')}>
+                                {customerProfile?.profileImage ? (
+                                    <img 
+                                        src={customerProfile.profileImage.startsWith('http') ? 
+                                            `${customerProfile.profileImage}${customerProfile.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                            `${import.meta.env.VITE_API_BASE_URL || ''}${customerProfile.profileImage.startsWith('/') ? '' : '/'}${customerProfile.profileImage}${customerProfile.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                        alt="Profile" 
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                            e.target.onerror = null;
+                                            e.target.style.display = 'none';
+                                            if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                        }}
+                                    />
+                                ) : (
+                                    <span className="material-symbols-outlined text-slate-400">account_circle</span>
+                                )}
+                                <span className="material-symbols-outlined text-slate-400 hidden items-center justify-center w-full h-full">account_circle</span>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+                <div className="flex flex-col items-center justify-center pt-32 p-6 text-center">
+                    <span className="material-symbols-outlined text-6xl text-slate-200 mb-4">error</span>
+                    <h2 className="text-2xl font-black text-teal-900 mb-2">요청 정보를 찾을 수 없습니다.</h2>
+                    <button onClick={() => navigate(-1)} className="mt-4 px-8 py-3 bg-primary text-white rounded-full font-black transition-all hover:bg-slate-900 active:scale-95">뒤로 가기</button>
+                </div>
             </div>
         );
     }
@@ -139,10 +202,30 @@ const ApprovalListCustomer = () => {
                         <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-full scale-95 active:scale-90 duration-200">
                             <span className="material-symbols-outlined">arrow_back</span>
                         </button>
-                        <span className="text-xl font-bold text-teal-900 tracking-tight">승인 상세 화면</span>
+                        <h1 className="text-xl font-bold text-teal-900 tracking-tight">승인 상세 화면</h1>
                     </div>
                     <div className="flex items-center gap-4">
-                         <span className="text-sm font-bold text-orange-600">승인 처리</span>
+                        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 overflow-hidden border-2 border-white shadow-sm transition-transform hover:scale-110 active:scale-95 cursor-pointer" onClick={() => navigate('/profile-customer')}>
+                            {customerProfile?.profileImage ? (
+                                <img 
+                                    src={customerProfile.profileImage.startsWith('http') ? 
+                                        `${customerProfile.profileImage}${customerProfile.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                        `${import.meta.env.VITE_API_BASE_URL || ''}${customerProfile.profileImage.startsWith('/') ? '' : '/'}${customerProfile.profileImage}${customerProfile.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                    alt="Profile" 
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.style.display = 'none';
+                                        if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                />
+                            ) : (
+                                <span className="material-symbols-outlined text-slate-400">account_circle</span>
+                            )}
+                            {customerProfile?.profileImage && (
+                                <span className="material-symbols-outlined text-slate-400 hidden items-center justify-center w-full h-full">account_circle</span>
+                            )}
+                        </div>
                     </div>
                 </div>
             </header>

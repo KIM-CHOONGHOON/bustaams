@@ -26,6 +26,8 @@ const RequestBus = () => {
     const [busTypes, setBusTypes] = useState([]);
     const [busCounts, setBusCounts] = useState({});
     const [quoteAmounts, setQuoteAmounts] = useState({});
+    const [profileImage, setProfileImage] = useState(null);
+    const [imageVersion, setImageVersion] = useState(Date.now());
 
     // Address states
     const [depAddress, setDepAddress] = useState(''); // 출발지
@@ -38,7 +40,19 @@ const RequestBus = () => {
     const [depDateTime, setDepDateTime] = useState('');
     const [arrDateTime, setArrDateTime] = useState('');
 
-    // Fetch bus types from DB
+    const fetchProfile = async () => {
+        try {
+            const profileRes = await api.get('/app/customer/profile');
+            if (profileRes.success && profileRes.data) {
+                setProfileImage(profileRes.data.profileImage || null);
+                setImageVersion(Date.now());
+            }
+        } catch (err) {
+            console.error('Fetch profile error:', err);
+        }
+    };
+
+    // Fetch bus types and profile
     useEffect(() => {
         const fetchBusTypes = async () => {
             try {
@@ -46,27 +60,22 @@ const RequestBus = () => {
                 if (response.data) {
                     setBusTypes(response.data);
                     
-                    // 만약 수정 모드라면, 데이터를 먼저 가져온 뒤 counts 설정
                     if (id) {
                         const resDetail = await api.get(`/app/customer/auction-req/${id}`);
-                        console.log('[RequestBus] Detail Response:', resDetail);
                         if (resDetail.success && resDetail.data) {
                             const data = resDetail.data;
                             setTripName(data.TRIP_TITLE || '');
                             setDepAddress(data.START_ADDR || '');
                             setEndAddress(data.END_ADDR || '');
                             
-                            // 시간 변환 (YYYY-MM-DD HH:mm)
                             const formatInputDt = (dt) => {
                                 if(!dt) return '';
-                                // 만약 dt가 ISO 스트링이나 Date 객체라면 문자열로 변환 후 처리
                                 const dtStr = typeof dt === 'string' ? dt : new Date(dt).toISOString();
                                 return dtStr.replace(' ', 'T').replace('Z', '').substring(0, 16);
                             };
                             setDepDateTime(formatInputDt(data.START_DT));
                             setArrDateTime(formatInputDt(data.END_DT));
 
-                            // 차량 정보 복원
                             const initialCounts = {};
                             if (response.data) {
                                 response.data.forEach(bus => initialCounts[bus.code] = 0);
@@ -82,9 +91,7 @@ const RequestBus = () => {
                             setBusCounts(initialCounts);
                             setQuoteAmounts(initialQuotes);
 
-                            // 경유지 복원
                             if (data.vias && Array.isArray(data.vias)) {
-                                // 기존 addr 필드를 사용하여 복원
                                 const startNodes = data.vias.filter(v => v.VIA_TYPE === 'START_NODE');
                                 const startWays = data.vias.filter(v => v.VIA_TYPE === 'START_WAY');
                                 const roundTrips = data.vias.filter(v => v.VIA_TYPE === 'ROUND_TRIP');
@@ -97,17 +104,10 @@ const RequestBus = () => {
                                 setReturnStops(endWays.map(v => v.addr));
                                 if(endNodes.length > 0) setEndAddress(endNodes[0].addr);
                             }
-                        } else {
-                            console.error('[RequestBus] Failed to load request data:', resDetail);
-                            notify.error('오류', '요청 정보를 불러오지 못했습니다.');
-                            navigate(-1);
                         }
                     } else {
-                        // 신규 모드: Initialize counts to 0
                         const initialCounts = {};
-                        response.data.forEach(bus => {
-                            initialCounts[bus.code] = 0;
-                        });
+                        response.data.forEach(bus => initialCounts[bus.code] = 0);
                         setBusCounts(initialCounts);
                     }
                 }
@@ -115,8 +115,11 @@ const RequestBus = () => {
                 console.error('Bus types fetch error:', err);
             }
         };
+
         fetchBusTypes();
+        fetchProfile();
     }, [id]);
+
 
     const handleQuoteChange = (index, value) => {
         const numStr = value.replace(/[^0-9]/g, '');
@@ -344,18 +347,57 @@ const RequestBus = () => {
                 </div>
             )}
 
-            <header className="bg-transparent text-teal-800 docked full-width top-0 z-40">
-                <div className="flex justify-between items-center w-full px-6 pt-8 pb-4 max-w-7xl mx-auto">
+            <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100/50 py-4">
+                <div className="flex justify-between items-center w-full px-6 max-w-7xl mx-auto">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => navigate(-1)} className="hover:opacity-80 transition-opacity active:scale-95 duration-200">
-                            <span className="material-symbols-outlined text-3xl">arrow_back</span>
+                        <button 
+                            onClick={() => navigate(-1)} 
+                            className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-50 text-teal-700 hover:bg-teal-50 transition-all duration-300 group"
+                        >
+                            <span className="material-symbols-outlined text-2xl group-hover:-translate-x-0.5 transition-transform">arrow_back</span>
                         </button>
-                        <h1 className="font-headline font-extrabold tracking-tight text-3xl text-teal-900 text-[24px]">{id ? '요청서 수정' : '요청서 작성'}</h1>
+                        <div>
+                            <h1 className="font-headline font-black tracking-tight text-xl text-teal-900">
+                                {id ? '요청서 수정' : '요청서 작성'}
+                            </h1>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest -mt-1">BusTaams Premium</p>
+                        </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                        <div 
+                            className="w-11 h-11 rounded-2xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden"
+                            onClick={() => navigate('/profile-customer')}
+                        >
+                            <div className="w-full h-full rounded-[14px] overflow-hidden bg-slate-50 flex items-center justify-center relative group">
+                                {profileImage ? (
+                                    <img 
+                                        alt="Customer Profile" 
+                                        src={profileImage.startsWith('http') ? 
+                                            `${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                            `${import.meta.env.VITE_API_BASE_URL || ''}${profileImage.startsWith('/') ? '' : '/'}${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                                        onError={(e) => {
+                                            e.target.onerror = null;
+                                            e.target.style.display = 'none';
+                                            if (e.target.nextSibling) {
+                                                e.target.nextSibling.style.display = 'flex';
+                                            }
+                                        }}
+                                    />
+                                ) : (
+                                    <span className="material-symbols-outlined text-teal-600 text-2xl">account_circle</span>
+                                )}
+                                {profileImage && (
+                                    <span className="material-symbols-outlined text-teal-600 text-2xl hidden items-center justify-center w-full h-full">account_circle</span>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </header>
 
-            <main className="max-w-7xl mx-auto px-6 pt-6 pb-32">
+            <main className="max-w-7xl mx-auto px-6 pt-24 pb-32">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                     {/* Left Side */}
                     <div className="col-span-12 lg:col-span-5 flex flex-col justify-center mb-8 lg:mb-0">

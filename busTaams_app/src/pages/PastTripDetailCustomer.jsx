@@ -8,6 +8,22 @@ const PastTripDetailCustomer = () => {
     const { id } = useParams();
     const [detail, setDetail] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [profileImage, setProfileImage] = useState(null);
+    const [imageVersion, setImageVersion] = useState(Date.now());
+
+    useEffect(() => {
+        const fetchProfile = async () => {
+            try {
+                const response = await api.get('/app/customer/profile');
+                if (response.success && response.data) {
+                    setProfileImage(response.data.profileImage);
+                }
+            } catch (error) {
+                console.error('Fetch profile error:', error);
+            }
+        };
+        fetchProfile();
+    }, []);
 
     useEffect(() => {
         const fetchDetail = async () => {
@@ -69,8 +85,31 @@ const PastTripDetailCustomer = () => {
                         <button onClick={() => navigate(-1)} className="material-symbols-outlined text-teal-700 hover:bg-slate-50 p-2 rounded-full transition-all">arrow_back</button>
                         <h1 className="font-bold text-[17px] text-[#1E293B]">여행 상세</h1>
                     </div>
-                    <div className="text-[#94A3B8] font-bold text-[13px] tracking-tight">
-                        #{detail.id}
+                    <div className="flex items-center gap-4">
+                        <div 
+                            className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center overflow-hidden border border-slate-100 cursor-pointer transition-transform active:scale-95"
+                            onClick={() => navigate('/profile-customer')}
+                        >
+                            {profileImage ? (
+                                <img 
+                                    alt="Customer Profile" 
+                                    src={profileImage.startsWith('http') ? 
+                                        `${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                        `${import.meta.env.VITE_API_BASE_URL || ''}${profileImage.startsWith('/') ? '' : '/'}${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                    className="w-full h-full object-cover" 
+                                    onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.style.display = 'none';
+                                        if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                />
+                            ) : (
+                                <span className="material-symbols-outlined text-slate-400 text-2xl">account_circle</span>
+                            )}
+                            {profileImage && (
+                                <span className="material-symbols-outlined text-slate-400 text-2xl hidden items-center justify-center w-full h-full">account_circle</span>
+                            )}
+                        </div>
                     </div>
                 </div>
             </header>
@@ -190,15 +229,7 @@ const PastTripDetailCustomer = () => {
                             </div>
                         </div>
 
-                        <div className="bg-[#E2E8F0]/50 p-6 rounded-3xl flex items-center justify-between">
-                            <div className="space-y-1">
-                                <p className="text-[9px] font-black text-[#64748B] uppercase tracking-widest">Request ID</p>
-                                <p className="text-[14px] font-bold text-[#1E293B]">{detail.reqId}</p>
-                            </div>
-                            <button className="text-[#94A3B8] hover:text-[#1E293B] transition-colors">
-                                <span className="material-symbols-outlined text-[20px]">content_copy</span>
-                            </button>
-                        </div>
+
                     </div>
                 </section>
 

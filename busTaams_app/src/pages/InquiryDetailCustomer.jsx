@@ -7,6 +7,8 @@ const InquiryDetailCustomer = () => {
     const { id } = useParams();
     const [inquiry, setInquiry] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [profileImage, setProfileImage] = useState(null);
+    const [imageVersion, setImageVersion] = useState(Date.now());
 
     useEffect(() => {
         const fetchInquiry = async () => {
@@ -22,7 +24,20 @@ const InquiryDetailCustomer = () => {
             }
         };
 
+        const fetchProfile = async () => {
+            try {
+                const res = await api.get('/app/customer/profile');
+                if (res.success && res.data.profileImage) {
+                    setProfileImage(res.data.profileImage);
+                    setImageVersion(Date.now());
+                }
+            } catch (err) {
+                console.error('Fetch profile error:', err);
+            }
+        };
+
         fetchInquiry();
+        fetchProfile();
     }, [id]);
 
     if (loading) {
@@ -41,13 +56,52 @@ const InquiryDetailCustomer = () => {
     return (
         <div className="bg-background text-on-surface min-h-screen pb-40 font-body text-left">
             {/* TopAppBar */}
-            <header className="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-sm shadow-teal-900/5 h-16 flex items-center">
-                <div className="flex items-center justify-between px-6 w-full max-w-3xl mx-auto">
+            <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100/50 py-4">
+                <div className="flex justify-between items-center w-full px-6 max-w-3xl mx-auto">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => navigate(-1)} className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-slate-100 transition-colors active:scale-90">
-                            <span className="material-symbols-outlined text-teal-800 dark:text-teal-400">arrow_back</span>
+                        <button 
+                            onClick={() => navigate(-1)} 
+                            className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-50 text-teal-700 hover:bg-teal-50 transition-all duration-300 group"
+                        >
+                            <span className="material-symbols-outlined text-2xl group-hover:-translate-x-0.5 transition-transform">arrow_back</span>
                         </button>
-                        <h1 className="text-teal-900 dark:text-teal-100 font-extrabold tracking-tight font-headline text-lg">문의 상세</h1>
+                        <div>
+                            <h1 className="font-headline font-black tracking-tight text-xl text-teal-900">
+                                문의 상세
+                            </h1>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest -mt-1">Inquiry Detail</p>
+                        </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                        <div 
+                            className="w-11 h-11 rounded-2xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden"
+                            onClick={() => navigate('/user-profile')}
+                        >
+                            <div className="w-full h-full rounded-[14px] overflow-hidden bg-slate-50 flex items-center justify-center relative group">
+                                {profileImage ? (
+                                    <img 
+                                        alt="Customer Profile" 
+                                        src={profileImage.startsWith('http') ? 
+                                            `${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                            `${import.meta.env.VITE_API_BASE_URL || ''}${profileImage.startsWith('/') ? '' : '/'}${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                                        onError={(e) => {
+                                            e.target.onerror = null;
+                                            e.target.src = '';
+                                            e.target.classList.add('hidden');
+                                            if (e.target.nextSibling) {
+                                                e.target.nextSibling.classList.remove('hidden');
+                                                e.target.nextSibling.classList.add('flex');
+                                            }
+                                        }}
+                                    />
+                                ) : null}
+                                <div className={`${profileImage ? 'hidden' : 'flex'} items-center justify-center w-full h-full bg-teal-50`}>
+                                    <span className="material-symbols-outlined text-teal-600 text-2xl">account_circle</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </header>
