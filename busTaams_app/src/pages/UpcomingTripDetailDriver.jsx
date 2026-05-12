@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api, { getDriverProfile } from '../api';
 import { notify } from '../utils/toast';
+import Swal from 'sweetalert2';
 import BottomNavDriver from '../components/BottomNavDriver';
 
 /**
@@ -15,6 +16,7 @@ const UpcomingTripDetailDriver = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [userProfileImg, setUserProfileImg] = useState('');
+    const [cancelReasons, setCancelReasons] = useState([]);
 
     useEffect(() => {
         const fetchDetail = async () => {
@@ -31,6 +33,12 @@ const UpcomingTripDetailDriver = () => {
                     setTrip(result.data);
                 } else {
                     setError(result.error);
+                }
+
+                // 3. 취소 사유 코드 조회
+                const codeRes = await api.get('/common/codes/DRIVER_CANCEL_REASON');
+                if (codeRes.success) {
+                    setCancelReasons(codeRes.data);
                 }
             } catch (err) {
                 console.error('Fetch detail error:', err);
@@ -60,13 +68,87 @@ const UpcomingTripDetailDriver = () => {
     };
 
     const handleCancelTrip = async () => {
-        const confirmed = await notify.confirm('계약 취소 요청', '운행 계약 취소를 요청하시겠습니까?\n반복적인 취소는 서비스 이용에 제한이 있을 수 있습니다.', '취소 요청', '닫기');
-        if (!confirmed) return;
+        const { value: formValues } = await Swal.fire({
+            title: '계약 취소 요청',
+            html: `
+                <div class="text-left py-2">
+                    <p class="text-[11px] text-red-600 mb-4 font-bold bg-red-50 p-3 rounded-xl leading-relaxed">
+                        ※ 주의: 반복적인 취소는 서비스 이용에 제한이 있을 수 있습니다.<br/>
+                        (1회: 1주일 정지, 2회: 2주일 정지, 3회 이상: 영구 정지)
+                    </p>
+                    <div class="mb-4">
+                        <label class="block text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-wider">취소 사유 선택</label>
+                        <select id="cancelCode" class="w-full p-4 rounded-2xl border border-gray-100 bg-gray-50 text-sm font-bold focus:ring-2 focus:ring-[#004D40] outline-none appearance-none shadow-sm">
+                            ${cancelReasons.map(r => `<option value="${r.code}">${r.name}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-wider">상세 사유</label>
+                        <textarea id="cancelReasonText" class="w-full p-4 rounded-2xl border border-gray-100 bg-gray-50 text-sm font-medium h-28 focus:ring-2 focus:ring-[#004D40] outline-none shadow-sm" placeholder="상세 사유를 입력해주세요."></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-wider">증빙 서류 첨부 (선택)</label>
+                        <div class="relative group">
+                            <input type="file" id="reasonDoc" class="hidden" onchange="document.getElementById('file-name-display').innerText = this.files[0] ? this.files[0].name : '파일을 선택해주세요.'">
+                            <button onclick="document.getElementById('reasonDoc').click()" class="w-full p-4 rounded-2xl border-2 border-dashed border-gray-200 text-gray-400 text-xs font-bold hover:border-[#004D40] hover:text-[#004D40] transition-all flex items-center justify-center gap-2">
+                                <span class="material-symbols-outlined">attach_file</span>
+                                <span id="file-name-display">증빙 서류 선택하기</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `,
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: '취소 요청하기',
+            cancelButtonText: '닫기',
+            customClass: {
+                popup: 'rounded-[2.5rem] border-none shadow-2xl p-8',
+                title: 'font-black text-2xl text-[#1D3557] mb-2',
+                confirmButton: 'bg-[#ba1a1a] text-white px-8 py-4 rounded-full font-bold shadow-lg shadow-red-100 mx-2 active:scale-95 transition-all',
+                cancelButton: 'bg-gray-100 text-gray-500 px-8 py-4 rounded-full font-bold mx-2 active:scale-95 transition-all'
+            },
+            buttonsStyling: false,
+            preConfirm: () => {
+                const cancelCode = document.getElementById('cancelCode').value;
+                const cancelReasonText = document.getElementById('cancelReasonText').value;
+                const reasonDoc = document.getElementById('reasonDoc').files[0];
+                
+                if (!cancelReasonText) {
+                    Swal.showValidationMessage('상세 사유를 입력해주세요.');
+                    return false;
+                }
+                
+                return { cancelCode, cancelReasonText, reasonDoc }
+            }
+        });
 
-        try {
-            notify.info('요청 완료', '계약 취소 요청이 접수되었습니다. 담당자 확인 후 연락드리겠습니다.');
-        } catch (err) {
-            notify.error('오류 발생', '요청 처리 중 오류가 발생했습니다.');
+        if (formValues) {
+            try {
+                setLoading(true);
+                const formData = new FormData();
+                formData.append('cancelCode', formValues.cancelCode);
+                formData.append('cancelReasonText', formValues.cancelReasonText);
+                if (formValues.reasonDoc) {
+                    formData.append('reasonDoc', formValues.reasonDoc);
+                }
+
+                const res = await api.post(`/app/driver/cancel-mission/${id}`, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+
+                if (res.success) {
+                    await notify.success('취소 완료', '운행 취소 처리가 완료되었습니다.\n운행 내역에서 상세 정보를 확인할 수 있습니다.');
+                    navigate('/upcoming-trips-driver');
+                } else {
+                    notify.error('오류 발생', res.error || '취소 처리 중 오류가 발생했습니다.');
+                }
+            } catch (err) {
+                console.error('Cancel trip error:', err);
+                notify.error('오류 발생', '서버와의 통신 중 오류가 발생했습니다.');
+            } finally {
+                setLoading(false);
+            }
         }
     };
 

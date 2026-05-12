@@ -62,33 +62,70 @@ const ApprovalListCustomer = () => {
         }
     };
 
-    const handleApproveBid = async (resId) => {
-        const confirmed = await notify.confirm('청약 승인', '이 기사님의 청약을 승인하시겠습니까?');
+    const handleApproveBid = async (bidId, price, driverName) => {
+        const confirmed = await notify.confirm('청약 승인 및 결제', `${driverName} 기사님의 청약을 승인하고 결제를 진행하시겠습니까?`);
         if (!confirmed) return;
-        try {
-            const res = await api.post('/app/customer/approve-bid', { resId });
-            if (res.success) {
-                notify.success('승인 완료', '승인이 완료되었습니다.');
-                fetchEstimates();
-            }
-        } catch (error) {
-            console.error('Approve bid error:', error);
-            notify.error('오류 발생', '승인 처리 중 오류가 발생했습니다.');
-        }
+        
+        initiatePayment({
+            resId: bidId,
+            price: price,
+            goodname: `${tripSummary.title} - ${driverName} 기사님`,
+            buyername: customerProfile?.custNm || '구매자',
+            buyertel: customerProfile?.phoneNo || '010-0000-0000',
+            buyeremail: customerProfile?.email || 'test@example.com'
+        });
     };
 
     const handleApproveAll = async () => {
-        const confirmed = await notify.confirm('전체 청약 승인', '진행 중인 모든 청약을 승인하시겠습니까?');
+        const confirmed = await notify.confirm('전체 청약 승인 및 결제', `진행 중인 모든 청약을 승인하고 총 ${totalReqAmt.toLocaleString()}원을 결제하시겠습니까?`);
         if (!confirmed) return;
+
+        initiatePayment({
+            reqId: reqId,
+            price: totalReqAmt,
+            goodname: `${tripSummary.title} 전체 승인`,
+            buyername: customerProfile?.custNm || '구매자',
+            buyertel: customerProfile?.phoneNo || '010-0000-0000',
+            buyeremail: customerProfile?.email || 'test@example.com'
+        });
+    };
+
+    const initiatePayment = async (payData) => {
         try {
-            const res = await api.post('/app/customer/approve-all', { reqId });
-            if (res.success) {
-                notify.success('전체 승인 완료', '모든 청약의 승인이 완료되었습니다.');
-                fetchEstimates();
+            // 1. 서버에서 결제 준비 데이터 가져오기
+            const res = await api.post('/payment/ready', payData);
+            
+            // api.js의 request는 에러 발생 시 throw하므로 res는 성공 시의 데이터임
+            const data = res;
+
+            // 2. 폼 데이터 설정
+            const form = document.getElementById('SendPayForm');
+            if (!form) {
+                notify.error('오류 발생', '결제 폼을 찾을 수 없습니다.');
+                return;
+            }
+
+            form.mid.value = data.mid;
+            form.oid.value = data.oid;
+            form.price.value = data.price;
+            form.timestamp.value = data.timestamp;
+            form.signature.value = data.signature;
+            form.mKey.value = data.mKey;
+            form.goodname.value = data.goodname;
+            form.buyername.value = data.buyername;
+            form.buyertel.value = data.buyertel;
+            form.buyeremail.value = data.buyeremail;
+            form.returnUrl.value = data.returnUrl;
+            
+            // 3. 결제창 호출
+            if (window.INIStdPay) {
+                window.INIStdPay.pay('SendPayForm');
+            } else {
+                notify.error('오류 발생', '이니시스 결제 모듈을 로드할 수 없습니다.');
             }
         } catch (error) {
-            console.error('Approve all error:', error);
-            notify.error('오류 발생', error.response?.data?.error || '전체 승인 처리 중 오류가 발생했습니다.');
+            console.error('Payment initiation error:', error);
+            notify.error('오류 발생', error.message || '결제 요청 중 오류가 발생했습니다.');
         }
     };
 
@@ -429,7 +466,7 @@ const ApprovalListCustomer = () => {
                                                         {/* 액션 버튼 */}
                                                         <div className="pt-4 space-y-4">
                                                             <button 
-                                                                onClick={() => !est.isSelected && handleApproveBid(est.id)}
+                                                                onClick={() => !est.isSelected && handleApproveBid(est.id, est.price, est.driverName)}
                                                                 disabled={est.isSelected}
                                                                 className={`w-full py-5 rounded-[2rem] font-black text-sm tracking-widest uppercase transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50 disabled:active:scale-100 ${
                                                                     est.isSelected ? 'bg-secondary text-white shadow-xl shadow-secondary/30' : 'bg-orange-600 text-white shadow-xl shadow-orange-900/20 hover:scale-[1.02]'
@@ -517,6 +554,25 @@ const ApprovalListCustomer = () => {
             </main>
 
             <BottomNavCustomer />
+
+            {/* 이니시스 결제용 숨김 폼 */}
+            <form id="SendPayForm" name="SendPayForm" method="POST" style={{ display: 'none' }}>
+                <input type="hidden" name="version" value="1.0" />
+                <input type="hidden" name="mid" value="" />
+                <input type="hidden" name="oid" value="" />
+                <input type="hidden" name="price" value="" />
+                <input type="hidden" name="timestamp" value="" />
+                <input type="hidden" name="signature" value="" />
+                <input type="hidden" name="mKey" value="" />
+                <input type="hidden" name="currency" value="WON" />
+                <input type="hidden" name="goodname" value="" />
+                <input type="hidden" name="buyername" value="" />
+                <input type="hidden" name="buyertel" value="" />
+                <input type="hidden" name="buyeremail" value="" />
+                <input type="hidden" name="returnUrl" value="" />
+                <input type="hidden" name="closeUrl" value={`${window.location.origin}/close-payment`} />
+                <input type="hidden" name="gopaymethod" value="Card" />
+            </form>
         </div>
     );
 };

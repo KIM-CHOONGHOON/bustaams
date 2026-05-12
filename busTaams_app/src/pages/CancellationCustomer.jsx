@@ -1,8 +1,83 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import axios from 'axios';
+import Swal from 'sweetalert2';
 
 const CancellationCustomer = () => {
     const navigate = useNavigate();
+    const location = useLocation();
+    const { reqId, resId } = location.state || {}; // 요청 ID 또는 예약 ID
+
+    const [cancelCode, setCancelCode] = useState('06'); // 기본: 기타 사유
+    const [cancelReasonText, setCancelReasonText] = useState('');
+    const [file, setFile] = useState(null);
+    const [loading, setLoading] = useState(false);
+
+    const cancelReasons = [
+        { code: '01', label: '본인 사망' },
+        { code: '02', label: '차량 파손 (운행 불가)' },
+        { code: '03', label: '법정 구속' },
+        { code: '04', label: '직계존비속 및 배우자 사망' },
+        { code: '05', label: '질병 또는 사고에 의한 입원' },
+        { code: '06', label: '기타 사유 (취소 패널티 적용)' },
+    ];
+
+    const handleFileChange = (e) => {
+        if (e.target.files && e.target.files[0]) {
+            setFile(e.target.files[0]);
+        }
+    };
+
+    const handleCancelSubmit = async () => {
+        if (!reqId) {
+            Swal.fire('오류', '취소할 요청 ID를 찾을 수 없습니다.', 'error');
+            return;
+        }
+
+        const result = await Swal.fire({
+            title: '정말 취소하시겠습니까?',
+            text: '취소 횟수에 따라 이용 제한 패널티가 적용될 수 있습니다.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#e11d48',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: '네, 취소합니다',
+            cancelButtonText: '아니오'
+        });
+
+        if (result.isConfirmed) {
+            setLoading(true);
+            try {
+                const formData = new FormData();
+                formData.append('reqId', reqId);
+                formData.append('cancelCode', cancelCode);
+                formData.append('cancelReasonText', cancelReasonText);
+                if (file) {
+                    formData.append('file', file);
+                }
+
+                const token = localStorage.getItem('token');
+                const response = await axios.post('/api/app/customer/cancel-request', formData, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'multipart/form-data'
+                    }
+                });
+
+                if (response.data.success) {
+                    await Swal.fire('취소 완료', response.data.message, 'success');
+                    navigate('/dashboard');
+                } else {
+                    Swal.fire('오류', response.data.error || '취소 처리 중 오류가 발생했습니다.', 'error');
+                }
+            } catch (error) {
+                console.error('Cancel Error:', error);
+                Swal.fire('오류', '서버 통신 중 오류가 발생했습니다.', 'error');
+            } finally {
+                setLoading(false);
+            }
+        }
+    };
 
     return (
         <div className="bg-background text-on-surface min-h-[100dvh] pb-40 font-body text-left">
@@ -89,25 +164,66 @@ const CancellationCustomer = () => {
                 <div className="lg:col-span-7 space-y-12 animate-in fade-in slide-in-from-right duration-700 text-left delay-200">
                     {/* Information Panel */}
                     <div className="bg-slate-50 rounded-[4rem] p-12 space-y-10 border border-slate-100 text-left shadow-inner">
-                        <div className="flex gap-8 items-start text-left">
+                        <div className="space-y-6 text-left">
+                            <h3 className="font-headline font-black text-3xl text-on-surface tracking-tighter italic">취소 사유 및 증빙</h3>
+                            
+                            <div className="space-y-4">
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">취소 사유 선택</label>
+                                <select 
+                                    value={cancelCode}
+                                    onChange={(e) => setCancelCode(e.target.value)}
+                                    className="w-full p-6 rounded-3xl bg-white border border-slate-200 focus:border-secondary focus:ring-4 focus:ring-secondary/10 outline-none transition-all font-bold text-slate-600"
+                                >
+                                    {cancelReasons.map(r => (
+                                        <option key={r.code} value={r.code}>{r.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="space-y-4">
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">상세 사유 (선택)</label>
+                                <textarea 
+                                    value={cancelReasonText}
+                                    onChange={(e) => setCancelReasonText(e.target.value)}
+                                    placeholder="상세한 취소 사유를 입력해주세요."
+                                    className="w-full p-6 rounded-3xl bg-white border border-slate-200 focus:border-secondary focus:ring-4 focus:ring-secondary/10 outline-none transition-all font-bold text-slate-600 h-32 resize-none"
+                                />
+                            </div>
+
+                            <div className="space-y-4">
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">증빙 서류 업로드 (선택)</label>
+                                <div className="relative group cursor-pointer">
+                                    <input 
+                                        type="file" 
+                                        onChange={handleFileChange}
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                    />
+                                    <div className="flex items-center gap-5 p-6 bg-white rounded-3xl border-2 border-dashed border-slate-200 group-hover:border-secondary transition-all">
+                                        <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-secondary/5 group-hover:text-secondary">
+                                            <span className="material-symbols-outlined">upload_file</span>
+                                        </div>
+                                        <div className="flex-1 overflow-hidden">
+                                            <p className="text-sm font-black text-on-surface truncate">
+                                                {file ? file.name : "파일을 선택하거나 드래그하세요"}
+                                            </p>
+                                            <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">
+                                                {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : "PDF, JPG, PNG (Max 10MB)"}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-8 items-start text-left pt-6 border-t border-slate-200">
                             <div className="w-16 h-16 shrink-0 rounded-3xl bg-secondary flex items-center justify-center shadow-2xl shadow-secondary/30 rotate-3">
                                 <span className="material-symbols-outlined text-white text-3xl" style={{fontVariationSettings: "'FILL' 1"}}>info</span>
                             </div>
                             <div className="space-y-5 text-left">
                                 <h3 className="font-headline font-black text-3xl text-on-surface tracking-tighter italic">Cancelation Protocol</h3>
                                 <p className="text-slate-400 leading-relaxed font-bold italic">
-                                    "독점성과 정밀성을 유지하기 위해, 예약 취소 시 <span className="text-secondary font-black text-xl underline decoration-4 underline-offset-4 decoration-secondary/20">결제 금액의 50% 위약금</span>이 발생합니다. 이는 라이브 가용성 관리 비용을 포함합니다."
+                                    "독점성과 정밀성을 유지하기 위해, 예약 취소 시 <span className="text-secondary font-black text-xl underline decoration-4 underline-offset-4 decoration-secondary/20">취소 횟수에 따른 이용 제한</span>이 발생합니다. (1회: 3개월, 2회: 6개월, 3회: 9개월, 4회 이상: 무기한)"
                                 </p>
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10 pt-10 border-t border-slate-200 text-left">
-                            <div className="p-8 bg-white rounded-[2.5rem] shadow-xl shadow-teal-900/5 text-left">
-                                <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-3">Original Payment</p>
-                                <p className="font-headline font-black text-4xl text-on-surface tracking-tighter">₩420,000</p>
-                            </div>
-                            <div className="p-8 bg-white rounded-[2.5rem] border-2 border-secondary/20 shadow-xl shadow-secondary/5 text-left">
-                                <p className="text-[9px] font-black text-secondary uppercase tracking-widest mb-3">Expected Refund (50%)</p>
-                                <p className="font-headline font-black text-4xl text-secondary tracking-tighter">₩210,000</p>
                             </div>
                         </div>
                     </div>
@@ -115,9 +231,13 @@ const CancellationCustomer = () => {
                     {/* Action Cluster */}
                     <div className="space-y-8 text-left">
                         <div className="pt-6 border-t font-black border-slate-100 text-left">
-                            <button className="w-full py-7 rounded-full bg-transparent border-4 border-secondary text-secondary font-headline font-black text-xl tracking-tighter flex items-center justify-center gap-5 hover:bg-secondary hover:text-white transition-all transform hover:-translate-y-1 active:scale-95 shadow-xl shadow-secondary/10">
-                                <span className="material-symbols-outlined text-3xl">delete_forever</span>
-                                Journey Termination
+                            <button 
+                                onClick={handleCancelSubmit}
+                                disabled={loading}
+                                className="w-full py-7 rounded-full bg-transparent border-4 border-secondary text-secondary font-headline font-black text-xl tracking-tighter flex items-center justify-center gap-5 hover:bg-secondary hover:text-white transition-all transform hover:-translate-y-1 active:scale-95 shadow-xl shadow-secondary/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <span className="material-symbols-outlined text-3xl">{loading ? 'sync' : 'delete_forever'}</span>
+                                {loading ? '처리 중...' : 'Journey Termination'}
                             </button>
                         </div>
                         <p className="text-center text-xs text-slate-300 font-bold uppercase tracking-widest pt-4">

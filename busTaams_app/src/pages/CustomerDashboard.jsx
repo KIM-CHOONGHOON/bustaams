@@ -11,6 +11,7 @@ const CustomerDashboard = () => {
     const [userName, setUserName] = useState('사용자');
     const [profileImage, setProfileImage] = useState(null);
     const [imageVersion, setImageVersion] = useState(Date.now());
+    const [restriction, setRestriction] = useState(null);
 
     const categories = [
         { name: '입찰 및 예약 문의', code: 'BID_RES' },
@@ -38,6 +39,9 @@ const CustomerDashboard = () => {
                         setProfileImage(statsRes.data.profileImage);
                         setImageVersion(Date.now());
                     }
+                    if (statsRes.data.restriction) {
+                        setRestriction(statsRes.data.restriction);
+                    }
                 }
             } catch (err) {
                 console.error('Fetch dashboard stats error:', err);
@@ -63,6 +67,20 @@ const CustomerDashboard = () => {
 
         fetchDashboardData();
     }, []);
+
+    const handleRequestBus = () => {
+        if (restriction) {
+            Swal.fire({
+                icon: 'error',
+                title: '이용 제한 안내',
+                text: restriction.message,
+                confirmButtonText: '확인',
+                confirmButtonColor: '#00685f'
+            });
+            return;
+        }
+        navigate('/request-bus');
+    };
 
 
 
@@ -112,6 +130,16 @@ const CustomerDashboard = () => {
                         </h2>
                     </div>
                 </section>
+
+                {restriction && (
+                    <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-xl flex items-start gap-3 shadow-sm animate-pulse">
+                        <span className="material-symbols-outlined text-red-500">warning</span>
+                        <div className="flex-1">
+                            <p className="text-red-800 font-bold text-sm">이용 제한 알림</p>
+                            <p className="text-red-700 text-xs mt-0.5">{restriction.message}</p>
+                        </div>
+                    </div>
+                )}
 
                 <section className="relative overflow-hidden rounded-[2rem] bg-primary text-white p-8 md:p-12 shadow-xl">
                     <div className="absolute top-0 right-0 w-1/2 h-full opacity-20 pointer-events-none">
@@ -167,7 +195,7 @@ const CustomerDashboard = () => {
                 <section className="space-y-6">
                     <h3 className="text-xl font-bold text-on-surface">빠른 서비스</h3>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6">
-                        <div onClick={() => navigate('/request-bus')} className="cursor-pointer bg-white p-6 rounded-3xl shadow-sm border-l-4 border-secondary hover:translate-y-[-4px] transition-all">
+                        <div onClick={handleRequestBus} className={`cursor-pointer bg-white p-6 rounded-3xl shadow-sm border-l-4 border-secondary hover:translate-y-[-4px] transition-all ${restriction ? 'opacity-60 grayscale-[0.5]' : ''}`}>
                             <div className="w-12 h-12 rounded-2xl bg-secondary/10 flex items-center justify-center mb-4 text-secondary">
                                 <span className="material-symbols-outlined">add_task</span>
                             </div>
@@ -215,7 +243,7 @@ const CustomerDashboard = () => {
 
             <BottomNavCustomer />
 
-            <button onClick={() => navigate('/request-bus')} className="fixed bottom-28 right-6 w-14 h-14 bg-secondary rounded-full shadow-lg flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all">
+            <button onClick={handleRequestBus} className={`fixed bottom-28 right-6 w-14 h-14 bg-secondary rounded-full shadow-lg flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all ${restriction ? 'grayscale-[0.5]' : ''}`}>
                 <span className="material-symbols-outlined">add</span>
             </button>
         </div>

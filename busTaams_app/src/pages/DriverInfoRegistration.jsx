@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DaumPostcodeEmbed from 'react-daum-postcode';
-import { getDriverProfile, updateDriverProfile, request } from '../api';
-import { auth } from '../firebase-config';
-import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
+import { getDriverProfile, updateDriverProfile, request, sendAuthCode, verifyAuthCode } from '../api';
 import { validateRRN } from '../utils/validation';
 import { notify } from '../utils/toast';
 import BottomNavDriver from '../components/BottomNavDriver';
@@ -45,7 +43,6 @@ const DriverInfoRegistration = () => {
     const [verificationSent, setVerificationSent] = useState(false);
     const [verificationCode, setVerificationCode] = useState('');
     const [isVerified, setIsVerified] = useState(false);
-    const [confirmationResult, setConfirmationResult] = useState(null);
     const [idToken, setIdToken] = useState(null);
     const [originalPhone, setOriginalPhone] = useState('');
 
@@ -124,37 +121,7 @@ const DriverInfoRegistration = () => {
         }
     };
 
-    useEffect(() => {
-        return () => {
-            if (window.recaptchaVerifier) {
-                try {
-                    window.recaptchaVerifier.clear();
-                } catch (e) {}
-                window.recaptchaVerifier = null;
-            }
-        };
-    }, []);
 
-    // Firebase reCAPTCHA 설정
-    const setupRecaptcha = () => {
-        if (!window.recaptchaVerifier) {
-            window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-                'size': 'invisible',
-                'callback': (response) => {
-                    // reCAPTCHA solved, allow signInWithPhoneNumber.
-                },
-                'expired-callback': () => {
-                    notify.warn('인증 만료', 'reCAPTCHA 인증이 만료되었습니다. 다시 시도해주세요.');
-                    if (window.recaptchaVerifier) {
-                        try {
-                            window.recaptchaVerifier.clear();
-                        } catch (e) {}
-                        window.recaptchaVerifier = null;
-                    }
-                }
-            });
-        }
-    };
 
     // SMS 인증번호 전송
     const handleSendSMS = async () => {
@@ -163,46 +130,17 @@ const DriverInfoRegistration = () => {
             return;
         }
 
-        // 전화번호 형식 정규화 (숫자만 추출)
-        let cleanPhone = formData.hpNo.replace(/[^0-9]/g, '');
-        
-        // 한국 번호 형식 체크 및 변환 (010... -> +8210...)
-        let formattedPhone = cleanPhone;
-        if (formattedPhone.startsWith('0')) {
-            formattedPhone = '+82' + formattedPhone.substring(1);
-        } else if (!formattedPhone.startsWith('+')) {
-            // 국가 코드가 없는 경우 기본 한국으로 설정
-            formattedPhone = '+82' + formattedPhone;
-        }
-
         try {
-            setupRecaptcha();
-            const appVerifier = window.recaptchaVerifier;
-            const confirmation = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
-            setConfirmationResult(confirmation);
-            setVerificationSent(true);
-            notify.success('인증번호 발송', 'Firebase를 통해 인증번호가 발송되었습니다.');
+            const res = await sendAuthCode(formData.hpNo, 'verify');
+            if (res.success) {
+                setVerificationSent(true);
+                notify.success('인증번호 발송', '인증번호가 발송되었습니다.');
+            } else {
+                notify.error('발송 실패', res.error || '인증번호 발송 중 오류가 발생했습니다.');
+            }
         } catch (error) {
-            console.error('Firebase Auth Detailed Error:', error);
-            
-            let errorMsg = '인증번호 발송 중 오류가 발생했습니다.';
-            if (error.code === 'auth/invalid-phone-number') {
-                errorMsg = '유효하지 않은 전화번호 형식입니다.';
-            } else if (error.code === 'auth/quota-exceeded') {
-                errorMsg = 'SMS 발송 한도를 초과했습니다. 나중에 다시 시도해주세요.';
-            } else if (error.code === 'auth/too-many-requests') {
-                errorMsg = '너무 많은 요청이 발생했습니다. 잠시 후 다시 시도해주세요.';
-            } else if (error.code === 'auth/captcha-check-failed') {
-                errorMsg = 'reCAPTCHA 인증에 실패했습니다.';
-            }
-
-            notify.error('발송 실패', errorMsg);
-            
-            // 오류 발생 시 reCAPTCHA 초기화
-            if (window.recaptchaVerifier) {
-                window.recaptchaVerifier.clear();
-                window.recaptchaVerifier = null;
-            }
+            console.error('Send SMS Error:', error);
+            notify.error('발송 실패', '인증번호 발송 중 오류가 발생했습니다.');
         }
     };
 
@@ -212,18 +150,20 @@ const DriverInfoRegistration = () => {
             notify.warn('입력 필요', '인증번호를 입력해주세요.');
             return;
         }
-        if (!confirmationResult) return notify.error('인증 오류', '발송된 인증 정보가 없습니다.');
 
         try {
-            const result = await confirmationResult.confirm(verificationCode);
-            const user = result.user;
-            const token = await user.getIdToken();
-            setIdToken(token);
-            setIsVerified(true);
-            setVerificationSent(false);
-            notify.success('인증 성공', '휴대폰 인증이 완료되었습니다.');
+            const res = await verifyAuthCode(formData.hpNo, verificationCode, 'verify');
+            if (res.success) {
+                setIdToken(res.verifyToken);
+                setIsVerified(true);
+                setVerificationSent(false);
+                notify.success('인증 성공', '휴대폰 인증이 완료되었습니다.');
+            } else {
+                notify.error('인증 실패', res.error || '인증번호가 일치하지 않습니다.');
+            }
         } catch (error) {
-            notify.error('인증 실패', '인증번호가 일치하지 않습니다.');
+            console.error('Verify Code Error:', error);
+            notify.error('인증 실패', '인증번호 확인 중 오류가 발생했습니다.');
         }
     };
 
@@ -446,7 +386,7 @@ const DriverInfoRegistration = () => {
                                                 {verificationSent ? '재발송' : '인증요청'}
                                             </button>
                                         </div>
-                                        <div id="recaptcha-container"></div>
+
                                         {verificationSent && (
                                             <div className="flex gap-3">
                                                 <input 

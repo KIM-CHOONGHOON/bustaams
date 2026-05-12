@@ -1,10 +1,10 @@
 const API_BASE_URL = '/api';
 
 // 공통 fetch 래퍼
-export const request = async (url, options = {}) => {
+export const request = async (url, options = {}, isFormData = false) => {
     const token = localStorage.getItem('accessToken');
     const headers = {
-        'Content-Type': 'application/json',
+        ...(!isFormData && { 'Content-Type': 'application/json' }),
         ...(token && { 'Authorization': `Bearer ${token}` }),
         ...options.headers
     };
@@ -16,12 +16,12 @@ export const request = async (url, options = {}) => {
     try {
         data = JSON.parse(text);
     } catch (e) {
-        if (text.trim().startsWith('<!doctype html>') || text.trim().startsWith('<html')) {
+    if (text.trim().toLowerCase().startsWith('<!doctype html>') || text.trim().toLowerCase().startsWith('<html')) {
             console.error(`[API] HTML Response for ${url}:`, text.substring(0, 200));
-            throw new Error(`서버가 JSON 대신 HTML을 반환했습니다. API 서버가 실행 중인지, 혹은 경로가 올바른지 확인해주세요. (URL: ${url})`);
+            throw new Error(`서버가 JSON 대신 HTML을 반환했습니다. (URL: ${url})\n응답 내용: ${text.substring(0, 100)}...`);
         }
         console.error(`[API] JSON Parse Error for ${url}:`, text);
-        throw new Error(`서버 응답 형식이 올바르지 않습니다. (URL: ${url})`);
+        throw new Error(`서버 응답 형식이 올바르지 않습니다. (URL: ${url})\n응답 내용: ${text.substring(0, 100)}`);
     }
 
     if (!response.ok) {
@@ -106,14 +106,14 @@ export const checkIdDuplicate = (userId) => request(`/app/auth/check-id?userId=$
 export const checkEmailDuplicate = (email) => request(`/app/auth/check-email?email=${email}`);
 export const checkPhoneDuplicate = (phoneNo) => request(`/app/auth/check-phone?phoneNo=${phoneNo}`);
 
-export const sendAuthCode = (phoneNo) => request('/app/auth/send-code', {
+export const sendAuthCode = (phoneNo, type = 'signup') => request('/app/auth/send-code', {
     method: 'POST',
-    body: JSON.stringify({ phoneNo })
+    body: JSON.stringify({ phoneNo, type })
 });
 
-export const verifyAuthCode = (phoneNo, code) => request('/app/auth/verify-code', {
+export const verifyAuthCode = (phoneNo, code, type = 'signup') => request('/app/auth/verify-code', {
     method: 'POST',
-    body: JSON.stringify({ phoneNo, code })
+    body: JSON.stringify({ phoneNo, code, type })
 });
 
 export const registerUser = (data) => request('/app/auth/register', {
@@ -168,10 +168,46 @@ export const updateBusProfile = async (formData) => {
     return resJson;
 };
 
+
+export const upsertDeviceToken = (fcmToken, clientKind = 'mobile') => request('/app/customer/upsert-device-token', {
+    method: 'POST',
+    body: JSON.stringify({ fcmToken, clientKind })
+});
+
+export const upsertDriverDeviceToken = (fcmToken, clientKind = 'mobile') => request('/app/driver/upsert-device-token', {
+    method: 'POST',
+    body: JSON.stringify({ fcmToken, clientKind })
+});
+
+
 // api.get() / api.post() 형식 지원
+
 const api = {
     get: (url) => request(url, { method: 'GET' }),
-    post: (url, data) => request(url, { method: 'POST', body: JSON.stringify(data) })
+    post: (url, data, options = {}) => {
+        const isFormData = data instanceof FormData;
+        const config = {
+            method: 'POST',
+            ...options,
+            headers: {
+                ...options.headers
+            }
+        };
+
+        if (isFormData) {
+            config.body = data;
+            // FormData 사용 시 Content-Type 헤더를 명시적으로 설정하지 않아야 함 (브라우저가 boundary와 함께 자동 설정)
+            // request 함수에서 기본으로 'application/json'을 넣으므로, 여기서 명시적으로 삭제하거나 request를 수정해야 함.
+            if (config.headers['Content-Type']) {
+                delete config.headers['Content-Type'];
+            }
+            // request 내부에서 기본 헤더를 병합하므로, request 함수 자체를 수정하는 것이 더 안전함.
+        } else {
+            config.body = JSON.stringify(data);
+        }
+
+        return request(url, config, isFormData);
+    }
 };
 
 export default api;

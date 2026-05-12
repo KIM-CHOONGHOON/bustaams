@@ -6,6 +6,8 @@ const DEFAULT_CANCEL = {
     cancelTravelerAllCnt: 0,
     cancelTravelerPartialBusCnt: 0,
     tradeRestrictYn: 'N',
+    restrictStat: 'N',
+    restrictEndDt: null,
 };
 
 /**
@@ -34,6 +36,8 @@ function mapCancelRow(row) {
         cancelTravelerPartialBusCnt: row.CANCEL_TRAVELER_PARTIAL_BUS_CNT != null
             ? Number(row.CANCEL_TRAVELER_PARTIAL_BUS_CNT) : 0,
         tradeRestrictYn: (row.TRADE_RESTRICT_YN || 'N').toString().toUpperCase() === 'Y' ? 'Y' : 'N',
+        restrictStat: row.RESTRICT_STAT || 'N',
+        restrictEndDt: row.RESTRICT_END_DT || null,
     };
 }
 
@@ -59,7 +63,7 @@ function getCurrentYyyyMm() {
 async function fetchCancelManageForUser(pool, user) {
     const cust = user.CUST_ID != null && String(user.CUST_ID).trim() !== '' ? String(user.CUST_ID).trim() : '';
     const loginId = user.USER_ID != null && String(user.USER_ID).trim() !== '' ? String(user.USER_ID).trim() : '';
-    const cols = `CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, CANCEL_TRAVELER_ALL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, TRADE_RESTRICT_YN`;
+    const cols = `CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, CANCEL_TRAVELER_ALL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, TRADE_RESTRICT_YN, RESTRICT_STAT, RESTRICT_END_DT`;
 
     const tryQ = async (sql, args) => {
         const [rows] = await pool.execute(sql, args);

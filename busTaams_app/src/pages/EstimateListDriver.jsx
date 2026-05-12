@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDriverProfile, request } from '../api';
 import BottomNavDriver from '../components/BottomNavDriver';
+import Swal from 'sweetalert2';
 
 const EstimateListDriver = () => {
     const navigate = useNavigate();
@@ -10,7 +11,30 @@ const EstimateListDriver = () => {
     const [userProfileImg, setUserProfileImg] = useState('');
 
     useEffect(() => {
+        const checkRestriction = async () => {
+            try {
+                const res = await request('/app/driver/check-restriction');
+                if (res.restricted) {
+                    await Swal.fire({
+                        icon: 'warning',
+                        title: '이용 제한 안내',
+                        text: res.message,
+                        confirmButtonText: '확인',
+                        confirmButtonColor: '#004e47'
+                    });
+                    navigate('/dashboard-driver');
+                    return true;
+                }
+            } catch (err) {
+                console.error('Check restriction error:', err);
+            }
+            return false;
+        };
+
         const fetchData = async () => {
+            const isRestricted = await checkRestriction();
+            if (isRestricted) return;
+
             setLoading(true);
             try {
                 // 1. 기사 프로필 정보 조회 (헤더용)
@@ -31,7 +55,7 @@ const EstimateListDriver = () => {
             }
         };
         fetchData();
-    }, []);
+    }, [navigate]);
 
     if (loading) return (
         <div className="min-h-screen flex items-center justify-center bg-[#f7f9fb]">

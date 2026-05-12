@@ -1,7 +1,9 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { notify } from '../utils/toast';
 import { login } from '../api';
+import { requestFirebaseToken } from '../utils/fcm';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -16,7 +18,12 @@ const Login = () => {
         if (response.success) {
             localStorage.setItem('accessToken', response.token);
             localStorage.setItem('user', JSON.stringify(response.user));
+            
+            // FCM 토큰 등록 시도
+            requestFirebaseToken();
+
             notify.success('로그인 성공', '오늘도 탁월한 선택을 환영합니다.');
+
             setTimeout(() => {
                 const userType = response.user.userType;
                 if (userType === 'DRIVER') {

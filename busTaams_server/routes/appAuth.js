@@ -5,6 +5,41 @@ const bcrypt = require('bcryptjs');
 const { randomUUID } = require('crypto');
 const jwt = require('jsonwebtoken');
 const { decrypt, encrypt } = require('../crypto');
+const axios = require('axios');
+
+/**
+ * [공통] 알리고 SMS 발송 유틸리티
+ */
+const sendAligoSMS = async (phoneNo, authCode) => {
+    const ALIGO_USER_ID = process.env.ALIGO_USER_ID;
+    const ALIGO_API_KEY = process.env.ALIGO_API_KEY;
+    const ALIGO_SENDER = process.env.ALIGO_SENDER;
+
+    if (!ALIGO_USER_ID || !ALIGO_API_KEY || !ALIGO_SENDER) {
+        console.error('Aligo credentials missing in environment variables');
+        throw new Error('SMS 설정 오류');
+    }
+
+    const msg = `[busTaams] 본인확인 인증번호 [${authCode}]를 입력해주세요.`;
+    
+    const params = new URLSearchParams();
+    params.append('user_id', ALIGO_USER_ID);
+    params.append('key', ALIGO_API_KEY);
+    params.append('receiver', phoneNo);
+    params.append('sender', ALIGO_SENDER);
+    params.append('msg', msg);
+    params.append('msg_type', 'SMS');
+
+    try {
+        const response = await axios.post('https://apis.aligo.in/send/', params);
+        console.log('[Aligo Send Response]', response.data);
+        return response.data;
+    } catch (error) {
+        console.error('Aligo SMS Send Error:', error.message);
+        throw error;
+    }
+};
+
 
 // 환경 변수 설정
 const JWT_SECRET_KEY = process.env.JWT_SECRET || 'bustaams-dev-secret-key-2026';
@@ -81,35 +116,35 @@ router.post('/register', async (req, res) => {
 
     console.log(`[Registration] Request received for user: ${userId}`);
 
-    // 0. Firebase Token 검증 (휴대폰 인증 확인)
+    // 0. SMS 인증 토큰 검증 (Firebase 대신 서버 자체 발행 토큰 사용)
     let verifiedPhoneNo = phoneNo;
     if (firebaseToken) {
         try {
-            const decodedToken = await admin.auth().verifyIdToken(firebaseToken);
-            // Firebase에 등록된 전화번호 가져오기 (+8210... 형식)
-            const firebasePhone = decodedToken.phone_number; 
+            // firebaseToken이라는 이름은 유지하되, 서버에서 발행한 JWT인지 확인 (리팩토링 편의상)
+            const decoded = jwt.verify(firebaseToken, JWT_SECRET_KEY);
             
-            // 국가번호 제거하고 숫자만 추출하여 비교 (필요 시)
-            const cleanFirebasePhone = firebasePhone.replace(/[^0-9]/g, '');
+            if (!decoded.verified || !decoded.phoneNo) {
+                throw new Error('Invalid verification token');
+            }
+
+            const cleanVerifiedPhone = decoded.phoneNo.replace(/[^0-9]/g, '');
             const cleanRequestPhone = phoneNo.replace(/[^0-9]/g, '');
             
-            // 한국 휴대폰 번호의 경우 010... 에서 앞의 0을 제외한 나머지 숫자가 Firebase 번호 끝과 일치하는지 확인
-            const phoneForMatch = cleanRequestPhone.startsWith('0') ? cleanRequestPhone.substring(1) : cleanRequestPhone;
-
-            if (!cleanFirebasePhone.endsWith(phoneForMatch)) {
-                console.error(`[Registration] Phone mismatch: FB(${cleanFirebasePhone}) vs Req(${cleanRequestPhone})`);
+            if (cleanVerifiedPhone !== cleanRequestPhone) {
+                console.error(`[Registration] Phone mismatch: Verified(${cleanVerifiedPhone}) vs Req(${cleanRequestPhone})`);
                 await connection.rollback();
                 return res.status(400).json({ error: '인증된 휴대폰 번호와 입력된 번호가 일치하지 않습니다.' });
             }
-            console.log(`[Registration] Firebase Phone Verified: ${firebasePhone}`);
+            console.log(`[Registration] Phone Verified via Server Token: ${decoded.phoneNo}`);
         } catch (error) {
-            console.error('[Registration] Firebase Token Verification Failed:', error);
+            console.error('[Registration] SMS Token Verification Failed:', error);
             await connection.rollback();
-            return res.status(401).json({ error: '휴대폰 인증 토큰이 유효하지 않습니다.' });
+            return res.status(401).json({ error: '휴대폰 인증이 유효하지 않거나 만료되었습니다.' });
         }
     } else {
         return res.status(400).json({ error: '휴대폰 인증이 필요합니다.' });
     }
+
 
     // ... (이후 기존 아이디 및 연락처 중복 체크 로직)
         // 아이디 및 연락처 중복 체크
@@ -176,12 +211,12 @@ router.post('/register', async (req, res) => {
         // 3.5 TB_USER_CANCEL_MANAGE 초기화 (취소 건수 0으로 설정)
         const cancelManageQuery = `
             INSERT INTO TB_USER_CANCEL_MANAGE (
-                CUST_ID, CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, 
+                CUST_ID, USER_UUID, USER_TYPE, CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, 
                 CANCEL_TRAVELER_ALL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, 
-                TRADE_RESTRICT_YN, REG_ID, MOD_ID
-            ) VALUES (?, 0, 0, 0, 0, 'N', ?, ?)
+                RESTRICT_STAT, TRADE_RESTRICT_YN, REG_ID, MOD_ID
+            ) VALUES (?, (SELECT USER_UUID FROM TB_USER WHERE CUST_ID = ?), ?, 0, 0, 0, 0, 'N', 'N', ?, ?)
         `;
-        await connection.execute(cancelManageQuery, [custId, custId, custId]);
+        await connection.execute(cancelManageQuery, [custId, custId, finalUserType, custId, custId]);
 
         // 4. 약관 동의 이력 처리 (TB_USER_TERMS_HIST - 키값을 CUST_ID로 변경)
         if (termsData && Array.isArray(termsData)) {
@@ -403,28 +438,28 @@ router.post('/reset-password', async (req, res) => {
             return res.status(400).json({ error: '필수 정보가 누락되었습니다.' });
         }
 
-        // 1. Firebase Token 검증
+        // 1. 인증 토큰 검증
         let verifiedPhoneNo = '';
         try {
-            const decodedToken = await admin.auth().verifyIdToken(firebaseToken);
-            const firebasePhone = decodedToken.phone_number; // +8210... 형식
-            
-            const cleanFirebasePhone = firebasePhone.replace(/[^0-9]/g, '');
-            const cleanRequestPhone = phoneNo.replace(/[^0-9]/g, '');
-            
-            // 한국 휴대폰 번호의 경우 010... 에서 앞의 0을 제외한 나머지 숫자가 Firebase 번호 끝과 일치하는지 확인
-            const phoneForMatch = cleanRequestPhone.startsWith('0') ? cleanRequestPhone.substring(1) : cleanRequestPhone;
+            const decoded = jwt.verify(firebaseToken, JWT_SECRET_KEY);
+            if (!decoded.verified || !decoded.phoneNo) {
+                throw new Error('Invalid verification token');
+            }
 
-            if (!cleanFirebasePhone.endsWith(phoneForMatch)) {
+            const cleanVerifiedPhone = decoded.phoneNo.replace(/[^0-9]/g, '');
+            const cleanRequestPhone = phoneNo.replace(/[^0-9]/g, '');
+
+            if (cleanVerifiedPhone !== cleanRequestPhone) {
                 await connection.rollback();
                 return res.status(400).json({ error: '인증된 휴대폰 번호와 입력된 번호가 일치하지 않습니다.' });
             }
             verifiedPhoneNo = cleanRequestPhone;
         } catch (error) {
-            console.error('[ResetPassword] Firebase Token Verification Failed:', error);
+            console.error('[ResetPassword] SMS Token Verification Failed:', error);
             await connection.rollback();
-            return res.status(401).json({ error: '휴대폰 인증 토큰이 유효하지 않습니다.' });
+            return res.status(401).json({ error: '휴대폰 인증이 유효하지 않거나 만료되었습니다.' });
         }
+
 
         // 2. 사용자 존재 및 번호 일치 확인
         const [rows] = await connection.execute(
@@ -461,24 +496,46 @@ router.post('/reset-password', async (req, res) => {
 
 /**
  * [App 전용] 휴대폰 인증번호 발송
+ * type: signup (가입), find-account (비밀번호 재설정), verify (단순 인증)
  */
 router.post('/send-code', async (req, res) => {
     try {
-        let { phoneNo } = req.body;
+        let { phoneNo, type } = req.body;
         if (!phoneNo) return res.status(400).json({ error: '휴대폰 번호를 입력해주세요.' });
 
         phoneNo = phoneNo.replace(/[^0-9]/g, '');
+        const verificationType = type || 'signup';
 
-        // 기가입 여부 확인
+        // 기가입 여부 확인 로직 분기
         const [existing] = await pool.execute('SELECT 1 FROM TB_USER WHERE HP_NO = ?', [phoneNo]);
-        if (existing.length > 0) {
-            return res.status(400).json({ success: false, error: '이미 가입된 휴대폰 번호입니다.' });
+        
+        if (verificationType === 'signup') {
+            if (existing.length > 0) {
+                return res.status(400).json({ success: false, error: '이미 가입된 휴대폰 번호입니다.' });
+            }
+        } else if (verificationType === 'find-account') {
+            if (existing.length === 0) {
+                return res.status(400).json({ success: false, error: '가입되지 않은 휴대폰 번호입니다.' });
+            }
         }
 
         // 6자리 인증번호 생성
         const authCode = Math.floor(100000 + Math.random() * 900000).toString();
         
-        // [수정] 로그인 상태일 경우 CUST_ID를 REG_ID/RECEIVER_ID로 사용
+        // 실제 SMS 발송 (Aligo)
+        let sendStat = 'SUCCESS';
+        let errorMsg = null;
+        try {
+            const aligoRes = await sendAligoSMS(phoneNo, authCode);
+            if (aligoRes.result_code !== '1') {
+                sendStat = 'FAIL';
+                errorMsg = aligoRes.message || '알리고 응답 오류';
+            }
+        } catch (e) {
+            sendStat = 'FAIL';
+            errorMsg = e.message;
+        }
+
         let currentCustId = '0000000000';
         const authHeader = req.headers['authorization'];
         if (authHeader) {
@@ -486,27 +543,34 @@ router.post('/send-code', async (req, res) => {
                 const token = authHeader.split(' ')[1];
                 const decoded = jwt.verify(token, JWT_SECRET_KEY);
                 if (decoded && decoded.custId) currentCustId = decoded.custId;
-            } catch (e) {
-                // 토큰 무효 시 시스템 아이디 유지
-            }
+            } catch (e) {}
         }
 
-        // TB_SMS_LOG에 발송 이력 저장 (LOG_SEQ 채번)
+        // TB_SMS_LOG에 발송 이력 저장
         const msgContent = `[busTaams] 본인확인 인증번호 [${authCode}]를 입력해주세요.`;
-        const logSeq = await getNextId('TB_SMS_LOG', 'LOG_SEQ', 10);
         
+        // SEND_CATEGORY를 type에 따라 저장
+        const categoryMap = {
+            'signup': 'SIGN_UP',
+            'find-account': 'FIND_ACCOUNT',
+            'verify': 'VERIFY'
+        };
+        const category = categoryMap[verificationType] || 'VERIFY';
+
         await pool.execute(
             `INSERT INTO TB_SMS_LOG (
-                LOG_SEQ, SEND_CATEGORY, SENDER_ID, RECEIVER_PHONE, RECEIVER_ID, REG_ID, MSG_CONTENT, MSG_TYPE, SEND_STAT, REG_DT
-            ) VALUES (?, 'SIGN_UP', 'SYSTEM', ?, ?, ?, ?, 'SMS', 'SUCCESS', NOW())`,
-            [logSeq, phoneNo, currentCustId, currentCustId, msgContent]
+                SEND_CATEGORY, SENDER_ID, RECEIVER_PHONE, RECEIVER_ID, REG_ID, MSG_CONTENT, MSG_TYPE, SEND_STAT, ERROR_MSG, REG_DT
+            ) VALUES (?, 'SYSTEM', ?, ?, ?, ?, 'SMS', ?, ?, NOW())`,
+            [category, phoneNo, currentCustId, currentCustId, msgContent, sendStat, errorMsg]
         );
 
-        // 시뮬레이션을 위해 실제 발송은 생략하고 로그 확인
-        console.log(`[SMS 발송 시뮬레이션] To: ${phoneNo}, Code: ${authCode}`);
+        if (sendStat === 'FAIL') {
+            return res.status(500).json({ error: '인증번호 발송 실패: ' + errorMsg });
+        }
 
-        // 데모 목적으로 클라이언트에 인증번호를 돌려줌 (실제 운영 환경에서는 절대 금지)
-        res.json({ success: true, message: '인증번호가 발송되었습니다.', debugCode: authCode });
+        console.log(`[SMS 발송 완료] Type: ${verificationType}, To: ${phoneNo}, Code: ${authCode}`);
+        res.json({ success: true, message: '인증번호가 발송되었습니다.' });
+
     } catch (err) {
         console.error('Send code error:', err);
         res.status(500).json({ error: '인증번호 발송 중 오류가 발생했습니다.' });
@@ -518,15 +582,23 @@ router.post('/send-code', async (req, res) => {
  */
 router.post('/verify-code', async (req, res) => {
     try {
-        const { phoneNo, code } = req.body;
+        const { phoneNo, code, type } = req.body;
         if (!phoneNo || !code) return res.status(400).json({ error: '번호와 인증코드를 모두 입력해주세요.' });
 
-        // TB_SMS_LOG에서 해당 번호의 가장 최신 인증번호 조회
+        const verificationType = type || 'signup';
+        const categoryMap = {
+            'signup': 'SIGN_UP',
+            'find-account': 'FIND_ACCOUNT',
+            'verify': 'VERIFY'
+        };
+        const category = categoryMap[verificationType] || 'VERIFY';
+
+        // TB_SMS_LOG에서 해당 번호와 카테고리의 가장 최신 인증번호 조회
         const [rows] = await pool.execute(
             `SELECT MSG_CONTENT FROM TB_SMS_LOG 
-             WHERE RECEIVER_PHONE = ? AND SEND_CATEGORY = 'SIGN_UP'
+             WHERE RECEIVER_PHONE = ? AND SEND_CATEGORY = ?
              ORDER BY REG_DT DESC LIMIT 1`,
-            [phoneNo]
+            [phoneNo, category]
         );
 
         if (rows.length === 0) {
@@ -537,10 +609,17 @@ router.post('/verify-code', async (req, res) => {
         const match = msgContent.includes(`[${code}]`);
 
         if (match) {
-            res.json({ success: true, message: '인증되었습니다.' });
+            // 인증 성공 시 서버 자체 토큰 발행 (30분 유효)
+            const verifyToken = jwt.sign(
+                { phoneNo, verified: true, type: verificationType },
+                JWT_SECRET_KEY,
+                { expiresIn: '30m' }
+            );
+            res.json({ success: true, message: '인증되었습니다.', verifyToken });
         } else {
             res.status(400).json({ success: false, error: '인증번호가 일치하지 않습니다.' });
         }
+
     } catch (err) {
         console.error('Verify code error:', err);
         res.status(500).json({ error: '인증 확인 중 오류가 발생했습니다.' });

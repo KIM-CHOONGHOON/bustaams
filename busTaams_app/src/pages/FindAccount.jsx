@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { findId, registerUser } from '../api';
-import { auth } from '../firebase-config';
-import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
+import { findId, sendAuthCode, verifyAuthCode } from '../api';
 import { notify } from '../utils/toast';
 import api from '../api'; // 비밀번호 재설정을 위한 api 객체
 
@@ -22,7 +20,6 @@ const FindAccount = () => {
     // State for flows
     const [isCodeSent, setIsCodeSent] = useState(false);
     const [isPhoneVerified, setIsPhoneVerified] = useState(false);
-    const [confirmationResult, setConfirmationResult] = useState(null);
     const [idToken, setIdToken] = useState(null);
     const [showPasswordFields, setShowPasswordFields] = useState(false);
 
@@ -46,93 +43,42 @@ const FindAccount = () => {
         }
     };
 
-    useEffect(() => {
-        return () => {
-            if (window.recaptchaVerifier) {
-                try {
-                    window.recaptchaVerifier.clear();
-                } catch (e) {}
-                window.recaptchaVerifier = null;
-            }
-        };
-    }, []);
 
-    // Firebase reCAPTCHA 설정
-    const setupRecaptcha = () => {
-        if (!window.recaptchaVerifier) {
-            window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-                'size': 'invisible',
-                'callback': (response) => {
-                    // reCAPTCHA solved
-                },
-                'expired-callback': () => {
-                    notify.warn('인증 만료', 'reCAPTCHA 인증이 만료되었습니다. 다시 시도해주세요.');
-                    if (window.recaptchaVerifier) {
-                        try {
-                            window.recaptchaVerifier.clear();
-                        } catch (e) {}
-                        window.recaptchaVerifier = null;
-                    }
-                }
-            });
-        }
-    };
 
     const handleSendCode = async () => {
         if (!phoneNo) return notify.warn('휴대폰 번호를 입력하세요.');
         if (activeTab === 'pw' && !userId) return notify.warn('아이디를 먼저 입력하세요.');
 
-        // 전화번호 정규화 (숫자만)
-        let cleanPhone = phoneNo.replace(/[^0-9]/g, '');
-        let formattedPhone = cleanPhone;
-        if (formattedPhone.startsWith('0')) {
-            formattedPhone = '+82' + formattedPhone.substring(1);
-        } else if (!formattedPhone.startsWith('+')) {
-            formattedPhone = '+82' + formattedPhone;
-        }
-
         try {
-            setupRecaptcha();
-            const appVerifier = window.recaptchaVerifier;
-            const confirmation = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
-            setConfirmationResult(confirmation);
-            setIsCodeSent(true);
-            notify.success('인증번호 발송', 'Firebase를 통해 인증번호가 발송되었습니다.');
+            const res = await sendAuthCode(phoneNo, 'find-account');
+            if (res.success) {
+                setIsCodeSent(true);
+                notify.success('인증번호 발송', '인증번호가 발송되었습니다.');
+            } else {
+                notify.error('발송 실패', res.error || '인증번호 발송 중 오류가 발생했습니다.');
+            }
         } catch (err) {
-            console.error('Firebase Auth Detailed Error:', err);
-            
-            let errorMsg = '인증번호 발송 중 오류가 발생했습니다.';
-            if (err.code === 'auth/invalid-app-credential') {
-                errorMsg = '앱 인증 설정이 올바르지 않습니다. (Firebase 콘솔 설정을 확인하세요)';
-            } else if (err.code === 'auth/invalid-phone-number') {
-                errorMsg = '유효하지 않은 전화번호 형식입니다.';
-            } else if (err.code === 'auth/captcha-check-failed') {
-                errorMsg = 'reCAPTCHA 인증에 실패했습니다.';
-            }
-
-            notify.error('발송 실패', errorMsg);
-
-            if (window.recaptchaVerifier) {
-                window.recaptchaVerifier.clear();
-                window.recaptchaVerifier = null;
-            }
+            console.error('Send Code Error:', err);
+            notify.error('발송 실패', '인증번호 발송 중 오류가 발생했습니다.');
         }
     };
 
     const handleVerifyCode = async () => {
         if (!authCode) return notify.warn('인증번호를 입력하세요.');
-        if (!confirmationResult) return notify.error('인증 오류', '발송된 인증 정보가 없습니다.');
 
         try {
-            const result = await confirmationResult.confirm(authCode);
-            const user = result.user;
-            const token = await user.getIdToken();
-            setIdToken(token);
-            setIsPhoneVerified(true);
-            setShowPasswordFields(true); // 인증 성공 시 비밀번호 입력창 표시
-            notify.success('인증 성공', '본인 확인이 완료되었습니다. 새 비밀번호를 설정하세요.');
+            const res = await verifyAuthCode(phoneNo, authCode, 'find-account');
+            if (res.success) {
+                setIdToken(res.verifyToken);
+                setIsPhoneVerified(true);
+                setShowPasswordFields(true);
+                notify.success('인증 성공', '본인 확인이 완료되었습니다. 새 비밀번호를 설정하세요.');
+            } else {
+                notify.error('인증 실패', res.error || '인증번호가 올바르지 않습니다.');
+            }
         } catch (err) {
-            notify.error('인증 실패', '인증번호가 올바르지 않습니다.');
+            console.error('Verify Code Error:', err);
+            notify.error('인증 실패', '인증번호 확인 중 오류가 발생했습니다.');
         }
     };
 
@@ -254,7 +200,7 @@ const FindAccount = () => {
                                                 {isCodeSent ? '재발송' : '인증요청'}
                                             </button>
                                         </div>
-                                        <div id="recaptcha-container"></div>
+
                                     </div>
 
                                     {isCodeSent && !isPhoneVerified && (

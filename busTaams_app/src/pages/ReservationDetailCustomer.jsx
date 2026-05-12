@@ -110,6 +110,47 @@ const ReservationDetailCustomer = () => {
         }
     };
 
+    const [showCancelModal, setShowCancelModal] = useState(false);
+    const [cancelCode, setCancelCode] = useState('06');
+    const [cancelReasonText, setCancelReasonText] = useState('');
+    const [cancelFile, setCancelFile] = useState(null);
+    const [isCancelling, setIsCancelling] = useState(false);
+
+    const handleCancel = async () => {
+        if (!cancelReasonText.trim()) {
+            alert('상세 취소 사유를 입력해주세요.');
+            return;
+        }
+
+        setIsCancelling(true);
+        try {
+            const formData = new FormData();
+            formData.append('reqId', id);
+            formData.append('cancelCode', cancelCode);
+            formData.append('cancelReasonText', cancelReasonText);
+            if (cancelFile) {
+                formData.append('file', cancelFile);
+            }
+
+            const res = await api.post('/app/customer/cancel-request', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
+            if (res.success) {
+                alert('여행이 성공적으로 취소되었습니다.');
+                navigate('/reservation-list');
+            } else {
+                alert(res.error || '취소 처리 중 오류가 발생했습니다.');
+            }
+        } catch (err) {
+            console.error('Failed to cancel request:', err);
+            alert('서ver와 통신 중 오류가 발생했습니다.');
+        } finally {
+            setIsCancelling(false);
+            setShowCancelModal(false);
+        }
+    };
+
     // 예약 확정된 버스들 필터링
     const confirmedBuses = reservation?.requestedBuses?.filter(b => b.resStatus === 'CONFIRM' || b.status === 'CONFIRM') || [];
     const routeData = reservation?.route || [];
@@ -142,6 +183,19 @@ const ReservationDetailCustomer = () => {
             </header>
 
             <main className="pt-28 px-6 max-w-7xl mx-auto">
+                {customerProfile?.restrictStat && customerProfile.restrictStat !== 'N' && (
+                    <div className="mb-8 p-6 rounded-[2rem] bg-rose-500 text-white shadow-xl shadow-rose-500/20 flex items-center gap-4 animate-pulse">
+                        <span className="material-symbols-outlined text-3xl">warning</span>
+                        <div>
+                            <p className="font-black text-sm uppercase tracking-widest">현재 서비스 이용 제한 상태입니다</p>
+                            <p className="text-xs font-bold opacity-90">
+                                {customerProfile.restrictStat === 'P' ? 
+                                    '무기한 이용 제한 상태입니다. 고객센터에 문의해주세요.' : 
+                                    `${customerProfile.restrictEndDt}까지 이용이 제한됩니다.`}
+                            </p>
+                        </div>
+                    </div>
+                )}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20">
                     <div className="lg:col-span-8 space-y-16">
                         {/* Trip Summary Header */}
@@ -341,17 +395,8 @@ const ReservationDetailCustomer = () => {
                                         여행 완료 처리
                                     </button>
                                 )}
-                                {reservation.status !== 'DONE' && (
-                                    <button onClick={() => {
-                                        if(window.confirm('예약을 취소하시겠습니까?')) {
-                                            api.post('/app/customer/cancel-request', { reqId: id }).then(res => {
-                                                if(res.success) {
-                                                    alert('취소되었습니다.');
-                                                    navigate('/reservation-list');
-                                                }
-                                            });
-                                        }
-                                    }} className="w-full py-5 rounded-full bg-white/5 text-red-400 border border-white/10 font-black text-[10px] uppercase tracking-[0.4em] hover:bg-red-500 hover:text-white transition-all italic">
+                                {reservation.status !== 'DONE' && reservation.status !== 'TRAVELER_CANCEL' && (
+                                    <button onClick={() => setShowCancelModal(true)} className="w-full py-5 rounded-full bg-white/5 text-red-400 border border-white/10 font-black text-[10px] uppercase tracking-[0.4em] hover:bg-red-500 hover:text-white transition-all italic">
                                         여행 취소하기
                                     </button>
                                 )}
@@ -360,6 +405,88 @@ const ReservationDetailCustomer = () => {
                     </div>
                 </div>
             </main>
+
+            {/* Cancel Modal */}
+            {showCancelModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-10 shadow-2xl space-y-8 animate-in zoom-in-95 duration-300">
+                        <div className="space-y-2 text-center">
+                            <h3 className="text-3xl font-black tracking-tighter text-slate-900 italic">여행 취소 요청</h3>
+                            <div className="bg-rose-50 p-4 rounded-2xl border border-rose-100 space-y-2">
+                                <p className="text-rose-600 text-[10px] font-black uppercase tracking-widest">취소 패널티 안내</p>
+                                <p className="text-slate-600 text-xs font-bold leading-relaxed">
+                                    취소 횟수에 따라 서비스 이용이 제한될 수 있습니다.<br/>
+                                    (1회: 3개월, 2회: 6개월, 3회: 9개월, 4회 이상: 무기한)
+                                </p>
+                            </div>
+                            <p className="text-slate-400 text-sm font-bold">원활한 서비스 개선을 위해 취소 사유를 입력해주세요.</p>
+                        </div>
+
+                        <div className="space-y-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">취소 사유 선택</label>
+                                <select 
+                                    value={cancelCode} 
+                                    onChange={(e) => setCancelCode(e.target.value)}
+                                    className="w-full px-6 py-4 rounded-2xl bg-slate-50 border border-slate-100 font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all appearance-none"
+                                >
+                                    <option value="01">단순 변심</option>
+                                    <option value="02">일정 변경</option>
+                                    <option value="03">타 서비스 이용</option>
+                                    <option value="04">기사 불친절/불만족</option>
+                                    <option value="05">서비스 장애</option>
+                                    <option value="06">기타</option>
+                                </select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">상세 사유 내용</label>
+                                <textarea 
+                                    value={cancelReasonText}
+                                    onChange={(e) => setCancelReasonText(e.target.value)}
+                                    placeholder="구체적인 취소 사유를 입력해주세요 (필수)"
+                                    className="w-full h-32 px-6 py-4 rounded-2xl bg-slate-50 border border-slate-100 font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition-all resize-none"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">관련 서류 (선택)</label>
+                                <div className="relative group">
+                                    <input 
+                                        type="file" 
+                                        id="cancel-file"
+                                        onChange={(e) => setCancelFile(e.target.files[0])}
+                                        className="hidden"
+                                    />
+                                    <label 
+                                        htmlFor="cancel-file"
+                                        className="flex items-center justify-between px-6 py-4 rounded-2xl bg-slate-50 border border-slate-100 font-bold text-slate-400 cursor-pointer hover:bg-slate-100 transition-all group-hover:border-teal-200"
+                                    >
+                                        <span className="truncate">{cancelFile ? cancelFile.name : '파일을 선택하세요'}</span>
+                                        <span className="material-symbols-outlined text-slate-300">attach_file</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-4">
+                            <button 
+                                onClick={() => setShowCancelModal(false)}
+                                className="flex-1 py-5 rounded-full bg-slate-100 text-slate-500 font-black text-[11px] uppercase tracking-widest hover:bg-slate-200 transition-all italic"
+                            >
+                                창 닫기
+                            </button>
+                            <button 
+                                onClick={handleCancel}
+                                disabled={isCancelling}
+                                className="flex-1 py-5 rounded-full bg-teal-500 text-white font-black text-[11px] uppercase tracking-widest shadow-lg shadow-teal-500/20 hover:scale-[1.02] active:scale-95 transition-all italic disabled:opacity-50 disabled:scale-100"
+                            >
+                                {isCancelling ? '처리 중...' : '취소 신청하기'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <BottomNavCustomer />
         </div>

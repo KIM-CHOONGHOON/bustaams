@@ -1,23 +1,32 @@
 const mysql = require('mysql2/promise');
+const dbConfig = {
+    host: '127.0.0.1',
+    port: 3307,
+    user: 'master',
+    password: '!QAZ2wsx2026@',
+    database: 'bustaams'
+};
 
-async function checkColumns() {
-    const pool = mysql.createPool({
-        host: 'localhost',
-        port: 3307,
-        user: 'root',
-        password: '',
-        database: 'bustaams'
-    });
-
+async function check() {
+    let connection;
     try {
-        const [columns] = await pool.execute("SHOW COLUMNS FROM TB_AUCTION_REQ");
-        console.log('Columns in TB_AUCTION_REQ:');
-        console.table(columns.map(c => ({ Field: c.Field, Type: c.Type })));
+        connection = await mysql.createConnection(dbConfig);
+        
+        const reqId = '0000000005';
+        
+        console.log(`--- Checking TB_AUCTION_REQ for REQ_ID: ${reqId} ---`);
+        const [reqRows] = await connection.execute('SELECT * FROM TB_AUCTION_REQ WHERE REQ_ID = ?', [reqId]);
+        console.log(JSON.stringify(reqRows, null, 2));
+
+        console.log(`--- Checking TB_AUCTION_REQ_VIA for REQ_ID: ${reqId} ---`);
+        const [viaRows] = await connection.execute('SELECT * FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = ? ORDER BY VIA_SEQ ASC', [reqId]);
+        console.log(JSON.stringify(viaRows, null, 2));
+
     } catch (err) {
-        console.error('Error checking columns:', err);
+        console.error('Error:', err);
     } finally {
-        await pool.end();
+        if (connection) await connection.end();
     }
 }
 
-checkColumns();
+check();

@@ -169,6 +169,34 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
             [custId]
         );
 
+        // 7. 이용 제한 상태 조회
+        const [restrictRows] = await pool.execute(`
+            SELECT RESTRICT_STAT, RESTRICT_END_DT, CANCEL_BUS_DRIVER_CNT
+            FROM TB_USER_CANCEL_MANAGE
+            WHERE USER_UUID = (SELECT USER_UUID FROM TB_USER WHERE USER_ID = ?) AND USER_TYPE = 'DRIVER'
+        `, [userId]);
+
+        let restriction = null;
+        if (restrictRows.length > 0) {
+            const r = restrictRows[0];
+            const now = new Date();
+            const endDt = r.RESTRICT_END_DT ? new Date(r.RESTRICT_END_DT) : null;
+
+            if (r.RESTRICT_STAT === 'P') {
+                restriction = { 
+                    status: 'P', 
+                    message: '운영정책에 의해 서비스 이용이 무기한 제한되었습니다.' 
+                };
+            } else if (r.RESTRICT_STAT === 'Y' && endDt && endDt > now) {
+                const dateStr = endDt.toISOString().split('T')[0];
+                restriction = { 
+                    status: 'Y', 
+                    endDt: dateStr,
+                    message: `취소 패널티로 인해 ${dateStr}까지 신규 입찰이 제한됩니다.` 
+                };
+            }
+        }
+
         res.json({
             success: true,
             data: {
@@ -184,7 +212,8 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
                 totalProfit: statsRows[0].totalProfit || 0,
                 todayTrip: todayRows.length > 0 ? todayRows[0] : null,
                 countAuctions,
-                auctionList
+                auctionList,
+                restriction
             }
         });
     } catch (error) {
@@ -784,6 +813,26 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
         const reqId = req.params.id;
         const userId = req.user.userId;
 
+        // 0. 이용 제한 상태 확인
+        const [restrictionRows] = await connection.execute(`
+            SELECT RESTRICT_STAT, RESTRICT_END_DT 
+            FROM TB_USER_CANCEL_MANAGE 
+            WHERE USER_UUID = (SELECT USER_UUID FROM TB_USER WHERE USER_ID = ?) AND USER_TYPE = 'DRIVER'
+        `, [userId]);
+
+        if (restrictionRows.length > 0) {
+            const resData = restrictionRows[0];
+            const now = new Date();
+            const endDt = resData.RESTRICT_END_DT ? new Date(resData.RESTRICT_END_DT) : null;
+
+            if (resData.RESTRICT_STAT === 'P') {
+                throw new Error('운영정책에 의해 서비스 이용이 무기한 제한되었습니다.');
+            } else if (resData.RESTRICT_STAT === 'Y' && endDt && endDt > now) {
+                const dateStr = endDt.toISOString().split('T')[0];
+                throw new Error(`취소 패널티로 인해 ${dateStr}까지 신규 입찰이 제한됩니다.`);
+            }
+        }
+
         // 1. 기사 정보 및 차량 정보 조회
         const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
         if (uRows.length === 0) throw new Error('사용자를 찾을 수 없습니다.');
@@ -1334,5 +1383,229 @@ router.get('/membership-card-info', authenticateToken, async (req, res) => {
     }
 });
 
+
+// FCM 기기 토큰 등록 및 업데이트 (Upsert)
+router.post('/upsert-device-token', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const { fcmToken, clientKind = 'mobile' } = req.body;
+
+        if (!fcmToken) {
+            return res.status(400).json({ success: false, error: 'FCM 토큰이 필요합니다.' });
+        }
+
+        // 1. CUST_ID 조회 (기사도 TB_USER 테이블에 존재)
+        const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        if (uRows.length === 0) {
+            return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
+        }
+        const custId = uRows[0].CUST_ID;
+
+        // 2. Upsert 실행 (CUST_ID, CLIENT_KIND가 PK이므로 중복 시 UPDATE)
+        await pool.execute(`
+            INSERT INTO TB_USER_DEVICE_TOKEN (CUST_ID, FCM_TOKEN, CLIENT_KIND, REG_ID, MOD_ID)
+            VALUES (?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE 
+                FCM_TOKEN = VALUES(FCM_TOKEN),
+                MOD_DT = CURRENT_TIMESTAMP,
+                MOD_ID = VALUES(MOD_ID)
+        `, [custId, fcmToken, clientKind, userId, userId]);
+
+        res.json({ success: true, message: '기사용 기기 토큰이 성공적으로 등록되었습니다.' });
+    } catch (err) {
+        console.error('[App Driver] Upsert device token error:', err);
+        res.status(500).json({ success: false, error: '기기 토큰 등록 중 오류가 발생했습니다.' });
+    }
+});
+
+/**
+ * [App] 기사 운행 취소 요청 (패널티 시스템 포함)
+ * 1. 1회 취소: 1주일 정지 (취소 익일부터)
+ * 2. 2회 취소: 2주일 정지
+ * 3. 3회 취소: 영구 정지
+ */
+/**
+ * [App] 기사 이용 제한 여부 확인
+ * TB_USER_CANCEL_MANAGE 테이블을 조회하여 무기한 정지(P) 또는 기간제 정지(Y) 여부를 반환합니다.
+ */
+router.get('/check-restriction', authenticateToken, async (req, res) => {
+    const connection = await pool.getConnection();
+    try {
+        const userId = req.user.userId;
+        
+        // 0. USER_UUID 및 CUST_ID 조회
+        const [uRows] = await connection.execute('SELECT CUST_ID, USER_UUID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        if (uRows.length === 0) return res.status(404).json({ success: false, message: '사용자를 찾을 수 없습니다.' });
+        
+        const { CUST_ID: custId, USER_UUID: userUuid } = uRows[0];
+
+        // 1. 거래제한 상태 조회
+        const [rows] = await connection.execute(`
+            SELECT RESTRICT_STAT, RESTRICT_START_DT, RESTRICT_END_DT 
+            FROM TB_USER_CANCEL_MANAGE 
+            WHERE USER_UUID = ? AND USER_TYPE = 'DRIVER'
+        `, [userUuid]);
+
+        if (rows.length === 0) {
+            return res.json({ restricted: false });
+        }
+
+        const { RESTRICT_STAT, RESTRICT_START_DT, RESTRICT_END_DT } = rows[0];
+
+        // 무기한 제한 (P)
+        if (RESTRICT_STAT === 'P') {
+            return res.json({ 
+                restricted: true, 
+                type: 'PERMANENT', 
+                message: '귀하는 무기한 이용 제한 상태입니다. 고객센터에 문의해주세요.' 
+            });
+        }
+
+        // 기간제 제한 (Y)
+        if (RESTRICT_STAT === 'Y') {
+            const now = new Date();
+            const start = RESTRICT_START_DT ? new Date(RESTRICT_START_DT) : null;
+            const end = RESTRICT_END_DT ? new Date(RESTRICT_END_DT) : null;
+
+            if (start && end && now >= start && now <= end) {
+                const endStr = end.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+                return res.json({ 
+                    restricted: true, 
+                    type: 'TEMPORARY', 
+                    message: `${endStr}까지 서비스 이용이 제한되어 청약 참여가 불가능합니다.` 
+                });
+            }
+        }
+
+        res.json({ restricted: false });
+
+    } catch (error) {
+        console.error('[Check Restriction] Error:', error);
+        res.status(500).json({ success: false, error: '이용 제한 상태 확인 중 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+router.post('/cancel-mission/:id', authenticateToken, memoryUpload.single('reasonDoc'), async (req, res) => {
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+        const resId = req.params.id;
+        const userId = req.user.userId;
+        const { cancelCode, cancelReasonText } = req.body;
+        const file = req.file;
+
+        // 1. 기사 정보 및 CUST_ID 조회
+        const [uRows] = await connection.execute('SELECT CUST_ID, USER_UUID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        if (uRows.length === 0) throw new Error('사용자를 찾을 수 없습니다.');
+        const { CUST_ID: custId, USER_UUID: userUuid } = uRows[0];
+
+        // 2. 예약 정보 확인 (본인 것인지 확인)
+        const [resRows] = await connection.execute(
+            'SELECT RES_ID, REQ_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ? AND DRIVER_ID = ? AND DATA_STAT = \'CONFIRM\'',
+            [resId, custId]
+        );
+        if (resRows.length === 0) throw new Error('취소 가능한 운행 내역이 아니거나 권한이 없습니다.');
+        const { REQ_ID: reqId } = resRows[0];
+
+        // 3. 파일 업로드 처리 (있는 경우)
+        let gcsPath = null;
+        if (file) {
+            const up = await uploadToGCS(file, 'cancels', connection);
+            await connection.execute(
+                `INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_ID, MOD_ID) 
+                 VALUES (?, 'CANCEL_DOC', ?, ?, ?, ?, ?, ?, ?)`,
+                [up.fileId, bucketName, up.url, up.originalName, up.ext, up.fileSize, custId, custId]
+            );
+            gcsPath = up.url;
+        }
+
+        // 4. 취소 카운트 및 패널티 계산
+        // TB_USER_CANCEL_MANAGE 조회 (없으면 생성)
+        const [manageRows] = await connection.execute(
+            'SELECT CANCEL_BUS_DRIVER_CNT FROM TB_USER_CANCEL_MANAGE WHERE USER_UUID = ? AND USER_TYPE = \'DRIVER\'',
+            [userUuid]
+        );
+
+        let currentCnt = 0;
+        if (manageRows.length === 0) {
+            await connection.execute(
+                'INSERT INTO TB_USER_CANCEL_MANAGE (USER_UUID, USER_TYPE, CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, REG_ID, MOD_ID) VALUES (?, \'DRIVER\', 0, 0, ?, ?)',
+                [userUuid, custId, custId]
+            );
+        } else {
+            currentCnt = manageRows[0].CANCEL_BUS_DRIVER_CNT;
+        }
+
+        const newCnt = currentCnt + 1;
+        let restrictStat = 'Y';
+        let restrictDays = 0;
+
+        if (newCnt === 1) {
+            restrictDays = 7;
+        } else if (newCnt === 2) {
+            restrictDays = 14;
+        } else {
+            restrictStat = 'P'; // Permanent
+        }
+
+        // 5. 상태 업데이트
+        // 예약 상태 변경
+        await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'DRIVER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE RES_ID = ?', [custId, resId]);
+        
+        // 슬롯 상태 변경 (다시 경매로 돌릴지 취소로 할지 고민이나, 여기서는 취소로 처리)
+        await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'DRIVER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND BUS_TYPE_CD = (SELECT SERVICE_CLASS FROM TB_BUS_DRIVER_VEHICLE WHERE BUS_ID = (SELECT BUS_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?))', [custId, reqId, resId]);
+
+        // 패널티 적용
+        if (restrictStat === 'P') {
+            await connection.execute(`
+                UPDATE TB_USER_CANCEL_MANAGE 
+                SET CANCEL_BUS_DRIVER_CNT = ?, 
+                    RESTRICT_STAT = 'P',
+                    RESTRICT_END_DT = NULL,
+                    TRADE_RESTRICT_YN = 'Y',
+                    TRADE_RESTRICT_START_DT = NOW(),
+                    TRADE_RESTRICT_END_DT = NULL,
+                    MOD_ID = ?, MOD_DT = NOW()
+                WHERE USER_UUID = ? AND USER_TYPE = 'DRIVER'
+            `, [newCnt, custId, userUuid]);
+        } else {
+            // 정지 시작일은 익일(내일)부터
+            await connection.execute(`
+                UPDATE TB_USER_CANCEL_MANAGE 
+                SET CANCEL_BUS_DRIVER_CNT = ?, 
+                    RESTRICT_STAT = 'Y',
+                    RESTRICT_START_DT = DATE_ADD(CURDATE(), INTERVAL 1 DAY),
+                    RESTRICT_END_DT = DATE_ADD(CURDATE(), INTERVAL ? + 1 DAY),
+                    TRADE_RESTRICT_YN = 'Y',
+                    TRADE_RESTRICT_START_DT = DATE_ADD(CURDATE(), INTERVAL 1 DAY),
+                    TRADE_RESTRICT_END_DT = DATE_ADD(CURDATE(), INTERVAL ? + 1 DAY),
+                    MOD_ID = ?, MOD_DT = NOW()
+                WHERE USER_UUID = ? AND USER_TYPE = 'DRIVER'
+            `, [newCnt, restrictDays, restrictDays, custId, userUuid]);
+        }
+
+        // 6. 취소 이력 등록
+        await connection.execute(`
+            INSERT INTO TB_USER_CANCEL_HIST (
+                HIST_UUID, USER_UUID, USER_TYPE, CANCEL_REASON_GRP_CD, CANCEL_REASON_DTL_CD, 
+                CANCEL_REASON_TEXT, REASON_DOC_FILE_NM, REG_ID, MOD_ID
+            ) VALUES (UUID_TO_BIN(UUID()), ?, 'DRIVER', 'DRIVER_CANCEL_REASON', ?, ?, ?, ?, ?)
+        `, [userUuid, cancelCode || 'OTHER', cancelReasonText || '', gcsPath, custId, custId]);
+
+        await connection.commit();
+        res.json({ success: true, message: '운행 취소 처리가 완료되었습니다.' });
+
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('[Driver Cancel Mission] Error:', error);
+        res.status(500).json({ success: false, error: error.message || '취소 처리 중 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
 module.exports = router;
+
 

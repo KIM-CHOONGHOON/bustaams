@@ -46,6 +46,36 @@ const RequestBus = () => {
             if (profileRes.success && profileRes.data) {
                 setProfileImage(profileRes.data.profileImage || null);
                 setImageVersion(Date.now());
+
+                // 이용 제한 체크
+                const { restrictStat, restrictEndDt } = profileRes.data;
+                const now = new Date();
+                let isRestricted = false;
+                let message = '';
+
+                if (restrictStat === 'P') {
+                    isRestricted = true;
+                    message = '귀하는 현재 서비스 이용이 무기한 제한된 상태입니다.\n운영자에게 문의해주세요.';
+                } else if (restrictStat === 'Y' && restrictEndDt) {
+                    const endDt = new Date(restrictEndDt);
+                    if (endDt > now) {
+                        isRestricted = true;
+                        message = `귀하는 현재 서비스 이용 제한 상태입니다.\n제한 종료일: ${restrictEndDt}\n해당 일자 이후에 다시 시도해주세요.`;
+                    }
+                }
+
+                if (isRestricted) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '이용 제한 안내',
+                        text: message,
+                        confirmButtonText: '확인',
+                        confirmButtonColor: '#0f766e', // teal-700
+                        allowOutsideClick: false,
+                    }).then(() => {
+                        navigate('/customer-dashboard');
+                    });
+                }
             }
         } catch (err) {
             console.error('Fetch profile error:', err);

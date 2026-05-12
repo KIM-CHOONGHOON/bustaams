@@ -1,4 +1,5 @@
-import React from 'react';
+
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -15,6 +16,8 @@ import ReservationList from './pages/ReservationListCustomer';
 import ReservationDetail from './pages/ReservationDetailCustomer';
 import CancelReservation from './pages/CancelReservation';
 import ProfileCustomer from './pages/ProfileCustomer';
+import { requestFirebaseToken } from './utils/fcm';
+
 
 import DriverDashboard from './pages/DriverDashboard';
 import DriverInfoRegistration from './pages/DriverInfoRegistration';
@@ -62,8 +65,17 @@ const Placeholder = ({ title }) => (
   </div>
 );
 
+
 function App() {
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      requestFirebaseToken();
+    }
+  }, []);
+
   return (
+
     <Router>
       <Routes>
         {/* 핵심 인증 라우트 */}
@@ -84,7 +96,7 @@ function App() {
         <Route path="/add-review/:id" element={<AddReview />} />
         <Route path="/review-detail/:id" element={<ReviewDetail />} />
         <Route path="/reservation-list" element={<ReservationList />} />
-        <Route path="/cancel-reservation" element={<CancelReservation />} />
+        <Route path="/cancel-reservation/:id" element={<CancelReservation />} />
         <Route path="/user-profile" element={<ProfileCustomer />} />
         <Route path="/estimate-list" element={<EstimateListCustomer />} />
         <Route path="/estimate-request-list" element={<EstimateRequestListCustomer />} />
@@ -103,7 +115,7 @@ function App() {
         <Route path="/estimate-detail-driver/:id" element={<EstimateDetailDriver />} />
         <Route path="/upcoming-trips-driver" element={<UpcomingTripsDriver />} />
         <Route path="/upcoming-trip-detail-driver/:id" element={<UpcomingTripDetailDriver />} />
-        <Route path="/contract-cancel-driver" element={<ContractCancelDriver />} />
+        <Route path="/contract-cancel-driver/:id" element={<ContractCancelDriver />} />
         <Route path="/approval-pending-driver" element={<ApprovalPendingDriver />} />
         <Route path="/bid-detail-driver/:id" element={<BidDetailDriver />} />
         <Route path="/completed-trips-driver" element={<CompletedTripsDriver />} />

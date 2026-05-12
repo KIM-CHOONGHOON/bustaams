@@ -1,5 +1,7 @@
+
 import { getToken, onMessage } from 'firebase/messaging';
 import { messaging } from '../firebase-config';
+import { upsertDeviceToken, upsertDriverDeviceToken } from '../api';
 
 // VAPID Key (Firebase Console > Project Settings > Cloud Messaging > Web Push certificates에서 확인 가능)
 // TODO: 실제 VAPID Key로 교체해야 합니다.
@@ -14,9 +16,31 @@ export const requestFirebaseToken = async () => {
       });
       if (token) {
         console.log('FCM Token:', token);
-        // 이 토큰을 백엔드 서버에 저장하는 로직이 필요합니다.
+        
+        // 로그인된 상태인 경우에만 서버에 토큰 저장
+        const accessToken = localStorage.getItem('accessToken');
+        const userData = localStorage.getItem('user');
+        
+        if (accessToken && userData) {
+          try {
+            const user = JSON.parse(userData);
+            const isDriver = user.userType === 'DRIVER';
+            
+            if (isDriver) {
+              await upsertDriverDeviceToken(token, 'mobile');
+              console.log('기사용 FCM 토큰이 서버에 성공적으로 저장되었습니다.');
+            } else {
+              await upsertDeviceToken(token, 'mobile');
+              console.log('고객용 FCM 토큰이 서버에 성공적으로 저장되었습니다.');
+            }
+          } catch (err) {
+            console.error('FCM 토큰 서버 저장 실패:', err);
+          }
+        }
+        
         return token;
       } else {
+
         console.log('토큰을 생성할 수 없습니다. 권한을 확인하세요.');
       }
     } else {
@@ -26,6 +50,7 @@ export const requestFirebaseToken = async () => {
     console.error('FCM 토큰 가져오기 오류:', error);
   }
 };
+
 
 // 포그라운드(앱이 켜져 있을 때) 메시지 수신 처리
 export const onMessageListener = () =>

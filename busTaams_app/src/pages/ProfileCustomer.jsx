@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getCustomerProfile, updateCustomerProfile, changePassword, uploadProfileImage } from '../api';
-import { auth } from '../firebase-config';
-import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
+import { getCustomerProfile, updateCustomerProfile, changePassword, uploadProfileImage, sendAuthCode, verifyAuthCode } from '../api';
 import { notify } from '../utils/toast';
 import BottomNavCustomer from '../components/BottomNavCustomer';
 
@@ -33,7 +31,6 @@ const ProfileCustomer = () => {
     const [verificationCode, setVerificationCode] = useState('');
     const [isVerified, setIsVerified] = useState(true); // 초기에는 인증된 상태로 간주
     const [originalPhone, setOriginalPhone] = useState('');
-    const [confirmationResult, setConfirmationResult] = useState(null);
     const [idToken, setIdToken] = useState(null);
     const [imageVersion, setImageVersion] = useState(Date.now()); // 이미지 캐시 버스팅용 상태
 
@@ -94,96 +91,49 @@ const ProfileCustomer = () => {
         }
     };
 
-    useEffect(() => {
-        return () => {
-            if (window.recaptchaVerifier) {
-                try {
-                    window.recaptchaVerifier.clear();
-                } catch (e) {}
-                window.recaptchaVerifier = null;
-            }
-        };
-    }, []);
 
-    // reCAPTCHA 초기화
-    const setupRecaptcha = () => {
-        if (!window.recaptchaVerifier) {
-            window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-                'size': 'invisible',
-                'callback': (response) => {
-                    // reCAPTCHA solved
-                },
-                'expired-callback': () => {
-                    notify.warn('인증 만료', 'reCAPTCHA 인증이 만료되었습니다. 다시 시도해주세요.');
-                    if (window.recaptchaVerifier) {
-                        try {
-                            window.recaptchaVerifier.clear();
-                        } catch (e) {}
-                        window.recaptchaVerifier = null;
-                    }
-                }
-            });
-        }
-    };
 
-    // SMS 인증번호 전송 (Firebase)
+    // SMS 인증번호 전송 (Aligo)
     const handleSendSMS = async () => {
         if (!userData.phone) {
             notify.warn('번호 입력', '휴대폰 번호를 입력해주세요.');
             return;
         }
 
-        let formattedPhone = userData.phone.replace(/-/g, '');
-        if (formattedPhone.startsWith('0')) {
-            formattedPhone = '+82' + formattedPhone.substring(1);
-        }
-
         try {
-            setupRecaptcha();
-            const appVerifier = window.recaptchaVerifier;
-            const confirmation = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
-            setConfirmationResult(confirmation);
-            setVerificationSent(true);
-            notify.success('인증번호 발송', 'Firebase를 통해 인증번호가 발송되었습니다.');
+            const res = await sendAuthCode(userData.phone, 'verify');
+            if (res.success) {
+                setVerificationSent(true);
+                notify.success('인증번호 발송', '인증번호가 발송되었습니다.');
+            } else {
+                notify.error('발송 실패', res.error || '인증번호 발송 중 오류가 발생했습니다.');
+            }
         } catch (error) {
-            console.error('Firebase Auth Detailed Error:', error);
-            
-            let errorMsg = '인증번호 발송 중 오류가 발생했습니다.';
-            if (error.code === 'auth/invalid-app-credential') {
-                errorMsg = '앱 인증 설정이 올바르지 않습니다. (Firebase 콘솔 확인 필요)';
-            } else if (error.code === 'auth/invalid-phone-number') {
-                errorMsg = '유효하지 않은 전화번호 형식입니다.';
-            } else if (error.code === 'auth/quota-exceeded') {
-                errorMsg = 'SMS 발송 한도를 초과했습니다.';
-            }
-
-            notify.error('발송 실패', errorMsg);
-            
-            if (window.recaptchaVerifier) {
-                window.recaptchaVerifier.clear();
-                window.recaptchaVerifier = null;
-            }
+            console.error('Send SMS Error:', error);
+            notify.error('발송 실패', '인증번호 발송 중 오류가 발생했습니다.');
         }
     };
 
-    // 인증번호 확인 (Firebase)
+    // 인증번호 확인 (Aligo)
     const handleVerifyCode = async () => {
         if (!verificationCode) {
             notify.warn('입력 필요', '인증번호를 입력해주세요.');
             return;
         }
-        if (!confirmationResult) return notify.error('인증 오류', '발송된 인증 정보가 없습니다.');
 
         try {
-            const result = await confirmationResult.confirm(verificationCode);
-            const user = result.user;
-            const token = await user.getIdToken();
-            setIdToken(token);
-            setIsVerified(true);
-            setVerificationSent(false);
-            notify.success('인증 성공', '휴대폰 인증이 완료되었습니다.');
+            const res = await verifyAuthCode(userData.phone, verificationCode, 'verify');
+            if (res.success) {
+                setIdToken(res.verifyToken);
+                setIsVerified(true);
+                setVerificationSent(false);
+                notify.success('인증 성공', '휴대폰 인증이 완료되었습니다.');
+            } else {
+                notify.error('인증 실패', res.error || '인증번호가 일치하지 않습니다.');
+            }
         } catch (error) {
-            notify.error('인증 실패', '인증번호가 일치하지 않습니다.');
+            console.error('Verify Code Error:', error);
+            notify.error('인증 실패', '인증번호 확인 중 오류가 발생했습니다.');
         }
     };
 
@@ -335,7 +285,7 @@ const ProfileCustomer = () => {
                                     {verificationSent ? '재발송' : '인증번호 전송'}
                                 </button>
                             </div>
-                            <div id="recaptcha-container"></div>
+
                         </div>
 
                         {verificationSent && (

@@ -40,6 +40,25 @@ router.post('/request', authenticateToken, async (req, res) => {
         const custId = uRows.length > 0 ? uRows[0].CUST_ID : userId;
 
         const reqId = await getNextId('TB_AUCTION_REQ', 'REQ_ID', 10);
+        
+        // 0. 이용 제한 확인
+        const [cancelRows] = await connection.execute(`
+            SELECT RESTRICT_STAT, RESTRICT_END_DT 
+            FROM TB_USER_CANCEL_MANAGE 
+            WHERE CUST_ID = ?
+        `, [custId]);
+
+        if (cancelRows.length > 0) {
+            const { RESTRICT_STAT, RESTRICT_END_DT } = cancelRows[0];
+            if (RESTRICT_STAT === 'P') {
+                await connection.rollback();
+                return res.status(403).json({ success: false, error: '귀하는 무기한 이용 제한 상태입니다. 고객센터에 문의해주세요.' });
+            } else if (RESTRICT_STAT === 'Y' && RESTRICT_END_DT && new Date(RESTRICT_END_DT) > new Date()) {
+                await connection.rollback();
+                const endDtStr = new Date(RESTRICT_END_DT).toLocaleString('ko-KR');
+                return res.status(403).json({ success: false, error: `${endDtStr}까지 서비스 이용이 제한되어 견적 요청이 불가능합니다.` });
+            }
+        }
 
         // 1. 마스터 정보 저장 (TB_AUCTION_REQ)
         const masterQuery = `

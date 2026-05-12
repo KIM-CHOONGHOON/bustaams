@@ -91,6 +91,7 @@ try {
     require('./routes/busOperationCompletionList')(pool, app);
     require('./routes/busOperationCompletionDetails')(pool, app);
     require('./routes/auctionList')(pool, app);
+    require('./routes/payment')(pool, app);
     console.log('✅ Function routers registered.');
 } catch (err) {
     console.error('❌ Function Router Error:', err.message);
