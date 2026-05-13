@@ -23,8 +23,25 @@ const SignaturePad = ({ onSave, onClear }) => {
         ctx.lineCap = 'round';
     }, []);
 
+    const getCoordinates = (e) => {
+        const canvas = canvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+        
+        if (e.touches && e.touches.length > 0) {
+            const touch = e.touches[0];
+            return {
+                offsetX: (touch.clientX - rect.left) * (canvas.width / rect.width),
+                offsetY: (touch.clientY - rect.top) * (canvas.height / rect.height)
+            };
+        }
+        return {
+            offsetX: e.nativeEvent.offsetX,
+            offsetY: e.nativeEvent.offsetY
+        };
+    };
+
     const startDrawing = (e) => {
-        const { offsetX, offsetY } = e.nativeEvent;
+        const { offsetX, offsetY } = getCoordinates(e);
         const ctx = canvasRef.current.getContext('2d');
         ctx.beginPath();
         ctx.moveTo(offsetX, offsetY);
@@ -33,10 +50,11 @@ const SignaturePad = ({ onSave, onClear }) => {
 
     const draw = (e) => {
         if (!isDrawing) return;
-        const { offsetX, offsetY } = e.nativeEvent;
+        const { offsetX, offsetY } = getCoordinates(e);
         const ctx = canvasRef.current.getContext('2d');
         ctx.lineTo(offsetX, offsetY);
         ctx.stroke();
+        if (e.cancelable) e.preventDefault();
     };
 
     const stopDrawing = () => {
@@ -68,6 +86,9 @@ const SignaturePad = ({ onSave, onClear }) => {
                     onMouseMove={draw}
                     onMouseUp={stopDrawing}
                     onMouseLeave={stopDrawing}
+                    onTouchStart={startDrawing}
+                    onTouchMove={draw}
+                    onTouchEnd={stopDrawing}
                 />
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
                     <span className="text-sm font-medium">여기에 서명해 주세요</span>
@@ -295,8 +316,8 @@ const Signup = () => {
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-on-surface ml-1">이메일</label>
                             <div className="flex gap-2">
-                                <input value={email} onChange={e=>{setEmail(e.target.value); setIsEmailChecked(false);}} type="email" placeholder="example@email.com" className="flex-grow bg-slate-100 rounded-xl py-4 px-5 outline-none focus:bg-slate-200 transition-all font-medium" />
-                                <button type="button" onClick={handleCheckEmail} className={`px-6 rounded-xl font-bold text-sm transition-all ${isEmailChecked ? 'bg-green-100 text-green-700' : 'bg-white border border-primary text-primary hover:bg-primary/5'}`}>
+                                <input value={email} onChange={e=>{setEmail(e.target.value); setIsEmailChecked(false);}} type="email" placeholder="example@email.com" className="flex-grow bg-slate-100 rounded-xl py-3 px-5 outline-none focus:bg-slate-200 transition-all font-medium" />
+                                <button type="button" onClick={handleCheckEmail} className={`px-5 shrink-0 whitespace-nowrap rounded-xl font-bold text-sm transition-all ${isEmailChecked ? 'bg-green-100 text-green-700' : 'bg-white border border-primary text-primary hover:bg-primary/5'}`}>
                                     {isEmailChecked ? '확인됨' : '중복 확인'}
                                 </button>
                             </div>
@@ -305,15 +326,17 @@ const Signup = () => {
                         {/* 성함 */}
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-on-surface ml-1">고객명</label>
-                            <input value={userName} onChange={e=>setUserName(e.target.value)} type="text" placeholder="실명을 입력하세요" className="w-full bg-slate-100 rounded-xl py-4 px-5 outline-none focus:bg-slate-200 transition-all font-medium" />
+                            <input value={userName} onChange={e=>setUserName(e.target.value)} type="text" placeholder="실명을 입력하세요" className="w-full bg-slate-100 rounded-xl py-3 px-5 outline-none focus:bg-slate-200 transition-all font-medium" />
                         </div>
 
                         {/* 아이디 */}
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-on-surface ml-1">아이디</label>
                             <div className="flex gap-2">
-                                <input value={userId} onChange={e=>setUserId(e.target.value)} type="text" placeholder="고유한 아이디를 입력하세요" className="flex-grow bg-slate-100 rounded-xl py-4 px-5 outline-none font-medium" />
-                                <button type="button" onClick={handleCheckId} className="px-6 bg-white border border-primary text-primary rounded-xl font-bold text-sm hover:bg-primary/5 transition-all">중복 확인</button>
+                                <input value={userId} onChange={e=>setUserId(e.target.value)} type="text" placeholder="고유한 아이디를 입력하세요" className="flex-grow bg-slate-100 rounded-xl py-3 px-5 outline-none font-medium" />
+                                <button type="button" onClick={handleCheckId} className={`px-5 shrink-0 whitespace-nowrap bg-white border border-primary text-primary rounded-xl font-bold text-sm hover:bg-primary/5 transition-all ${isIdChecked ? 'bg-green-100 text-green-700' : ''}`}>
+                                    {isIdChecked ? '확인됨' : '중복 확인'}
+                                </button>
                             </div>
                         </div>
 
@@ -327,7 +350,7 @@ const Signup = () => {
                                         onChange={e=>setPassword(e.target.value)} 
                                         type={showPassword ? "text" : "password"} 
                                         placeholder="비밀번호(8자 이상, 숫자, 특수문자 포함)" 
-                                        className="w-full bg-slate-100 rounded-xl py-4 px-5 pr-12 outline-none font-medium focus:bg-slate-200 transition-all" 
+                                        className="w-full bg-slate-100 rounded-xl py-3 px-5 pr-12 outline-none font-medium focus:bg-slate-200 transition-all" 
                                     />
                                     <span 
                                         className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline cursor-pointer hover:text-primary"
@@ -350,7 +373,7 @@ const Signup = () => {
                                         onChange={e=>setPasswordConfirm(e.target.value)} 
                                         type={showPasswordConfirm ? "text" : "password"} 
                                         placeholder="비밀번호를 다시 한번 입력하세요" 
-                                        className="w-full bg-slate-100 rounded-xl py-4 px-5 pr-12 outline-none font-medium focus:bg-slate-200 transition-all" 
+                                        className="w-full bg-slate-100 rounded-xl py-3 px-5 pr-12 outline-none font-medium focus:bg-slate-200 transition-all" 
                                     />
                                     <span 
                                         className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline cursor-pointer hover:text-primary"
@@ -379,14 +402,14 @@ const Signup = () => {
                                         type="tel" 
                                         placeholder="휴대폰 번호" 
                                         disabled={isPhoneVerified}
-                                        className="w-full bg-slate-100 rounded-xl py-4 pl-12 pr-4 outline-none font-medium disabled:opacity-50" 
+                                        className="w-full bg-slate-100 rounded-xl py-3 pl-12 pr-4 outline-none font-medium disabled:opacity-50" 
                                     />
                                 </div>
                                 <button 
                                     type="button" 
                                     onClick={handleSendCode} 
                                     disabled={isPhoneVerified}
-                                    className="px-6 bg-white border border-primary text-primary rounded-xl font-bold text-sm disabled:opacity-50"
+                                    className="px-5 bg-white border border-primary text-primary rounded-xl font-bold text-sm disabled:opacity-50"
                                 >
                                     {isCodeSent ? '재발송' : '인증요청'}
                                 </button>
@@ -402,13 +425,13 @@ const Signup = () => {
                                             onChange={e=>setAuthCode(e.target.value)} 
                                             type="text" 
                                             placeholder="6자리 인증번호" 
-                                            className="w-full bg-slate-100 rounded-xl py-4 pl-12 pr-4 outline-none font-medium" 
+                                            className="w-full bg-slate-100 rounded-xl py-3 pl-12 pr-4 outline-none font-medium" 
                                         />
                                     </div>
                                     <button 
                                         type="button" 
                                         onClick={handleVerifyCode} 
-                                        className="px-6 bg-primary text-white rounded-xl font-bold text-sm hover:bg-primary-dark transition-all"
+                                        className="px-5 bg-primary text-white rounded-xl font-bold text-sm hover:bg-primary-dark transition-all"
                                     >
                                         인증확인
                                     </button>
@@ -525,7 +548,7 @@ const Signup = () => {
                                         </label>
                                          <button 
                                             type="button" 
-                                                                                         onClick={() => handleShowTerms('마케팅 정보 수신 및 활용 동의 (선택)', `마케팅 정보 수신 및 활용 동의서 (선택)\n\n본 동의서는 (주)청솔테크(이하 “회사”)가 운영하는 플랫폼 “버스타암스(BUSTAAMS)”에서 제공하는 서비스의 홍보, 이벤트, 맞춤형 정보 제공을 위해 이용자의 개인정보를 수집 및 활용하는 것에 대한 동의를 구하는 내용입니다.\n\n1. 수집 및 이용 목적\n회사는 수집한 개인정보를 다음의 목적을 위해 활용합니다.\n- 공통: 신규 서비스 홍보 및 맞춤형 서비스 제공, 이벤트 및 광고성 정보 안내, 경품 배송, 서비스 개선을 위한 통계 분석 및 설문조사.\n- 버스기사(파트너) 전용: 신규 청약 발생 알림, 지역별 배차 수요 정보 제공, 수수료 할인 프로모션 안내.\n- 여행자(이용자) 전용: 맞춤형 여행/버스 청약 정보, 시즌별 할인 쿠폰 및 프로모션 알림.\n- 영업 파트너 전용: 신규 입점 프로모션 안내, 목표 달성 추가 배당 수수료 이벤트 정보 제공.\n\n2. 수집 항목\n성명, 휴대폰 번호, 이메일 주소, 서비스 이용 기록, 기기 식별 정보(푸시 알림용).\n\n3. 보유 및 이용 기간\n회원 탈퇴 시 또는 동의 철회 시까지\n\n4. 전송 방법\n서비스 내 푸시 알림(Push), SMS(LMS), 카카오 알림톡, 이메일, 유선 전화 등.\n\n5. 동의 거부 권리 및 불이익\n본 마케팅 정보 수신 동의는 선택 사항입니다. 동의를 거부하시더라도 플랫폼의 기본 중개 서비스 이용에는 제한이 없으나, 회사가 제공하는 할인 쿠폰, 수수료 프로모션, 실시간 배차 꿀팁 및 이벤트 참여 등 혜택 제공 대상에서 제외될 수 있습니다.\n\n부칙: 본 방침은 2026년 5월 1일부터 시행됩니다.`)}
+                                                                                         onClick={() => handleShowTerms('마케팅 정보 수신 및 활용 동의 (선택)', `마케팅 정보 수신 및 활용 동의서 (선택)\n\n본 동의서는 (주)청솔테크(이하 “회사”)가 운영하는 플랫폼 “버스타암스(BUSTAAMS)”에서 제공하는 서비스의 홍보, 이벤트, 맞춤형 정보 제공을 위해 이용자의 개인정보를 수집 및 활용하는 것에 대한 동의를 구하는 내용입니다.\n\n1. 수집 및 이용 목적\n회사는 수집한 개인정보를 다음의 목적을 위해 활용합니다.\n- 공통: 신규 서비스 홍보 및 맞춤형 서비스 제공, 이벤트 및 광고성 정보 안내, 경품 배송, 서비스 개선을 위한 통계 분석 및 설문조사.\n- 버스기사(파트너) 전용: 신규 청약 발생 알림, 지역별 배차 수요 정보 제공, 수수료 할인 프로모션 안내.\n- 여행자(이용자) 전용: 맞춤형 여행/버스 청약 정보, 시즌별 할인 쿠폰 및 프로모션 알림.\n- 영업 파트너 전용: 신규 입점 프로모션 안내, 목표 달성 추가 배당 수수료 이벤트 정보 제공.\n\n2. 수집 항목\n성명, 휴대폰 번호, 이메일 주소, 서비스 이용 기록, 기기 식별 정보(푸시 알림용).\n\n3. 보유 및 이용 기간\n회원 탈퇴 시 또는 동의 철회 시까지\n\n4. 전송 방법\n서비스 내 푸시 알림(Push), SMS(LMS), 카카오 알림톡, 이메일, 유선 전화 등.\n\n5. 동의 거부 권리 및 불이익\n본 마케팅 정보 수신 동의는 선택 사항입니다. 동의를 거부하시더라도 플랫폼의 기본 중개 서비스 이용에는 제한이 없으나, 회사가 제공하는 할인 쿠폰, 수수료 프로모션, 실시간 배차 꿀팁 및 이벤트 참여 등 혜택 제공 대상에서 제외될 수 있습니다.\n\n부칙: 본 방침은 2026년 5월 1일부터 시행됩니다.`, 'marketing')}
 
                                             className="text-[10px] text-outline underline font-bold uppercase tracking-tighter"
                                         >
