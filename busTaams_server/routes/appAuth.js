@@ -209,14 +209,15 @@ router.post('/register', async (req, res) => {
         ]);
 
         // 3.5 TB_USER_CANCEL_MANAGE 초기화 (취소 건수 0으로 설정)
+        // 중복 키 오류 방지를 위해 INSERT IGNORE 사용
         const cancelManageQuery = `
-            INSERT INTO TB_USER_CANCEL_MANAGE (
-                CUST_ID, USER_UUID, USER_TYPE, CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, 
+            INSERT IGNORE INTO TB_USER_CANCEL_MANAGE (
+                CUST_ID, USER_TYPE, CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, 
                 CANCEL_TRAVELER_ALL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, 
                 RESTRICT_STAT, TRADE_RESTRICT_YN, REG_ID, MOD_ID
-            ) VALUES (?, (SELECT USER_UUID FROM TB_USER WHERE CUST_ID = ?), ?, 0, 0, 0, 0, 'N', 'N', ?, ?)
+            ) VALUES (?, ?, 0, 0, 0, 0, 'N', 'N', ?, ?)
         `;
-        await connection.execute(cancelManageQuery, [custId, custId, finalUserType, custId, custId]);
+        await connection.execute(cancelManageQuery, [custId, finalUserType, custId, custId]);
 
         // 4. 약관 동의 이력 처리 (TB_USER_TERMS_HIST - 키값을 CUST_ID로 변경)
         if (termsData && Array.isArray(termsData)) {
@@ -388,20 +389,31 @@ router.post('/login', async (req, res) => {
 
 /**
  * [App 전용] 아이디 찾기 (휴대폰 번호로 검색)
- * - 평문 매칭 우선 시도
- * - 실패 시 암호화된 기존 데이터(Web 가입자 등) 복호화 매칭 시도
+ * - SMS 인증 토큰(verifyToken) 필수
  */
 router.post('/find-id', async (req, res) => {
     try {
-        let { phoneNo } = req.body;
+        let { phoneNo, verifyToken } = req.body;
         if (!phoneNo) return res.status(400).json({ error: '휴대폰 번호를 입력해주세요.' });
+        if (!verifyToken) return res.status(400).json({ error: '휴대폰 인증이 필요합니다.' });
 
-        // 휴대폰 번호 정규화 (하이픈 제거 등)
-        phoneNo = phoneNo.replace(/[^0-9]/g, '');
+        // 1. 인증 토큰 검증
+        try {
+            const decoded = jwt.verify(verifyToken, JWT_SECRET_KEY);
+            const cleanTokenPhone = decoded.phoneNo.replace(/[^0-9]/g, '');
+            const cleanRequestPhone = phoneNo.replace(/[^0-9]/g, '');
+
+            if (!decoded.verified || cleanTokenPhone !== cleanRequestPhone) {
+                return res.status(401).json({ error: '인증 정보가 일치하지 않거나 유효하지 않습니다.' });
+            }
+        } catch (error) {
+            console.error('[Find ID] Token Verification Failed:', error);
+            return res.status(401).json({ error: '인증이 만료되었습니다. 다시 시도해주세요.' });
+        }
 
         console.log(`[Find ID] Searching for: ${phoneNo}`);
 
-        // 1. 휴대폰 번호로 직접 조회 (평문이므로 가능)
+        // 2. 휴대폰 번호로 직접 조회 (평문이므로 가능)
         const [rows] = await pool.execute(
             'SELECT USER_ID FROM TB_USER WHERE HP_NO = ? AND USER_STAT = "ACTIVE"', 
             [phoneNo]

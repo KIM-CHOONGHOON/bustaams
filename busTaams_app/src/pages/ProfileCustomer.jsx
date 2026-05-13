@@ -386,26 +386,7 @@ const ProfileCustomer = () => {
                                 </button>
                             </div>
                         </div>
-                        {/* SNS Linking */}
-                        <div className="bg-surface-container-lowest p-6 rounded-2xl shadow-[0px_10px_40px_rgba(0,0,0,0.04)] flex flex-col gap-4">
-                            <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">SNS 계정 연동</span>
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 bg-[#FEE500] rounded-full flex items-center justify-center text-[10px] font-bold">K</div>
-                                        <span className="text-sm font-semibold">카카오</span>
-                                    </div>
-                                    <span className="text-xs font-bold text-primary">연결됨</span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 bg-[#03C75A] rounded-full flex items-center justify-center text-[10px] text-white font-bold">N</div>
-                                        <span className="text-sm font-semibold">네이버</span>
-                                    </div>
-                                    <button className="text-xs font-bold text-outline-variant hover:text-secondary transition-colors">연결하기</button>
-                                </div>
-                            </div>
-                        </div>
+
                     </div>
                 </section>
 

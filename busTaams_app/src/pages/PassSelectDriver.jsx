@@ -8,6 +8,8 @@ const PassSelectDriver = () => {
     const navigate = useNavigate();
     const [currentPolicy, setCurrentPolicy] = useState('');
     const [loading, setLoading] = useState(true);
+    const [userImage, setUserImage] = useState(null);
+    const [imageVersion] = useState(Date.now());
 
     const plans = [
         {
@@ -60,6 +62,7 @@ const PassSelectDriver = () => {
             if (response.success) {
                 // 백엔드에서 준 feePolicy 사용 (없을 경우 빈 값)
                 setCurrentPolicy(response.data.driver.feePolicy || '');
+                setUserImage(response.data.driver.profileImg || null);
             }
         } catch (error) {
             console.error('Failed to fetch profile:', error);
@@ -176,17 +179,64 @@ const PassSelectDriver = () => {
                         </button>
                         <h1 className="font-headline font-bold tracking-tight text-xl text-teal-900 dark:text-teal-100">Membership</h1>
                     </div>
+
+                    <div className="flex items-center gap-3">
+                        <div 
+                            className="w-10 h-10 rounded-full bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center cursor-pointer hover:shadow-md transition-all"
+                            onClick={() => navigate('/driver-dashboard')}
+                        >
+                            {userImage ? (
+                                <img 
+                                    alt="User Profile" 
+                                    src={userImage.startsWith('http') ? 
+                                        `${userImage}${userImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                        `${import.meta.env.VITE_API_BASE_URL || ''}${userImage.startsWith('/') ? '' : '/'}${userImage}${userImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                    className="w-full h-full object-cover" 
+                                    onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.style.display = 'none';
+                                        if (e.target.nextSibling) {
+                                            e.target.nextSibling.style.display = 'flex';
+                                        }
+                                    }}
+                                />
+                            ) : (
+                                <span className="material-symbols-outlined text-[#bec9c6]">person</span>
+                            )}
+                            {userImage && (
+                                <span className="material-symbols-outlined text-[#bec9c6] hidden items-center justify-center w-full h-full">person</span>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </header>
 
             <main className="pt-24 px-6 max-w-md mx-auto space-y-12 animate-in fade-in slide-in-from-bottom duration-1000 text-left">
                 {/* Hero Header */}
-                <header className="space-y-2 text-left">
-                    <span className="text-secondary font-bold text-sm tracking-widest uppercase mb-2 block">Premium Membership</span>
-                    <h2 className="text-3xl font-extrabold text-primary tracking-tight leading-tight mb-4">
-                        버스탐스 멤버십으로<br/>수익을 극대화하세요.
-                    </h2>
-                    <p className="text-on-surface-variant text-sm leading-relaxed">
+                <header className="space-y-4 text-left">
+                    <div className="space-y-1">
+                        <span className="text-secondary font-bold text-[10px] tracking-widest uppercase block">Premium Membership</span>
+                        <h2 className="text-3xl font-extrabold text-primary tracking-tight leading-tight">
+                            버스탐스 멤버십으로<br/>수익을 극대화하세요.
+                        </h2>
+                    </div>
+
+                    {/* 현재 요금제 상태 표시 추가 */}
+                    <div className="inline-flex items-center gap-3 bg-white/50 backdrop-blur-sm border border-primary/5 px-4 py-3 rounded-2xl shadow-sm">
+                        <div className={`w-2 h-2 rounded-full animate-pulse ${currentPolicy ? 'bg-secondary' : 'bg-slate-300'}`}></div>
+                        <div className="flex flex-col">
+                            <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-tighter leading-none mb-1">Current Status</span>
+                            <span className={`text-sm font-black ${currentPolicy ? 'text-primary' : 'text-slate-400'}`}>
+                                {currentPolicy ? (
+                                    `${plans.find(p => p.id === currentPolicy)?.name || currentPolicy} 요금제 이용 중`
+                                ) : (
+                                    '등록된 요금제 없음'
+                                )}
+                            </span>
+                        </div>
+                    </div>
+
+                    <p className="text-on-surface-variant text-sm leading-relaxed max-w-[90%]">
                         회원님의 운행 스타일에 맞는 요금제를 선택하고 더 많은 낙찰 기회를 잡으세요.
                     </p>
                 </header>

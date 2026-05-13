@@ -8,6 +8,8 @@ const ChatListDriver = () => {
     const navigate = useNavigate();
     const [chats, setChats] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [userProfile, setUserProfile] = useState(null);
+    const [imageVersion] = useState(Date.now());
 
     useEffect(() => {
         const fetchChats = async () => {
@@ -24,7 +26,23 @@ const ChatListDriver = () => {
                 setLoading(false);
             }
         };
+
+        const fetchProfile = async () => {
+            try {
+                const res = await api.get('/app/driver/dashboard');
+                if (res.success) {
+                    setUserProfile({
+                        userName: res.data.userName,
+                        userImage: res.data.userImage
+                    });
+                }
+            } catch (err) {
+                console.error('Profile fetch error:', err);
+            }
+        };
+
         fetchChats();
+        fetchProfile();
     }, []);
 
     // 시간 포맷팅 유틸리티
@@ -51,17 +69,32 @@ const ChatListDriver = () => {
     return (
         <div className="bg-[#f7f9fb] text-[#191c1e] min-h-[100dvh] pb-40 font-body text-left">
             {/* TopAppBar */}
-            <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 backdrop-blur-[20px] border-b border-slate-100">
-                <div className="flex justify-between items-center w-full px-6 pt-8 pb-4 max-w-7xl mx-auto">
+            <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 backdrop-blur-[20px] border-b border-slate-100 h-20">
+                <div className="flex justify-between items-center w-full px-6 h-full max-w-7xl mx-auto">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => navigate('/driver-dashboard')} className="text-[#004e47] hover:opacity-80 transition-opacity">
-                            <span className="material-symbols-outlined">menu</span>
+                        <button onClick={() => navigate(-1)} className="text-[#004e47] hover:opacity-80 transition-opacity flex items-center gap-2">
+                            <span className="material-symbols-outlined text-2xl">arrow_back</span>
+                            <h1 className="text-[#004e47] font-headline font-extrabold tracking-tight text-xl">메시지 목록</h1>
                         </button>
-                        <h1 className="text-[#004e47] font-headline font-extrabold tracking-tighter text-3xl">busTaams</h1>
                     </div>
                     <div className="flex items-center gap-4">
-                        <div className="h-10 w-10 rounded-full bg-slate-200 overflow-hidden ring-2 ring-[#a1f1e5]">
-                            <img alt="User profile" className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCQKXRoBCeLV07vgTChHmqvi_NRAZXUqrhpqN8AbLegLS8VjYTymtrKWXeyE0UgCnxmjd6Z9z_psP9elE65_2EmmAVEl7ghuLcqsd-cQE7r6oa6Gkiw_j2FTp9fNI_DVbgJN2jMYf5uSfckIxhOQMUSR3wFXvxUeGSlW22qeXfGvG7eXWJypKF0PVF_uiYVAXCxislNYYMqDcFsDB4S7OYRwC0Fp9Knhp9wnVItFORMfdeQFLvUz1TJfgR6NKSyggPQuF4Oytl2Q8Q"/>
+                        <div 
+                            className="h-10 w-10 rounded-full bg-slate-200 overflow-hidden ring-2 ring-[#a1f1e5] cursor-pointer hover:shadow-md transition-all"
+                            onClick={() => navigate('/driver-dashboard')}
+                        >
+                            {userProfile?.userImage ? (
+                                <img 
+                                    alt="User profile" 
+                                    className="w-full h-full object-cover" 
+                                    src={userProfile.userImage.startsWith('http') ? 
+                                        `${userProfile.userImage}${userProfile.userImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                        `${import.meta.env.VITE_API_BASE_URL || ''}${userProfile.userImage.startsWith('/') ? '' : '/'}${userProfile.userImage}${userProfile.userImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                    <span className="material-symbols-outlined">person</span>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

@@ -66,7 +66,7 @@ const DriverInfoRegistration = () => {
     const fetchInitialData = async () => {
         try {
             setLoading(true);
-            
+
             // 1. 공통 코드 조회
             try {
                 const codeRes = await request('/common/codes/LICENSE_TYPE');
@@ -221,7 +221,7 @@ const DriverInfoRegistration = () => {
         try {
             setSubmitting(true);
             const data = new FormData();
-            
+
             data.append('name', formData.userNm);
             data.append('phone', formData.hpNo);
             if (formData.hpNo !== originalPhone) {
@@ -308,7 +308,7 @@ const DriverInfoRegistration = () => {
                     <div className="col-span-12 md:col-span-8">
                         <p className="font-headline font-bold text-[#9d4300] uppercase tracking-[0.2em] mb-4 text-sm">온보딩</p>
                         <h2 className="font-headline text-5xl md:text-7xl font-extrabold text-[#004e47] leading-tight tracking-tighter mb-6">
-                            기사님 등록을 <br/>환영합니다.
+                            기사님 등록을 <br />환영합니다.
                         </h2>
                         <p className="text-[#3e4947] text-lg max-w-xl font-medium leading-relaxed">
                             자격 증명을 확인하여 독점 버스 경매 및 대규모 운송 계약에 참여하세요. 전문적인 파트너십이 여기서 시작됩니다.
@@ -377,11 +377,11 @@ const DriverInfoRegistration = () => {
                                     <label className="font-headline font-bold text-sm text-[#191c1e] ml-1">휴대전화 번호</label>
                                     <div className="space-y-3">
                                         <div className="flex gap-3">
-                                            <input name="hpNo" value={formData.hpNo} onChange={handleInputChange} className="flex-1 bg-[#e6e8ea] border-none rounded-xl px-6 py-4 text-[#191c1e]" placeholder="010-0000-0000" />
-                                            <button 
-                                                type="button" 
+                                            <input name="hpNo" value={formData.hpNo} onChange={handleInputChange} className="flex-1 min-w-0 bg-[#e6e8ea] border-none rounded-xl px-4 py-4 text-[#191c1e]" placeholder="010-0000-0000" />
+                                            <button
+                                                type="button"
                                                 onClick={handleSendSMS}
-                                                className="w-1/3 bg-[#004e47] text-white font-bold rounded-xl px-4 py-4 hover:bg-[#00685f] transition-all text-sm active:scale-95"
+                                                className="w-[110px] shrink-0 whitespace-nowrap bg-[#004e47] text-white font-bold rounded-xl px-3 py-4 hover:bg-[#00685f] transition-all text-sm active:scale-95"
                                             >
                                                 {verificationSent ? '재발송' : '인증요청'}
                                             </button>
@@ -389,17 +389,17 @@ const DriverInfoRegistration = () => {
 
                                         {verificationSent && (
                                             <div className="flex gap-3">
-                                                <input 
-                                                    value={verificationCode} 
+                                                <input
+                                                    value={verificationCode}
                                                     onChange={(e) => setVerificationCode(e.target.value)}
-                                                    className="flex-1 bg-[#e6e8ea] border-none rounded-xl px-6 py-4 text-[#191c1e]" 
-                                                    maxLength="6" 
-                                                    placeholder="6자리 인증번호" 
+                                                    className="flex-1 min-w-0 bg-[#e6e8ea] border-none rounded-xl px-4 py-4 text-[#191c1e]"
+                                                    maxLength="6"
+                                                    placeholder="6자리 인증번호"
                                                 />
-                                                <button 
-                                                    type="button" 
+                                                <button
+                                                    type="button"
                                                     onClick={handleVerifyCode}
-                                                    className="w-1/3 border-2 border-[#004e47] text-[#004e47] font-bold rounded-xl px-4 py-4 hover:bg-[#004e47]/5 transition-all text-sm active:scale-95"
+                                                    className="w-[110px] shrink-0 whitespace-nowrap border-2 border-[#004e47] text-[#004e47] font-bold rounded-xl px-3 py-4 hover:bg-[#004e47]/5 transition-all text-sm active:scale-95"
                                                 >
                                                     인증확인
                                                 </button>
@@ -525,7 +525,7 @@ const DriverInfoRegistration = () => {
                                     <div className="flex items-center justify-between mb-4">
                                         <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6e7977]">운전면허증 <span className="text-red-500">*필수</span></span>
                                         <span className={`flex items-center gap-1 text-[10px] font-bold ${formData.licenseApproveStat === 'APPROVE' ? 'text-[#00685f]' : formData.licenseApproveStat === 'WAIT' ? 'text-[#9d4300]' : 'text-[#ba1a1a]'}`}>
-                                            <span className={`w-1.5 h-1.5 rounded-full ${formData.licenseApproveStat === 'APPROVE' ? 'bg-[#00685f]' : formData.licenseApproveStat === 'WAIT' ? 'bg-[#9d4300]' : 'bg-[#ba1a1a]'}`}></span> 
+                                            <span className={`w-1.5 h-1.5 rounded-full ${formData.licenseApproveStat === 'APPROVE' ? 'bg-[#00685f]' : formData.licenseApproveStat === 'WAIT' ? 'bg-[#9d4300]' : 'bg-[#ba1a1a]'}`}></span>
                                             {!formData.licenseApproveStat ? '미등록' : formData.licenseApproveStat === 'WAIT' ? '확인 중' : formData.licenseApproveStat === 'APPROVE' ? '승인됨' : '반려됨'}
                                         </span>
                                     </div>
@@ -545,7 +545,7 @@ const DriverInfoRegistration = () => {
                                     <div className="flex items-center justify-between mb-4">
                                         <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6e7977]">버스운전자격증 <span className="text-red-500">*필수</span></span>
                                         <span className={`flex items-center gap-1 text-[10px] font-bold ${formData.qualApproveStat === 'APPROVE' ? 'text-[#00685f]' : formData.qualApproveStat === 'WAIT' ? 'text-[#9d4300]' : 'text-[#ba1a1a]'}`}>
-                                            <span className={`w-1.5 h-1.5 rounded-full ${formData.qualApproveStat === 'APPROVE' ? 'bg-[#00685f]' : formData.qualApproveStat === 'WAIT' ? 'bg-[#9d4300]' : 'bg-[#ba1a1a]'}`}></span> 
+                                            <span className={`w-1.5 h-1.5 rounded-full ${formData.qualApproveStat === 'APPROVE' ? 'bg-[#00685f]' : formData.qualApproveStat === 'WAIT' ? 'bg-[#9d4300]' : 'bg-[#ba1a1a]'}`}></span>
                                             {!formData.qualApproveStat ? '미등록' : formData.qualApproveStat === 'WAIT' ? '확인 중' : formData.qualApproveStat === 'APPROVE' ? '승인됨' : '반려됨'}
                                         </span>
                                     </div>
@@ -565,7 +565,7 @@ const DriverInfoRegistration = () => {
                                     <div className="flex items-center justify-between mb-4">
                                         <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6e7977]">운전경력증명서 <span className="text-red-500">*필수</span></span>
                                         <span className={`flex items-center gap-1 text-[10px] font-bold ${formData.careerCertApproveStat === 'APPROVE' ? 'text-[#00685f]' : formData.careerCertApproveStat === 'WAIT' ? 'text-[#9d4300]' : 'text-[#ba1a1a]'}`}>
-                                            <span className={`w-1.5 h-1.5 rounded-full ${formData.careerCertApproveStat === 'APPROVE' ? 'bg-[#00685f]' : formData.careerCertApproveStat === 'WAIT' ? 'bg-[#9d4300]' : 'bg-[#ba1a1a]'}`}></span> 
+                                            <span className={`w-1.5 h-1.5 rounded-full ${formData.careerCertApproveStat === 'APPROVE' ? 'bg-[#00685f]' : formData.careerCertApproveStat === 'WAIT' ? 'bg-[#9d4300]' : 'bg-[#ba1a1a]'}`}></span>
                                             {!formData.careerCertApproveStat ? '미등록' : formData.careerCertApproveStat === 'WAIT' ? '확인 중' : formData.careerCertApproveStat === 'APPROVE' ? '승인됨' : '반려됨'}
                                         </span>
                                     </div>

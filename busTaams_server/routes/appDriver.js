@@ -66,7 +66,7 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
                     CASE WHEN f.GCS_PATH IS NOT NULL THEN CONCAT('/api/common/display-image?path=', f.GCS_PATH) ELSE NULL END as userImage 
              FROM TB_USER u 
              LEFT JOIN TB_FILE_MASTER f ON u.PROFILE_FILE_ID = f.FILE_ID 
-             WHERE u.USER_ID = ?`, 
+             WHERE u.USER_ID = ?`,
             [userId]
         );
         if (uRows.length === 0) return res.status(404).json({ success: false, error: '사용자 정보를 찾을 수 없습니다.' });
@@ -74,8 +74,8 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
 
         // 2. 기사 상세 정보 등록 여부 확인 (TB_DRIVER_DETAIL)
         const [detailRows] = await pool.execute(
-            'SELECT 1 FROM TB_DRIVER_DETAIL WHERE USER_ID = ?',
-            [userId]
+            'SELECT 1 FROM TB_DRIVER_DETAIL WHERE CUST_ID = ?',
+            [custId]
         );
         const isDriverInfoRegistered = detailRows.length > 0;
 
@@ -119,13 +119,13 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
                  ORDER BY r.REG_DT DESC LIMIT 3`,
                 [busType]
             );
-            
+
             // 시간 경과 표시 및 경로 가공
             auctionList = listRows.map(row => {
                 const diffMin = Math.floor((new Date() - new Date(row.regDt)) / 60000);
-                
+
                 const endAddr = row.endAddrVia || row.endAddrMaster;
-                
+
                 // 경로 시퀀스 생성: 출발 -> 출발경유 -> 회차 -> 회차경유 -> 도착
                 const pathParts = [row.startAddr];
                 if (row.startVia) pathParts.push(...row.startVia.split(','));
@@ -173,7 +173,7 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
         const [restrictRows] = await pool.execute(`
             SELECT RESTRICT_STAT, RESTRICT_END_DT, CANCEL_BUS_DRIVER_CNT
             FROM TB_USER_CANCEL_MANAGE
-            WHERE USER_UUID = (SELECT USER_UUID FROM TB_USER WHERE USER_ID = ?) AND USER_TYPE = 'DRIVER'
+            WHERE CUST_ID = (SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?) AND USER_TYPE = 'DRIVER'
         `, [userId]);
 
         let restriction = null;
@@ -183,16 +183,16 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
             const endDt = r.RESTRICT_END_DT ? new Date(r.RESTRICT_END_DT) : null;
 
             if (r.RESTRICT_STAT === 'P') {
-                restriction = { 
-                    status: 'P', 
-                    message: '운영정책에 의해 서비스 이용이 무기한 제한되었습니다.' 
+                restriction = {
+                    status: 'P',
+                    message: '운영정책에 의해 서비스 이용이 무기한 제한되었습니다.'
                 };
             } else if (r.RESTRICT_STAT === 'Y' && endDt && endDt > now) {
                 const dateStr = endDt.toISOString().split('T')[0];
-                restriction = { 
-                    status: 'Y', 
+                restriction = {
+                    status: 'Y',
                     endDt: dateStr,
-                    message: `취소 패널티로 인해 ${dateStr}까지 신규 입찰이 제한됩니다.` 
+                    message: `취소 패널티로 인해 ${dateStr}까지 신규 입찰이 제한됩니다.`
                 };
             }
         }
@@ -259,7 +259,7 @@ router.get('/auctions', authenticateToken, async (req, res) => {
 
         const auctionList = listRows.map(row => {
             const diffMin = Math.floor((new Date() - new Date(row.regDt)) / 60000);
-            
+
             const endAddr = row.endAddrVia || row.endAddrMaster;
 
             // 경로 시퀀스 가공
@@ -290,7 +290,7 @@ router.get('/auctions', authenticateToken, async (req, res) => {
 router.get('/auctions/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
-        
+
         // 1. 마스터 및 경유지 정보 조회
         const [masterRows] = await pool.execute(
             `SELECT 
@@ -339,7 +339,7 @@ router.get('/auctions/:id', authenticateToken, async (req, res) => {
 router.get('/profile', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
-        
+
         // 1. TB_USER 기본 정보 (성함, 번호, 주민번호 등 + 프로필 이미지 조인)
         const [userRows] = await pool.execute(
             `SELECT u.CUST_ID, u.USER_NM, u.HP_NO, u.RESIDENT_NO_ENC, 
@@ -355,8 +355,8 @@ router.get('/profile', authenticateToken, async (req, res) => {
 
         // 2. TB_DRIVER_DETAIL 상세 정보 (주소, 요금제 등)
         const [detailRows] = await pool.execute(
-            'SELECT ZIPCODE as zipcode, ADDRESS as address, DETAIL_ADDRESS as detailAddress, SEX as sex, ADDR_TYPE as addrType, SELF_INTRO as selfIntro, FEE_POLICY as feePolicy FROM TB_DRIVER_DETAIL WHERE USER_ID = ?',
-            [userId]
+            'SELECT ZIPCODE as zipcode, ADDRESS as address, DETAIL_ADDRESS as detailAddress, SEX as sex, ADDR_TYPE as addrType, SELF_INTRO as selfIntro, FEE_POLICY as feePolicy FROM TB_DRIVER_DETAIL WHERE CUST_ID = ?',
+            [custId]
         );
 
         // 3. TB_DRIVER_DOCS 인증 서류 정보 (면허증, 자격증 등)
@@ -401,7 +401,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
         res.json({
             success: true,
             data: {
-                user: { 
+                user: {
                     name: userData.USER_NM,
                     phone: userData.HP_NO
                 },
@@ -441,13 +441,13 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
 
     try {
         await connection.beginTransaction();
-        const { 
-            name, phone, residentNo, zipcode, address, detailAddress, 
+        const {
+            name, phone, residentNo, zipcode, address, detailAddress,
             licenseType, licenseNo, licenseIssueDt, licenseValidity,
             busLicenseNo, qualAcquisitionDt, qualStatus,
             sex, addrType, selfIntro, firebaseToken
         } = req.body;
-        
+
         // 주민등록번호 유효성 검증
         if (!validateRRN(residentNo)) {
             throw new Error('유효하지 않은 주민등록번호입니다.');
@@ -518,28 +518,28 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
 
         // 2. TB_DRIVER_DETAIL 업데이트 (주소, 성별, 자기소개, 생년월일 등)
         const birthYmd = residentNo.substring(0, 6);
-        const [existsDetail] = await connection.execute('SELECT 1 FROM TB_DRIVER_DETAIL WHERE USER_ID = ?', [userId]);
+        const [existsDetail] = await connection.execute('SELECT 1 FROM TB_DRIVER_DETAIL WHERE CUST_ID = ?', [custId]);
         if (existsDetail.length > 0) {
             await connection.execute(
-                'UPDATE TB_DRIVER_DETAIL SET BIRTH_YMD = ?, ZIPCODE = ?, ADDRESS = ?, DETAIL_ADDRESS = ?, SEX = ?, ADDR_TYPE = ?, SELF_INTRO = ?, MOD_ID = ?, MOD_DT = NOW() WHERE USER_ID = ?',
-                [birthYmd, zipcode, address, detailAddress, sex, addrType, selfIntro, custId, userId]
+                'UPDATE TB_DRIVER_DETAIL SET BIRTH_YMD = ?, ZIPCODE = ?, ADDRESS = ?, DETAIL_ADDRESS = ?, SEX = ?, ADDR_TYPE = ?, SELF_INTRO = ?, MOD_ID = ?, MOD_DT = NOW() WHERE CUST_ID = ?',
+                [birthYmd, zipcode, address, detailAddress, sex, addrType, selfIntro, custId, custId]
             );
         } else {
             await connection.execute(
-                'INSERT INTO TB_DRIVER_DETAIL (USER_ID, BIRTH_YMD, ZIPCODE, ADDRESS, DETAIL_ADDRESS, SEX, ADDR_TYPE, SELF_INTRO, FEE_POLICY, REG_ID, MOD_ID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [userId, birthYmd, zipcode, address, detailAddress, sex, addrType, selfIntro, 'DRIVER_GENNERAL', custId, custId]
+                'INSERT INTO TB_DRIVER_DETAIL (CUST_ID, BIRTH_YMD, ZIPCODE, ADDRESS, DETAIL_ADDRESS, SEX, ADDR_TYPE, SELF_INTRO, REG_ID, MOD_ID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [custId, birthYmd, zipcode, address, detailAddress, sex, addrType, selfIntro, custId, custId]
             );
         }
 
         // 3. TB_DRIVER_DOCS 처리 (면허증, 자격증)
         const upsertDoc = async (type, no, dt, fileKey, licType = null, status = 'WAIT') => {
             if (!no && (!req.files || !req.files[fileKey])) return;
-            
+
             const [docRows] = await connection.execute(
-                'SELECT DOC_TYPE_SEQ FROM TB_DRIVER_DOCS WHERE CUST_ID = ? AND DOC_TYPE = ? ORDER BY DOC_TYPE_SEQ DESC LIMIT 1', 
+                'SELECT DOC_TYPE_SEQ FROM TB_DRIVER_DOCS WHERE CUST_ID = ? AND DOC_TYPE = ? ORDER BY DOC_TYPE_SEQ DESC LIMIT 1',
                 [custId, type]
             );
-            
+
             const file = req.files && req.files[fileKey] ? req.files[fileKey][0] : null;
             let currentPath = null;
             let fileId = null;
@@ -548,7 +548,7 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
                 const uploadResult = await uploadToGCS(file, 'drivers', connection);
                 fileId = uploadResult.fileId;
                 currentPath = uploadResult.url;
-                
+
                 // TB_FILE_MASTER 등록
                 await connection.execute(
                     `INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_ID, MOD_ID) 
@@ -612,7 +612,7 @@ router.get('/bus/detail', authenticateToken, async (req, res) => {
         const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
         if (uRows.length === 0) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
         const custId = uRows[0].CUST_ID;
-        
+
         const [busRows] = await pool.execute(
             `SELECT * FROM TB_BUS_DRIVER_VEHICLE WHERE CUST_ID = ? ORDER BY REG_DT DESC LIMIT 1`,
             [custId]
@@ -680,7 +680,7 @@ router.get('/bus/profile', authenticateToken, async (req, res) => {
         }
 
         const busData = busRows[0];
-        
+
         // 서류 파일 URL 조회 (프록시 적용)
         const fileIds = [busData.BIZ_REG_FILE_ID, busData.TRANS_LIC_FILE_ID, busData.INS_CERT_FILE_ID].filter(Boolean);
         let fileMap = {};
@@ -737,7 +737,7 @@ router.post('/bus/register', authenticateToken, memoryUpload.fields([
         const custId = uRows[0].CUST_ID;
 
         const [existing] = await connection.execute('SELECT BUS_ID, BIZ_REG_FILE_ID, TRANS_LIC_FILE_ID, INS_CERT_FILE_ID, VEHICLE_PHOTOS_JSON FROM TB_BUS_DRIVER_VEHICLE WHERE CUST_ID = ?', [custId]);
-        
+
         let busId = existing.length > 0 ? existing[0].BUS_ID : await getNextId('TB_BUS_DRIVER_VEHICLE', 'BUS_ID', 10, connection);
 
         const uploadFile = async (fileKey, category, existingFileId = null) => {
@@ -817,7 +817,7 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
         const [restrictionRows] = await connection.execute(`
             SELECT RESTRICT_STAT, RESTRICT_END_DT 
             FROM TB_USER_CANCEL_MANAGE 
-            WHERE USER_UUID = (SELECT USER_UUID FROM TB_USER WHERE USER_ID = ?) AND USER_TYPE = 'DRIVER'
+            WHERE CUST_ID = (SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?) AND USER_TYPE = 'DRIVER'
         `, [userId]);
 
         if (restrictionRows.length > 0) {
@@ -869,7 +869,7 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
 
         // 4. TB_BUS_RESERVATION 등록
         const resId = await getNextId('TB_BUS_RESERVATION', 'RES_ID', 10, connection);
-        
+
         // 수수료 계산 (마스터 로직과 동일하게 6.6%, 5.5%, 1.1%)
         const feeTotal = Math.floor(busAmt * 0.066);
         const feeRefund = Math.floor(busAmt * 0.055);
@@ -963,7 +963,7 @@ router.get('/upcoming-trips', authenticateToken, async (req, res) => {
             }
 
             const endAddr = row.endAddrVia || row.endAddrMaster;
-            
+
             const getShort = (addr) => {
                 if (!addr) return '';
                 return addr.split(' ').slice(0, 2).join(' ');
@@ -1096,13 +1096,13 @@ router.get('/mission-detail/:id', authenticateToken, async (req, res) => {
 
         const row = rows[0];
         const endAddr = row.endAddrVia || row.endAddrMaster;
-        
+
         let image = null;
         if (row.vehiclePhotos) {
             try {
                 const photos = JSON.parse(row.vehiclePhotos);
                 if (photos && photos.length > 0) image = photos[0].url || photos[0];
-            } catch (e) {}
+            } catch (e) { }
         }
 
         // 정산 상세 내역 (DB에 별도 컬럼이 없으므로 총액 기준 가상 분배 - 디자인 준수 목적)
@@ -1262,15 +1262,15 @@ router.post('/membership/update', authenticateToken, async (req, res) => {
 
         // 요금제 업데이트 (TB_DRIVER_DETAIL)
         const [result] = await pool.execute(
-            'UPDATE TB_DRIVER_DETAIL SET FEE_POLICY = ?, MOD_ID = ?, MOD_DT = NOW() WHERE USER_ID = ?',
-            [feePolicy, custId, userId]
+            'UPDATE TB_DRIVER_DETAIL SET FEE_POLICY = ?, MOD_ID = ?, MOD_DT = NOW() WHERE CUST_ID = ?',
+            [feePolicy, custId, custId]
         );
 
         if (result.affectedRows === 0) {
             // 상세 정보가 없는 경우 신규 생성 (기본값과 함께)
             await pool.execute(
-                'INSERT INTO TB_DRIVER_DETAIL (USER_ID, FEE_POLICY, REG_ID, MOD_ID) VALUES (?, ?, ?, ?)',
-                [userId, feePolicy, custId, custId]
+                'INSERT INTO TB_DRIVER_DETAIL (CUST_ID, FEE_POLICY, REG_ID, MOD_ID) VALUES (?, ?, ?, ?)',
+                [custId, feePolicy, custId, custId]
             );
         }
 
@@ -1296,8 +1296,8 @@ router.post('/membership/terminate', authenticateToken, async (req, res) => {
         // 요금제 해지 처리 (기본 요금제로 변경하거나 특정 상태값 업데이트)
         // 여기서는 기본 요금제인 'DRIVER_GENNERAL'로 강제 변경하는 것으로 구현
         const [result] = await pool.execute(
-            'UPDATE TB_DRIVER_DETAIL SET FEE_POLICY = ?, MOD_ID = ?, MOD_DT = NOW() WHERE USER_ID = ?',
-            ['DRIVER_GENNERAL', custId, userId]
+            'UPDATE TB_DRIVER_DETAIL SET FEE_POLICY = ?, MOD_ID = ?, MOD_DT = NOW() WHERE CUST_ID = ?',
+            ['DRIVER_GENNERAL', custId, custId]
         );
 
         if (result.affectedRows === 0) {
@@ -1319,27 +1319,45 @@ router.get('/membership-card-info', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
 
-        // 1. 등록된 카드 정보 조회
-        const [cards] = await pool.execute(
-            'SELECT CARD_SEQ, CARD_NICKNAME, CARD_NO_ENC, EXP_MONTH, EXP_YEAR, IS_PRIMARY FROM TB_PAYMENT_CARD WHERE CUST_ID = (SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?) ORDER BY IS_PRIMARY DESC, CARD_SEQ ASC',
+        // 1. 등록된 카드 정보 및 사용자 프로필 이미지 조회
+        const [[user]] = await pool.execute(
+            `SELECT 
+                u.CUST_ID,
+                u.USER_IMAGE,
+                f.GCS_PATH
+             FROM TB_USER u
+             LEFT JOIN TB_FILE_MASTER f ON u.PROFILE_FILE_ID = f.FILE_ID
+             WHERE u.USER_ID = ?`,
             [userId]
+        );
+
+        if (!user) {
+            return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
+        }
+
+        const custId = user.CUST_ID;
+        const userImage = user.GCS_PATH ? `/api/common/display-image?path=${encodeURIComponent(user.GCS_PATH)}` : user.USER_IMAGE;
+
+        const [cards] = await pool.execute(
+            'SELECT CARD_SEQ, CARD_NICKNAME, CARD_NO_ENC, EXP_MONTH, EXP_YEAR, IS_PRIMARY FROM TB_PAYMENT_CARD WHERE CUST_ID = ? ORDER BY IS_PRIMARY DESC, CARD_SEQ ASC',
+            [custId]
         );
 
         // 2. 월별 멤버십 이용 및 결제 내역 조회 (최근 12개월)
         const [history] = await pool.execute(
             `SELECT 
                 YYYYMM, FEE_POLICY, BASIC_CNT, USE_CNT, REMAINING_CNT, REG_DT 
-             FROM TB_MON_MEMBER 
-             WHERE CUST_ID = (SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?)
+             FROM TB_MOM_MEMBER 
+             WHERE CUST_ID = ?
              ORDER BY YYYYMM DESC 
              LIMIT 12`,
-            [userId]
+            [custId]
         );
 
         // 3. 현재 활성화된 요금제 확인하여 다음 결제 정보 계산
         const [detail] = await pool.execute(
-            'SELECT FEE_POLICY FROM TB_DRIVER_DETAIL WHERE USER_ID = ?',
-            [userId]
+            'SELECT FEE_POLICY FROM TB_DRIVER_DETAIL WHERE CUST_ID = ?',
+            [custId]
         );
 
         const currentPolicy = detail[0]?.FEE_POLICY || 'DRIVER_GENERAL';
@@ -1347,6 +1365,8 @@ router.get('/membership-card-info', authenticateToken, async (req, res) => {
         // 정책별 금액 매핑
         const policyPrices = {
             'DRIVER_GENERAL': 0,
+            'DRIVER_GENNERAL': 0, // DB 오타 대응
+            'DRIVER': 0,
             'DRIVER_MIDDLE': 500000,
             'DRIVER_HIGH': 800000
         };
@@ -1355,7 +1375,7 @@ router.get('/membership-card-info', authenticateToken, async (req, res) => {
         let nextPaymentAmount = 0;
 
         // 유료 멤버십인 경우에만 다음 결제 정보 생성 (예: 다음 달 10일 결제 가정)
-        if (currentPolicy !== 'DRIVER_GENERAL') {
+        if (currentPolicy !== 'DRIVER_GENERAL' && currentPolicy !== 'DRIVER_GENNERAL') {
             const now = new Date();
             const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 10);
             nextPaymentDate = `${nextMonth.getMonth() + 1}월 ${nextMonth.getDate()}일`;
@@ -1371,6 +1391,7 @@ router.get('/membership-card-info', authenticateToken, async (req, res) => {
         res.json({
             success: true,
             data: {
+                userImage: userImage || null,
                 cards: cards,
                 history: formattedHistory,
                 nextPaymentDate: nextPaymentDate,
@@ -1432,19 +1453,19 @@ router.get('/check-restriction', authenticateToken, async (req, res) => {
     const connection = await pool.getConnection();
     try {
         const userId = req.user.userId;
-        
-        // 0. USER_UUID 및 CUST_ID 조회
-        const [uRows] = await connection.execute('SELECT CUST_ID, USER_UUID FROM TB_USER WHERE USER_ID = ?', [userId]);
+
+        // 0. CUST_ID 조회
+        const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
         if (uRows.length === 0) return res.status(404).json({ success: false, message: '사용자를 찾을 수 없습니다.' });
-        
-        const { CUST_ID: custId, USER_UUID: userUuid } = uRows[0];
+
+        const { CUST_ID: custId } = uRows[0];
 
         // 1. 거래제한 상태 조회
         const [rows] = await connection.execute(`
             SELECT RESTRICT_STAT, RESTRICT_START_DT, RESTRICT_END_DT 
             FROM TB_USER_CANCEL_MANAGE 
-            WHERE USER_UUID = ? AND USER_TYPE = 'DRIVER'
-        `, [userUuid]);
+            WHERE CUST_ID = ? AND USER_TYPE = 'DRIVER'
+        `, [custId]);
 
         if (rows.length === 0) {
             return res.json({ restricted: false });
@@ -1454,10 +1475,10 @@ router.get('/check-restriction', authenticateToken, async (req, res) => {
 
         // 무기한 제한 (P)
         if (RESTRICT_STAT === 'P') {
-            return res.json({ 
-                restricted: true, 
-                type: 'PERMANENT', 
-                message: '귀하는 무기한 이용 제한 상태입니다. 고객센터에 문의해주세요.' 
+            return res.json({
+                restricted: true,
+                type: 'PERMANENT',
+                message: '귀하는 무기한 이용 제한 상태입니다. 고객센터에 문의해주세요.'
             });
         }
 
@@ -1469,10 +1490,10 @@ router.get('/check-restriction', authenticateToken, async (req, res) => {
 
             if (start && end && now >= start && now <= end) {
                 const endStr = end.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
-                return res.json({ 
-                    restricted: true, 
-                    type: 'TEMPORARY', 
-                    message: `${endStr}까지 서비스 이용이 제한되어 청약 참여가 불가능합니다.` 
+                return res.json({
+                    restricted: true,
+                    type: 'TEMPORARY',
+                    message: `${endStr}까지 서비스 이용이 제한되어 청약 참여가 불가능합니다.`
                 });
             }
         }
@@ -1497,9 +1518,9 @@ router.post('/cancel-mission/:id', authenticateToken, memoryUpload.single('reaso
         const file = req.file;
 
         // 1. 기사 정보 및 CUST_ID 조회
-        const [uRows] = await connection.execute('SELECT CUST_ID, USER_UUID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
         if (uRows.length === 0) throw new Error('사용자를 찾을 수 없습니다.');
-        const { CUST_ID: custId, USER_UUID: userUuid } = uRows[0];
+        const { CUST_ID: custId } = uRows[0];
 
         // 2. 예약 정보 확인 (본인 것인지 확인)
         const [resRows] = await connection.execute(
@@ -1524,15 +1545,15 @@ router.post('/cancel-mission/:id', authenticateToken, memoryUpload.single('reaso
         // 4. 취소 카운트 및 패널티 계산
         // TB_USER_CANCEL_MANAGE 조회 (없으면 생성)
         const [manageRows] = await connection.execute(
-            'SELECT CANCEL_BUS_DRIVER_CNT FROM TB_USER_CANCEL_MANAGE WHERE USER_UUID = ? AND USER_TYPE = \'DRIVER\'',
-            [userUuid]
+            'SELECT CANCEL_BUS_DRIVER_CNT FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ? AND USER_TYPE = \'DRIVER\'',
+            [custId]
         );
 
         let currentCnt = 0;
         if (manageRows.length === 0) {
             await connection.execute(
-                'INSERT INTO TB_USER_CANCEL_MANAGE (USER_UUID, USER_TYPE, CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, REG_ID, MOD_ID) VALUES (?, \'DRIVER\', 0, 0, ?, ?)',
-                [userUuid, custId, custId]
+                'INSERT INTO TB_USER_CANCEL_MANAGE (CUST_ID, USER_TYPE, CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, REG_ID, MOD_ID) VALUES (?, \'DRIVER\', 0, 0, ?, ?)',
+                [custId, custId]
             );
         } else {
             currentCnt = manageRows[0].CANCEL_BUS_DRIVER_CNT;
@@ -1553,7 +1574,7 @@ router.post('/cancel-mission/:id', authenticateToken, memoryUpload.single('reaso
         // 5. 상태 업데이트
         // 예약 상태 변경
         await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'DRIVER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE RES_ID = ?', [custId, resId]);
-        
+
         // 슬롯 상태 변경 (다시 경매로 돌릴지 취소로 할지 고민이나, 여기서는 취소로 처리)
         await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'DRIVER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND BUS_TYPE_CD = (SELECT SERVICE_CLASS FROM TB_BUS_DRIVER_VEHICLE WHERE BUS_ID = (SELECT BUS_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?))', [custId, reqId, resId]);
 
@@ -1568,8 +1589,8 @@ router.post('/cancel-mission/:id', authenticateToken, memoryUpload.single('reaso
                     TRADE_RESTRICT_START_DT = NOW(),
                     TRADE_RESTRICT_END_DT = NULL,
                     MOD_ID = ?, MOD_DT = NOW()
-                WHERE USER_UUID = ? AND USER_TYPE = 'DRIVER'
-            `, [newCnt, custId, userUuid]);
+                WHERE CUST_ID = ? AND USER_TYPE = 'DRIVER'
+            `, [newCnt, custId, custId]);
         } else {
             // 정지 시작일은 익일(내일)부터
             await connection.execute(`
@@ -1582,17 +1603,25 @@ router.post('/cancel-mission/:id', authenticateToken, memoryUpload.single('reaso
                     TRADE_RESTRICT_START_DT = DATE_ADD(CURDATE(), INTERVAL 1 DAY),
                     TRADE_RESTRICT_END_DT = DATE_ADD(CURDATE(), INTERVAL ? + 1 DAY),
                     MOD_ID = ?, MOD_DT = NOW()
-                WHERE USER_UUID = ? AND USER_TYPE = 'DRIVER'
-            `, [newCnt, restrictDays, restrictDays, custId, userUuid]);
+                WHERE CUST_ID = ? AND USER_TYPE = 'DRIVER'
+            `, [newCnt, restrictDays, restrictDays, custId, custId]);
         }
 
         // 6. 취소 이력 등록
+        const [[seqRow]] = await connection.execute(`
+            SELECT IFNULL(MAX(HIST_SEQ), 0) + 1 AS HIST_SEQ
+            FROM TB_USER_CANCEL_HIST
+            WHERE CUST_ID = ?
+        `, [custId]);
+
+        const histSeq = seqRow.HIST_SEQ;
+
         await connection.execute(`
             INSERT INTO TB_USER_CANCEL_HIST (
-                HIST_UUID, USER_UUID, USER_TYPE, CANCEL_REASON_GRP_CD, CANCEL_REASON_DTL_CD, 
+                CUST_ID, HIST_SEQ, CANCEL_REASON_GRP_CD, CANCEL_REASON_DTL_CD, 
                 CANCEL_REASON_TEXT, REASON_DOC_FILE_NM, REG_ID, MOD_ID
-            ) VALUES (UUID_TO_BIN(UUID()), ?, 'DRIVER', 'DRIVER_CANCEL_REASON', ?, ?, ?, ?, ?)
-        `, [userUuid, cancelCode || 'OTHER', cancelReasonText || '', gcsPath, custId, custId]);
+            ) VALUES (?, ?, 'DRIVER', 'DRIVER_CANCEL_REASON', ?, ?, ?, ?)
+        `, [custId, histSeq, cancelReasonText || '', gcsPath, custId, custId]);
 
         await connection.commit();
         res.json({ success: true, message: '운행 취소 처리가 완료되었습니다.' });

@@ -33,9 +33,9 @@ router.get('/room/:resId', authenticateToken, async (req, res) => {
     try {
         // 1. 기존 방 확인 (RES_ID 기준)
         const [rooms] = await pool.execute(
-            `SELECT CHAT_SEQ, CHAT_LOG_UUID, REQ_ID, RES_ID, CHAT_TITLE 
+            `SELECT CHAT_SEQ, REQ_ID, RES_ID, CHAT_TITLE 
              FROM TB_CHAT_LOG 
-             WHERE RES_ID = ?`, 
+             WHERE RES_ID = ?`,
             [resId]
         );
 
@@ -58,15 +58,14 @@ router.get('/room/:resId', authenticateToken, async (req, res) => {
             }
 
             const { REQ_ID, TRAVELER_ID, DRIVER_ID } = resRows[0];
-            const chatLogUuid = randomUUID();
             const chatTitle = `${resId} 관련 대화`;
 
             // TB_CHAT_LOG 삽입 (ROOM_KIND: DRIVER - 기사 매칭 방)
             const [result] = await pool.execute(
                 `INSERT INTO TB_CHAT_LOG (
-                    CHAT_LOG_UUID, ROOM_KIND, CHAT_TITLE, REQ_ID, RES_ID, CREATED_BY_CUST_ID, REG_ID
-                ) VALUES (UUID_TO_BIN(?), 'DRIVER', ?, ?, ?, ?, ?)`,
-                [chatLogUuid, chatTitle, REQ_ID, resId, custId, custId]
+                    ROOM_KIND, CHAT_TITLE, REQ_ID, RES_ID, CREATED_BY_CUST_ID, REG_ID
+                ) VALUES ('DRIVER', ?, ?, ?, ?, ?)`,
+                [chatTitle, REQ_ID, resId, custId, custId]
             );
 
             chatSeq = result.insertId;
@@ -100,8 +99,8 @@ router.get('/room/:resId', authenticateToken, async (req, res) => {
             [chatSeq, custId]
         );
 
-        res.json({ 
-            success: true, 
+        res.json({
+            success: true,
             data: {
                 chatSeq,
                 chatTitle: chatRoom.CHAT_TITLE,
@@ -185,7 +184,7 @@ router.get('/list', authenticateToken, async (req, res) => {
         // 1. 기존 채팅방 + 2. 성사된 예약(채팅방 없음) UNION 조회
         const [rows] = await pool.execute(
             `SELECT * FROM (
-                SELECT l.CHAT_SEQ as chatSeq, l.CHAT_LOG_UUID as chatUuid, l.RES_ID as resId, l.CHAT_TITLE as chatTitle, 
+                SELECT l.CHAT_SEQ as chatSeq, l.RES_ID as resId, l.CHAT_TITLE as chatTitle, 
                         l.MSG_BODY as lastMsg, 
                         l.LAST_MSG_DT as lastMsgDt,
                         DATE_FORMAT(l.LAST_MSG_DT, '%Y-%m-%d %H:%i') as lastMsgTime,
@@ -196,7 +195,7 @@ router.get('/list', authenticateToken, async (req, res) => {
                  JOIN TB_CHAT_LOG_PART p ON l.CHAT_SEQ = p.CHAT_SEQ
                  WHERE p.CUST_ID = ?
                 UNION ALL
-                SELECT NULL as chatSeq, NULL as chatUuid, r.RES_ID as resId, CONCAT(r.RES_ID, ' 관련 대화') as chatTitle,
+                SELECT NULL as chatSeq, r.RES_ID as resId, CONCAT(r.RES_ID, ' 관련 대화') as chatTitle,
                         '채팅방이 생성되었습니다. 메시지를 보내보세요.' as lastMsg,
                         r.REG_DT as lastMsgDt,
                         DATE_FORMAT(r.REG_DT, '%Y-%m-%d %H:%i') as lastMsgTime,
@@ -215,7 +214,7 @@ router.get('/list', authenticateToken, async (req, res) => {
         // 각 항목의 상대방 정보 추가
         const roomsWithOther = await Promise.all(rows.map(async (room) => {
             let otherCustId = room.otherCustId;
-            
+
             // 채팅방이 있는 경우 파트너 테이블에서 상대방 ID 조회
             if (!otherCustId && room.chatSeq) {
                 const [parts] = await pool.execute(

@@ -105,7 +105,7 @@ router.post('/profile/change-password', authenticateToken, async (req, res) => {
 
         // 3. 새 비밀번호 해싱 및 업데이트
         const hashedNewPassword = await bcrypt.hash(newPassword.toString().trim(), 10);
-        await pool.execute('UPDATE TB_USER SET PASSWORD = ? WHERE USER_UUID = ?', [hashedNewPassword, foundUser.USER_UUID]);
+        await pool.execute('UPDATE TB_USER SET PASSWORD = ? WHERE USER_ID = ?', [hashedNewPassword, req.user.userId]);
 
         console.log('PasswordChange: Update successful via Mirror-Login.');
         res.status(200).json({ message: '비밀번호가 성공적으로 변경되었습니다.' });
@@ -136,7 +136,7 @@ router.post('/auth/verify-code', authenticateToken, async (req, res) => {
 router.get('/dashboard', authenticateToken, async (req, res) => {
     try {
         const [reservations] = await pool.execute(
-            'SELECT * FROM TB_BUS_RESERVATION WHERE TRAVELER_UUID = (SELECT USER_UUID FROM TB_USER WHERE USER_ID = ?) ORDER BY START_DT DESC LIMIT 5',
+            'SELECT * FROM TB_BUS_RESERVATION WHERE TRAVELER_ID = ? ORDER BY START_DT DESC LIMIT 5',
             [req.user.userId]
         );
         
@@ -158,15 +158,15 @@ router.post('/reservations/request', authenticateToken, async (req, res) => {
     const { startAddr, endAddr, startDt, endDt, busType, passengers, totalPrice } = req.body;
     
     try {
-        const resUuid = uuidv4();
-        // 실제 저장 시 BINARY(16) 변환 필요
+        const resId = uuidv4();
+        // 실제 저장 시 ID 기반으로 저장
         await pool.execute(
-            `INSERT INTO TB_BUS_RESERVATION (RES_UUID, TRAVELER_UUID, START_ADDR, END_ADDR, START_DT, END_DT, TOTAL_PRICE, DEPOSIT_PRICE, RES_STAT)
-             VALUES (UUID_TO_BIN(?), (SELECT USER_UUID FROM TB_USER WHERE USER_ID = ?), ?, ?, ?, ?, ?, ?, 'REQ')`,
-            [resUuid, req.user.userId, startAddr, endAddr, startDt, endDt, totalPrice, totalPrice * 0.066]
+            `INSERT INTO TB_BUS_RESERVATION (RES_ID, TRAVELER_ID, START_ADDR, END_ADDR, START_DT, END_DT, TOTAL_PRICE, DEPOSIT_PRICE, RES_STAT)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'REQ')`,
+            [resId, req.user.userId, startAddr, endAddr, startDt, endDt, totalPrice, totalPrice * 0.066]
         );
 
-        res.status(201).json({ status: 201, message: '예약 요청이 성공적으로 등록되었습니다.', resUuid });
+        res.status(201).json({ status: 201, message: '예약 요청이 성공적으로 등록되었습니다.', resUuid: resId });
     } catch (error) {
         console.error('Reservation request error:', error);
         res.status(500).json({ status: 500, error: '예약 요청 중 오류가 발생했습니다.' });
@@ -181,10 +181,10 @@ router.get('/estimates', authenticateToken, async (req, res) => {
         const [bids] = await pool.execute(
             `SELECT b.*, u.USER_NM as driverName, bu.BUS_NM as busName 
              FROM TB_DRIVER_BID b
-             JOIN TB_USER u ON b.DRIVER_UUID = u.USER_UUID
-             JOIN TB_BUS_INFO bu ON b.BUS_UUID = bu.BUS_UUID
-             JOIN TB_BUS_RESERVATION r ON b.RES_UUID = r.RES_UUID
-             WHERE r.TRAVELER_UUID = (SELECT USER_UUID FROM TB_USER WHERE USER_ID = ?)`,
+             JOIN TB_USER u ON b.DRIVER_ID = u.USER_ID
+             JOIN TB_BUS_INFO bu ON b.BUS_ID = bu.BUS_ID
+             JOIN TB_BUS_RESERVATION r ON b.RES_ID = r.RES_ID
+             WHERE r.TRAVELER_ID = ?`,
             [req.user.userId]
         );
 
@@ -201,9 +201,9 @@ router.get('/estimates/:id', authenticateToken, async (req, res) => {
         const [rows] = await pool.execute(
             `SELECT b.*, u.USER_NM as driverName, bu.BUS_NM as busName, bu.BUS_YEAR, bu.PASS_LIMIT
              FROM TB_DRIVER_BID b
-             JOIN TB_USER u ON b.DRIVER_UUID = u.USER_UUID
-             JOIN TB_BUS_INFO bu ON b.BUS_UUID = bu.BUS_UUID
-             WHERE b.BID_UUID = UUID_TO_BIN(?)`,
+             JOIN TB_USER u ON b.DRIVER_ID = u.USER_ID
+             JOIN TB_BUS_INFO bu ON b.BUS_ID = bu.BUS_ID
+             WHERE b.BID_ID = ?`,
             [req.params.id]
         );
         if (rows.length === 0) return res.status(404).json({ error: '견적을 찾을 수 없습니다.' });
@@ -217,7 +217,7 @@ router.get('/estimates/:id', authenticateToken, async (req, res) => {
 router.get('/reservations/:id', authenticateToken, async (req, res) => {
     try {
         const [rows] = await pool.execute(
-            'SELECT * FROM TB_BUS_RESERVATION WHERE RES_UUID = UUID_TO_BIN(?)',
+            'SELECT * FROM TB_BUS_RESERVATION WHERE RES_ID = ?',
             [req.params.id]
         );
         if (rows.length === 0) return res.status(404).json({ error: '예약을 찾을 수 없습니다.' });
@@ -231,7 +231,7 @@ router.get('/reservations/:id', authenticateToken, async (req, res) => {
 router.post('/reservations/:id/cancel', authenticateToken, async (req, res) => {
     try {
         await pool.execute(
-            'UPDATE TB_BUS_RESERVATION SET RES_STAT = "CANCEL" WHERE RES_UUID = UUID_TO_BIN(?)',
+            'UPDATE TB_BUS_RESERVATION SET RES_STAT = "CANCEL" WHERE RES_ID = ?',
             [req.params.id]
         );
         res.status(200).json({ status: 200, message: '예약이 취소되었습니다.' });
@@ -244,10 +244,10 @@ router.post('/reservations/:id/cancel', authenticateToken, async (req, res) => {
 router.post('/reviews', authenticateToken, async (req, res) => {
     const { resUuid, rating, comment } = req.body;
     try {
-        const reviewUuid = uuidv4();
+        const reviewId = uuidv4();
         await pool.execute(
-            'INSERT INTO TB_REVIEW (REV_UUID, RES_UUID, TRAVELER_UUID, RATING, COMMENT) VALUES (UUID_TO_BIN(?), UUID_TO_BIN(?), (SELECT USER_UUID FROM TB_USER WHERE USER_ID = ?), ?, ?)',
-            [reviewUuid, resUuid, req.user.userId, rating, comment]
+            'INSERT INTO TB_REVIEW (REV_ID, RES_ID, TRAVELER_ID, RATING, COMMENT) VALUES (?, ?, ?, ?, ?)',
+            [reviewId, resUuid, req.user.userId, rating, comment]
         );
         res.status(201).json({ status: 201, message: '리뷰가 등록되었습니다.' });
     } catch (error) {
@@ -272,7 +272,7 @@ router.get('/my-pending-requests', authenticateToken, async (req, res) => {
     try {
         const [rows] = await pool.execute(`
             SELECT 
-                BIN_TO_UUID(REQ_UUID) as reqUuid,
+                REQ_ID as reqUuid,
                 TRIP_TITLE as tripName,
                 START_ADDR as departure,
                 END_ADDR as destination,
@@ -280,10 +280,10 @@ router.get('/my-pending-requests', authenticateToken, async (req, res) => {
                 REQ_AMT as totalPrice,
                 REQ_STAT as status
             FROM TB_AUCTION_REQ 
-            WHERE TRAVELER_UUID = UUID_TO_BIN(?) 
+            WHERE TRAVELER_ID = ? 
               AND REQ_STAT IN ('OPEN', 'BIDDING', 'CONFIRM')
             ORDER BY REG_DT DESC
-        `, [req.user.userUuid]);
+        `, [req.user.userId]);
 
         res.status(200).json({ success: true, data: rows });
     } catch (error) {

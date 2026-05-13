@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import Swal from 'sweetalert2';
@@ -14,6 +14,23 @@ const CardRegisterDriver = () => {
         cardPwFront: ''
     });
     const [loading, setLoading] = useState(false);
+    const [userImage, setUserImage] = useState(null);
+    const [imageVersion] = useState(Date.now());
+
+    useEffect(() => {
+        const fetchProfile = async () => {
+            try {
+                // 기사 프로필 이미지를 가져오기 위해 멤버십 정보 API를 활용합니다.
+                const response = await api.get('/app/driver/membership-card-info');
+                if (response.success && response.data.userImage) {
+                    setUserImage(response.data.userImage);
+                }
+            } catch (error) {
+                console.error('Failed to fetch profile image:', error);
+            }
+        };
+        fetchProfile();
+    }, []);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -76,6 +93,35 @@ const CardRegisterDriver = () => {
                             <span className="material-symbols-outlined text-2xl">arrow_back</span>
                         </button>
                         <h1 className="font-headline font-bold tracking-tight text-xl text-teal-900 dark:text-teal-100 italic uppercase text-left">카드 등록</h1>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <div 
+                            className="w-10 h-10 rounded-full bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center cursor-pointer hover:shadow-md transition-all"
+                            onClick={() => navigate('/driver-dashboard')}
+                        >
+                            {userImage ? (
+                                <img 
+                                    alt="User Profile" 
+                                    src={userImage.startsWith('http') ? 
+                                        `${userImage}${userImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                        `${import.meta.env.VITE_API_BASE_URL || ''}${userImage.startsWith('/') ? '' : '/'}${userImage}${userImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                    className="w-full h-full object-cover" 
+                                    onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.style.display = 'none';
+                                        if (e.target.nextSibling) {
+                                            e.target.nextSibling.style.display = 'flex';
+                                        }
+                                    }}
+                                />
+                            ) : (
+                                <span className="material-symbols-outlined text-[#bec9c6]">person</span>
+                            )}
+                            {userImage && (
+                                <span className="material-symbols-outlined text-[#bec9c6] hidden items-center justify-center w-full h-full">person</span>
+                            )}
+                        </div>
                     </div>
                 </div>
             </header>

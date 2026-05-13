@@ -6,8 +6,9 @@ import BottomNavDriver from '../components/BottomNavDriver';
 
 const CardMembershipMgmtDriver = () => {
     const navigate = useNavigate();
-    const [data, setData] = useState({ cards: [], history: [] });
+    const [data, setData] = useState({ cards: [], history: [], userImage: null });
     const [loading, setLoading] = useState(true);
+    const [imageVersion] = useState(Date.now());
 
     useEffect(() => {
         fetchData();
@@ -17,11 +18,21 @@ const CardMembershipMgmtDriver = () => {
         try {
             const response = await api.get('/app/driver/membership-card-info');
             if (response.success) {
-                setData(response.data);
+                // 데이터가 비어있거나 예상치 못한 형식일 경우를 대비해 기본값을 설정합니다.
+                setData({
+                    cards: response.data.cards || [],
+                    history: response.data.history || [],
+                    userImage: response.data.userImage || null,
+                    nextPaymentDate: response.data.nextPaymentDate || '',
+                    nextPaymentAmount: response.data.nextPaymentAmount || 0
+                });
+            } else {
+                console.error('Membership info fetch failed:', response.message);
+                Swal.fire('오류', response.message || '멤버십 정보를 불러올 수 없습니다.', 'error');
             }
         } catch (error) {
             console.error('Failed to fetch membership data:', error);
-            Swal.fire('오류', '정보를 불러오는 중 오류가 발생했습니다.', 'error');
+            Swal.fire('오류', '서버 통신 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.', 'error');
         } finally {
             setLoading(false);
         }
@@ -29,8 +40,6 @@ const CardMembershipMgmtDriver = () => {
 
     const maskCardNo = (cardNoEnc) => {
         if (!cardNoEnc) return '**** **** **** ****';
-        // 실제 암호화된 번호라면 백엔드에서 복호화 후 일부만 줘야 하지만, 
-        // 여기선 간단히 마지막 4자리만 보여주는 예시로 작성
         return `**** **** **** ${cardNoEnc.slice(-4)}`;
     };
 
@@ -58,6 +67,35 @@ const CardMembershipMgmtDriver = () => {
                             <span className="material-symbols-outlined text-2xl">arrow_back</span>
                         </button>
                         <h1 className="font-headline font-bold tracking-tight text-xl text-teal-900 dark:text-teal-100 italic uppercase">멤버십 및 카드 관리</h1>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                        <div 
+                            className="w-10 h-10 rounded-full bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center cursor-pointer hover:shadow-md transition-all"
+                            onClick={() => navigate('/driver-dashboard')}
+                        >
+                            {data.userImage ? (
+                                <img 
+                                    alt="User Profile" 
+                                    src={data.userImage.startsWith('http') ? 
+                                        `${data.userImage}${data.userImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                        `${import.meta.env.VITE_API_BASE_URL || ''}${data.userImage.startsWith('/') ? '' : '/'}${data.userImage}${data.userImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                    className="w-full h-full object-cover" 
+                                    onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.style.display = 'none';
+                                        if (e.target.nextSibling) {
+                                            e.target.nextSibling.style.display = 'flex';
+                                        }
+                                    }}
+                                />
+                            ) : (
+                                <span className="material-symbols-outlined text-[#bec9c6]">person</span>
+                            )}
+                            {data.userImage && (
+                                <span className="material-symbols-outlined text-[#bec9c6] hidden items-center justify-center w-full h-full">person</span>
+                            )}
+                        </div>
                     </div>
                 </div>
             </header>
@@ -145,7 +183,7 @@ const CardMembershipMgmtDriver = () => {
                                                 {item.YYYYMM.slice(0, 4)}년 {item.YYYYMM.slice(4)}월
                                             </span>
                                             <span className="text-on-surface-variant text-[10px] font-bold uppercase tracking-widest">
-                                                Membership Fee • {item.FEE_POLICY.split('_')[1]}
+                                                Membership Fee • {item.FEE_POLICY ? item.FEE_POLICY.split('_')[1] : '일반'}
                                             </span>
                                         </div>
                                     </div>

@@ -1,9 +1,27 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import api from '../api';
 import BottomNavDriver from '../components/BottomNavDriver';
 
 const SettlementHistoryDriver = () => {
     const navigate = useNavigate();
+    const [userImage, setUserImage] = useState(null);
+    const [imageVersion] = useState(Date.now());
+
+    useEffect(() => {
+        const fetchProfile = async () => {
+            try {
+                // 기사 프로필 이미지를 가져오기 위해 멤버십 정보 API를 활용합니다.
+                const response = await api.get('/app/driver/membership-card-info');
+                if (response.success && response.data.userImage) {
+                    setUserImage(response.data.userImage);
+                }
+            } catch (error) {
+                console.error('Failed to fetch profile image:', error);
+            }
+        };
+        fetchProfile();
+    }, []);
 
     const transactions = [
         { id: 1, month: '2024년 5월', type: '운행 정산', status: '정산 완료', txn: 'SET-202405-01', amount: '2,450,000' },
@@ -22,6 +40,35 @@ const SettlementHistoryDriver = () => {
                             <span className="material-symbols-outlined text-lg">arrow_back</span>
                         </button>
                         <h1 className="font-headline font-black tracking-tighter text-3xl text-teal-900 italic uppercase">정산 내역</h1>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <div 
+                            className="w-10 h-10 rounded-full bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center cursor-pointer hover:shadow-md transition-all"
+                            onClick={() => navigate('/driver-dashboard')}
+                        >
+                            {userImage ? (
+                                <img 
+                                    alt="User Profile" 
+                                    src={userImage.startsWith('http') ? 
+                                        `${userImage}${userImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                        `${import.meta.env.VITE_API_BASE_URL || ''}${userImage.startsWith('/') ? '' : '/'}${userImage}${userImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                    className="w-full h-full object-cover" 
+                                    onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.style.display = 'none';
+                                        if (e.target.nextSibling) {
+                                            e.target.nextSibling.style.display = 'flex';
+                                        }
+                                    }}
+                                />
+                            ) : (
+                                <span className="material-symbols-outlined text-[#bec9c6]">person</span>
+                            )}
+                            {userImage && (
+                                <span className="material-symbols-outlined text-[#bec9c6] hidden items-center justify-center w-full h-full">person</span>
+                            )}
+                        </div>
                     </div>
                 </div>
             </header>

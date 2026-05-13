@@ -92,9 +92,9 @@ export const changePassword = (currentPassword, newPassword) => request('/app/cu
 });
 
 // --- 아이디/비밀번호 찾기 및 가입 ---
-export const findId = (phoneNo) => request('/app/auth/find-id', {
+export const findId = (phoneNo, verifyToken) => request('/app/auth/find-id', {
     method: 'POST',
-    body: JSON.stringify({ phoneNo })
+    body: JSON.stringify({ phoneNo, verifyToken })
 });
 
 export const findPassword = (userId, phoneNo) => request('/app/auth/find-password', {

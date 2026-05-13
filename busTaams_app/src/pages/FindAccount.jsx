@@ -71,8 +71,21 @@ const FindAccount = () => {
             if (res.success) {
                 setIdToken(res.verifyToken);
                 setIsPhoneVerified(true);
-                setShowPasswordFields(true);
-                notify.success('인증 성공', '본인 확인이 완료되었습니다. 새 비밀번호를 설정하세요.');
+                
+                if (activeTab === 'id') {
+                    // 아이디 찾기 탭인 경우 바로 아이디 조회 실행
+                    const findRes = await findId(phoneNo, res.verifyToken);
+                    if (findRes.success) {
+                        setFoundId(findRes.userId);
+                        setShowResult(true);
+                        notify.success('인증 성공', '아이디를 성공적으로 찾았습니다.');
+                    } else {
+                        notify.error('실패', findRes.error || '정보를 찾을 수 없습니다.');
+                    }
+                } else {
+                    setShowPasswordFields(true);
+                    notify.success('인증 성공', '본인 확인이 완료되었습니다. 새 비밀번호를 설정하세요.');
+                }
             } else {
                 notify.error('인증 실패', res.error || '인증번호가 올바르지 않습니다.');
             }
@@ -128,14 +141,14 @@ const FindAccount = () => {
                 {/* Tabs */}
                 <div className="mb-10 flex gap-8 border-none overflow-x-auto no-scrollbar relative">
                     <button 
-                        onClick={() => {setActiveTab('id'); setShowResult(false);}}
+                        onClick={() => {setActiveTab('id'); setShowResult(false); setIsCodeSent(false); setIsPhoneVerified(false); setPhoneNo(''); setAuthCode('');}}
                         className={`relative pb-2 text-xl font-bold transition-all duration-300 ${activeTab === 'id' ? 'text-teal-700' : 'text-slate-300 hover:text-teal-600/60'}`}
                     >
                         아이디 찾기
                         {activeTab === 'id' && <span className="absolute bottom-0 left-0 w-8 h-1 bg-teal-600 rounded-full"></span>}
                     </button>
                     <button 
-                        onClick={() => {setActiveTab('pw'); setShowResult(false);}}
+                        onClick={() => {setActiveTab('pw'); setShowResult(false); setIsCodeSent(false); setIsPhoneVerified(false); setPhoneNo(''); setAuthCode('');}}
                         className={`relative pb-2 text-xl font-bold transition-all duration-300 ${activeTab === 'pw' ? 'text-teal-700' : 'text-slate-300 hover:text-teal-600/60'}`}
                     >
                         비밀번호 찾기
@@ -150,21 +163,48 @@ const FindAccount = () => {
                                 <div className="space-y-6">
                                     <div className="relative group">
                                         <label className="block text-[10px] font-bold text-teal-700 uppercase tracking-widest mb-2 ml-1">휴대폰 번호</label>
-                                        <input 
-                                            value={phoneNo}
-                                            onChange={(e) => setPhoneNo(e.target.value.replace(/[^0-9]/g, ''))}
-                                            className="w-full px-6 py-4 bg-slate-50 border-none rounded-xl focus:bg-white focus:shadow-xl transition-all duration-300 text-on-surface placeholder:text-slate-300 font-medium outline-none" 
-                                            placeholder="01012345678" 
-                                            type="tel"
-                                        />
+                                        <div className="flex gap-2">
+                                            <input 
+                                                value={phoneNo}
+                                                onChange={(e) => setPhoneNo(e.target.value.replace(/[^0-9]/g, ''))}
+                                                disabled={isPhoneVerified}
+                                                className="flex-grow px-6 py-4 bg-slate-50 border-none rounded-xl font-medium outline-none disabled:opacity-50" 
+                                                placeholder="01012345678" 
+                                                type="tel"
+                                            />
+                                            <button 
+                                                type="button" 
+                                                onClick={handleSendCode} 
+                                                disabled={isPhoneVerified}
+                                                className="px-4 py-2 bg-teal-600 text-white rounded-xl font-bold text-xs disabled:opacity-50"
+                                            >
+                                                {isCodeSent ? '재발송' : '인증요청'}
+                                            </button>
+                                        </div>
                                     </div>
+
+                                    {isCodeSent && !isPhoneVerified && (
+                                        <div className="relative">
+                                            <label className="block text-[10px] font-bold text-teal-700 uppercase tracking-widest mb-2 ml-1">인증번호</label>
+                                            <div className="flex gap-2">
+                                                <input 
+                                                    value={authCode}
+                                                    onChange={(e) => setAuthCode(e.target.value)}
+                                                    className="flex-grow px-6 py-4 bg-slate-50 border-none rounded-xl font-medium outline-none" 
+                                                    placeholder="6자리 숫자" 
+                                                    type="text"
+                                                />
+                                                <button 
+                                                    type="button" 
+                                                    onClick={handleVerifyCode} 
+                                                    className="px-6 py-2 bg-primary text-white rounded-xl font-bold text-xs"
+                                                >
+                                                    확인
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                                <button 
-                                    onClick={handleFindId}
-                                    className="w-full py-5 rounded-full bg-gradient-to-r from-primary to-teal-800 text-white font-bold text-lg shadow-2xl shadow-primary/20 active:scale-95 transition-all outline-none"
-                                >
-                                    아이디 찾기
-                                </button>
                             </div>
                         ) : (
                             <div className="space-y-8">

@@ -42,7 +42,7 @@ const memoryUpload = multer({ storage: memoryStorage });
 router.get('/dashboard', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
-        
+
         // 1. 사용자 정보 및 CUST_ID 조회
         const [uRows] = await pool.execute(`
             SELECT u.CUST_ID, u.USER_NM, 
@@ -97,17 +97,17 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
 
             // 상태가 'Y'이거나 'P'인 경우, 그리고 종료일이 지나지 않았거나 무기한인 경우
             if (r.RESTRICT_STAT === 'P') {
-                restriction = { 
-                    restricted: true, 
-                    type: 'PERMANENT', 
-                    message: '귀하는 무기한 이용 제한 상태입니다. 고객센터에 문의해주세요.' 
+                restriction = {
+                    restricted: true,
+                    type: 'PERMANENT',
+                    message: '귀하는 무기한 이용 제한 상태입니다. 고객센터에 문의해주세요.'
                 };
             } else if (r.RESTRICT_STAT === 'Y' && endDt && now <= endDt) {
                 const endStr = endDt.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
-                restriction = { 
-                    restricted: true, 
-                    type: 'TEMPORARY', 
-                    message: `${endStr}까지 서비스 이용이 제한됩니다.` 
+                restriction = {
+                    restricted: true,
+                    type: 'TEMPORARY',
+                    message: `${endStr}까지 서비스 이용이 제한됩니다.`
                 };
             }
         }
@@ -133,19 +133,16 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
 router.get('/check-restriction', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
-        
-        // 1. USER_UUID 조회
-        const [uRows] = await pool.execute('SELECT USER_UUID FROM TB_USER WHERE USER_ID = ?', [userId]);
-        if (uRows.length === 0) return res.status(404).json({ success: false, message: '사용자를 찾을 수 없습니다.' });
-        
-        const { USER_UUID: userUuid } = uRows[0];
+
+        // 1. CUST_ID 조회 (req.user에서 가져옴)
+        const custId = req.user.custId;
 
         // 2. 거래제한 상태 조회
         const [rows] = await pool.execute(`
             SELECT RESTRICT_STAT, RESTRICT_START_DT, RESTRICT_END_DT 
             FROM TB_USER_CANCEL_MANAGE 
-            WHERE USER_UUID = ? AND USER_TYPE = 'TRAVELER'
-        `, [userUuid]);
+            WHERE CUST_ID = ? AND USER_TYPE = 'TRAVELER'
+        `, [custId]);
 
         if (rows.length === 0) {
             return res.json({ restricted: false });
@@ -155,10 +152,10 @@ router.get('/check-restriction', authenticateToken, async (req, res) => {
 
         // 무기한 제한 (P)
         if (RESTRICT_STAT === 'P') {
-            return res.json({ 
-                restricted: true, 
-                type: 'PERMANENT', 
-                message: '귀하는 무기한 이용 제한 상태입니다. 고객센터에 문의해주세요.' 
+            return res.json({
+                restricted: true,
+                type: 'PERMANENT',
+                message: '귀하는 무기한 이용 제한 상태입니다. 고객센터에 문의해주세요.'
             });
         }
 
@@ -170,10 +167,10 @@ router.get('/check-restriction', authenticateToken, async (req, res) => {
 
             if (start && end && now >= start && now <= end) {
                 const endStr = end.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
-                return res.json({ 
-                    restricted: true, 
-                    type: 'TEMPORARY', 
-                    message: `${endStr}까지 서비스 이용이 제한되어 신규 요청이 불가능합니다.` 
+                return res.json({
+                    restricted: true,
+                    type: 'TEMPORARY',
+                    message: `${endStr}까지 서비스 이용이 제한되어 신규 요청이 불가능합니다.`
                 });
             }
         }
@@ -319,7 +316,7 @@ router.post('/profile/update', authenticateToken, async (req, res) => {
 // 3. 비밀번호 변경
 router.post('/profile/change-password', authenticateToken, async (req, res) => {
     const { currentPassword, newPassword } = req.body;
-    
+
     if (!currentPassword || !newPassword) {
         return res.status(400).json({ message: '비밀번호를 입력해주세요.' });
     }
@@ -327,8 +324,8 @@ router.post('/profile/change-password', authenticateToken, async (req, res) => {
     // 비밀번호 정규식: 8자 이상, 영문, 숫자, 특수문자 조합
     const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
     if (!passwordRegex.test(newPassword)) {
-        return res.status(400).json({ 
-            message: '비밀번호는 8자 이상이며, 영문, 숫자, 특수문자를 모두 포함해야 합니다.' 
+        return res.status(400).json({
+            message: '비밀번호는 8자 이상이며, 영문, 숫자, 특수문자를 모두 포함해야 합니다.'
         });
     }
 
@@ -338,7 +335,7 @@ router.post('/profile/change-password', authenticateToken, async (req, res) => {
         await connection.beginTransaction();
 
         const [rows] = await connection.execute('SELECT PASSWORD FROM TB_USER WHERE USER_ID = ? AND USER_STAT = "ACTIVE"', [userId]);
-        
+
         if (rows.length === 0) {
             await connection.rollback();
             return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
@@ -346,7 +343,7 @@ router.post('/profile/change-password', authenticateToken, async (req, res) => {
 
         const user = rows[0];
         const isMatch = await bcrypt.compare(currentPassword, user.PASSWORD);
-        
+
         if (!isMatch) {
             await connection.rollback();
             return res.status(401).json({ message: '현재 비밀번호가 일치하지 않습니다.' });
@@ -357,10 +354,10 @@ router.post('/profile/change-password', authenticateToken, async (req, res) => {
         const custId = uRows.length > 0 ? uRows[0].CUST_ID : userId;
 
         const hashedNewPassword = await bcrypt.hash(newPassword, 10);
-        
+
         // 1. 비밀번호 업데이트 (MOD_ID, MOD_DT 포함)
         await connection.execute(
-            'UPDATE TB_USER SET PASSWORD = ?, MOD_ID = ?, MOD_DT = NOW() WHERE USER_ID = ?', 
+            'UPDATE TB_USER SET PASSWORD = ?, MOD_ID = ?, MOD_DT = NOW() WHERE USER_ID = ?',
             [hashedNewPassword, custId, userId]
         );
 
@@ -379,7 +376,7 @@ router.post('/profile/change-password', authenticateToken, async (req, res) => {
 router.get('/dashboard', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
-        
+
         // 사용자의 정보(이름, 프로필 사진)와 견적 현황을 가져오는 쿼리
         // DATA_STAT: AUCTION, BUS_CHANGE -> 견적진행중 (countProgressing)
         // DATA_STAT: BIDDING -> 승인대기중 (countWaitingApproval)
@@ -400,7 +397,7 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
         }
 
         const stats = rows[0];
-        
+
         // 이미지 경로 처리 (GCS URL인 경우 백엔드 프록시 경로로 변환)
         let profileImage = stats.profileImage;
         if (profileImage && profileImage.startsWith('http')) {
@@ -437,7 +434,7 @@ router.post('/auth/send-code', authenticateToken, async (req, res) => {
         // 6자리 인증번호 생성
         const authCode = Math.floor(100000 + Math.random() * 900000).toString();
         const msgContent = `[busTaams] 본인확인 인증번호 [${authCode}]를 입력해주세요.`;
-        
+
         // TB_SMS_LOG 기록 - DB 오류가 전체 로직을 중단시키지 않도록 예외 처리 분리
         try {
             // userId로 CUST_ID 조회
@@ -457,10 +454,10 @@ router.post('/auth/send-code', authenticateToken, async (req, res) => {
 
         console.log(`[SMS AUTH] To: ${phone}, Code: ${authCode}`);
 
-        res.json({ 
-            success: true, 
+        res.json({
+            success: true,
             message: '인증번호가 발송되었습니다.',
-            code: authCode 
+            code: authCode
         });
     } catch (err) {
         console.error('Critical Send SMS Error:', err);
@@ -608,7 +605,7 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
                 JOIN TB_USER u ON r.TRAVELER_ID = u.CUST_ID
                 WHERE r.REQ_ID = ? AND u.USER_ID = ?
             `, [reqId, req.user.userId]);
-            
+
             if (fallbackRows.length > 0) {
                 tripRows = fallbackRows.map(r => ({
                     id: r.REQ_ID, title: r.TRIP_TITLE, startAddr: r.START_ADDR, endAddr: r.END_ADDR,
@@ -636,7 +633,7 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
 
         const fullRoute = [];
         fullRoute.push({ type: 'START', addr: tripInfo.startAddr, title: '출발지' });
-        
+
         viaRows.forEach(v => {
             // 이미 출발지와 도착지를 별도로 추가하므로 START_NODE와 END_NODE는 제외합니다.
             if (v.type === 'START_NODE' || v.type === 'END_NODE') return;
@@ -647,7 +644,7 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
             else if (v.type === 'ROUND_TRIP') title = '목적지';
             fullRoute.push({ type: v.type, addr: v.addr, title: title });
         });
-        
+
         fullRoute.push({ type: 'END', addr: tripInfo.endAddr, title: '도착지' });
         tripInfo.fullRoute = fullRoute;
 
@@ -762,7 +759,7 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
                         if (Array.isArray(ids)) {
                             busImages = ids.map(id => photoMap[id]).filter(Boolean);
                         }
-                    } catch (e) {}
+                    } catch (e) { }
                 }
 
                 unitMap[row.unitSeq].estimates.push({
@@ -784,8 +781,8 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
             }
         });
 
-        res.json({ 
-            success: true, 
+        res.json({
+            success: true,
             data: {
                 tripSummary: {
                     title: tripInfo.title,
@@ -816,13 +813,13 @@ router.post('/approve-bid', authenticateToken, async (req, res) => {
         // 1. 해당 예약 정보 조회
         const [bidRows] = await pool.execute('SELECT REQ_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [resId]);
         if (bidRows.length === 0) return res.status(404).json({ success: false, error: '입찰 정보를 찾을 수 없습니다.' });
-        
+
         const { REQ_ID: reqId, REQ_BUS_SEQ: unitSeq } = bidRows[0];
 
         // 2. 해당 차량의 모든 입찰을 일단 대기 상태로 (혹은 다른 로직)
         // 3. 선택된 입찰만 CONFIRM
         await pool.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = "CONFIRM", CONFIRM_DT = NOW() WHERE RES_ID = ?', [resId]);
-        
+
         // 4. 차량 상태도 CONFIRM으로 변경
         await pool.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = "CONFIRM" WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?', [reqId, unitSeq]);
 
@@ -831,11 +828,11 @@ router.post('/approve-bid', authenticateToken, async (req, res) => {
             'SELECT COUNT(*) as total, SUM(CASE WHEN DATA_STAT = "CONFIRM" THEN 1 ELSE 0 END) as confirmed FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ?',
             [reqId]
         );
-        
+
         if (busStats[0].total > 0 && busStats[0].total === busStats[0].confirmed) {
             await pool.execute('UPDATE TB_AUCTION_REQ SET DATA_STAT = "CONFIRM", MOD_DT = NOW() WHERE REQ_ID = ?', [reqId]);
         }
-        
+
         res.json({ success: true });
     } catch (error) {
         console.error('Approve bid error:', error);
@@ -849,7 +846,7 @@ router.post('/approve-all', authenticateToken, async (req, res) => {
     try {
         // 현재 BIDDING 상태인 모든 차량에 대해, 각 차량별로 첫 번째 입찰을 승인하는 예시 로직
         // (실제로는 사용자가 선택한 견적들이 있어야 하지만, 요청에 따라 전체 승인 처리)
-        
+
         const [bids] = await pool.execute(`
             SELECT RES_ID, REQ_BUS_SEQ 
             FROM TB_BUS_RESERVATION 
@@ -891,20 +888,20 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
         // 1. ID 해석 (REQ_ID 인지 RES_ID 인지 구분하며 사용자 권한 연동)
         let reqId = null;
         console.log(`[DEBUG] idParam: '${idParam}', length: ${idParam?.length}`);
-        
+
         // 우선 요청번호(REQ_ID)가 본인 것인지 확인
         const [reqCheck] = await pool.execute(
-            'SELECT REQ_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ? AND TRAVELER_ID = ?', 
+            'SELECT REQ_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ? AND TRAVELER_ID = ?',
             [idParam, custId]
         );
-        
+
         if (reqCheck.length > 0) {
             reqId = idParam;
             console.log(`[App Reservation Detail] Found matching REQ_ID: ${idParam}`);
         } else {
             // 요청번호로 없거나 본인 것이 아니라면, 예약번호(RES_ID)로 조회 시도 (본인 것인지 포함)
             const [resCheck] = await pool.execute(
-                'SELECT REQ_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ? AND TRAVELER_ID = ?', 
+                'SELECT REQ_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ? AND TRAVELER_ID = ?',
                 [idParam, custId]
             );
             if (resCheck.length > 0) {
@@ -913,7 +910,7 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
             } else {
                 // 둘 다 아니라면 (혹은 다른 사람의 REQ_ID인 경우)
                 // 보안상 상세 메시지보다는 404로 처리하거나, 기존 로직처럼 reqId를 idParam으로 두고 아래에서 403 처리
-                reqId = idParam; 
+                reqId = idParam;
             }
         }
 
@@ -980,7 +977,7 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
                 let title = '경유지';
                 let type = 'VIA';
 
-                switch(v.type) {
+                switch (v.type) {
                     case 'START_NODE':
                         title = '출발지';
                         type = 'START';
@@ -1019,7 +1016,7 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
             fullRoute.push({ type: 'START', addr: reservation.from_addr, title: '출발지', time: reservation.start_date });
             fullRoute.push({ type: 'END', addr: reservation.to_addr, title: '도착지', time: reservation.end_date });
         }
-        
+
         console.log(`[DEBUG] Final fullRoute for REQ_ID ${reqId}:`, JSON.stringify(fullRoute, null, 2));
         reservation.route = fullRoute;
 
@@ -1066,7 +1063,7 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
                             'SELECT GCS_PATH FROM TB_FILE_MASTER WHERE FILE_ID IN (?)',
                             [photoIds]
                         );
-                        
+
                         const paths = fileRows.map(f => {
                             // 이미 풀 URL(https://...) 형태라면 그대로 사용, 아니면 프록시 경로 사용
                             if (f.GCS_PATH && f.GCS_PATH.startsWith('http')) {
@@ -1074,7 +1071,7 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
                             }
                             return `/api/common/display-image?path=${encodeURIComponent(f.GCS_PATH)}`;
                         });
-                        
+
                         bus.busPhotos = paths;
                         bus.busImage = paths[0]; // 첫 번째 이미지를 대표 이미지로 설정
                     } else {
@@ -1195,7 +1192,7 @@ router.get('/received-bids', authenticateToken, async (req, res) => {
         sql += " ORDER BY b.REG_DT DESC";
 
         const [rows] = await pool.execute(sql, params);
-        
+
         // [추가] 상단 요약 정보를 위해 예약 마스터 정보 조회
         const [masterRows] = await pool.execute(`
             SELECT 
@@ -1241,10 +1238,10 @@ router.get('/received-bids', authenticateToken, async (req, res) => {
             };
         });
 
-        res.json({ 
-            success: true, 
+        res.json({
+            success: true,
             data: processedRows,
-            reservation: master 
+            reservation: master
         });
     } catch (error) {
         console.error('Fetch received bids error:', error);
@@ -1305,7 +1302,7 @@ router.get('/bid-detail/:id', authenticateToken, async (req, res) => {
         };
 
         bid.avatar = processUrl(bid.avatar);
-        
+
         // 편의시설 파싱
         try {
             if (bid.amenities) {
@@ -1327,19 +1324,19 @@ router.get('/bid-detail/:id', authenticateToken, async (req, res) => {
                 if (Array.isArray(photoIds) && photoIds.length > 0) {
                     // 유효한 ID들만 필터링
                     const validIds = photoIds.map(id => String(id).trim()).filter(id => id && id !== 'null');
-                    
+
                     if (validIds.length > 0) {
                         const [fileRows] = await pool.execute(
                             `SELECT FILE_ID, GCS_PATH FROM TB_FILE_MASTER WHERE FILE_ID IN (${validIds.map(() => '?').join(',')})`,
                             validIds
                         );
-                        
+
                         // ID별 경로 매핑
                         const fileMap = {};
                         fileRows.forEach(f => {
                             fileMap[String(f.FILE_ID).trim()] = f.GCS_PATH;
                         });
-                        
+
                         // 원본 순서 유지하며 URL 생성
                         finalPhotos = validIds.map(id => {
                             const path = fileMap[id];
@@ -1378,7 +1375,7 @@ router.post('/auction-req', authenticateToken, async (req, res) => {
         await connection.beginTransaction();
         const userId = req.user.userId;
         const { startAddr, endAddr, startDt, endDt, passengerCnt, buses, vias, tripTitle: clientTripTitle } = req.body;
-        
+
         console.log('[Auction Request] Incoming Data:', { userId, startAddr, endAddr, startDt, endDt });
 
         if (!startAddr || !endAddr || !startDt || !endDt) {
@@ -1415,12 +1412,12 @@ router.post('/auction-req', authenticateToken, async (req, res) => {
 
         // ID 생성
         const reqId = await getNextId('TB_AUCTION_REQ', 'REQ_ID', 10);
-        
+
         // 데이터 정제
         const safeBuses = Array.isArray(buses) ? buses : [];
         const totalReqAmt = safeBuses.reduce((acc, b) => acc + (parseInt(b.reqAmt, 10) || 0), 0);
         const tripTitle = clientTripTitle || `${startAddr.split(' ')[0]} -> ${endAddr.split(' ')[0]} 여정`;
-        
+
         // MySQL DATETIME 형식으로 변환 (ISO -> YYYY-MM-DD HH:mm:ss)
         const formatDt = (dtStr) => dtStr.replace('T', ' ').replace('Z', '').substring(0, 19);
 
@@ -1455,7 +1452,7 @@ router.post('/auction-req', authenticateToken, async (req, res) => {
             let busSeq = 1;
             for (const bus of safeBuses) {
                 const busAmt = parseInt(bus.reqAmt, 10) || 0;
-                
+
                 // 수수료 계산 (6.6%, 5.5%, 1.1%)
                 const feeTotal = Math.floor(busAmt * 0.066);
                 const feeRefund = Math.floor(busAmt * 0.055);
@@ -1469,44 +1466,44 @@ router.post('/auction-req', authenticateToken, async (req, res) => {
                         REG_ID, MOD_ID
                     ) VALUES (?, ?, ?, 'AUCTION', ?, ?, ?, ?, ?, ?, ?, ?)
                 `, [
-                    reqId, busSeq, bus.busTypeCd, parseInt(bus.tollsAmt, 10) || 0, parseInt(bus.fuelCost, 10) || 0, 
+                    reqId, busSeq, bus.busTypeCd, parseInt(bus.tollsAmt, 10) || 0, parseInt(bus.fuelCost, 10) || 0,
                     busAmt, feeTotal, feeRefund, feeAttribution, custId, custId
                 ]);
                 busSeq++;
             }
         }
 
-         const safeVias = Array.isArray(vias) ? vias : [];
-         if (safeVias.length > 0) {
-              for (let i = 0; i < safeVias.length; i++) {
-                  const via = safeVias[i];
-                  let viaType = 'START_WAY';
-                  
-                  // 프론트엔드 타입 매핑
-                  const rawType = String(via.type || via.viaType || '').toLowerCase().trim();
-                  
-                  if (rawType === 'dep' || rawType === 'start' || rawType.includes('start_node')) {
-                      viaType = 'START_NODE';
-                  } else if (rawType === 'arr' || rawType === 'round' || rawType.includes('round_trip')) {
-                      viaType = 'ROUND_TRIP';
-                  } else if (rawType === 'end' || rawType === 'finish' || rawType.includes('end_node')) {
-                      viaType = 'END_NODE';
-                  } else if (rawType === 'stop' || rawType === 'via' || rawType.includes('start_way')) {
-                      viaType = 'START_WAY';
-                  } else if (rawType === 'retstop' || rawType === 'returnstop' || rawType.includes('end_way')) {
-                      viaType = 'END_WAY';
-                  } else {
-                      viaType = 'START_WAY'; // 최후의 기본값
-                  }
+        const safeVias = Array.isArray(vias) ? vias : [];
+        if (safeVias.length > 0) {
+            for (let i = 0; i < safeVias.length; i++) {
+                const via = safeVias[i];
+                let viaType = 'START_WAY';
 
-                  console.log(`[Auction Request] Mapping Result - Raw: "${rawType}", Mapped: "${viaType}"`);
-                  await connection.execute(`
+                // 프론트엔드 타입 매핑
+                const rawType = String(via.type || via.viaType || '').toLowerCase().trim();
+
+                if (rawType === 'dep' || rawType === 'start' || rawType.includes('start_node')) {
+                    viaType = 'START_NODE';
+                } else if (rawType === 'arr' || rawType === 'round' || rawType.includes('round_trip')) {
+                    viaType = 'ROUND_TRIP';
+                } else if (rawType === 'end' || rawType === 'finish' || rawType.includes('end_node')) {
+                    viaType = 'END_NODE';
+                } else if (rawType === 'stop' || rawType === 'via' || rawType.includes('start_way')) {
+                    viaType = 'START_WAY';
+                } else if (rawType === 'retstop' || rawType === 'returnstop' || rawType.includes('end_way')) {
+                    viaType = 'END_WAY';
+                } else {
+                    viaType = 'START_WAY'; // 최후의 기본값
+                }
+
+                console.log(`[Auction Request] Mapping Result - Raw: "${rawType}", Mapped: "${viaType}"`);
+                await connection.execute(`
                       INSERT INTO TB_AUCTION_REQ_VIA (
                           REQ_ID, VIA_SEQ, VIA_TYPE, VIA_ADDR, REG_ID, MOD_ID
                       ) VALUES (?, ?, ?, ?, ?, ?)
                   `, [reqId, i + 1, viaType, via.addr || via.viaAddr || '', custId, custId]);
-              }
-         } else {
+            }
+        } else {
             console.log('[Auction Request] Inserting Default Vias (Start/Round/End)');
             // 출발지
             await connection.execute(`INSERT INTO TB_AUCTION_REQ_VIA (REQ_ID, VIA_SEQ, VIA_TYPE, VIA_ADDR, REG_ID, MOD_ID) VALUES (?, 1, 'START_NODE', ?, ?, ?)`, [reqId, startAddr, custId, custId]);
@@ -1522,8 +1519,8 @@ router.post('/auction-req', authenticateToken, async (req, res) => {
     } catch (error) {
         if (connection) await connection.rollback();
         console.error('Auction Request Critical Error:', error);
-        res.status(500).json({ 
-            success: false, 
+        res.status(500).json({
+            success: false,
             error: error.message || '요청 저장 중 오류가 발생했습니다.',
             detail: error.sqlMessage || null // SQL 에러 메시지가 있으면 전달
         });
@@ -1652,7 +1649,7 @@ router.put('/auction-req/:id', authenticateToken, async (req, res) => {
                         REG_ID, MOD_ID
                     ) VALUES (?, ?, ?, 'AUCTION', ?, ?, ?, ?, ?, ?, ?, ?)
                 `, [
-                    reqId, busSeq++, bus.busTypeCd || bus.name, parseInt(bus.tollsAmt, 10) || 0, parseInt(bus.fuelCost, 10) || 0, 
+                    reqId, busSeq++, bus.busTypeCd || bus.name, parseInt(bus.tollsAmt, 10) || 0, parseInt(bus.fuelCost, 10) || 0,
                     busAmt, feeTotal, feeRefund, feeAttribution, custId, custId
                 ]);
             }
@@ -1794,7 +1791,7 @@ router.post('/inquiries', authenticateToken, async (req, res) => {
 
         const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
         const custId = uRows.length > 0 ? uRows[0].CUST_ID : userId;
-        
+
         // INQ_SEQ 채번 (CUST_ID별 순번)
         const [seqRows] = await pool.execute('SELECT IFNULL(MAX(INQ_SEQ), 0) + 1 as nextSeq FROM TB_INQUIRY WHERE CUST_ID = ?', [custId]);
         const nextSeq = seqRows[0].nextSeq;
@@ -1945,7 +1942,7 @@ router.get('/reservations', authenticateToken, async (req, res) => {
                         if (Array.isArray(photos) && photos.length > 0) {
                             allPhotoIds.push(String(photos[0]).trim());
                         }
-                    } catch (e) {}
+                    } catch (e) { }
                 }
             });
 
@@ -1965,11 +1962,11 @@ router.get('/reservations', authenticateToken, async (req, res) => {
             rows.forEach(resObj => {
                 // 1. 노선 정보 구성 (DB 데이터 기반 상세 명칭 추출)
                 const vias = allVias.filter(v => v.REQ_ID === resObj.id);
-                
+
                 // 출발지/도착지 명칭 (주소 전체를 쓰거나 주요 명칭 추출)
                 const startPoint = resObj.startAddr || '출발지';
                 const endPoint = resObj.endAddr || '도착지';
-                
+
                 // 'ROUND_TRIP' (목적지) 찾기
                 const destination = vias.find(v => v.VIA_TYPE === 'ROUND_TRIP');
                 const destPoint = destination ? destination.VIA_ADDR : null;
@@ -1992,7 +1989,7 @@ router.get('/reservations', authenticateToken, async (req, res) => {
                             if (Array.isArray(photos) && photos.length > 0) {
                                 busImg = photoMap[String(photos[0]).trim()];
                             }
-                        } catch (e) {}
+                        } catch (e) { }
                     }
 
                     return {
@@ -2044,7 +2041,7 @@ router.post('/cancel-bus', authenticateToken, async (req, res) => {
 
         // 3. 해당 차량 유닛 상태 변경
         await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?', [custId, reqId, unitSeq]);
-        
+
         // 4. 관련 입찰 정보 취소
         await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT NOT IN (\'CONFIRM\', \'DONE\')', [custId, reqId, unitSeq]);
 
@@ -2097,7 +2094,7 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
             const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20, connection);
             const fileName = `cancel_docs/${fileId}${path.extname(req.file.originalname)}`;
             const file = getBucket().file(fileName);
-            
+
             await file.save(req.file.buffer, {
                 metadata: { contentType: req.file.mimetype }
             });
@@ -2110,36 +2107,29 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
                 VALUES (?, 'CANCEL_DOC', ?, ?, ?, ?, ?, ?, ?)
             `;
             await connection.execute(fileQuery, [
-                fileId, bucketName, gcsPath, req.file.originalname, 
-                path.extname(req.file.originalname).replace('.', ''), 
+                fileId, bucketName, gcsPath, req.file.originalname,
+                path.extname(req.file.originalname).replace('.', ''),
                 req.file.size, custId, custId
             ]);
         }
 
-        // 3. 사용자 정보(USER_UUID) 및 현재 취소 횟수 조회
-        const [uInfo] = await connection.execute('SELECT USER_UUID FROM TB_USER WHERE CUST_ID = ?', [custId]);
-        const userUuid = uInfo[0]?.USER_UUID;
-        if (!userUuid) {
-            await connection.rollback();
-            return res.status(404).json({ success: false, error: '사용자 UUID를 찾을 수 없습니다.' });
-        }
-
+        // 3. 현재 취소 횟수 조회
         const [manageRows] = await connection.execute(
-            'SELECT CANCEL_CNT FROM TB_USER_CANCEL_MANAGE WHERE USER_UUID = ? AND USER_TYPE = \'TRAVELER\'', 
-            [userUuid]
+            'SELECT CANCEL_CNT FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ? AND USER_TYPE = \'TRAVELER\'',
+            [custId]
         );
-        
+
         let currentCnt = 0;
         if (manageRows.length > 0) {
             currentCnt = manageRows[0].CANCEL_CNT;
         } else {
             // 정보가 없으면 초기 행 생성
             await connection.execute(
-                'INSERT INTO TB_USER_CANCEL_MANAGE (USER_UUID, USER_TYPE, CUST_ID, CANCEL_CNT, REG_ID, MOD_ID) VALUES (?, \'TRAVELER\', ?, 0, ?, ?)', 
-                [userUuid, custId, custId, custId]
+                'INSERT INTO TB_USER_CANCEL_MANAGE (CUST_ID, USER_TYPE, CANCEL_CNT, REG_ID, MOD_ID) VALUES (?, \'TRAVELER\', ?, 0, ?, ?)',
+                [custId, custId, custId]
             );
         }
-        
+
         const newCnt = currentCnt + 1;
         let restrictMonths = 0;
         let restrictStat = 'N'; // N: 정상, Y: 이용제한, P: 무기한(Permanent)
@@ -2168,8 +2158,8 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
                     RESTRICT_START_DT = NOW(),
                     RESTRICT_END_DT = NULL,
                     MOD_ID = ?, MOD_DT = NOW()
-                WHERE USER_UUID = ? AND USER_TYPE = 'TRAVELER'
-            `, [newCnt, custId, userUuid]);
+                WHERE CUST_ID = ? AND USER_TYPE = 'TRAVELER'
+            `, [newCnt, custId, custId]);
         } else if (restrictStat === 'Y') {
             await connection.execute(`
                 UPDATE TB_USER_CANCEL_MANAGE 
@@ -2179,25 +2169,33 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
                     RESTRICT_START_DT = NOW(),
                     RESTRICT_END_DT = DATE_ADD(NOW(), INTERVAL ? MONTH),
                     MOD_ID = ?, MOD_DT = NOW()
-                WHERE USER_UUID = ? AND USER_TYPE = 'TRAVELER'
-            `, [newCnt, restrictStat, restrictMonths, custId, userUuid]);
+                WHERE CUST_ID = ? AND USER_TYPE = 'TRAVELER'
+            `, [newCnt, restrictStat, restrictMonths, custId, custId]);
         } else {
             await connection.execute(`
                 UPDATE TB_USER_CANCEL_MANAGE 
                 SET CANCEL_CNT = ?, 
                     CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
                     MOD_ID = ?, MOD_DT = NOW()
-                WHERE USER_UUID = ? AND USER_TYPE = 'TRAVELER'
-            `, [newCnt, custId, userUuid]);
+                WHERE CUST_ID = ? AND USER_TYPE = 'TRAVELER'
+            `, [newCnt, custId, custId]);
         }
 
         // 4. 취소 이력 테이블 등록
+        const [[seqRow]] = await connection.execute(`
+            SELECT IFNULL(MAX(HIST_SEQ), 0) + 1 AS HIST_SEQ
+            FROM TB_USER_CANCEL_HIST
+            WHERE CUST_ID = ?
+        `, [custId]);
+
+        const histSeq = seqRow.HIST_SEQ;
+
         await connection.execute(`
             INSERT INTO TB_USER_CANCEL_HIST (
-                HIST_UUID, USER_UUID, USER_TYPE, CANCEL_REASON_GRP_CD, CANCEL_REASON_DTL_CD, 
+                CUST_ID, HIST_SEQ, USER_TYPE, CANCEL_REASON_GRP_CD, CANCEL_REASON_DTL_CD, 
                 CANCEL_REASON_TEXT, REASON_DOC_FILE_NM, REG_ID, MOD_ID
-            ) VALUES (UUID_TO_BIN(UUID()), ?, 'TRAVELER', 'CANCEL_REASON', ?, ?, ?, ?, ?)
-        `, [userUuid, cancelCode || '06', cancelReasonText || '', gcsPath, custId, custId]);
+            ) VALUES (?, ?, 'TRAVELER', 'CANCEL_REASON', ?, ?, ?, ?, ?)
+        `, [custId, histSeq, cancelCode || '06', cancelReasonText || '', gcsPath, custId, custId]);
 
         // 5. 기존 상태 변경 로직 (전체 요청, 차량 유닛, 응찰 정보)
         await connection.execute('UPDATE TB_AUCTION_REQ SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?', [custId, reqId]);
@@ -2219,7 +2217,7 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
 router.get('/completed-missions', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
-        
+
         // 0. CUST_ID 조회
         const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
         if (uRows.length === 0) return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });

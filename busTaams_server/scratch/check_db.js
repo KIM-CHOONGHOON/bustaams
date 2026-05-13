@@ -1,50 +1,30 @@
 const mysql = require('mysql2/promise');
+require('dotenv').config();
 
-async function checkReservation(id) {
+async function checkSchema() {
     const connection = await mysql.createConnection({
-        host: '127.0.0.1',
-        port: 3307,
-        user: 'master',
-        password: '!QAZ2wsx2026@',
-        database: 'bustaams'
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME
     });
 
     try {
-        console.log(`Checking ID: ${id}`);
-        
-        // Check if it's REQ_ID
-        const [req] = await connection.query('SELECT * FROM TB_AUCTION_REQ WHERE REQ_ID = ?', [id]);
-        if (req.length > 0) {
-            console.log('Found in TB_AUCTION_REQ:');
-            console.log(JSON.stringify(req[0], null, 2));
-            
-            const [vias] = await connection.query('SELECT * FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = ? ORDER BY VIA_SEQ', [id]);
-            console.log(`Found ${vias.length} waypoints in TB_AUCTION_REQ_VIA:`);
-            console.log(JSON.stringify(vias, null, 2));
-        } else {
-            console.log('NOT found in TB_AUCTION_REQ');
+        const [rows] = await connection.execute('DESCRIBE TB_USER');
+        const hasUserUuid = rows.some(r => r.Field === 'USER_UUID');
+        console.log(`TB_USER has USER_UUID: ${hasUserUuid}`);
+        console.log('TB_USER columns:', rows.map(r => r.Field).join(', '));
+
+        const tablesToCheck = ['TB_BUS_RESERVATION', 'TB_AUCTION_REQ', 'TB_DRIVER_BID', 'TB_REVIEW'];
+        for (const tableName of tablesToCheck) {
+            try {
+                const [cols] = await connection.execute(`DESCRIBE ${tableName}`);
+                console.log(`${tableName} columns:`, cols.map(c => c.Field).join(', '));
+            } catch (e) {
+                console.log(`${tableName} does not exist.`);
+            }
         }
-
-        // Check if it's RES_ID
-        const [res] = await connection.query('SELECT * FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [id]);
-        if (res.length > 0) {
-            console.log('Found in TB_BUS_RESERVATION:');
-            console.log(JSON.stringify(res[0], null, 2));
-            
-            const reqId = res[0].REQ_ID;
-            console.log(`Associated REQ_ID: ${reqId}`);
-            
-            const [req2] = await connection.query('SELECT * FROM TB_AUCTION_REQ WHERE REQ_ID = ?', [reqId]);
-            console.log('Associated TB_AUCTION_REQ:');
-            console.log(JSON.stringify(req2[0], null, 2));
-
-            const [vias2] = await connection.query('SELECT * FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = ? ORDER BY VIA_SEQ', [reqId]);
-            console.log(`Found ${vias2.length} waypoints in TB_AUCTION_REQ_VIA:`);
-            console.log(JSON.stringify(vias2, null, 2));
-        } else {
-            console.log('NOT found in TB_BUS_RESERVATION');
-        }
-
     } catch (err) {
         console.error(err);
     } finally {
@@ -52,4 +32,4 @@ async function checkReservation(id) {
     }
 }
 
-checkReservation('0000000005');
+checkSchema();

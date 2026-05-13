@@ -64,21 +64,36 @@ const ReservationListCustomer = () => {
                         <button onClick={() => navigate(-1)} className="text-teal-800 hover:bg-slate-50 p-2 rounded-full transition-all">
                             <span className="material-symbols-outlined">arrow_back</span>
                         </button>
-                        <h1 className="text-3xl font-black text-teal-900 tracking-tighter font-headline italic">busTaams</h1>
+                        <h1 className="text-3xl font-black text-teal-900 tracking-tighter font-headline">예약 내역</h1>
                     </div>
-                    <div className="flex items-center gap-8">
-                        <div className="w-12 h-12 rounded-2xl overflow-hidden border-2 border-white shadow-2xl rotate-3 cursor-pointer" onClick={() => navigate('/user-profile')}>
-                            {customerProfile?.profileImage ? (
-                                <img 
-                                    src={customerProfile.profileImage.startsWith('http') ? 
-                                        `${customerProfile.profileImage}${customerProfile.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
-                                        `${import.meta.env.VITE_API_BASE_URL || ''}${customerProfile.profileImage.startsWith('/') ? '' : '/'}${customerProfile.profileImage}${customerProfile.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
-                                    alt="Profile" 
-                                    className="w-full h-full object-cover"
-                                />
-                            ) : (
-                                <img alt="User" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBDAuydGKeWcVXnNwZDRc1I8NFS_BI9gq969584jVmM5maopYZ63srZ7FvlrWEb_EAlmkWIjBb5BPNcP1t7cxeVW66HWUlO53iZcSpZ7qSCpZdrQUXwvp8X5ibBv6Xx57pJrCmFA8WY8f1W6QCEC0wt2VbiePnFQ6Dco1T3vF-Vkzh0wL5vNyHOTwR2RKCQJ0QLxejtltR8UYIvSuocurIgQmtVJa8pHYHzWuHFe8N8rJRH34uYOlkJtQMcv8C1c99d4lMC41r-mrI" />
-                            )}
+                    <div className="flex items-center gap-3">
+                        <div 
+                            className="w-11 h-11 rounded-2xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden"
+                            onClick={() => navigate('/user-profile')}
+                        >
+                            <div className="w-full h-full rounded-[14px] overflow-hidden bg-slate-50 flex items-center justify-center relative group">
+                                {customerProfile?.profileImage ? (
+                                    <img 
+                                        alt="Customer Profile" 
+                                        src={customerProfile.profileImage.startsWith('http') ? 
+                                            `${customerProfile.profileImage}${customerProfile.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
+                                            `${import.meta.env.VITE_API_BASE_URL || ''}${customerProfile.profileImage.startsWith('/') ? '' : '/'}${customerProfile.profileImage}${customerProfile.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                                        onError={(e) => {
+                                            e.target.onerror = null;
+                                            e.target.style.display = 'none';
+                                            if (e.target.nextSibling) {
+                                                e.target.nextSibling.style.display = 'flex';
+                                            }
+                                        }}
+                                    />
+                                ) : (
+                                    <span className="material-symbols-outlined text-teal-600 text-2xl">account_circle</span>
+                                )}
+                                {customerProfile?.profileImage && (
+                                    <span className="material-symbols-outlined text-teal-600 text-2xl hidden items-center justify-center w-full h-full">account_circle</span>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
