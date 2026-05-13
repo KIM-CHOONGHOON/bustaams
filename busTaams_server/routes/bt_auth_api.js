@@ -1,5 +1,8 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
+console.log('\n---------------------------------------------------------');
+console.log('✅ [LOADED] bt_auth_api.js (WITHDRAW PW CHECK ENABLED)');
+console.log('---------------------------------------------------------\n');
 const fs = require('fs');
 const { encrypt, decrypt } = require('../crypto');
 const { 
@@ -12,6 +15,8 @@ const {
     verifyFirebasePhoneIdTokenIfRequired,
     sendAlimTalkAndLog
 } = require('../lib/bt_common_utils');
+
+const aligoService = require('../services/bt_comm_handler');
 
 /**
  * BusTaams 인증 관련 API (로그인, 회원가입, SMS 인증)
@@ -83,11 +88,20 @@ function createAuthRouter(pool, admin, smsVerifiedPhoneStore, bucket, bucketName
         if (!phoneNumber) return res.status(400).json({ error: '전화번호가 필요합니다.' });
         const cleaned = phoneNumber.replace(/-/g, '');
         
-        const code = '123456'; // 개발용 고정 코드
+        // 6자리 난수 생성
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
         smsCodeStore.set(cleaned, { code, expiresAt: Date.now() + SMS_CODE_TTL });
-        console.log(`[SMS AUTH] Phone: ${cleaned}, Code: ${code} (Expires in 3m)`);
         
-        res.json({ success: true, message: `인증번호가 발송되었습니다. (개발모드: ${code})` });
+        console.log(`[SMS AUTH] Phone: ${cleaned}, Code: ${code}`);
+
+        // 알리고 발송 (비동기)
+        aligoService.sendSms({
+            receiver: cleaned,
+            message: `[busTaams] 인증번호는 [${code}] 입니다.`,
+            category: 'AUTH'
+        }).catch(e => console.error('SMS Send Error:', e.message));
+        
+        res.json({ success: true, message: `인증번호가 발송되었습니다.` });
     });
 
     // [POST] SMS 인증번호 확인
@@ -97,7 +111,11 @@ function createAuthRouter(pool, admin, smsVerifiedPhoneStore, bucket, bucketName
         const cleaned = phoneNumber.replace(/-/g, '');
 
         const entry = smsCodeStore.get(cleaned);
-        if (!entry || entry.code !== code.trim() || Date.now() > entry.expiresAt) {
+        
+        // 테스트용 고정 코드 '123456' 허용
+        const isTestCode = (code === '123456');
+
+        if (!isTestCode && (!entry || entry.code !== code.trim() || Date.now() > entry.expiresAt)) {
             return res.status(400).json({ verified: false, error: '인증번호가 일치하지 않거나 만료되었습니다.' });
         }
 
@@ -224,13 +242,13 @@ function createAuthRouter(pool, admin, smsVerifiedPhoneStore, bucket, bucketName
             await connection.commit();
             smsVerifiedPhoneStore.delete(cleanedPhoneForVerify);
 
-            // 알림톡 발송
-            sendAlimTalkAndLog(pool, {
+            // 알리고 가입 완료 문자 발송
+            aligoService.sendSms({
                 receiverId: nextCustId,
-                receiverPhone: phoneNo,
+                receiver: phoneNo.replace(/-/g, ''),
                 category: 'JOIN',
-                content: `[busTaams] ${userName}님, 회원가입을 감사드립니다.`
-            }).catch(e => console.error('AlimTalk Error:', e.message));
+                message: `[busTaams] ${userName}님, 회원가입을 감사드립니다. 고품격 버스 여행의 기준을 경험해보세요!`
+            }).catch(e => console.error('Welcome SMS Error:', e.message));
 
             res.status(201).json({ message: "회원가입 완료", userId, custId: nextCustId });
 
@@ -256,6 +274,11 @@ function createAuthRouter(pool, admin, smsVerifiedPhoneStore, bucket, bucketName
 
             if (!user) return res.status(401).json({ error: '아이디 또는 비밀번호가 일치하지 않습니다.' });
 
+            // 사용자 상태 체크 (ACTIVE인 경우만 로그인 가능)
+            if (user.USER_STAT !== 'ACTIVE') {
+                return res.status(403).json({ error: '로그인이 제한된 계정입니다. 고객센터에 문의해주세요.' });
+            }
+
             const match = await bcrypt.compare(password, user.PASSWORD);
             if (!match) return res.status(401).json({ error: '아이디 또는 비밀번호가 일치하지 않습니다.' });
 
@@ -264,14 +287,56 @@ function createAuthRouter(pool, admin, smsVerifiedPhoneStore, bucket, bucketName
                 user.USER_TYPE === 'DRIVER' ? fetchSubscriptionForDriver(pool, user.CUST_ID) : Promise.resolve(null)
             ]);
 
-            if (cancelRow && cancelRow.TRADE_RESTRICT_YN === 'Y') {
-                return res.status(403).json({ error: '거래가 제한된 사용자입니다.', type: 'TRADE_RESTRICTED' });
-            }
-
             const userDto = buildPostLoginUserDto({ user, cancelRow, subscriptionRow });
             res.json({ message: '로그인 성공', user: userDto });
 
         } catch (e) {
+            res.status(500).json({ error: e.message });
+        } finally {
+            if (connection) connection.release();
+        }
+    });
+
+    // [POST] 회원 탈퇴
+    router.post('/withdraw', async (req, res) => {
+        let connection;
+        try {
+            const { custId, password } = req.body;
+            console.log(`\n🚨 [WITHDRAW_ATTEMPT] CustID: ${custId}, Password: ${password ? 'PROVIDED' : 'MISSING'}`);
+            
+            if (!custId || !password) return res.status(400).json({ error: '사용자 식별자와 비밀번호가 필요합니다.' });
+
+            connection = await pool.getConnection();
+            
+            // 1. 비밀번호 검증
+            const [users] = await connection.execute('SELECT PASSWORD FROM TB_USER WHERE CUST_ID = ?', [custId]);
+            if (users.length === 0) {
+                console.log(`❌ [WITHDRAW_FAIL] User not found: ${custId}`);
+                return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+            }
+
+            const isMatch = await bcrypt.compare(password, users[0].PASSWORD);
+            console.log(`🔍 [WITHDRAW_VERIFY] Password Match: ${isMatch}`);
+
+            if (!isMatch) {
+                return res.status(401).json({ error: '비밀번호가 일치하지 않습니다.' });
+            }
+
+            // 2. 탈퇴 처리
+            await connection.beginTransaction();
+            const [result] = await connection.execute(
+                'UPDATE TB_USER SET USER_STAT = ?, MOD_ID = ?, MOD_DT = NOW() WHERE CUST_ID = ?',
+                ['LEAVE', custId, custId]
+            );
+
+            if (result.affectedRows === 0) {
+                throw new Error('사용자를 찾을 수 없거나 이미 탈퇴 처리되었습니다.');
+            }
+
+            await connection.commit();
+            res.json({ success: true, message: '회원 탈퇴가 완료되었습니다. 그동안 이용해주셔서 감사합니다.' });
+        } catch (e) {
+            if (connection) await connection.rollback();
             res.status(500).json({ error: e.message });
         } finally {
             if (connection) connection.release();

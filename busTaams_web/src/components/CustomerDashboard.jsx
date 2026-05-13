@@ -102,6 +102,19 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
       */}
       
       <main className="max-w-[1440px] mx-auto px-8 py-6">
+        {/* [추가] 거래 제한 안내 배너 */}
+        {user?.tradeRestrictYn === 'Y' && (
+          <div className="mb-8 bg-red-50 border-2 border-red-200 p-6 rounded-[1.5rem] flex items-center gap-6 animate-pulse">
+            <div className="w-12 h-12 bg-red-500 text-white rounded-full flex items-center justify-center shrink-0 shadow-lg">
+              <span className="material-symbols-outlined text-2xl">block</span>
+            </div>
+            <div>
+              <h4 className="text-red-900 font-black text-lg italic tracking-tight">거래 제한 안내</h4>
+              <p className="text-red-700/80 text-sm font-bold">취소 규정 위반으로 인해 현재 서비스 이용이 제한되었습니다. 고객센터에 문의해 주세요.</p>
+            </div>
+          </div>
+        )}
+
         {/* Middle Section: Service Grid — Radiant Traveler 스타일 적용 */}
         <section className="mb-10">
           <header className="mb-6">
@@ -116,27 +129,35 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
               { id: 'onShowTripHistory',     icon: 'history',          label: '이용 내역 확인',     action: () => setShowTripHistory(true) },
               { id: 'onReviewManage',        icon: 'rate_review',      label: '리뷰 관리',          action: () => setShowReviewManage(true) },
               { id: 'onOpenLiveChat',        icon: 'forum',            label: '실시간 채팅',        action: onOpenLiveChat },
-            ].map((srv) => (
-              <div 
-                key={srv.id}
-                onClick={() => {
-                  if (srv.id === 'onBusRegister') {
-                    const cancelCnt = user?.cancelManage?.cancelTravelerAllCnt || 0;
-                    if (cancelCnt >= 3) {
-                      alert(`안내: 취소 건수가 ${cancelCnt}회 누적되어, 새로운 여행 등록을 하실 수 없습니다.`);
+            ].map((srv) => {
+              const isRestrictedAction = srv.id === 'onBusRegister';
+              const isDisabled = isRestrictedAction && user?.tradeRestrictYn === 'Y';
+              
+              return (
+                <div 
+                  key={srv.id}
+                  onClick={() => {
+                    if (isDisabled) {
+                      alert('안내: 현재 서비스 이용이 제한되어 새로운 여행 등록을 하실 수 없습니다.');
                       return;
                     }
-                  }
-                  srv.action?.();
-                }}
-                className="bg-surface-container-low p-5 rounded-2xl flex flex-col items-center text-center group cursor-pointer hover:bg-primary transition-all duration-500 shadow-sm hover:shadow-xl hover:-translate-y-1 no-line-rule"
-              >
-                <div className="w-12 h-12 bg-surface-container-lowest rounded-xl flex items-center justify-center mb-3 group-hover:bg-primary-container transition-colors duration-500 shadow-inner">
-                  <span className="material-symbols-outlined text-xl text-primary group-hover:text-on-primary-container">{srv.icon}</span>
+                    srv.action?.();
+                  }}
+                  className={`p-5 rounded-2xl flex flex-col items-center text-center group cursor-pointer transition-all duration-500 shadow-sm no-line-rule ${
+                    isDisabled 
+                      ? 'bg-gray-100 opacity-50 cursor-not-allowed grayscale' 
+                      : 'bg-surface-container-low hover:bg-primary hover:shadow-xl hover:-translate-y-1'
+                  }`}
+                >
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 transition-colors duration-500 shadow-inner ${
+                    isDisabled ? 'bg-gray-200' : 'bg-surface-container-lowest group-hover:bg-primary-container'
+                  }`}>
+                    <span className={`material-symbols-outlined text-xl ${isDisabled ? 'text-gray-400' : 'text-primary group-hover:text-on-primary-container'}`}>{srv.icon}</span>
+                  </div>
+                  <span className={`font-bold text-[11px] tracking-tight transition-colors duration-500 ${isDisabled ? 'text-gray-400' : 'group-hover:text-white'}`}>{srv.label}</span>
                 </div>
-                <span className="font-bold text-[11px] tracking-tight group-hover:text-white transition-colors duration-500">{srv.label}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
 
@@ -151,14 +172,17 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
               <p className="text-outline max-w-md text-base leading-relaxed">아직 등록된 견적 요청이 없습니다.<br/>지금 바로 최적의 프리미엄 버스를 예약해 보세요.</p>
               <button 
                 onClick={() => {
-                  const cancelCnt = user?.cancelManage?.cancelTravelerAllCnt || 0;
-                  if (cancelCnt >= 3) {
-                    alert(`안내: 취소 건수가 ${cancelCnt}회 누적되어, 새로운 여행 등록을 하실 수 없습니다.`);
+                  if (user?.tradeRestrictYn === 'Y') {
+                    alert('안내: 현재 서비스 이용이 제한되어 새로운 여행 등록을 하실 수 없습니다.');
                     return;
                   }
                   onBusRegister();
                 }}
-                className="mt-6 bg-primary text-white px-8 py-3 rounded-full font-bold shadow-lg hover:scale-105 transition-transform flex items-center gap-3"
+                className={`mt-6 px-8 py-3 rounded-full font-bold shadow-lg transition-all flex items-center gap-3 ${
+                  user?.tradeRestrictYn === 'Y'
+                    ? 'bg-gray-400 cursor-not-allowed opacity-70'
+                    : 'bg-primary text-white hover:scale-105'
+                }`}
               >
                 <span className="material-symbols-outlined text-sm">add_circle</span>
                 버스 예약하기

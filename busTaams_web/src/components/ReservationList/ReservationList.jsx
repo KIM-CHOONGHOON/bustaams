@@ -29,8 +29,8 @@ const ReservationList = ({ user, onBack }) => {
 
     if (currentUser && currentUser.custId) {
       setLoading(true);
-      console.log('[DEBUG] Fetching from:', `http://localhost:8080/api/auction/history/${currentUser.custId}`);
-      fetch(`http://localhost:8080/api/auction/history/${currentUser.custId}`)
+      console.log('[DEBUG] Fetching from:', `/api/auction/history/${currentUser.custId}`);
+      fetch(`/api/auction/history/${currentUser.custId}`)
         .then(res => {
           console.log('[DEBUG] Response received, status:', res.status);
           return res.json();
@@ -70,7 +70,7 @@ const ReservationList = ({ user, onBack }) => {
     if (!window.confirm(`선택하신 ${getVehicleLabel(bus.BUS_TYPE_CD)} 차량을 예약 목록에서 취소(삭제)하시겠습니까?`)) return;
 
     try {
-      const response = await fetch('http://localhost:8080/api/auction/bus-change', {
+      const response = await fetch('/api/auction/bus-change', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -100,7 +100,7 @@ const ReservationList = ({ user, onBack }) => {
   const handleBusCancel = async (bus) => {
     if (window.confirm(`선택하신 ${getVehicleLabel(bus.BUS_TYPE_CD)}의 기사를 변경하시겠습니까?\n(기사 변경은 여정당 최대 1회만 가능합니다.)`)) {
       try {
-        const response = await fetch('http://localhost:8080/api/auction/bus-cancel', {
+        const response = await fetch('/api/auction/bus-cancel', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -149,7 +149,7 @@ const ReservationList = ({ user, onBack }) => {
     if (!window.confirm(`${trip.DRIVER_NM || '기사'}님의 청약을 승인하시겠습니까?\n승인 시 예약이 확정됩니다.`)) return;
 
     try {
-      const response = await fetch('http://localhost:8080/api/auction/confirm', {
+      const response = await fetch('/api/auction/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -250,14 +250,13 @@ const ReservationList = ({ user, onBack }) => {
           ) : (
             <div className="grid grid-cols-1 gap-8">
               {Object.values(reservations.reduce((acc, curr) => {
-                // [임시 주석 처리] 테스트를 위해 과거 일정 필터링 제거
-                /*
                 const now = new Date();
                 const startDt = new Date(curr.START_DT);
+                
+                // [수정] 오늘 이후의 일정만 표시 (지난 건 제외)
                 if (startDt < now) {
                   return acc;
                 }
-                */
 
                 // 취소된 버스는 목록에서 제외 (BUS_STAT 기준)
                 if (curr.BUS_STAT === 'TRAVELER_CANCEL' || curr.BUS_STAT === 'BUS_CANCEL') {
@@ -353,7 +352,7 @@ const ReservationList = ({ user, onBack }) => {
                                        <div className="w-9 h-9 rounded-xl overflow-hidden border border-slate-100 shadow-inner bg-slate-50 flex items-center justify-center">
                                          {bus.PROFILE_PHOTO_ID ? (
                                            <img 
-                                             src={`http://localhost:8080/api/user/profile-image?fileId=${bus.PROFILE_PHOTO_ID}`} 
+                                             src={`/api/user/profile-image?fileId=${bus.PROFILE_PHOTO_ID}`} 
                                              alt="driver"
                                              className="w-full h-full object-cover group-hover/driver:scale-110 transition-transform duration-300"
                                            />

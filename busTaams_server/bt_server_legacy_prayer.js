@@ -663,14 +663,6 @@ app.post(['/api/auth/login', '/api/users/login'], async (req, res) => {
             user.USER_TYPE === 'DRIVER' ? fetchSubscriptionForDriver(pool, custId) : Promise.resolve(null)
         ]);
 
-        // [체크] 거래 제한 여부 확인
-        if (cancelRow && (cancelRow.TRADE_RESTRICT_YN === 'Y' || cancelRow.tradeRestrictYn === 'Y')) {
-            return res.status(403).json({ 
-                error: '거래가 제한된 사용자입니다. 취소 건수 초과 등으로 인해 서비스 이용이 일시적으로 중지되었습니다. 고객센터에 문의해주세요.',
-                type: 'TRADE_RESTRICTED'
-            });
-        }
-
         // [신규] DTO 생성 (복호화 및 구조화된 데이터 포함)
         const userDto = buildPostLoginUserDto({
             user,
@@ -1175,7 +1167,31 @@ app.post('/api/auction/request', async (req, res) => {
         await connection.beginTransaction();
 
         try {
-            // Helper to trim address to City/District
+            const safeCustId = String(custId || '').padStart(10, '0');
+
+            // 0. 거래 제한(패널티) 확인
+            const [penaltyRows] = await connection.execute(
+                `SELECT TRADE_RESTRICT_YN, TRADE_RESTRICT_START_DT, TRADE_RESTRICT_END_DT FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ? FOR UPDATE`,
+                [safeCustId]
+            );
+            if (penaltyRows.length > 0) {
+                const now = new Date();
+                const startDt = penaltyRows[0].TRADE_RESTRICT_START_DT ? new Date(penaltyRows[0].TRADE_RESTRICT_START_DT) : null;
+                const endDt = penaltyRows[0].TRADE_RESTRICT_END_DT ? new Date(penaltyRows[0].TRADE_RESTRICT_END_DT) : null;
+                const dbRestrictYn = (penaltyRows[0].TRADE_RESTRICT_YN || 'N').toString().toUpperCase() === 'Y';
+
+                const dateRestricted = (startDt && endDt && now >= startDt && now <= endDt);
+                const isRestricted = dateRestricted || dbRestrictYn;
+
+                if (isRestricted) {
+                    const dateStr = endDt ? endDt.toISOString().slice(0, 10) : '미정';
+                    await connection.rollback();
+                    return res.status(403).json({ 
+                        error: `취소 누적으로 인해 새로운 예약 요청이 제한되었습니다. (제한 종료일: ${dateStr})`,
+                        type: 'TRADE_RESTRICTED'
+                    });
+                }
+            }
             const trimAddress = (addr) => {
                 if (!addr || typeof addr !== 'string') return '';
                 return addr.trim().split(/\s+/).slice(0, 2).join(' ');
@@ -1436,7 +1452,16 @@ app.get('/api/auction/user/:custId', async (req, res) => {
         
         const [rows] = await pool.execute(query, [custId]);
         
-        // 각 예약 건의 경유지 정보 추가
+        // [추가] 패널티 정보 조회
+        const safeCustId = String(custId || '').padStart(10, '0');
+        const [penaltyRows] = await pool.execute(
+            `SELECT TRADE_RESTRICT_YN FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ?`,
+            [safeCustId]
+        );
+        const isRestricted = penaltyRows.length > 0 && penaltyRows[0].TRADE_RESTRICT_YN === 'Y';
+        const tradeRestrictYn = isRestricted ? 'Y' : 'N';
+
+        // 각 예약 건의 경유지 정보 및 패널티 정보 추가
         for (let row of rows) {
             const viaQuery = `
                 SELECT VIA_ADDR as address, VIA_SEQ 
@@ -1446,6 +1471,7 @@ app.get('/api/auction/user/:custId', async (req, res) => {
             `;
             const [vias] = await pool.execute(viaQuery, [row.REQ_ID]);
             row.waypoints = vias;
+            row.tradeRestrictYn = tradeRestrictYn; // 각 행에 추가
         }
 
         res.status(200).json(rows);
@@ -1601,12 +1627,16 @@ app.post('/api/auction/cancel-bus', async (req, res) => {
             // 4. TB_USER_CANCEL_MANAGE 카운트 업데이트 (부분 취소 카운트)
             await connection.execute(`
                 INSERT INTO TB_USER_CANCEL_MANAGE (
-                    CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, REG_ID, MOD_ID, REG_DT, MOD_DT
-                ) VALUES (?, 1, 1, ?, ?, NOW(), NOW())
+                    CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, 
+                    TRADE_RESTRICT_YN, TRADE_RESTRICT_START_DT, TRADE_RESTRICT_END_DT,
+                    REG_ID, MOD_ID, REG_DT, MOD_DT
+                ) VALUES (?, 1, 1, 'Y', DATE_ADD(CURDATE(), INTERVAL 1 DAY), DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH), ?, ?, NOW(), NOW())
                 ON DUPLICATE KEY UPDATE 
                     CANCEL_CNT = CANCEL_CNT + 1,
                     CANCEL_TRAVELER_PARTIAL_BUS_CNT = CANCEL_TRAVELER_PARTIAL_BUS_CNT + 1,
-                    TRADE_RESTRICT_YN = CASE WHEN (CANCEL_CNT + 1) >= 3 THEN 'Y' ELSE TRADE_RESTRICT_YN END,
+                    TRADE_RESTRICT_YN = 'Y',
+                    TRADE_RESTRICT_START_DT = DATE_ADD(CURDATE(), INTERVAL 1 DAY),
+                    TRADE_RESTRICT_END_DT = DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH),
                     MOD_ID = ?,
                     MOD_DT = NOW()
             `, [custId, custId, custId, custId]);
@@ -1729,12 +1759,16 @@ app.post('/api/auction/complex-cancel', async (req, res) => {
         // 5. TB_USER_CANCEL_MANAGE 카운트 업데이트 (Upsert)
         await connection.execute(`
             INSERT INTO TB_USER_CANCEL_MANAGE (
-                CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_ALL_CNT, REG_ID, MOD_ID, REG_DT, MOD_DT
-            ) VALUES (?, 1, 1, ?, ?, NOW(), NOW())
+                CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_ALL_CNT, 
+                TRADE_RESTRICT_YN, TRADE_RESTRICT_START_DT, TRADE_RESTRICT_END_DT,
+                REG_ID, MOD_ID, REG_DT, MOD_DT
+            ) VALUES (?, 1, 1, 'Y', DATE_ADD(CURDATE(), INTERVAL 1 DAY), DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH), ?, ?, NOW(), NOW())
             ON DUPLICATE KEY UPDATE 
                 CANCEL_CNT = CANCEL_CNT + 1,
                 CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
-                TRADE_RESTRICT_YN = CASE WHEN (CANCEL_TRAVELER_ALL_CNT + 1) >= 3 THEN 'Y' ELSE TRADE_RESTRICT_YN END,
+                TRADE_RESTRICT_YN = 'Y',
+                TRADE_RESTRICT_START_DT = DATE_ADD(CURDATE(), INTERVAL 1 DAY),
+                TRADE_RESTRICT_END_DT = DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH),
                 MOD_ID = ?,
                 MOD_DT = NOW()
         `, [custId, custId, custId, custId]);
@@ -1891,12 +1925,17 @@ app.post('/api/auction/bus-change', async (req, res) => {
             `, [secureModId, nextHistSeq]);
 
             await connection.execute(`
-                INSERT INTO TB_USER_CANCEL_MANAGE (CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_ALL_CNT, REG_ID, MOD_ID, REG_DT, MOD_DT)
-                VALUES (?, 1, 1, ?, ?, NOW(), NOW())
+                INSERT INTO TB_USER_CANCEL_MANAGE (
+                    CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_ALL_CNT, 
+                    TRADE_RESTRICT_YN, TRADE_RESTRICT_START_DT, TRADE_RESTRICT_END_DT,
+                    REG_ID, MOD_ID, REG_DT, MOD_DT
+                ) VALUES (?, 1, 1, 'Y', DATE_ADD(CURDATE(), INTERVAL 1 DAY), DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH), ?, ?, NOW(), NOW())
                 ON DUPLICATE KEY UPDATE 
                     CANCEL_CNT = CANCEL_CNT + 1,
                     CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
-                    TRADE_RESTRICT_YN = CASE WHEN (CANCEL_CNT + 1) >= 3 THEN 'Y' ELSE TRADE_RESTRICT_YN END,
+                    TRADE_RESTRICT_YN = 'Y',
+                    TRADE_RESTRICT_START_DT = DATE_ADD(CURDATE(), INTERVAL 1 DAY),
+                    TRADE_RESTRICT_END_DT = DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH),
                     MOD_ID = ?, MOD_DT = NOW()
             `, [secureModId, secureModId, secureModId, secureModId]);
         } else {
@@ -1907,12 +1946,17 @@ app.post('/api/auction/bus-change', async (req, res) => {
             `, [secureModId, nextHistSeq, `차량 개별 취소 (SEQ: ${reqBusSeq})`]);
 
             await connection.execute(`
-                INSERT INTO TB_USER_CANCEL_MANAGE (CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, REG_ID, MOD_ID, REG_DT, MOD_DT)
-                VALUES (?, 1, 1, ?, ?, NOW(), NOW())
+                INSERT INTO TB_USER_CANCEL_MANAGE (
+                    CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, 
+                    TRADE_RESTRICT_YN, TRADE_RESTRICT_START_DT, TRADE_RESTRICT_END_DT,
+                    REG_ID, MOD_ID, REG_DT, MOD_DT
+                ) VALUES (?, 1, 1, 'Y', DATE_ADD(CURDATE(), INTERVAL 1 DAY), DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH), ?, ?, NOW(), NOW())
                 ON DUPLICATE KEY UPDATE 
                     CANCEL_CNT = CANCEL_CNT + 1,
                     CANCEL_TRAVELER_PARTIAL_BUS_CNT = CANCEL_TRAVELER_PARTIAL_BUS_CNT + 1,
-                    TRADE_RESTRICT_YN = CASE WHEN (CANCEL_CNT + 1) >= 3 THEN 'Y' ELSE TRADE_RESTRICT_YN END,
+                    TRADE_RESTRICT_YN = 'Y',
+                    TRADE_RESTRICT_START_DT = DATE_ADD(CURDATE(), INTERVAL 1 DAY),
+                    TRADE_RESTRICT_END_DT = DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH),
                     MOD_ID = ?, MOD_DT = NOW()
             `, [secureModId, secureModId, secureModId, secureModId]);
         }
@@ -1985,17 +2029,7 @@ app.post('/api/auction/bus-cancel', async (req, res) => {
         );
 
         if (driverInfoRows.length > 0) {
-            const driverId = driverInfoRows[0].DRIVER_ID;
-            // 기사 취소 누적 횟수 증가 및 3아웃 체크
-            await connection.execute(`
-                INSERT INTO TB_USER_CANCEL_MANAGE (CUST_ID, CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, REG_ID, MOD_ID, REG_DT, MOD_DT)
-                VALUES (?, 1, 1, 'SYSTEM', 'SYSTEM', NOW(), NOW())
-                ON DUPLICATE KEY UPDATE 
-                    CANCEL_CNT = CANCEL_CNT + 1,
-                    CANCEL_BUS_DRIVER_CNT = CANCEL_BUS_DRIVER_CNT + 1,
-                    TRADE_RESTRICT_YN = CASE WHEN (CANCEL_BUS_DRIVER_CNT + 1) >= 3 THEN 'Y' ELSE TRADE_RESTRICT_YN END,
-                    MOD_DT = NOW()
-            `, [driverId]);
+            // [정책 변경] 기사는 패널티 체크/부여 제외함 (사용자 요청)
         }
 
         await connection.execute(
@@ -3243,14 +3277,25 @@ app.get('/api/customer/active-request', async (req, res) => {
     const { custId } = req.query;
     if (!custId) return res.status(400).json({ error: 'custId is required' });
     try {
-        const [rows] = await pool.execute(
-            `SELECT REQ_ID, TRIP_TITLE, START_ADDR, END_ADDR, PASSENGER_CNT, DATA_STAT, START_DT
-             FROM TB_AUCTION_REQ
-             WHERE TRAVELER_ID = ? AND DATA_STAT = 'AUCTION'
-             ORDER BY REG_DT DESC LIMIT 1`,
-            [custId]
+        const safeCustId = String(custId || '').padStart(10, '0');
+        
+        // 1. 패널티 정보 조회
+        const [penaltyRows] = await pool.execute(
+            `SELECT TRADE_RESTRICT_YN FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ?`,
+            [safeCustId]
         );
-        if (rows.length === 0) return res.json(null);
+        
+        const isRestricted = penaltyRows.length > 0 && penaltyRows[0].TRADE_RESTRICT_YN === 'Y';
+        const tradeRestrictYn = isRestricted ? 'Y' : 'N';
+
+        const penaltyInfo = {
+            tradeRestrictYn
+        };
+
+        if (rows.length === 0) {
+            return res.json({ ...penaltyInfo });
+        }
+
         const r = rows[0];
         res.json({
             id: r.REQ_ID,
@@ -3258,7 +3303,8 @@ app.get('/api/customer/active-request', async (req, res) => {
             subTitle: r.TRIP_TITLE,
             startDt: formatDateYmd(r.START_DT),
             description: `대형 · ${r.PASSENGER_CNT}명`,
-            status: r.DATA_STAT
+            status: r.DATA_STAT,
+            ...penaltyInfo
         });
     } catch (error) { res.status(500).json({ error: error.message }); }
 });
@@ -3494,19 +3540,7 @@ app.put('/api/traveler-quote-request-details/bid', async (req, res) => {
         connection = await pool.getConnection();
 
         // [페널티 체크] 기사 취소 건수가 3건 이상인 경우 입찰 불가 (설계서 정책 준수)
-        const [cancelRows] = await connection.execute(
-            `SELECT CANCEL_BUS_DRIVER_CNT, TRADE_RESTRICT_YN FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ?`,
-            [custId]
-        );
-        if (cancelRows.length > 0) {
-            const { CANCEL_BUS_DRIVER_CNT, TRADE_RESTRICT_YN } = cancelRows[0];
-            if (CANCEL_BUS_DRIVER_CNT >= 3 || TRADE_RESTRICT_YN === 'Y') {
-                return res.status(403).json({ 
-                    error: '누적 취소 건수 초과로 인해 입찰 참여가 제한되었습니다.',
-                    cancelCnt: CANCEL_BUS_DRIVER_CNT
-                });
-            }
-        }
+        // [정책 변경] 기사는 패널티 체크 제외함 (사용자 요청)
 
         const [rows] = await connection.execute(
             `SELECT RES_ID, DATA_STAT FROM TB_BUS_RESERVATION WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DRIVER_ID = ? LIMIT 1`,
@@ -3596,12 +3630,24 @@ app.get('/api/driver/dashboard', async (req, res) => {
         );
 
         const now = new Date();
+        const safeCustId = String(custId || '').padStart(10, '0');
+
+        // [추가] 패널티 정보 조회
+        const [penaltyRows] = await connection.execute(
+            `SELECT TRADE_RESTRICT_YN FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ?`,
+            [safeCustId]
+        );
+        
+        const isRestricted = penaltyRows.length > 0 && penaltyRows[0].TRADE_RESTRICT_YN === 'Y';
+        const tradeRestrictYn = isRestricted ? 'Y' : 'N';
+
         res.json({
             year: now.getFullYear(), month: now.getMonth() + 1,
             currentMonthTotal: Number(currSum.total), previousMonthTotal: Number(prevSum.total),
             diffFromPrevious: Number(currSum.total) - Number(prevSum.total),
             bidCount: Number(agg.bidCount), bidAmountSum: Number(agg.bidAmountSum),
-            confirmCount: Number(agg.confirmCount), confirmAmountSum: Number(agg.confirmAmountSum)
+            confirmCount: Number(agg.confirmCount), confirmAmountSum: Number(agg.confirmAmountSum),
+            tradeRestrictYn
         });
     } catch (e) { res.status(500).json({ error: e.message }); }
     finally { if (connection) connection.release(); }
@@ -3657,7 +3703,20 @@ app.get('/api/list-of-traveler-quotations', async (req, res) => {
             params
         );
 
-        res.status(200).json({ total: rows.length, items: rows });
+        // [추가] 패널티 정보 조회
+        const safeDriverId = String(driverId || '').padStart(10, '0');
+        const [penaltyRows] = await connection.execute(
+            `SELECT TRADE_RESTRICT_YN FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ?`,
+            [safeDriverId]
+        );
+        const isRestricted = penaltyRows.length > 0 && penaltyRows[0].TRADE_RESTRICT_YN === 'Y';
+        const tradeRestrictYn = isRestricted ? 'Y' : 'N';
+
+        res.status(200).json({ 
+            total: rows.length, 
+            items: rows,
+            tradeRestrictYn
+        });
     } catch (error) {
         console.error('list-of-traveler-quotations:', error);
         res.status(500).json({ error: error.message });
@@ -3714,7 +3773,20 @@ app.get('/api/auction-list', async (req, res) => {
              ORDER BY r.REG_DT DESC`,
             [driverId, driverId]
         );
-        res.status(200).json({ total: rows.length, items: rows });
+        // [추가] 패널티 정보 조회
+        const safeDriverId = String(driverId || '').padStart(10, '0');
+        const [penaltyRows] = await connection.execute(
+            `SELECT TRADE_RESTRICT_YN FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ?`,
+            [safeDriverId]
+        );
+        const isRestricted = penaltyRows.length > 0 && penaltyRows[0].TRADE_RESTRICT_YN === 'Y';
+        const tradeRestrictYn = isRestricted ? 'Y' : 'N';
+
+        res.status(200).json({ 
+            total: rows.length, 
+            items: rows,
+            tradeRestrictYn
+        });
     } catch (error) {
         console.error('auction-list:', error);
         res.status(500).json({ error: error.message });
@@ -3851,13 +3923,14 @@ app.put('/api/traveler-quote-request-details/bid', async (req, res) => {
         await connection.beginTransaction();
 
         // 0. 거래 제한(패널티) 확인
+        const safeDriverId = String(driverId || '').padStart(10, '0');
         const [penaltyRows] = await connection.execute(
             "SELECT TRADE_RESTRICT_YN FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ?",
-            [driverId]
+            [safeDriverId]
         );
         if (penaltyRows.length > 0 && penaltyRows[0].TRADE_RESTRICT_YN === 'Y') {
             await connection.rollback();
-            return res.status(403).json({ error: '취소 누적으로 인해 입찰 참여가 제한되었습니다. 고객센터에 문의하세요.' });
+            return res.status(403).json({ error: '취소 누적으로 인해 서비스 이용이 일시적으로 제한되었습니다. 고객센터에 문의해주세요.' });
         }
 
         // 1. 기존 입찰 여부 확인 (REQ_ID + REQ_BUS_SEQ + DRIVER_ID 조합으로 확인)
@@ -3970,59 +4043,16 @@ app.listen(PORT, () => {
  * @param {string} category 발송 상황 구분 (REQ_REG, CONFIRM, JOIN 등)
  */
 async function sendAlimTalkAndLog({ reqId, receiverId, receiverPhone, content, category }) {
-    let connection;
     try {
-        console.log(`[ALIMTALK SENDING] To: ${receiverPhone}, Category: ${category}`);
-        console.log(`[CONTENT] \n${content}`);
-
-        /**
-         * [TODO] 실제 카카오 알림톡 발송 업체 API 호출부 (솔라피, 알리고 등)
-         * 예시 (SOLAPI 기준):
-         * const { SolapiMessageService } = require('solapi-sdk');
-         * const messageService = new SolapiMessageService('YOUR_API_KEY', 'YOUR_API_SECRET');
-         * await messageService.sendOne({
-         *   to: receiverPhone,
-         *   from: '01012345678', // 발신번호 (발신번호 등록 필수)
-         *   text: content,
-         *   kakaoOptions: {
-         *     pfId: 'YOUR_PF_ID', // 플러스친구 ID
-         *     templateId: 'YOUR_TEMPLATE_ID' // 템플릿 ID
-         *   }
-         * });
-         */
-        const sendStat = 'SUCCESS'; 
-
-        connection = await pool.getConnection();
-
-        // [ID 생성] 최신 16자리 숫자 ID 생성 (문자 포함된 ID 제외하고 숫자 규격만 필터링)
-        const [[{ maxLogId }]] = await connection.execute("SELECT MAX(LOG_ID) AS maxLogId FROM TB_SMS_LOG WHERE LOG_ID REGEXP '^[0-9]+$'");
-        const logId = generateNextNumericId(maxLogId || '0', 16);
-
-        const query = `
-            INSERT INTO TB_SMS_LOG (
-                LOG_ID, REQ_ID, RECEIVER_ID, RECEIVER_PHONE, 
-                MSG_CONTENT, MSG_TYPE, SEND_STAT, SEND_CATEGORY, REG_DT
-            ) VALUES (
-                ?, ?, ?, ?, ?, 'ALIMTALK', ?, ?, NOW()
-            )
-        `;
-
-        const params = [
-            logId, 
-            reqId || null, 
-            receiverId, 
-            receiverPhone, 
-            content, 
-            sendStat, 
-            category
-        ];
-
-        await connection.execute(query, params);
-        console.log(`[ALIMTALK LOG SAVED] LogID: ${logId}`);
-
+        const aligoService = require('./services/bt_comm_handler');
+        await aligoService.sendSms({
+            reqId,
+            receiverId,
+            receiver: receiverPhone.replace(/-/g, ''),
+            message: content,
+            category: category || 'ETC'
+        });
     } catch (err) {
-        console.error('AlimTalk Send or Log Error:', err);
-    } finally {
-        if (connection) connection.release();
+        console.error('AlimTalk(Aligo) Send or Log Error:', err);
     }
 }

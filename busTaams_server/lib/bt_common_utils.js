@@ -76,39 +76,20 @@ async function verifyFirebasePhoneIdTokenIfRequired(admin, smsVerifiedPhoneStore
 }
 
 /**
- * 알림톡 발송 및 이력 저장 유틸리티
+ * 알림톡/SMS 발송 및 이력 저장 유틸리티
  */
 async function sendAlimTalkAndLog(pool, { reqId, receiverId, receiverPhone, content, category }) {
-    let connection;
     try {
-        console.log(`[ALIMTALK SENDING] To: ${receiverPhone}, Category: ${category}`);
-        // 실제 발송 로직은 여기서 업체 API 호출 (현재는 SUCCESS로 시뮬레이션)
-        const sendStat = 'SUCCESS'; 
-
-        connection = await pool.getConnection();
-
-        // 16자리 숫자 ID 생성
-        const [[{ maxLogId }]] = await connection.execute("SELECT MAX(LOG_ID) AS maxLogId FROM TB_SMS_LOG WHERE LOG_ID REGEXP '^[0-9]+$'");
-        const logId = generateNextNumericId(maxLogId || '0', 16);
-
-        const query = `
-            INSERT INTO TB_SMS_LOG (
-                LOG_ID, REQ_ID, RECEIVER_ID, RECEIVER_PHONE, 
-                MSG_CONTENT, MSG_TYPE, SEND_STAT, SEND_CATEGORY, REG_DT
-            ) VALUES (
-                ?, ?, ?, ?, ?, 'ALIMTALK', ?, ?, NOW()
-            )
-        `;
-
-        await connection.execute(query, [
-            logId, reqId || null, receiverId, receiverPhone, content, sendStat, category
-        ]);
-        console.log(`[ALIMTALK LOG SAVED] LogID: ${logId}`);
-
+        const aligoService = require('../services/bt_comm_handler');
+        await aligoService.sendSms({
+            reqId,
+            receiverId,
+            receiver: receiverPhone.replace(/-/g, ''),
+            message: content,
+            category: category || 'ETC'
+        });
     } catch (err) {
-        console.error('AlimTalk Send or Log Error:', err);
-    } finally {
-        if (connection) connection.release();
+        console.error('AlimTalk(Aligo) Send or Log Error:', err);
     }
 }
 

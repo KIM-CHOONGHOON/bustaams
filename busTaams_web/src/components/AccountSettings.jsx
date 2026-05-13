@@ -77,7 +77,7 @@ const AccountSettings = ({ user, onBack, onLogout, onUpdateUser }) => {
     setIsSmsSent(false);
 
     try {
-      const res = await fetch('http://localhost:8080/api/auth/send-sms', {
+      const res = await fetch(`${API_BASE}/api/auth/send-sms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phoneNumber: phoneNo })
@@ -96,7 +96,7 @@ const AccountSettings = ({ user, onBack, onLogout, onUpdateUser }) => {
 
   const handleVerifySms = async () => {
     try {
-      const res = await fetch('http://localhost:8080/api/auth/verify-sms', {
+      const res = await fetch(`${API_BASE}/api/auth/verify-sms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phoneNumber: phoneNo, code: verificationCode })
@@ -228,6 +228,44 @@ const AccountSettings = ({ user, onBack, onLogout, onUpdateUser }) => {
     }
   };
 
+
+  const handleWithdraw = async () => {
+    if (!currentPassword) {
+      alert('본인 확인을 위해 현재 비밀번호를 먼저 입력해주세요.');
+      return;
+    }
+
+    const ok = window.confirm('정말 탈퇴하시겠습니까?\n탈퇴 시 더 이상 로그인이 불가능하며, 모든 활동이 중단됩니다.');
+    if (!ok) return;
+
+    const targetUrl = `${API_BASE}/api/auth/withdraw`;
+    console.log(`[DEBUG] Attempting withdrawal. URL: ${targetUrl}, CustID: ${user?.custId || user?.CUST_ID}`);
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(targetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          custId: user?.custId || user?.CUST_ID,
+          password: currentPassword 
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert(result.message || '탈퇴 처리가 완료되었습니다. 이용해주셔서 감사합니다.');
+        onLogout(); // 로그아웃 및 세션 제거
+      } else {
+        alert(result.error || '탈퇴 처리 중 오류가 발생했습니다.');
+      }
+    } catch (error) {
+      alert('서버와 통신 중 오류가 발생했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[100] bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-300">
@@ -456,19 +494,19 @@ const AccountSettings = ({ user, onBack, onLogout, onUpdateUser }) => {
                 </div>
               </div>
 
-              <button 
-                onClick={onLogout}
-                className="w-full flex items-center justify-center gap-3 p-6 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-[2rem] transition-all font-bold text-sm border-2 border-dashed border-slate-200 hover:border-red-100"
-              >
-                <span className="material-symbols-outlined">logout</span> 
-                계정 로그아웃
-              </button>
             </section>
           </div>
         </main>
 
         {/* Footer Actions */}
-        <footer className="shrink-0 px-10 py-8 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
+        <footer className="shrink-0 px-10 py-8 border-t border-slate-100 bg-slate-50/50 flex justify-end items-center gap-3">
+          <button 
+            onClick={handleWithdraw}
+            disabled={isLoading}
+            className="px-6 py-4 text-sm font-bold text-slate-400 hover:text-red-500 transition-colors rounded-2xl hover:bg-red-50"
+          >
+            회원탈퇴
+          </button>
           <button 
             onClick={onBack}
             className="px-8 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-100 transition-all"

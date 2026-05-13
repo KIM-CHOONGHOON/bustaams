@@ -279,15 +279,12 @@ function LoginModal({ close, onLoginSuccess, setCurrentView }) {
 
       const result = await response.json();
 
-      if (response.ok) {
+        if (response.ok) {
         const loggedInUser = result.user;
-        const cancelData = loggedInUser.cancelManage || {};
         
-        // [페널티 체크] 취소 건수가 3회 이상인 경우 경고 메시지 출력
-        if (loggedInUser.userType === 'TRAVELER' && cancelData.cancelTravelerAllCnt >= 3) {
-          alert(`안내: ${loggedInUser.userName}님은 취소 건수가 ${cancelData.cancelTravelerAllCnt}회 누적되어, 현재 더 이상의 신규 여행 등록을 할 수 없습니다.`);
-        } else if (loggedInUser.userType === 'DRIVER' && cancelData.cancelBusDriverCnt >= 3) {
-          alert(`안내: ${loggedInUser.userName}님은 취소 건수가 ${cancelData.cancelBusDriverCnt}회 누적되어, 현재 더 이상의 버스 입찰에 참여할 수 없습니다.`);
+        // [페널티 체크] tradeRestrictYn 플래그 확인 (1회 취소 시 바로 제한)
+        if (loggedInUser.tradeRestrictYn === 'Y') {
+          alert(`안내: ${loggedInUser.userName}님은 현재 서비스 이용이 제한된 상태입니다. 자세한 내용은 고객센터에 문의해주세요.`);
         }
 
         setMessage({ text: `${loggedInUser.userName}님, 환영합니다!`, type: 'success' });
