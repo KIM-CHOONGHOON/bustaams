@@ -367,26 +367,31 @@
 
 ## TB_USER
 
+> **`bustaams` 정본 DDL**: [`busTaams_web/BUSTAAMS_테이블 생성 쿼리 전체.md`](busTaams_web/BUSTAAMS_테이블%20생성%20쿼리%20전체.md) 내 `TB_USER` 정의와 동일.
+
 | 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **CUST_ID** | varchar(10) | NO | PRI | NULL |  | 사용자 식별자 |
-| **USER_ID** | varchar(256) | NO | UNI | NULL |  | 로그인 ID |
+| **CUST_ID** | varchar(10) | NO | PRI | NULL |  | 회원 내부 식별자(신규 가입 시 0패딩 순번 등) |
+| **USER_ID** | varchar(256) | NO | UNI | NULL |  | 로그인 ID·SNS 연동 식별 조합 |
 | **EMAIL** | varchar(100) | YES |  | NULL |  | 이메일 |
-| **SNS_TYPE** | enum('NONE','KAKAO','NAVER') | YES |  | NONE |  | SNS 타입 |
-| **USER_TYPE** | enum('TRAVELER','DRIVER','PARTNER') | NO |  | NULL |  | 회원 구분 |
-| **PASSWORD** | varchar(255) | NO |  | NULL |  | 비밀번호 |
+| **SNS_TYPE** | enum('NONE','KAKAO','NAVER') | YES |  | NONE |  | 간편로그인 타입 |
+| **USER_TYPE** | enum('TRAVELER','DRIVER','PARTNER','ADMIN') | NO |  | NULL |  | 회원 구분·대시보드 분기(`ADMIN` 포함) |
+| **PASSWORD** | varchar(255) | NO |  | NULL |  | 비밀번호(bcrypt 등 단방향) |
 | **USER_NM** | varchar(255) | YES |  | NULL |  | 사용자명 |
-| **RESIDENT_NO_ENC** | varchar(255) | YES |  | NULL |  | 주민번호 (암호화) |
+| **RESIDENT_NO_ENC** | varchar(255) | YES |  | NULL |  | 주민등록번호 양방향 암호화(`crypto.js` 권장) |
 | **HP_NO** | varchar(255) | YES |  | NULL |  | 휴대폰번호 |
-| **USER_IMAGE** | varchar(255) | YES |  | NULL |  | 사용자 이미지 |
-| **SIGNATURE_FILE_ID** | varchar(20) | YES |  | NULL |  | 서명 파일 ID |
-| **PROFILE_FILE_ID** | varchar(20) | YES |  | NULL |  | **`TB_FILE_MASTER.FILE_ID`와 동일 문자열**(20자 패딩 권장) |
+| **PROFILE_IMG_PATH** | varchar(512) | YES |  | NULL |  | 프로필 이미지 경로(URL·상대경로 등) |
+| **PROFILE_FILE_ID** | varchar(20) | YES |  | NULL |  | 프로필 사진 `TB_FILE_MASTER.FILE_ID` |
 | **SMS_AUTH_YN** | enum('Y','N') | YES |  | N |  | SMS 인증 여부 |
-| **RECOM_CODE** | varchar(20) | YES |  | NULL |  | 추천인 코드 |
+| **RECOM_CODE** | varchar(20) | YES |  | NULL |  | 추천인 코드(영업파트너 `CUST_ID` 등) |
 | **JOIN_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 가입 일시 |
-| **USER_STAT** | enum('ACTIVE','LEAVE','BANNED','TEMPORARY') | YES |  | ACTIVE |  | 상태 |
+| **USER_STAT** | enum('ACTIVE','LEAVE','BANNED','TEMPORARY') | YES |  | ACTIVE |  | 계정 상태 |
 | **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 수정 일시 |
-| **MOD_ID** | varchar(10) | YES |  | NULL |  | 수정자 ID |
+| **MOD_ID** | varchar(30) | YES |  | NULL |  | 수정자 ID |
+
+**키·문자집합**: `PRIMARY KEY (CUST_ID)`, `UNIQUE KEY UK_USER_LOGIN_ID (USER_ID)` — `ENGINE=InnoDB`, `utf8mb4` / `utf8mb4_0900_ai_ci` (DDL 준수).
+
+**변경 요약(구 설계 대비 `bustaams`)**: `USER_TYPE`에 `ADMIN` 추가, `USER_IMAGE`·`SIGNATURE_FILE_ID` 컬럼 제거, 프로필 URL은 **`PROFILE_IMG_PATH`** 로 통일.
 
 ## TB_USER_CANCEL_HIST
 

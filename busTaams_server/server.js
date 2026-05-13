@@ -2217,6 +2217,8 @@ app.post('/api/driver/profile-setup', async (req, res) => {
             detailAddress
         } = req.body;
 
+        const qualCertNoTrim = qualCertNo != null ? String(qualCertNo).trim() : '';
+
         const loginUserId = (loginUserIdBody || '').trim();
         if (!loginUserId) return res.status(400).json({ error: 'userId is required' });
 
@@ -2267,7 +2269,7 @@ app.post('/api/driver/profile-setup', async (req, res) => {
         const existingDriverRow = licenseRowForVerify || qualBirthRow;
 
         const qualUnchanged =
-            qualBirthRow && isQualCertUnchanged(qualBirthRow, { qualCertNo });
+            qualBirthRow && isQualCertUnchanged(qualBirthRow, { qualCertNo: qualCertNoTrim });
 
         const rrnNorm = (rrn || '').trim();
         const rrnM = /^(\d{6})-(\d{7})$/.exec(rrnNorm);
@@ -2341,7 +2343,7 @@ app.post('/api/driver/profile-setup', async (req, res) => {
             rrn: rrnForVerify,
             licenseNo,
             licenseSerialNo,
-            qualCertNo,
+            qualCertNo: qualCertNoTrim,
             licenseType,
             licenseIssueDt,
             licenseExpiryDt,
@@ -2460,7 +2462,7 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                         licenseSerialNo || null,
                         licenseIssueDt,
                         licenseExpiryDt,
-                        qualCertNo,
+                        qualCertNoTrim,
                         qualCertVerifyStatus,
                         qualCertVerifyDt
                     ]
@@ -4733,7 +4735,6 @@ app.put('/api/traveler-quote-request-details/bid', async (req, res) => {
         if (connection) connection.release();
     }
 });
-
 
 // API: 공통 코드 조회
 app.get('/api/common/codes/:grpCd', async (req, res) => {

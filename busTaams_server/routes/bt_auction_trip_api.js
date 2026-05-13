@@ -476,68 +476,8 @@ function createAuctionTripRouter(pool, admin, bucket, bucketName) {
     });
 
 
-    // 6. [PUT] 기사 입찰 등록/수정
-    router.put('/bid', async (req, res) => {
-        let connection;
-        try {
-            const { reqId, reqBusSeq, custId, bidPrice } = req.body;
-            connection = await pool.getConnection();
-            await connection.beginTransaction();
-
-            const [existing] = await connection.execute('SELECT RES_ID FROM TB_BUS_RESERVATION WHERE REQ_ID = ? AND DRIVER_ID = ? AND REQ_BUS_SEQ = ?', [reqId, custId, reqBusSeq]);
-            
-            if (existing.length > 0) {
-                await connection.execute('UPDATE TB_BUS_RESERVATION SET DRIVER_BIDDING_PRICE = ?, DATA_STAT = \'BIDDING\', MOD_DT = NOW() WHERE RES_ID = ?', [bidPrice, existing[0].RES_ID]);
-            } else {
-                const [maxRes] = await connection.execute('SELECT MAX(RES_ID) as maxId FROM TB_BUS_RESERVATION');
-                const resId = generateNextNumericId(maxRes[0].maxId, 10);
-                await connection.execute(`
-                    INSERT INTO TB_BUS_RESERVATION (RES_ID, REQ_ID, REQ_BUS_SEQ, TRAVELER_ID, DRIVER_ID, DRIVER_BIDDING_PRICE, DATA_STAT, REG_DT, REG_ID)
-                    SELECT ?, ?, ?, TRAVELER_ID, ?, ?, 'BIDDING', NOW(), ? FROM TB_AUCTION_REQ WHERE REQ_ID = ?
-                `, [resId, reqId, reqBusSeq, custId, bidPrice, custId, reqId]);
-            }
-
-            await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'BIDDING\' WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?', [reqId, reqBusSeq]);
-            await connection.execute('UPDATE TB_AUCTION_REQ SET DATA_STAT = \'BIDDING\' WHERE REQ_ID = ?', [reqId]);
-
-            await connection.commit();
-            res.json({ success: true });
-        } catch (e) {
-            if (connection) await connection.rollback();
-            res.status(500).json({ error: e.message });
-        } finally {
-            if (connection) connection.release();
-        }
-    });
-
-    // 7. [PUT] 기사 입찰 취소
-    router.put('/bid-cancel', async (req, res) => {
-        let connection;
-        try {
-            const { reqId, custId, reqBusSeq } = req.body;
-            connection = await pool.getConnection();
-            await connection.beginTransaction();
-
-            const [rows] = await connection.execute(
-                'SELECT RES_ID FROM TB_BUS_RESERVATION WHERE REQ_ID = ? AND DRIVER_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT = \'BIDDING\'',
-                [reqId, custId, reqBusSeq]
-            );
-            
-            if (rows.length === 0) {
-                return res.status(404).json({ error: '취소할 수 있는 입찰 정보를 찾을 수 없습니다.' });
-            }
-
-            await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'CANCELLATION_OF_BID\', MOD_DT = NOW() WHERE RES_ID = ?', [rows[0].RES_ID]);
-            
-            await connection.commit();
-            res.json({ success: true });
-        } catch (e) {
-            if (connection) await connection.rollback();
-            res.status(500).json({ error: e.message });
-        } finally {
-            if (connection) connection.release();
-        }
-    });
+    // 6–7. PUT /bid, PUT /bid-cancel — `server.js`의 동일 경로 핸들러에 위임
+    // (라우터에 두면 여기가 먼저 매칭되어 bidPrice 미전달 시 mysql2 "undefined" 오류가 남)
 
     // 8. [GET] 사용자의 확정된 예약 목록 조회
     router.get('/confirmed/:custId', async (req, res) => {

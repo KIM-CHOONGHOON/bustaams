@@ -276,7 +276,7 @@ const TravelerQuoteRequestDetails = ({
             {!loading && !loadError && data && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 <div className="lg:col-span-8">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">요청 요약</p>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">여행지 및 경유지</p>
                   <div className="rounded-2xl border border-gray-100 shadow-sm p-8 border-l-4 border-l-teal-500 flex flex-col min-h-[340px]">
                     <div className="flex items-center gap-2 mb-4 shrink-0">
                       <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center text-teal-600">
@@ -315,7 +315,7 @@ const TravelerQuoteRequestDetails = ({
 
                 <div className="lg:col-span-4 space-y-8">
                   <div>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">차량 및 경유지</p>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">요청 일정</p>
                     <div className="rounded-2xl border border-gray-100 p-6 space-y-6 shadow-sm">
                       <div className="flex gap-3">
                         <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center text-gray-600 shrink-0">
@@ -323,8 +323,9 @@ const TravelerQuoteRequestDetails = ({
                         </div>
                         <div>
                           <p className="text-xs text-gray-500 font-semibold">날짜</p>
-                          <p className="text-lg font-bold text-gray-900">
-                            {formatDtShort(data.startDt)} - {formatDtShort(data.endDt)}
+                          <p className="text-lg font-bold text-gray-900 leading-snug">
+                            <span className="block">{formatDtShort(data.startDt)} ~</span>
+                            <span className="block">{formatDtShort(data.endDt)}</span>
                           </p>
                         </div>
                       </div>
