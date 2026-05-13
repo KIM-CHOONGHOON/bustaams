@@ -66,6 +66,9 @@ const Placeholder = ({ title }) => (
 );
 
 
+import NotificationList from './pages/NotificationList';
+import NotificationToast from './components/NotificationToast';
+
 function App() {
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -75,8 +78,8 @@ function App() {
   }, []);
 
   return (
-
     <Router>
+      <NotificationToast />
       <Routes>
         {/* 핵심 인증 라우트 */}
         <Route path="/" element={<Navigate to="/login" replace />} />
@@ -131,6 +134,7 @@ function App() {
 
         {/* 공통 라우트 */}
         <Route path="/chat-room/:id" element={<Chat />} />
+        <Route path="/notifications" element={<NotificationList />} />
       </Routes>
     </Router>
   );

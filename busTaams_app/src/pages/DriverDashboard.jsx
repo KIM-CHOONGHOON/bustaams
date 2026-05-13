@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../api';
+import api, { getNotifications } from '../api';
 import BottomNavDriver from '../components/BottomNavDriver';
 
 const DriverDashboard = () => {
@@ -20,6 +20,7 @@ const DriverDashboard = () => {
     const [auctionList, setAuctionList] = useState([]);
     const [todayTrip, setTodayTrip] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [unreadCount, setUnreadCount] = useState(0);
 
     useEffect(() => {
         const fetchDashboardData = async () => {
@@ -49,6 +50,15 @@ const DriverDashboard = () => {
                 console.error('Fetch driver dashboard error:', err);
             } finally {
                 setLoading(false);
+            }
+
+            // 읽지 않은 알림 개수 가져오기
+            try {
+                const notifs = await getNotifications();
+                const unread = notifs.filter(n => n.READ_YN === 'N').length;
+                setUnreadCount(unread);
+            } catch (err) {
+                console.error('Fetch notifications count error:', err);
             }
         };
         fetchDashboardData();
@@ -87,9 +97,16 @@ const DriverDashboard = () => {
                 </div>
                 <div className="text-xl font-extrabold text-teal-900 tracking-tighter font-headline hidden md:block italic">BUS TAAMS</div>
                 <div className="flex items-center gap-4">
-                    <button className="relative text-teal-800 hover:opacity-80 transition-opacity p-2">
+                    <button 
+                        onClick={() => navigate('/notifications')}
+                        className="relative text-teal-800 hover:opacity-80 transition-opacity p-2"
+                    >
                         <span className="material-symbols-outlined">notifications</span>
-                        <span className="absolute top-2 right-2 w-2 h-2 bg-secondary rounded-full"></span>
+                        {unreadCount > 0 && (
+                            <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-secondary rounded-full border-2 border-white text-[9px] text-white font-bold flex items-center justify-center">
+                                {unreadCount > 99 ? '99+' : unreadCount}
+                            </span>
+                        )}
                     </button>
                 </div>
             </header>

@@ -179,6 +179,18 @@ export const upsertDriverDeviceToken = (fcmToken, clientKind = 'mobile') => requ
     body: JSON.stringify({ fcmToken, clientKind })
 });
 
+// --- 알림 (Notifications) ---
+export const getNotifications = () => request('/app/notifications');
+export const markNotificationAsRead = (seq) => request('/app/notifications/read', {
+    method: 'POST',
+    body: JSON.stringify({ seq })
+});
+export const markAllNotificationsAsRead = () => request('/app/notifications/read-all', {
+    method: 'POST'
+});
+export const deleteNotification = (seq) => request(`/app/notifications/${seq}`, {
+    method: 'DELETE'
+});
 
 // api.get() / api.post() 형식 지원
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../api';
+import api, { getNotifications } from '../api';
 import Swal from 'sweetalert2';
 import { notify } from '../utils/toast';
 import BottomNavCustomer from '../components/BottomNavCustomer';
@@ -12,6 +12,7 @@ const CustomerDashboard = () => {
     const [profileImage, setProfileImage] = useState(null);
     const [imageVersion, setImageVersion] = useState(Date.now());
     const [restriction, setRestriction] = useState(null);
+    const [unreadCount, setUnreadCount] = useState(0);
 
     const categories = [
         { name: '입찰 및 예약 문의', code: 'BID_RES' },
@@ -63,6 +64,15 @@ const CustomerDashboard = () => {
             } catch (err) {
                 console.error('Fetch profile error:', err);
             }
+
+            // 3. 읽지 않은 알림 개수 가져오기
+            try {
+                const notifs = await getNotifications();
+                const unread = notifs.filter(n => n.READ_YN === 'N').length;
+                setUnreadCount(unread);
+            } catch (err) {
+                console.error('Fetch notifications count error:', err);
+            }
         };
 
         fetchDashboardData();
@@ -93,8 +103,16 @@ const CustomerDashboard = () => {
                     <h1 className="text-2xl font-black text-teal-800 italic font-headline tracking-tight text-[22px]">busTaams</h1>
                 </div>
                 <div className="flex items-center gap-4">
-                    <button className="p-2 rounded-full hover:bg-slate-100/50 transition-colors">
+                    <button 
+                        onClick={() => navigate('/notifications')}
+                        className="p-2 rounded-full hover:bg-slate-100/50 transition-colors relative"
+                    >
                         <span className="material-symbols-outlined text-slate-500">notifications</span>
+                        {unreadCount > 0 && (
+                            <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 rounded-full border-2 border-white text-[9px] text-white font-bold flex items-center justify-center">
+                                {unreadCount > 99 ? '99+' : unreadCount}
+                            </span>
+                        )}
                     </button>
                     <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => navigate('/profile-customer')}>
                         {profileImage ? (
