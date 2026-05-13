@@ -468,11 +468,12 @@
 - **목록 필터링**: 나의 예약 목록 조회 시 마스터(`TB_AUCTION_REQ`)의 `DATA_STAT`이 `('TRAVELER_CANCEL', 'BUS_CHANGE')`인 항목은 제외함. 단, 버스(`TB_AUCTION_REQ_BUS`) 단위의 `BUS_CANCEL`은 목록에 노출함.
 
 ### 2. 사용자 취소 페널티 (Cancellation Penalty)
-- **제한**: 누적 취소 횟수가 **3회** 이상일 경우 서비스 이용 제한.
-- **체크 시점**: 로그인 시 및 주요 서비스(여행 등록, 입찰 참여) 진입 시.
-- **제한 내용**:
-  - **여행자**: 새로운 여행 예약 등록 불가.
-  - **버스기사**: 실시간 입찰 참여 불가.
+- **대상**: **모든 사용자** (여행자 및 기사 공통).
+- **제한 원칙**: `TB_USER_CANCEL_MANAGE` 테이블의 `TRADE_RESTRICT_START_DT` ~ `TRADE_RESTRICT_END_DT` 기간 내에 현재 날짜가 포함되면 거래 정지 상태로 간주함.
+- **체크 시점**:
+    - **로그인**: 제한 기간 중에도 로그인은 허용하되, 사용자 정보에 제한 상태를 포함하여 UI에서 안내함.
+    - **거래 행위**: 신규 예약 등록(여행자) 및 입찰 참여(기사) 등 실제 거래 시 서버에서 차단(`403 Forbidden`).
+- **제한 내용**: 새로운 거래 행위 불가 및 UI 버튼 비활성화.
 - **관련 테이블**: `TB_USER_CANCEL_MANAGE`
-  - 여행자: `CANCEL_TRAVELER_ALL_CNT` 체크.
-  - 버스기사: `CANCEL_BUS_DRIVER_CNT` 체크.
+    - 여행자: `CANCEL_TRAVELER_ALL_CNT` 기록 및 날짜 체크.
+    - 버스기사: `CANCEL_BUS_DRIVER_CNT` 기록 및 날짜 체크.

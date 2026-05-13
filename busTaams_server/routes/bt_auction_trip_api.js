@@ -79,6 +79,18 @@ function createAuctionTripRouter(pool, admin, bucket, bucketName) {
             connection = await pool.getConnection();
             await connection.beginTransaction();
 
+            const safeCustId = String(custId || '').padStart(10, '0');
+
+            // 0. 거래 제한(패널티) 확인
+            const [penaltyRows] = await connection.execute(
+                `SELECT TRADE_RESTRICT_YN FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ? FOR UPDATE`,
+                [safeCustId]
+            );
+            if (penaltyRows.length > 0 && penaltyRows[0].TRADE_RESTRICT_YN === 'Y') {
+                await connection.rollback();
+                return res.status(403).json({ error: '취소 누적으로 인해 서비스 이용이 일시적으로 제한되었습니다. 고객센터에 문의해주세요.' });
+            }
+
             const [maxReqRows] = await connection.execute('SELECT MAX(REQ_ID) as maxId FROM TB_AUCTION_REQ');
             const reqId = generateNextNumericId(maxReqRows[0].maxId);
             const secureRegId = String(custId).substring(0, 10);
@@ -271,10 +283,19 @@ function createAuctionTripRouter(pool, admin, bucket, bucketName) {
             `, [custId, (maxHist[0].maxSeq || 0) + 1, reasonCode, reasonText || '', fileId]);
 
             await connection.execute(`
-                INSERT INTO TB_USER_CANCEL_MANAGE (CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_ALL_CNT, REG_ID, MOD_ID, REG_DT, MOD_DT)
-                VALUES (?, 1, 1, ?, ?, NOW(), NOW())
-                ON DUPLICATE KEY UPDATE CANCEL_CNT = CANCEL_CNT + 1, CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
-                TRADE_RESTRICT_YN = CASE WHEN (CANCEL_TRAVELER_ALL_CNT + 1) >= 3 THEN 'Y' ELSE TRADE_RESTRICT_YN END, MOD_ID = ?, MOD_DT = NOW()
+                INSERT INTO TB_USER_CANCEL_MANAGE (
+                    CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_ALL_CNT, 
+                    TRADE_RESTRICT_YN, TRADE_RESTRICT_START_DT, TRADE_RESTRICT_END_DT,
+                    REG_ID, MOD_ID, REG_DT, MOD_DT
+                ) VALUES (?, 1, 1, 'Y', DATE_ADD(CURDATE(), INTERVAL 1 DAY), DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH), ?, ?, NOW(), NOW())
+                ON DUPLICATE KEY UPDATE 
+                    CANCEL_CNT = CANCEL_CNT + 1,
+                    CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
+                    TRADE_RESTRICT_YN = 'Y',
+                    TRADE_RESTRICT_START_DT = DATE_ADD(CURDATE(), INTERVAL 1 DAY),
+                    TRADE_RESTRICT_END_DT = DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH),
+                    MOD_ID = ?,
+                    MOD_DT = NOW()
             `, [custId, custId, custId, custId]);
 
             await connection.commit();
@@ -318,19 +339,21 @@ function createAuctionTripRouter(pool, admin, bucket, bucketName) {
         }
     });
 
-    // 4. [POST] 버스 변경 요청
+    // 4. [POST] 버스 취소(삭제) 요청 (기존 bus-change 명칭 유지)
     router.post('/bus-change', async (req, res) => {
         let connection;
         try {
             const { reqId, reqBusSeq, custId } = req.body;
-            const secureModId = String(custId || 'SYSTEM').substring(0, 10);
+            const secureModId = String(custId || '').padStart(10, '0');
             connection = await pool.getConnection();
             await connection.beginTransaction();
 
+            // 1. 해당 버스 정보 및 전체 버스 수 조회
             const [activeBuses] = await connection.execute(
-                'SELECT REQ_BUS_SEQ, RES_BUS_AMT FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ? AND DATA_STAT NOT IN (\'TRAVELER_CANCEL\', \'BUS_CANCEL\') FOR UPDATE',
+                'SELECT REQ_BUS_SEQ, RES_BUS_AMT FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ? AND DATA_STAT NOT IN (\'TRAVELER_CANCEL\', \'BUS_CANCEL\', \'BUS_CHANGE\') FOR UPDATE',
                 [reqId]
             );
+
             const busToCancel = activeBuses.find(b => b.REQ_BUS_SEQ === Number(reqBusSeq));
             if (!busToCancel) {
                 await connection.rollback();
@@ -338,14 +361,33 @@ function createAuctionTripRouter(pool, admin, bucket, bucketName) {
             }
 
             const oldBusAmt = busToCancel.RES_BUS_AMT || 0;
-            const masterStatusUpdate = activeBuses.length === 1 ? ', DATA_STAT = \'TRAVELER_CANCEL\'' : '';
+            const isLastBus = activeBuses.length === 1;
 
-            await connection.execute(`UPDATE TB_AUCTION_REQ SET BUS_CHANG_CNT = BUS_CHANG_CNT + 1, REQ_AMT = REQ_AMT - ?, MOD_ID = ?, MOD_DT = NOW() ${masterStatusUpdate} WHERE REQ_ID = ?`, [oldBusAmt, secureModId, reqId]);
+            // 2. 마스터 업데이트 (금액 차감 및 상태 변경)
+            const masterStatusUpdate = isLastBus ? ', DATA_STAT = \'TRAVELER_CANCEL\'' : '';
+            await connection.execute(
+                `UPDATE TB_AUCTION_REQ SET REQ_AMT = REQ_AMT - ?, MOD_ID = ?, MOD_DT = NOW() ${masterStatusUpdate} WHERE REQ_ID = ?`,
+                [oldBusAmt, secureModId, reqId]
+            );
+
+            // 3. 버스 및 예약 상태 업데이트
             await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?', [secureModId, reqId, reqBusSeq]);
-            await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT = \'CONFIRM\'', [reqId, reqBusSeq]);
+            await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT = \'CONFIRM\'', [secureModId, reqId, reqBusSeq]);
+
+            // 4. 패널티 반영 (TB_USER_CANCEL_MANAGE)
+            const penaltyColumn = isLastBus ? 'CANCEL_TRAVELER_ALL_CNT' : 'CANCEL_TRAVELER_PARTIAL_BUS_CNT';
+            await connection.execute(`
+                INSERT INTO TB_USER_CANCEL_MANAGE (CUST_ID, CANCEL_CNT, ${penaltyColumn}, TRADE_RESTRICT_YN, REG_ID, MOD_ID, REG_DT, MOD_DT)
+                VALUES (?, 1, 1, 'N', ?, ?, NOW(), NOW())
+                ON DUPLICATE KEY UPDATE 
+                    CANCEL_CNT = CANCEL_CNT + 1,
+                    ${penaltyColumn} = ${penaltyColumn} + 1,
+                    MOD_ID = ?,
+                    MOD_DT = NOW()
+            `, [secureModId, secureModId, secureModId, secureModId]);
 
             await connection.commit();
-            res.json({ message: '버스 변경 요청 완료' });
+            res.json({ message: isLastBus ? '여정 전체가 취소되었습니다.' : '선택하신 버스가 취소(삭제)되었습니다.' });
         } catch (e) {
             if (connection) await connection.rollback();
             res.status(500).json({ error: e.message });
@@ -354,27 +396,45 @@ function createAuctionTripRouter(pool, admin, bucket, bucketName) {
         }
     });
 
-    // 5. [POST] 버스 취소
+    // 5. [POST] 기사 변경 요청 (기존 bus-cancel 명칭 유지)
     router.post('/bus-cancel', async (req, res) => {
         let connection;
         try {
             const { reqId, reqBusSeq, custId } = req.body;
-            const secureModId = String(custId || 'SYSTEM').substring(0, 10);
+            const secureModId = String(custId || '').padStart(10, '0');
             connection = await pool.getConnection();
             await connection.beginTransaction();
 
-            const [busRows] = await connection.execute('SELECT RES_BUS_AMT FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? FOR UPDATE', [reqId, reqBusSeq]);
+            // 1. 해당 버스 상태 확인
+            const [busRows] = await connection.execute(
+                'SELECT REQ_BUS_SEQ FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? FOR UPDATE',
+                [reqId, reqBusSeq]
+            );
             if (busRows.length === 0) {
                 await connection.rollback();
                 return res.status(404).json({ error: '해당 버스 요청을 찾을 수 없습니다.' });
             }
 
-            await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'BUS_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?', [secureModId, reqId, reqBusSeq]);
-            await connection.execute('UPDATE TB_AUCTION_REQ SET REQ_AMT = REQ_AMT - ?, MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?', [busRows[0].RES_BUS_AMT || 0, secureModId, reqId]);
-            await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'BUS_CANCEL\', MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT = \'CONFIRM\'', [reqId, reqBusSeq]);
+            // 2. 기사 변경 카운트 증가 및 마스터 상태를 다시 'AUCTION'으로 변경
+            await connection.execute(
+                'UPDATE TB_AUCTION_REQ SET BUS_CHANG_CNT = BUS_CHANG_CNT + 1, DATA_STAT = \'AUCTION\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?',
+                [secureModId, reqId]
+            );
+
+            // 3. 해당 버스 상태를 'AUCTION'으로 되돌림 (재경매 참여 가능 상태)
+            await connection.execute(
+                'UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'AUCTION\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?',
+                [secureModId, reqId, reqBusSeq]
+            );
+
+            // 4. 기존 예약 데이터를 'BUS_CHANGE'로 무효화
+            await connection.execute(
+                'UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'BUS_CHANGE\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT IN (\'CONFIRM\', \'COMPLETED\')',
+                [secureModId, reqId, reqBusSeq]
+            );
 
             await connection.commit();
-            res.json({ message: '버스 취소 완료' });
+            res.json({ message: '기사 변경이 완료되었습니다. 새로운 입찰을 기다려주세요.' });
         } catch (e) {
             if (connection) await connection.rollback();
             res.status(500).json({ error: e.message });

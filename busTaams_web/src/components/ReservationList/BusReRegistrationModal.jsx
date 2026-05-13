@@ -110,7 +110,7 @@ const BusReRegistrationModal = ({ reqId, user, onClose, onSuccess }) => {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch('http://localhost:8080/api/auction/re-register-bus', {
+      const response = await fetch('/api/auction/re-register-bus', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reqId, vehicles, custId: user?.custId })

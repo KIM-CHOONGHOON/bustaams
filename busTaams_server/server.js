@@ -353,7 +353,6 @@ async function ensureTbCommonCodeTable(connection) {
             COMMENT='시스템 공통 코드 관리 테이블'
     `);
 }
->>>>>>> a322f87c965c90c5f6b4f0a3cf567e4a0779b88f
 
 async function seedBusTypeCodesIfEmpty(connection) {
     const [rows] = await connection.execute(
@@ -1349,12 +1348,16 @@ app.post('/api/auction/cancel-bus', async (req, res) => {
             // 4. TB_USER_CANCEL_MANAGE 카운트 업데이트 (부분 취소 카운트)
             await connection.execute(`
                 INSERT INTO TB_USER_CANCEL_MANAGE (
-                    CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, REG_ID, MOD_ID, REG_DT, MOD_DT
-                ) VALUES (?, 1, 1, ?, ?, NOW(), NOW())
+                    CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, 
+                    TRADE_RESTRICT_YN, TRADE_RESTRICT_START_DT, TRADE_RESTRICT_END_DT,
+                    REG_ID, MOD_ID, REG_DT, MOD_DT
+                ) VALUES (?, 1, 1, 'Y', DATE_ADD(CURDATE(), INTERVAL 1 DAY), DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH), ?, ?, NOW(), NOW())
                 ON DUPLICATE KEY UPDATE 
                     CANCEL_CNT = CANCEL_CNT + 1,
                     CANCEL_TRAVELER_PARTIAL_BUS_CNT = CANCEL_TRAVELER_PARTIAL_BUS_CNT + 1,
-                    TRADE_RESTRICT_YN = CASE WHEN (CANCEL_CNT + 1) >= 3 THEN 'Y' ELSE TRADE_RESTRICT_YN END,
+                    TRADE_RESTRICT_YN = 'Y',
+                    TRADE_RESTRICT_START_DT = DATE_ADD(CURDATE(), INTERVAL 1 DAY),
+                    TRADE_RESTRICT_END_DT = DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH),
                     MOD_ID = ?,
                     MOD_DT = NOW()
             `, [custId, custId, custId, custId]);
@@ -1477,12 +1480,16 @@ app.post('/api/auction/complex-cancel', async (req, res) => {
         // 5. TB_USER_CANCEL_MANAGE 카운트 업데이트 (Upsert)
         await connection.execute(`
             INSERT INTO TB_USER_CANCEL_MANAGE (
-                CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_ALL_CNT, REG_ID, MOD_ID, REG_DT, MOD_DT
-            ) VALUES (?, 1, 1, ?, ?, NOW(), NOW())
+                CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_ALL_CNT, 
+                TRADE_RESTRICT_YN, TRADE_RESTRICT_START_DT, TRADE_RESTRICT_END_DT,
+                REG_ID, MOD_ID, REG_DT, MOD_DT
+            ) VALUES (?, 1, 1, 'Y', DATE_ADD(CURDATE(), INTERVAL 1 DAY), DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH), ?, ?, NOW(), NOW())
             ON DUPLICATE KEY UPDATE 
                 CANCEL_CNT = CANCEL_CNT + 1,
                 CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
-                TRADE_RESTRICT_YN = CASE WHEN (CANCEL_TRAVELER_ALL_CNT + 1) >= 3 THEN 'Y' ELSE TRADE_RESTRICT_YN END,
+                TRADE_RESTRICT_YN = 'Y',
+                TRADE_RESTRICT_START_DT = DATE_ADD(CURDATE(), INTERVAL 1 DAY),
+                TRADE_RESTRICT_END_DT = DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH),
                 MOD_ID = ?,
                 MOD_DT = NOW()
         `, [custId, custId, custId, custId]);
@@ -1639,12 +1646,17 @@ app.post('/api/auction/bus-change', async (req, res) => {
             `, [secureModId, nextHistSeq]);
 
             await connection.execute(`
-                INSERT INTO TB_USER_CANCEL_MANAGE (CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_ALL_CNT, REG_ID, MOD_ID, REG_DT, MOD_DT)
-                VALUES (?, 1, 1, ?, ?, NOW(), NOW())
+                INSERT INTO TB_USER_CANCEL_MANAGE (
+                    CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_ALL_CNT, 
+                    TRADE_RESTRICT_YN, TRADE_RESTRICT_START_DT, TRADE_RESTRICT_END_DT,
+                    REG_ID, MOD_ID, REG_DT, MOD_DT
+                ) VALUES (?, 1, 1, 'Y', DATE_ADD(CURDATE(), INTERVAL 1 DAY), DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH), ?, ?, NOW(), NOW())
                 ON DUPLICATE KEY UPDATE 
                     CANCEL_CNT = CANCEL_CNT + 1,
                     CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
-                    TRADE_RESTRICT_YN = CASE WHEN (CANCEL_CNT + 1) >= 3 THEN 'Y' ELSE TRADE_RESTRICT_YN END,
+                    TRADE_RESTRICT_YN = 'Y',
+                    TRADE_RESTRICT_START_DT = DATE_ADD(CURDATE(), INTERVAL 1 DAY),
+                    TRADE_RESTRICT_END_DT = DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH),
                     MOD_ID = ?, MOD_DT = NOW()
             `, [secureModId, secureModId, secureModId, secureModId]);
         } else {
@@ -1655,12 +1667,17 @@ app.post('/api/auction/bus-change', async (req, res) => {
             `, [secureModId, nextHistSeq, `차량 개별 취소 (SEQ: ${reqBusSeq})`]);
 
             await connection.execute(`
-                INSERT INTO TB_USER_CANCEL_MANAGE (CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, REG_ID, MOD_ID, REG_DT, MOD_DT)
-                VALUES (?, 1, 1, ?, ?, NOW(), NOW())
+                INSERT INTO TB_USER_CANCEL_MANAGE (
+                    CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, 
+                    TRADE_RESTRICT_YN, TRADE_RESTRICT_START_DT, TRADE_RESTRICT_END_DT,
+                    REG_ID, MOD_ID, REG_DT, MOD_DT
+                ) VALUES (?, 1, 1, 'Y', DATE_ADD(CURDATE(), INTERVAL 1 DAY), DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH), ?, ?, NOW(), NOW())
                 ON DUPLICATE KEY UPDATE 
                     CANCEL_CNT = CANCEL_CNT + 1,
                     CANCEL_TRAVELER_PARTIAL_BUS_CNT = CANCEL_TRAVELER_PARTIAL_BUS_CNT + 1,
-                    TRADE_RESTRICT_YN = CASE WHEN (CANCEL_CNT + 1) >= 3 THEN 'Y' ELSE TRADE_RESTRICT_YN END,
+                    TRADE_RESTRICT_YN = 'Y',
+                    TRADE_RESTRICT_START_DT = DATE_ADD(CURDATE(), INTERVAL 1 DAY),
+                    TRADE_RESTRICT_END_DT = DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH),
                     MOD_ID = ?, MOD_DT = NOW()
             `, [secureModId, secureModId, secureModId, secureModId]);
         }
@@ -1733,17 +1750,7 @@ app.post('/api/auction/bus-cancel', async (req, res) => {
         );
 
         if (driverInfoRows.length > 0) {
-            const driverId = driverInfoRows[0].DRIVER_ID;
-            // 기사 취소 누적 횟수 증가 및 3아웃 체크
-            await connection.execute(`
-                INSERT INTO TB_USER_CANCEL_MANAGE (CUST_ID, CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, REG_ID, MOD_ID, REG_DT, MOD_DT)
-                VALUES (?, 1, 1, 'SYSTEM', 'SYSTEM', NOW(), NOW())
-                ON DUPLICATE KEY UPDATE 
-                    CANCEL_CNT = CANCEL_CNT + 1,
-                    CANCEL_BUS_DRIVER_CNT = CANCEL_BUS_DRIVER_CNT + 1,
-                    TRADE_RESTRICT_YN = CASE WHEN (CANCEL_BUS_DRIVER_CNT + 1) >= 3 THEN 'Y' ELSE TRADE_RESTRICT_YN END,
-                    MOD_DT = NOW()
-            `, [driverId]);
+            // [정책 변경] 기사는 패널티 체크/부여 제외함 (사용자 요청)
         }
 
         await connection.execute(
@@ -3400,14 +3407,35 @@ app.get('/api/customer/active-request', async (req, res) => {
     const { custId } = req.query;
     if (!custId) return res.status(400).json({ error: 'custId is required' });
     try {
+        const safeCustId = String(custId || '').padStart(10, '0');
+        
+        // 1. 패널티 정보 조회
+        const [penaltyRows] = await pool.execute(
+            `SELECT TRADE_RESTRICT_YN FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ?`,
+            [safeCustId]
+        );
+        
+        const isRestricted = penaltyRows.length > 0 && penaltyRows[0].TRADE_RESTRICT_YN === 'Y';
+        console.log(`[DEBUG] Dashboard Penalty Check - CUST_ID: ${safeCustId}, isRestricted: ${isRestricted}`);
+        const tradeRestrictYn = isRestricted ? 'Y' : 'N';
+
+        // 2. 활성 요청 조회
         const [rows] = await pool.execute(
             `SELECT REQ_ID, TRIP_TITLE, START_ADDR, END_ADDR, PASSENGER_CNT, DATA_STAT, START_DT
              FROM TB_AUCTION_REQ
              WHERE TRAVELER_ID = ? AND DATA_STAT = 'AUCTION'
              ORDER BY REG_DT DESC LIMIT 1`,
-            [custId]
+            [safeCustId]
         );
-        if (rows.length === 0) return res.json(null);
+
+        const penaltyInfo = {
+            tradeRestrictYn
+        };
+
+        if (rows.length === 0) {
+            return res.json({ ...penaltyInfo });
+        }
+
         const r = rows[0];
         res.json({
             id: r.REQ_ID,
@@ -3415,7 +3443,8 @@ app.get('/api/customer/active-request', async (req, res) => {
             subTitle: r.TRIP_TITLE,
             startDt: formatDateYmd(r.START_DT),
             description: `대형 · ${r.PASSENGER_CNT}명`,
-            status: r.DATA_STAT
+            status: r.DATA_STAT,
+            ...penaltyInfo
         });
     } catch (error) { res.status(500).json({ error: error.message }); }
 });
@@ -4640,13 +4669,14 @@ app.put('/api/traveler-quote-request-details/bid', async (req, res) => {
         await connection.beginTransaction();
 
         // 0. 거래 제한(패널티) 확인
+        const safeDriverId = String(driverId || '').padStart(10, '0');
         const [penaltyRows] = await connection.execute(
             "SELECT TRADE_RESTRICT_YN FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ?",
-            [driverId]
+            [safeDriverId]
         );
         if (penaltyRows.length > 0 && penaltyRows[0].TRADE_RESTRICT_YN === 'Y') {
             await connection.rollback();
-            return res.status(403).json({ error: '취소 누적으로 인해 입찰 참여가 제한되었습니다. 고객센터에 문의하세요.' });
+            return res.status(403).json({ error: '취소 누적으로 인해 서비스 이용이 일시적으로 제한되었습니다. 고객센터에 문의해주세요.' });
         }
 
         // 1. 기존 입찰 여부 확인 (REQ_ID + REQ_BUS_SEQ + DRIVER_ID 조합으로 확인)
@@ -4704,11 +4734,6 @@ app.put('/api/traveler-quote-request-details/bid', async (req, res) => {
     }
 });
 
-const RES_STAT_LABEL = { CONFIRM: '확정', DONE: '완료', TRAVELER_CANCEL: '여행자 취소', DRIVER_CANCEL: '버스기사 취소' };
-
-app.use('/api/live-chat-bus-driver', createLiveChatBusDriverRouter(pool));
-app.use('/api/live-chat-traveler', createLiveChatTravelerRouter(pool));
-app.use('/api/user/device-token', createUserDeviceTokenRouter(pool));
 
 // API: 공통 코드 조회
 app.get('/api/common/codes/:grpCd', async (req, res) => {

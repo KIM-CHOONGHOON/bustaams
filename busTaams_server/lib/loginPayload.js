@@ -28,13 +28,25 @@ function getMainDashboardBranch(userType) {
 
 function mapCancelRow(row) {
     if (!row) return { ...DEFAULT_CANCEL };
+    
+    // DB 플래그(YN)를 직접 체크
+    const isRestricted = row.TRADE_RESTRICT_YN === 'Y';
+
+    // [DEBUG] 로그
+    if (isRestricted) {
+        console.log(`[DEBUG] Final Restriction: TRUE (based on TRADE_RESTRICT_YN='Y')`);
+    }
+
     return {
         cancelCnt: row.CANCEL_CNT != null ? Number(row.CANCEL_CNT) : 0,
         cancelBusDriverCnt: row.CANCEL_BUS_DRIVER_CNT != null ? Number(row.CANCEL_BUS_DRIVER_CNT) : 0,
         cancelTravelerAllCnt: row.CANCEL_TRAVELER_ALL_CNT != null ? Number(row.CANCEL_TRAVELER_ALL_CNT) : 0,
         cancelTravelerPartialBusCnt: row.CANCEL_TRAVELER_PARTIAL_BUS_CNT != null
             ? Number(row.CANCEL_TRAVELER_PARTIAL_BUS_CNT) : 0,
-        tradeRestrictYn: (row.TRADE_RESTRICT_YN || 'N').toString().toUpperCase() === 'Y' ? 'Y' : 'N',
+        tradeRestrictYn: isRestricted ? 'Y' : 'N', // 최종 판정
+        dbTradeRestrictYn: row.TRADE_RESTRICT_YN || 'N', // DB 원본 값
+        tradeRestrictStartDt: row.TRADE_RESTRICT_START_DT,
+        tradeRestrictEndDt: row.TRADE_RESTRICT_END_DT,
     };
 }
 
@@ -58,9 +70,10 @@ function getCurrentYyyyMm() {
  * TB_USER_CANCEL_MANAGE: SERVER 환경.md CUST_ID 조인·BUSTAAMS 컬럼명 혼용 대응
  */
 async function fetchCancelManageForUser(pool, user) {
-    const cust = user.CUST_ID != null && String(user.CUST_ID).trim() !== '' ? String(user.CUST_ID).trim() : '';
+    const custRaw = user.CUST_ID != null && String(user.CUST_ID).trim() !== '' ? String(user.CUST_ID).trim() : '';
+    const cust = custRaw ? custRaw.padStart(10, '0') : '';
     const loginId = user.USER_ID != null && String(user.USER_ID).trim() !== '' ? String(user.USER_ID).trim() : '';
-    const cols = `CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, CANCEL_TRAVELER_ALL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, TRADE_RESTRICT_YN`;
+    const cols = `CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, CANCEL_TRAVELER_ALL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, TRADE_RESTRICT_YN, TRADE_RESTRICT_START_DT, TRADE_RESTRICT_END_DT`;
 
     const tryQ = async (sql, args) => {
         const [rows] = await pool.execute(sql, args);
@@ -136,6 +149,9 @@ function buildPostLoginUserDto({ user, cancelRow, subscriptionRow }, opts = {}) 
         subscription = mapSubscriptionRow(subscriptionRow);
     }
 
+    // 최상위 레벨에서도 확인 가능하도록 추가
+    const isRestricted = cancelManage && cancelManage.tradeRestrictYn === 'Y';
+
     return {
         custId: user.CUST_ID != null ? String(user.CUST_ID).trim() : '',
         userId: user.USER_ID != null ? String(user.USER_ID).trim() : '',
@@ -152,6 +168,7 @@ function buildPostLoginUserDto({ user, cancelRow, subscriptionRow }, opts = {}) 
         cancelManage,
         subscription,
         mainDashboard: main,
+        tradeRestrictYn: isRestricted ? 'Y' : 'N', // 최상위 필드 추가
     };
 }
 

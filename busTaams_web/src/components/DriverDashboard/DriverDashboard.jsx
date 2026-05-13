@@ -317,6 +317,7 @@ function QuickMenu({
   onTripCompletionList,
   onCancellationList,
   onSettlement,
+  tradeRestrictYn,
 }) {
   const menuBtn =
     'flex flex-col items-center justify-center gap-2 md:gap-3 p-4 md:p-5 bg-surface-container-lowest rounded-2xl hover:bg-teal-50/50 transition-all group shadow-sm';
@@ -326,108 +327,53 @@ function QuickMenu({
 
   return (
     <section className="space-y-6">
+      {/* [추가] 거래 제한 안내 배너 */}
+      {tradeRestrictYn === 'Y' && (
+        <div className="mb-8 bg-red-50 border-2 border-red-200 p-6 rounded-2xl flex items-center gap-6 animate-pulse">
+          <div className="w-12 h-12 bg-red-600 text-white rounded-full flex items-center justify-center shrink-0 shadow-lg">
+            <span className="material-symbols-outlined text-2xl">block</span>
+          </div>
+          <div>
+            <h4 className="text-red-900 font-bold text-lg">거래 제한 안내</h4>
+            <p className="text-red-700/80 text-sm font-medium">취소 규정 위반으로 인해 현재 서비스 이용이 제한되었습니다. 고객센터에 문의해 주세요.</p>
+          </div>
+        </div>
+      )}
+
       <h3 className={SECTION_TITLE_CLASS}>등록/변경 메뉴</h3>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
-        <button
-          type="button"
-          aria-label="기사 정보 관리"
-          onClick={() => onProfileSetup?.()}
-          className={menuBtn}
-        >
-          <div className={iconBox}>
-            <span className="material-symbols-outlined text-[22px] md:text-[24px]">person</span>
-          </div>
-          <span className={labelSm}>기사 정보 관리</span>
-        </button>
-        <button
-          type="button"
-          aria-label="버스 정보 관리"
-          onClick={() => onBusInfoSetup?.()}
-          className={menuBtn}
-        >
-          <div className={iconBox}>
-            <span className="material-symbols-outlined text-[22px] md:text-[24px]">directions_bus</span>
-          </div>
-          <span className={labelSm}>버스 정보 관리</span>
-        </button>
-        <button
-          type="button"
-          aria-label="카드 및 월회비"
-          onClick={() => onBillingSubscription?.()}
-          className={menuBtn}
-        >
-          <div className={iconBox}>
-            <span className="material-symbols-outlined text-[22px] md:text-[24px]">credit_card</span>
-          </div>
-          <span className={labelSm}>카드 및 월회비</span>
-        </button>
-        <button
-          type="button"
-          aria-label="여행 요청 목록 조회"
-          onClick={() => onQuotationList?.()}
-          className={menuBtn}
-        >
-          <div className={iconBox}>
-            <span className="material-symbols-outlined text-[22px] md:text-[24px]">request_quote</span>
-          </div>
-          <span className={labelSm}>여행 요청 목록 조회</span>
-        </button>
-        <button
-          type="button"
-          aria-label="기사님 청약/여행 목록"
-          onClick={() => onDriversListOfBids?.()}
-          className={menuBtn}
-        >
-          <div className={iconBox}>
-            <span className="material-symbols-outlined text-[22px] md:text-[24px]">format_list_bulleted</span>
-          </div>
-          <span className={labelSm}>기사님 청약/여행 목록</span>
-        </button>
-
-        <button
-          type="button"
-          aria-label="여행자와 대화"
-          onClick={() => onLiveChat?.()}
-          className={menuBtn}
-        >
-          <div className={iconBox}>
-            <span className="material-symbols-outlined text-[22px] md:text-[24px]">forum</span>
-          </div>
-          <span className={labelSm}>여행자와 대화</span>
-        </button>
-        <button
-          type="button"
-          aria-label="여행 완료 목록"
-          onClick={() => onTripCompletionList?.()}
-          className={menuBtn}
-        >
-          <div className={iconBox}>
-            <span className="material-symbols-outlined text-[22px] md:text-[24px]">task_alt</span>
-          </div>
-          <span className={labelSm}>여행 완료 목록</span>
-        </button>
-        <button
-          type="button"
-          aria-label="청약 취소 목록 조회"
-          onClick={() => onCancellationList?.()}
-          className={menuBtn}
-        >
-          <div className={iconBox}>
-            <span className="material-symbols-outlined text-[22px] md:text-[24px]">cancel</span>
-          </div>
-          <span className={labelSm}>청약 취소 목록 조회</span>
-        </button>
-        <button
-          type="button"
-          aria-label="정산 관리"
-          onClick={() => onSettlement?.()}
-          className={menuBtn}
-        >
-          <div className={iconBox}>
-            <span className="material-symbols-outlined text-[22px] md:text-[24px]">account_balance_wallet</span>
-          </div>
-          <span className={labelSm}>정산 관리</span>
-        </button>
+        {[
+          { label: '기사 정보 관리', icon: 'person', action: onProfileSetup, id: 'profile' },
+          { label: '버스 정보 관리', icon: 'directions_bus', action: onBusInfoSetup, id: 'bus' },
+          { label: '카드 및 월회비', icon: 'credit_card', action: onBillingSubscription, id: 'billing' },
+          { label: '여행 요청 목록 조회', icon: 'request_quote', action: onQuotationList, id: 'quote', restrict: true },
+          { label: '기사님 청약/여행 목록', icon: 'format_list_bulleted', action: onDriversListOfBids, id: 'bid' },
+          { label: '여행자와 대화', icon: 'forum', action: onLiveChat, id: 'chat' },
+          { label: '여행 완료 목록', icon: 'task_alt', action: onTripCompletionList, id: 'done' },
+          { label: '청약 취소 목록 조회', icon: 'cancel', action: onCancellationList, id: 'cancel' },
+          { label: '정산 관리', icon: 'account_balance_wallet', action: onSettlement, id: 'settle' },
+        ].map((item) => {
+          const isDisabled = item.restrict && tradeRestrictYn === 'Y';
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                if (isDisabled) {
+                  alert('안내: 현재 서비스 이용이 제한되어 입찰 참여가 불가능합니다.');
+                  return;
+                }
+                item.action?.();
+              }}
+              className={`${menuBtn} ${isDisabled ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
+            >
+              <div className={`${iconBox} ${isDisabled ? 'bg-gray-200' : ''}`}>
+                <span className={`material-symbols-outlined text-[22px] md:text-[24px] ${isDisabled ? 'text-gray-400' : ''}`}>{item.icon}</span>
+              </div>
+              <span className={`${labelSm} ${isDisabled ? 'text-gray-400' : ''}`}>{item.label}</span>
+            </button>
+          );
+        })}
       </div>
     </section>
   );
@@ -441,6 +387,7 @@ const DriverDashboard = ({
   onDriversListOfBids,
 }) => {
   const driverCustId = currentUser?.custId || currentUser?.userId || '';
+  const tradeRestrictYn = currentUser?.tradeRestrictYn || 'N';
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth() + 1);
@@ -588,6 +535,7 @@ const DriverDashboard = ({
             onTripCompletionList={() => setShowTripCompletionList(true)}
             onCancellationList={() => setShowDriversCancellationList(true)}
             onSettlement={() => setShowBillingSubscription(true)}
+            tradeRestrictYn={tradeRestrictYn}
           />
         </div>
       </main>
