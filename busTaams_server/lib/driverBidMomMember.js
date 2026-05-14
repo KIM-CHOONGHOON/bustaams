@@ -238,6 +238,44 @@ async function applyMomMemberAfterBid(connection, custId) {
     };
 }
 
+/**
+ * 기사 취소/변경 시 응찰 횟수 원복 처리
+ * @param {import('mysql2').PoolConnection} connection
+ * @param {string} custId 기사 CUST_ID
+ * @returns {Promise<{ ok: true } | { ok: false, error: any }>}
+ */
+async function rollbackMomMember(connection, custId) {
+    const cust = String(custId || '').trim();
+    if (!cust) return { ok: false, error: 'CUST_ID_REQUIRED' };
+
+    const yyyyMM = getCurrentYyyyMm();
+
+    try {
+        // [수정] 데이터가 없으면 Insert, 있으면 Update 로직 적용
+        // Insert 시: USE_CNT=0, REMAINING_CNT=5
+        // Update 시: USE_CNT=USE_CNT-1, REMAINING_CNT=REMAINING_CNT+1
+        const query = `
+            INSERT INTO TB_MOM_MEMBER (
+                CUST_ID, YYYYMM, FEE_POLICY, BASIC_CNT, USE_CNT, REMAINING_CNT, REG_DT, REG_ID, MOD_DT, MOD_ID
+            ) VALUES (?, ?, 'DRIVER', 5, 0, 5, NOW(), ?, NOW(), ?)
+            ON DUPLICATE KEY UPDATE
+                USE_CNT = IF(USE_CNT > 0, USE_CNT - 1, 0),
+                REMAINING_CNT = REMAINING_CNT + 1,
+                MOD_DT = NOW(),
+                MOD_ID = ?
+        `;
+
+        await connection.execute(query, [cust, yyyyMM, cust, cust, cust]);
+        console.log(`[ROLLBACK] Quota rollback processed for driver ${cust} (${yyyyMM})`);
+        
+        return { ok: true };
+    } catch (e) {
+        console.error(`[ROLLBACK ERROR] Failed to process quota for driver ${cust}:`, e);
+        return { ok: false, error: e };
+    }
+}
+
 module.exports = {
     applyMomMemberAfterBid,
+    rollbackMomMember,
 };

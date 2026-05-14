@@ -32,6 +32,18 @@ try {
             );
         }
     }
+
+    // [ADD] Antigravity_env.env (루트 폴더) 로드
+    const agEnvPath = path.resolve(__dirname, '..', 'Antigravity_env.env');
+    if (fs.existsSync(agEnvPath)) {
+        console.log('[loadEnv] Antigravity_env.env 로드 중:', agEnvPath);
+        const agRaw = fs.readFileSync(agEnvPath, 'utf8');
+        const agParsed = dotenv.parse(agRaw);
+        for (const k in agParsed) {
+            // Antigravity 설정을 우선적으로 반영하거나 덮어씀
+            process.env[k] = agParsed[k];
+        }
+    }
 } catch (e) {
-    console.error('[loadEnv] .env 읽기 실패:', envPath, e.message);
+    console.error('[loadEnv] 환경 파일 읽기 실패:', e.message);
 }

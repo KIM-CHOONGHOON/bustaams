@@ -49,7 +49,17 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
     if (!dateStr) return '';
     try {
       const d = new Date(dateStr);
-      return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      const year = d.getFullYear();
+      const month = d.getMonth() + 1;
+      const date = d.getDate();
+      
+      let hours = d.getHours();
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? '오후' : '오전';
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      
+      return `${year}년 ${month}월 ${date}일 ${ampm} ${String(hours).padStart(2, '0')}:${minutes}`;
     } catch (e) {
       return dateStr;
     }
@@ -218,8 +228,8 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
                             <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] ${
                               isActive ? 'bg-primary text-white' : 'bg-primary-container/20 text-primary'
                             }`}>
-                              {req.DATA_STAT === 'AUCTION' ? '입찰중' : 
-                               req.DATA_STAT === 'BIDDING' ? '견적중' : 
+                              {req.DATA_STAT === 'AUCTION' ? '청약요청중' : 
+                               req.DATA_STAT === 'BIDDING' ? '청약승인대기중' : 
                                req.DATA_STAT === 'CONFIRM' ? '예약확정' : 
                                req.DATA_STAT === 'BUS_CANCEL' ? '버스취소' : 
                                req.DATA_STAT || '진행중'}

@@ -66,8 +66,9 @@ const ReservationList = ({ user, onBack }) => {
     setShowCancelReasonModal(true);
   };
 
-  const handleBusChange = async (bus) => {
-    if (!window.confirm(`선택하신 ${getVehicleLabel(bus.BUS_TYPE_CD)} 차량을 예약 목록에서 취소(삭제)하시겠습니까?`)) return;
+  // [신규] 버스 취소 (영구 삭제)
+  const handleBusDelete = async (bus) => {
+    if (!window.confirm(`선택하신 ${getVehicleLabel(bus.BUS_TYPE_CD)} 차량 요청을 영구적으로 취소(삭제)하시겠습니까?`)) return;
 
     try {
       const response = await fetch('/api/auction/bus-change', {
@@ -80,7 +81,33 @@ const ReservationList = ({ user, onBack }) => {
         }),
       });
 
-      const result = await response.json();
+      if (response.ok) {
+        alert('버스가 성공적으로 취소되었습니다.');
+        fetchReservations(); // 목록 갱신
+      } else {
+        const result = await response.json();
+        alert(result.error || '버스 취소 중 오류가 발생했습니다.');
+      }
+    } catch (error) {
+      console.error('Bus Delete Error:', error);
+      alert('서버와 통신 중 오류가 발생했습니다.');
+    }
+  };
+
+  // [유지] 버스 변경 (취소 후 재등록 모달 오픈)
+  const handleBusChange = async (bus) => {
+    if (!window.confirm(`선택하신 ${getVehicleLabel(bus.BUS_TYPE_CD)} 차량을 다른 차종으로 변경하시겠습니까?\n(기존 요청은 취소되고 새 차량 등록 화면이 열립니다.)`)) return;
+
+    try {
+      const response = await fetch('/api/auction/bus-change', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          reqId: bus.REQ_ID,
+          reqBusSeq: bus.REQ_BUS_SEQ,
+          custId: user?.custId 
+        }),
+      });
 
       if (response.ok) {
         alert('이전 버스가 취소되었습니다. 새로운 버스를 선택해주세요.');
@@ -89,6 +116,7 @@ const ReservationList = ({ user, onBack }) => {
         setReRegReqId(bus.REQ_ID);
         setShowBusReRegModal(true);
       } else {
+        const result = await response.json();
         alert(result.error || '버스 변경 처리 중 오류가 발생했습니다.');
       }
     } catch (error) {
@@ -184,7 +212,18 @@ const ReservationList = ({ user, onBack }) => {
     try {
       const d = new Date(dateStr);
       const days = ['일', '월', '화', '수', '목', '금', '토'];
-      return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]}) · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} 출발`;
+      const year = d.getFullYear();
+      const month = d.getMonth() + 1;
+      const date = d.getDate();
+      const day = days[d.getDay()];
+      
+      let hours = d.getHours();
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? '오후' : '오전';
+      hours = hours % 12;
+      hours = hours ? hours : 12; // 0시는 12시로 표시
+      
+      return `${year}년 ${month}월 ${date}일 (${day}) · ${ampm} ${String(hours).padStart(2, '0')}:${minutes} 출발`;
     } catch (e) {
       return dateStr;
     }
@@ -289,7 +328,9 @@ const ReservationList = ({ user, onBack }) => {
                             <div className="flex items-center gap-2">
                                <span className={`w-1.5 h-1.5 rounded-full ${trip.DATA_STAT === 'CONFIRM' ? 'bg-primary' : 'bg-amber-400 animate-pulse'}`}></span>
                                <span className={`${trip.DATA_STAT === 'CONFIRM' ? 'text-primary' : 'text-amber-500'} text-[9px] font-black uppercase tracking-[0.3em]`}>
-                                  {trip.DATA_STAT === 'CONFIRM' ? '확정된 여정' : '견적 입찰 진행 중'}
+                                  {trip.DATA_STAT === 'AUCTION' ? '청약요청중' : 
+                                   trip.DATA_STAT === 'BIDDING' ? '청약승인대기중' : 
+                                   trip.DATA_STAT === 'CONFIRM' ? '확정된 여정' : '진행중'}
                                </span>
                             </div>
                          </div>
@@ -314,11 +355,14 @@ const ReservationList = ({ user, onBack }) => {
                          <div className="flex items-center gap-3">
                              {trip.DATA_STAT === 'BIDDING' && (
                                <button
-                                 onClick={() => handleConfirmTrip(trip)}
+                                 onClick={() => {
+                                   setSelectedReqId(trip.REQ_ID);
+                                   setShowQuotationList(true);
+                                 }}
                                  className="px-6 py-2.5 bg-[#004d40] text-white text-[11px] font-black rounded-full hover:bg-[#003d33] transition-all shadow-md flex items-center gap-2"
                                >
                                   <span className="material-symbols-outlined text-sm">verified</span>
-                                  청약승인
+                                  청약승인처리
                                </button>
                              )}
                             <button 
@@ -347,7 +391,9 @@ const ReservationList = ({ user, onBack }) => {
 
                                {bus.RES_STAT && (
                                  <div className="flex-1 flex justify-center items-center">
-                                   <div className="flex items-center gap-3 bg-white px-5 py-2.5 rounded-2xl border-2 border-primary/10 shadow-sm hover:border-primary/30 transition-all cursor-default group/driver max-w-fit">
+                                   <div 
+                                     className={`flex items-center gap-3 bg-white px-5 py-2.5 rounded-2xl border-2 border-primary/10 shadow-sm transition-all group/driver max-w-fit relative z-10 cursor-default`}
+                                   >
                                      <div className="relative">
                                        <div className="w-9 h-9 rounded-xl overflow-hidden border border-slate-100 shadow-inner bg-slate-50 flex items-center justify-center">
                                          {bus.PROFILE_PHOTO_ID ? (
@@ -365,7 +411,9 @@ const ReservationList = ({ user, onBack }) => {
                                        </div>
                                      </div>
                                      <div className="flex flex-col">
-                                       <span className="text-[10px] text-primary font-black uppercase tracking-tight leading-none mb-1">담당 기사님</span>
+                                       <div className="flex items-center gap-1 leading-none mb-1">
+                                         <span className="text-[10px] text-primary font-black uppercase tracking-tight">담당 기사님</span>
+                                       </div>
                                        <p className="text-sm text-on-surface font-black leading-none">{bus.DRIVER_NM || '확인 중'}</p>
                                      </div>
                                    </div>
@@ -373,15 +421,21 @@ const ReservationList = ({ user, onBack }) => {
                                )}
                                <div className="flex items-center gap-2 shrink-0 ml-4">
                                   <button 
-                                    onClick={() => handleBusChange(bus)}
-                                    className="px-5 py-2.5 bg-slate-100 text-slate-600 text-[11px] font-black rounded-full hover:bg-slate-200 transition-all shadow-sm border border-slate-200 whitespace-nowrap" 
+                                    onClick={() => handleBusDelete(bus)}
+                                    className="px-4 py-2 bg-white text-slate-500 text-[10px] font-black rounded-full hover:bg-slate-50 transition-all border border-slate-200" 
                                   >
                                      버스취소
+                                  </button>
+                                  <button 
+                                    onClick={() => handleBusChange(bus)}
+                                    className="px-4 py-2 bg-slate-100 text-slate-600 text-[10px] font-black rounded-full hover:bg-slate-200 transition-all border border-slate-200" 
+                                  >
+                                     버스변경
                                   </button>
                                   {bus.RES_STAT && (
                                     <button 
                                       onClick={() => handleBusCancel(bus)}
-                                      className="px-5 py-2.5 bg-red-50 text-red-400 text-[11px] font-black rounded-full hover:bg-red-500 hover:text-white transition-all shadow-sm border border-red-100 whitespace-nowrap" 
+                                      className="px-4 py-2 bg-red-50 text-red-400 text-[10px] font-black rounded-full hover:bg-red-500 hover:text-white transition-all border border-red-100" 
                                     >
                                        기사변경
                                     </button>
