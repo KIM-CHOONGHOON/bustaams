@@ -906,7 +906,10 @@ function App() {
                 setShowLoginModal(false);
                 setCurrentView('home');
               }}
-              setCurrentView={setCurrentView}
+              onSwitchToSignup={() => {
+                setShowLoginModal(false);
+                setCurrentView('signup');
+              }}
             />
           </div>
         </div>

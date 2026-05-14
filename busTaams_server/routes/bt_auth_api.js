@@ -337,6 +337,96 @@ function createAuthRouter(pool, admin, smsVerifiedPhoneStore, bucket, bucketName
             res.json({ success: true, message: '회원 탈퇴가 완료되었습니다. 그동안 이용해주셔서 감사합니다.' });
         } catch (e) {
             if (connection) await connection.rollback();
+        } finally {
+            if (connection) connection.release();
+        }
+    });
+    
+    // [POST] 아이디 찾기
+    router.post('/find-id', async (req, res) => {
+        let connection;
+        try {
+            const { userName, phoneNo } = req.body;
+            if (!userName || !phoneNo) return res.status(400).json({ error: '이름과 휴대폰 번호를 입력해주세요.' });
+
+            connection = await pool.getConnection();
+            const [rows] = await connection.execute('SELECT USER_ID, HP_NO FROM TB_USER WHERE USER_NM = ? AND USER_STAT = "ACTIVE"', [userName]);
+            
+            // 암호화된 HP_NO 복호화 비교
+            const foundUser = rows.find(row => {
+                try {
+                    return decrypt(row.HP_NO) === phoneNo.replace(/-/g, '');
+                } catch (e) { return false; }
+            });
+
+            if (!foundUser) {
+                return res.status(404).json({ error: '일치하는 사용자 정보를 찾을 수 없습니다.' });
+            }
+
+            res.json({ success: true, userId: foundUser.USER_ID });
+        } catch (e) {
+            res.status(500).json({ error: e.message });
+        } finally {
+            if (connection) connection.release();
+        }
+    });
+
+    // [POST] 비밀번호 재설정을 위한 본인 확인
+    router.post('/verify-for-password', async (req, res) => {
+        let connection;
+        try {
+            const { userId, phoneNo, email } = req.body;
+            if (!userId || !phoneNo || !email) return res.status(400).json({ error: '모든 정보를 입력해주세요.' });
+
+            connection = await pool.getConnection();
+            const [rows] = await connection.execute(
+                'SELECT CUST_ID, HP_NO FROM TB_USER WHERE USER_ID = ? AND EMAIL = ? AND USER_STAT = "ACTIVE"', 
+                [userId, email]
+            );
+
+            const foundUser = rows.find(row => {
+                try {
+                    return decrypt(row.HP_NO) === phoneNo.replace(/-/g, '');
+                } catch (e) { return false; }
+            });
+
+            if (!foundUser) {
+                return res.status(404).json({ error: '일치하는 사용자 정보를 찾을 수 없습니다.' });
+            }
+
+            res.json({ success: true, custId: foundUser.CUST_ID });
+        } catch (e) {
+            res.status(500).json({ error: e.message });
+        } finally {
+            if (connection) connection.release();
+        }
+    });
+
+    // [POST] 비밀번호 재설정 (최종 변경)
+    router.post('/reset-password', async (req, res) => {
+        let connection;
+        try {
+            const { custId, newPassword } = req.body;
+            if (!custId || !newPassword) return res.status(400).json({ error: '필수 정보가 누락되었습니다.' });
+
+            const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+            connection = await pool.getConnection();
+            await connection.beginTransaction();
+
+            const [result] = await connection.execute(
+                'UPDATE TB_USER SET PASSWORD = ?, MOD_DT = NOW(), MOD_ID = ? WHERE CUST_ID = ?',
+                [hashedPassword, custId, custId]
+            );
+
+            if (result.affectedRows === 0) {
+                throw new Error('비밀번호 변경에 실패했습니다.');
+            }
+
+            await connection.commit();
+            res.json({ success: true, message: '비밀번호가 성공적으로 변경되었습니다.' });
+        } catch (e) {
+            if (connection) await connection.rollback();
             res.status(500).json({ error: e.message });
         } finally {
             if (connection) connection.release();

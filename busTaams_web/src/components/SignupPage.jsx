@@ -572,26 +572,6 @@ const SignupPage = ({ onBack }) => {
             </button>
           </form>
 
-          {/* Social Login */}
-          <div style={{ position: 'relative', margin: '2.5rem 0', textAlign: 'center' }}>
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center' }}>
-              <div style={{ width: '100%', borderTop: '1px solid rgba(190,201,198,0.25)' }} />
-            </div>
-            <span style={{ position: 'relative', background: '#f7f9fb', padding: '0 1rem', fontSize: '0.7rem', fontWeight: 700, color: '#6e7977', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-              간편 회원가입
-            </span>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
-            <button type="button" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.625rem', padding: '0.875rem', background: '#FEE500', color: '#3c1e1e', border: 'none', borderRadius: '0.625rem', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer' }}>
-              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3C6.477 3 2 6.48 2 10.791c0 2.763 1.833 5.188 4.606 6.554l-.847 3.123c-.102.378.114.757.48.84.116.027.234.01.338-.04l3.65-2.428c.57.085 1.16.128 1.773.128 5.523 0 10-3.48 10-7.791C22 6.48 17.523 3 12 3z" /></svg>
-              카카오로 시작
-            </button>
-            <button type="button" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.625rem', padding: '0.875rem', background: '#03C75A', color: '#fff', border: 'none', borderRadius: '0.625rem', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer' }}>
-              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M16.273 12.845L7.376 0H0v24h7.727V11.155L16.624 24H24V0h-7.727v12.845z" /></svg>
-              네이버로 시작
-            </button>
-          </div>
 
           <div style={{ textAlign: 'center' }}>
             <p style={{ fontSize: '0.875rem', color: '#3e4947' }}>

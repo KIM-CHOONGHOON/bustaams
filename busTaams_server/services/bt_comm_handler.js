@@ -21,7 +21,7 @@ const btCommHandler = {
         
         const userId = process.env.ALIGO_USER_ID;
         const apiKey = process.env.ALIGO_API_KEY;
-        const sender = process.env.ALIGO_SENDER_PHONE;
+        const sender = process.env.ALIGO_SENDER; // Antigravity_env.env의 ALIGO_SENDER 사용
         const testMode = process.env.ALIGO_TEST_MODE === 'true';
 
         console.log(`[COMM] Attempting to notify ${receiver}: ${message.substring(0, 20)}...`);
