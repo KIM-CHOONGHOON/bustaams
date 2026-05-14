@@ -1905,7 +1905,7 @@ app.get('/api/auction/bids/:reqId', async (req, res) => {
                 v.HAS_ADAS as hasAdas
             FROM TB_BUS_RESERVATION res
             LEFT JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID
-            LEFT JOIN TB_DRIVER_DETAIL di ON res.DRIVER_ID = di.USER_ID
+            LEFT JOIN TB_DRIVER_DETAIL di ON res.DRIVER_ID = di.CUST_ID
             LEFT JOIN TB_BUS_DRIVER_VEHICLE v ON res.BUS_ID = v.BUS_ID
             WHERE res.REQ_ID = ?
             ORDER BY res.REG_DT DESC
@@ -1970,7 +1970,8 @@ app.get('/api/auction/history/:custId', async (req, res) => {
                     FROM TB_BUS_RESERVATION res 
                     WHERE res.REQ_ID = r.REQ_ID 
                       AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED)
-                    ORDER BY CASE WHEN res.DATA_STAT IN ('CONFIRM', 'COMPLETED') THEN 0 ELSE 1 END ASC
+                      AND res.DATA_STAT IN ('AUCTION', 'BIDDING')
+                    ORDER BY CASE WHEN res.DATA_STAT IN ('CONFIRM', 'DONE') THEN 0 ELSE 1 END ASC
                     LIMIT 1
                 ) as RES_STAT,
                 (
@@ -1979,7 +1980,7 @@ app.get('/api/auction/history/:custId', async (req, res) => {
                     WHERE res.REQ_ID = r.REQ_ID 
                       AND res.TRAVELER_ID = r.TRAVELER_ID
                       AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED)
-                      AND res.DATA_STAT IN ('CONFIRM', 'COMPLETED')
+                      AND res.DATA_STAT IN ('AUCTION', 'BIDDING')
                     LIMIT 1
                 ) as FINAL_CONFIRM_AMT,
                 (
@@ -1989,7 +1990,7 @@ app.get('/api/auction/history/:custId', async (req, res) => {
                     WHERE res.REQ_ID = r.REQ_ID 
                       AND res.TRAVELER_ID = r.TRAVELER_ID
                       AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED)
-                    ORDER BY CASE WHEN res.DATA_STAT IN ('CONFIRM', 'COMPLETED') THEN 0 ELSE 1 END ASC
+                      AND res.DATA_STAT IN ('AUCTION', 'BIDDING')
                     LIMIT 1
                 ) as DRIVER_NM,
                 (
@@ -1999,7 +2000,7 @@ app.get('/api/auction/history/:custId', async (req, res) => {
                     WHERE res.REQ_ID = r.REQ_ID 
                       AND res.TRAVELER_ID = r.TRAVELER_ID
                       AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED)
-                    ORDER BY CASE WHEN res.DATA_STAT IN ('CONFIRM', 'COMPLETED') THEN 0 ELSE 1 END ASC
+                      AND res.DATA_STAT IN ('AUCTION', 'BIDDING')
                     LIMIT 1
                 ) as PROFILE_PHOTO_ID,
                 (
@@ -2008,9 +2009,18 @@ app.get('/api/auction/history/:custId', async (req, res) => {
                     WHERE res.REQ_ID = r.REQ_ID 
                       AND res.TRAVELER_ID = r.TRAVELER_ID
                       AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED)
-                    ORDER BY CASE WHEN res.DATA_STAT IN ('CONFIRM', 'COMPLETED') THEN 0 ELSE 1 END ASC
+                      AND res.DATA_STAT IN ('AUCTION', 'BIDDING')
                     LIMIT 1
-                ) as DRIVER_ID
+                ) as DRIVER_ID,
+                (
+                    SELECT res.RES_ID 
+                    FROM TB_BUS_RESERVATION res 
+                    WHERE res.REQ_ID = r.REQ_ID 
+                      AND res.TRAVELER_ID = r.TRAVELER_ID
+                      AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED)
+                      AND res.DATA_STAT IN ('AUCTION', 'BIDDING')
+                    LIMIT 1
+                ) as RES_ID
             FROM TB_AUCTION_REQ r
             INNER JOIN TB_AUCTION_REQ_BUS ab ON r.REQ_ID = ab.REQ_ID
             WHERE r.TRAVELER_ID = ?
@@ -2164,7 +2174,7 @@ app.get('/api/auction/bid-detail/:bidId', async (req, res) => {
                 v.VEHICLE_PHOTOS_JSON as busPhotos
             FROM TB_BUS_RESERVATION res
             JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID
-            LEFT JOIN TB_DRIVER_DETAIL di ON res.DRIVER_ID = di.USER_ID
+            LEFT JOIN TB_DRIVER_DETAIL di ON res.DRIVER_ID = di.CUST_ID
             LEFT JOIN TB_BUS_DRIVER_VEHICLE v ON res.BUS_ID = v.BUS_ID
             WHERE res.RES_ID = ?
         `;
@@ -2791,7 +2801,7 @@ app.get('/api/driver/detail/:driverId', async (req, res) => {
                 dd.SELF_INTRO as selfIntro
              FROM TB_USER u
              LEFT JOIN TB_BUS_DRIVER_VEHICLE v ON u.CUST_ID = v.CUST_ID
-             LEFT JOIN TB_DRIVER_DETAIL dd ON u.USER_ID = dd.USER_ID
+             LEFT JOIN TB_DRIVER_DETAIL dd ON u.CUST_ID = dd.CUST_ID
              WHERE u.CUST_ID = ?`,
             [driverId]
         );

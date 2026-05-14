@@ -11,6 +11,25 @@ const API_BASE = String(RAW_API).trim().replace(/\/$/, '') || 'http://127.0.0.1:
 
 export const SCREEN_ID = 'DriversListOfBids';
 
+/** 견적·응찰·여행일: YYYY-MM-DD 오전/오후 HH:mm */
+function formatDateTimeAmPm(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return String(iso);
+    
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    
+    let hours = d.getHours();
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? '오후' : '오전';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    
+    return `${y}-${mo}-${day} ${ampm} ${String(hours).padStart(2, '0')}:${minutes}`;
+}
+
 /** 견적·응찰·여행일: YYYY-MM-DD */
 function formatDateYmd(iso) {
     if (!iso) return '—';
@@ -204,10 +223,10 @@ const DriversListOfBids = ({ open, onClose, driverId, variant = 'active' }) => {
                                                         {row.tripTitle?.trim() || '—'}
                                                     </td>
                                                     <td className="px-6 py-5 text-sm text-[#404947]">
-                                                        {formatDateYmd(row.tripStartDt)}
+                                                        {formatDateTimeAmPm(row.tripStartDt)}
                                                     </td>
                                                     <td className="px-6 py-5 text-sm text-[#404947]">
-                                                        {formatDateYmd(row.tripEndDt)}
+                                                        {formatDateTimeAmPm(row.tripEndDt)}
                                                     </td>
                                                     <td className="px-6 py-5 text-sm font-bold text-[#002824] tabular-nums">
                                                         {formatFare(row.driverBiddingPrice)}
