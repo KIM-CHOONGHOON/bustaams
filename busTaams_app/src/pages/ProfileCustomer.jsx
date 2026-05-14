@@ -172,12 +172,8 @@ const ProfileCustomer = () => {
             const response = await uploadProfileImage(file);
             notify.success('이미지 변경', '프로필 이미지가 성공적으로 변경되었습니다.');
             
-            // 이미지 버전 업데이트하여 화면 갱신 유도
-            setImageVersion(Date.now());
-            setUserData(prev => ({ ...prev, profileImage: response.imageUrl }));
-            
-            // 전체 데이터 동기화를 위해 fetchProfile도 호출 (선택 사항)
-            // fetchProfile(); 
+            // 업로드 성공 후 전체 데이터를 다시 불러와서 동기화
+            await fetchProfile();
         } catch (error) {
             notify.error('업로드 실패', error.message || '이미지 업로드 실패');
         }
@@ -217,7 +213,7 @@ const ProfileCustomer = () => {
                                     className="w-full h-full object-cover" 
                                     src={userData.profileImage.startsWith('http') ? 
                                         `${userData.profileImage}${userData.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
-                                        `${import.meta.env.VITE_API_BASE_URL || ''}${userData.profileImage}${userData.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                        `${(import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')}${userData.profileImage}${userData.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
                                 />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center text-slate-400">

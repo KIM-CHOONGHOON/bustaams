@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const axios = require('axios');
 const { getBucket, bucketName } = require('../db');
 
 /**
@@ -11,8 +12,10 @@ router.get('/display-image', async (req, res) => {
     const { path: rawPath } = req.query;
 
     if (!rawPath) {
-        return res.status(400).send('Path is required');
+        return res.status(400).send('Image path is required');
     }
+
+    console.log(`[Display Image] Request path: ${rawPath}`);
 
     try {
         let gcsFilePath = '';
@@ -23,42 +26,35 @@ router.get('/display-image', async (req, res) => {
             
             if (rawPath.startsWith(urlPrefix)) {
                 gcsFilePath = rawPath.replace(urlPrefix, '');
+                console.log(`[Display Image] GCS URL detected. Stripped path: ${gcsFilePath}`);
             } else {
-                // 외부 URL인 경우 (예: 카카오 프로필 등) 스트리밍 유지
-                const axios = require('axios');
-                const response = await axios({
-                    method: 'get',
-                    url: rawPath,
-                    responseType: 'stream'
-                });
-                res.setHeader('Content-Type', response.headers['content-type'] || 'image/png');
+                console.log(`[Display Image] External URL detected. Proxying: ${rawPath}`);
+                const response = await axios.get(rawPath, { responseType: 'stream' });
+                res.setHeader('Content-Type', response.headers['content-type']);
                 return response.data.pipe(res);
             }
         } else {
-            // 2. GCS 상대 경로인 경우 (예: VEHICLE_PHOTO/...)
-            gcsFilePath = rawPath;
+            // 2. GCS 상대 경로인 경우
+            gcsFilePath = rawPath.startsWith('/') ? rawPath.substring(1) : rawPath; // 맨 앞 슬래시 제거
+            console.log(`[Display Image] Relative path detected: ${gcsFilePath}`);
         }
 
-        // GCS에서 파일 가져오기
         const bucket = getBucket();
         const file = bucket.file(gcsFilePath);
 
-        // 파일 존재 여부 확인
         const [exists] = await file.exists();
         if (!exists) {
-            // 로컬 파일인지 마지막으로 확인 (호환성 유지)
-            const path = require('path');
-            const fs = require('fs');
-            if (fs.existsSync(rawPath) && !fs.lstatSync(rawPath).isDirectory()) {
-                return res.sendFile(rawPath);
-            }
-            console.warn(`[Display Image] File not found in GCS or Local: ${gcsFilePath}`);
-            return res.status(404).send('Image not found');
+            console.error(`[Display Image] FILE NOT FOUND in GCS Bucket: "${bucketName}", Path: "${gcsFilePath}"`);
+            // 버킷 내 파일 목록 확인 (디버깅용 - 실제 서비스에선 제외 가능)
+            return res.status(404).send('Image not found in storage');
         }
 
-        // 메타데이터에서 Content-Type 가져오기
+        // 이미지 메타데이터 가져오기
         const [metadata] = await file.getMetadata();
+        console.log(`[Display Image] Serving file: ${gcsFilePath}, Type: ${metadata.contentType}`);
+        
         res.setHeader('Content-Type', metadata.contentType || 'image/png');
+        res.setHeader('Cache-Control', 'public, max-age=3600'); 
 
         // 스트림으로 클라이언트에 전송
         file.createReadStream()

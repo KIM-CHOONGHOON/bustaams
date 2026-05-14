@@ -46,7 +46,7 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
         // 1. 사용자 정보 및 CUST_ID 조회
         const [uRows] = await pool.execute(`
             SELECT u.CUST_ID, u.USER_NM, 
-                   CASE WHEN f.GCS_PATH IS NOT NULL THEN CONCAT('/api/common/display-image?path=', f.GCS_PATH) ELSE NULL END as USER_IMAGE 
+                   f.GCS_PATH as USER_IMAGE 
             FROM TB_USER u 
             LEFT JOIN TB_FILE_MASTER f ON u.PROFILE_FILE_ID = f.FILE_ID 
             WHERE u.USER_ID = ?
@@ -82,12 +82,11 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
         const stats = statsRows[0] || { countProgressing: 0, countWaitingApproval: 0 };
         console.log(`[Dashboard] Stats Result:`, stats);
 
-        // 3. 이용 제한 상태 조회
         const [restrictRows] = await pool.execute(`
             SELECT RESTRICT_STAT, RESTRICT_END_DT, CANCEL_CNT
             FROM TB_USER_CANCEL_MANAGE
-            WHERE USER_ID = ?
-        `, [userId]);
+            WHERE CUST_ID = ?
+        `, [custId]);
 
         let restriction = null;
         if (restrictRows.length > 0) {
@@ -141,7 +140,7 @@ router.get('/check-restriction', authenticateToken, async (req, res) => {
         const [rows] = await pool.execute(`
             SELECT RESTRICT_STAT, RESTRICT_START_DT, RESTRICT_END_DT 
             FROM TB_USER_CANCEL_MANAGE 
-            WHERE CUST_ID = ? AND USER_TYPE = 'TRAVELER'
+            WHERE CUST_ID = ?
         `, [custId]);
 
         if (rows.length === 0) {
@@ -188,7 +187,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
         const userId = req.user.userId;
         const [rows] = await pool.execute(`
             SELECT u.CUST_ID, u.USER_NM, u.HP_NO, u.EMAIL, u.USER_ID, u.USER_TYPE, 
-                   CASE WHEN f.GCS_PATH IS NOT NULL THEN CONCAT('/api/common/display-image?path=', f.GCS_PATH) ELSE NULL END as USER_IMAGE, 
+                   f.GCS_PATH as USER_IMAGE, 
                    u.PROFILE_FILE_ID 
             FROM TB_USER u 
             LEFT JOIN TB_FILE_MASTER f ON u.PROFILE_FILE_ID = f.FILE_ID 
@@ -215,10 +214,12 @@ router.get('/profile', authenticateToken, async (req, res) => {
             RESTRICT_END_DT: null
         };
 
-        // 이미지 경로 처리 (GCS URL인 경우 백엔드 프록시 경로로 변환)
+        // 이미지 경로 처리 (프록시 URL로 변환 및 인코딩)
         let userImage = user.USER_IMAGE;
-        if (userImage && userImage.startsWith('http')) {
-            userImage = `/api/common/display-image?path=${encodeURIComponent(userImage)}`;
+        if (userImage) {
+            // 이미 전체 URL 형태인 경우(예:signatures/...)와 상대 경로인 경우 모두 대응
+            const pathValue = userImage.startsWith('http') ? userImage : userImage; 
+            userImage = `/api/common/display-image?path=${encodeURIComponent(pathValue)}`;
         }
 
         res.status(200).json({
@@ -313,6 +314,68 @@ router.post('/profile/update', authenticateToken, async (req, res) => {
     }
 });
 
+// 2-1. 프로필 이미지 업로드
+router.post('/profile/upload-image', authenticateToken, memoryUpload.single('profileImage'), async (req, res) => {
+    try {
+        const file = req.file;
+        if (!file) {
+            return res.status(400).json({ success: false, error: '업로드할 이미지가 없습니다.' });
+        }
+
+        const userId = req.user.userId;
+        const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        if (uRows.length === 0) {
+            return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
+        }
+        const custId = uRows[0].CUST_ID;
+
+        // GCS 업로드 설정
+        const ext = path.extname(file.originalname).replace('.', '') || 'png';
+        const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20);
+        const gcsPath = `profiles/${fileId}.${ext}`;
+        const bucket = getBucket();
+        const gcsFile = bucket.file(gcsPath);
+
+        // GCS에 파일 저장
+        await gcsFile.save(file.buffer, {
+            metadata: { contentType: file.mimetype }
+        });
+
+        // 공개 접근 권한 설정
+        try {
+            await gcsFile.makePublic();
+        } catch (e) {
+            console.log('GCS makePublic failed:', e.message);
+        }
+
+        // DB 저장 (사용자 요구사항에 따라 프로필 이미지는 상대 경로 'profiles/...'로 저장)
+        // signatures 등 다른 카테고리는 전체 URL을 저장할 수 있으나, 프로필은 상대 경로 유지
+        const dbSavePath = gcsPath; 
+
+        await pool.execute(
+            `INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_ID, MOD_ID) 
+             VALUES (?, 'USER_PROFILE', ?, ?, ?, ?, ?, ?, ?)`,
+            [fileId, bucketName, dbSavePath, file.originalname, ext, file.size, custId, custId]
+        );
+
+        await pool.execute(
+            'UPDATE TB_USER SET PROFILE_FILE_ID = ?, USER_IMAGE = ?, MOD_ID = ?, MOD_DT = NOW() WHERE USER_ID = ?',
+            [fileId, dbSavePath, custId, userId]
+        );
+
+        res.json({
+            success: true,
+            message: '프로필 이미지가 성공적으로 업로드되었습니다.',
+            data: {
+                profileImage: `/api/common/display-image?path=${encodeURIComponent(dbSavePath)}`
+            }
+        });
+    } catch (error) {
+        console.error('Profile image upload error:', error);
+        res.status(500).json({ success: false, error: '이미지 업로드 중 오류가 발생했습니다.' });
+    }
+});
+
 // 3. 비밀번호 변경
 router.post('/profile/change-password', authenticateToken, async (req, res) => {
     const { currentPassword, newPassword } = req.body;
@@ -372,54 +435,7 @@ router.post('/profile/change-password', authenticateToken, async (req, res) => {
     }
 });
 
-// 4. 대시보드 요약 정보
-router.get('/dashboard', authenticateToken, async (req, res) => {
-    try {
-        const userId = req.user.userId;
 
-        // 사용자의 정보(이름, 프로필 사진)와 견적 현황을 가져오는 쿼리
-        // DATA_STAT: AUCTION, BUS_CHANGE -> 견적진행중 (countProgressing)
-        // DATA_STAT: BIDDING -> 승인대기중 (countWaitingApproval)
-        const [rows] = await pool.execute(
-            `SELECT 
-                u.USER_NM as userName,
-                CASE WHEN f.GCS_PATH IS NOT NULL THEN CONCAT('/api/common/display-image?path=', f.GCS_PATH) ELSE NULL END as profileImage,
-                (SELECT COUNT(*) FROM TB_AUCTION_REQ WHERE TRAVELER_ID = u.CUST_ID AND DATA_STAT IN ('AUCTION', 'BUS_CHANGE')) as countProgressing,
-                (SELECT COUNT(*) FROM TB_AUCTION_REQ WHERE TRAVELER_ID = u.CUST_ID AND DATA_STAT = 'BIDDING') as countWaitingApproval
-             FROM TB_USER u
-             LEFT JOIN TB_FILE_MASTER f ON u.PROFILE_FILE_ID = f.FILE_ID
-             WHERE u.USER_ID = ?`,
-            [userId]
-        );
-
-        if (rows.length === 0) {
-            return res.status(404).json({ success: false, error: '사용자 정보를 찾을 수 없습니다.' });
-        }
-
-        const stats = rows[0];
-
-        // 이미지 경로 처리 (GCS URL인 경우 백엔드 프록시 경로로 변환)
-        let profileImage = stats.profileImage;
-        if (profileImage && profileImage.startsWith('http')) {
-            profileImage = `/api/common/display-image?path=${encodeURIComponent(profileImage)}`;
-        }
-
-        res.status(200).json({
-            success: true,
-            status: 200,
-            data: {
-                userName: stats.userName || '사용자',
-                profileImage: profileImage || null,
-                countProgressing: stats.countProgressing || 0,
-                countWaitingApproval: stats.countWaitingApproval || 0,
-                status: 'CONNECTED'
-            }
-        });
-    } catch (error) {
-        console.error('App dashboard error:', error);
-        res.status(500).json({ success: false, error: '대시보드 데이터를 가져오는 데 실패했습니다.' });
-    }
-});
 
 // 5. 휴대폰 인증번호 발송
 router.post('/auth/send-code', authenticateToken, async (req, res) => {
