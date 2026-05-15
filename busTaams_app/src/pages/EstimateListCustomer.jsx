@@ -16,8 +16,12 @@ const EstimateListCustomer = () => {
     const [tripSummary, setTripSummary] = useState(null);
     const [units, setUnits] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [profileImage, setProfileImage] = useState(null);
     const [imageVersion, setImageVersion] = useState(Date.now());
+    
+    // 금액 수정 관련 상태
+    const [editingUnit, setEditingUnit] = useState(null);
+    const [tempAmount, setTempAmount] = useState('');
+    const [profileImage, setProfileImage] = useState(null);
 
     // 청약 데이터 가져오기
     const fetchEstimates = async () => {
@@ -58,7 +62,7 @@ const EstimateListCustomer = () => {
         if (!confirmed) return;
         try {
             const res = await api.post(`/app/customer/cancel-bus`, { reqId, unitSeq });
-            if (res.data.success) {
+            if (res.success) {
                 notify.success('취소 완료', '해당 차량의 청약 요청이 취소되었습니다.');
                 fetchEstimates();
             }
@@ -84,6 +88,30 @@ const EstimateListCustomer = () => {
         }
     };
 
+    // 개별 차량 요청 금액 수정
+    const handleUpdateAmount = async (unitSeq) => {
+        if (!tempAmount || isNaN(tempAmount)) {
+            notify.error('입력 오류', '올바른 금액을 입력해주세요.');
+            return;
+        }
+
+        try {
+            const res = await api.post('/app/customer/update-unit-amount', { 
+                reqId, 
+                unitSeq, 
+                newAmount: tempAmount 
+            });
+            if (res.success) {
+                notify.success('수정 완료', '요청 금액이 수정되었습니다.');
+                setEditingUnit(null);
+                fetchEstimates();
+            }
+        } catch (error) {
+            console.error('Update amount error:', error);
+            notify.error('오류 발생', '금액 수정 중 오류가 발생했습니다.');
+        }
+    };
+
     // 전체 승인
     const handleApproveAll = async () => {
         const confirmed = await notify.confirm('전체 청약 승인', '진행 중인 모든 청약을 승인하시겠습니까?');
@@ -105,16 +133,25 @@ const EstimateListCustomer = () => {
         const confirmed = await notify.confirm('전체 청약 요청 취소', '전체 청약 요청을 취소하시겠습니까?');
         if (!confirmed) return;
         try {
-            const res = await api.post('/app/customer/cancel-request', { reqId });
+            // 전체 취소 시에도 reqId를 명확히 전달하며, 기본 사유 전달
+            const res = await api.post('/app/customer/cancel-request', { 
+                reqId,
+                cancelCode: '06', // 기타 사유
+                cancelReasonText: '사용자에 의한 전체 취소'
+            });
+            
             if (res.success) {
-                notify.success('취소 완료', '전체 취소되었습니다.');
+                notify.success('취소 완료', '전체 청약 요청이 성공적으로 취소되었습니다.');
                 navigate('/customer-dashboard');
             } else {
-                notify.error('취소 실패', res.error || '취소 중 오류가 발생했습니다.');
+                notify.error('취소 실패', res.error || '취소 처리 중 응답 오류가 발생했습니다.');
             }
         } catch (error) {
             console.error('Cancel error:', error);
-            notify.error('오류 발생', '취소 중 오류가 발생했습니다.');
+            const errorMsg = error.response?.data?.error || error.message || '서버와의 통신 중 오류가 발생했습니다.';
+            notify.error('오류 발생', errorMsg);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -282,8 +319,48 @@ const EstimateListCustomer = () => {
                                             <span className={`px-5 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase shadow-sm ${getBusStatusDisplay(unit.unitStat).color}`}>
                                                 {getBusStatusDisplay(unit.unitStat).label}
                                             </span>
+                                            {(unit.unitStat === 'AUCTION' || unit.unitStat === 'BUS_CHANGE') && (
+                                                <button 
+                                                    onClick={() => {
+                                                        if (editingUnit === unit.unitSeq) {
+                                                            setEditingUnit(null);
+                                                        } else {
+                                                            setEditingUnit(unit.unitSeq);
+                                                            setTempAmount(unit.unitReqAmt);
+                                                        }
+                                                    }}
+                                                    className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-primary transition-colors mt-1"
+                                                >
+                                                    <span className="material-symbols-outlined text-[14px]">
+                                                        {editingUnit === unit.unitSeq ? 'close' : 'edit'}
+                                                    </span>
+                                                    {editingUnit === unit.unitSeq ? '취소' : '금액 수정'}
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
+
+                                    {/* 금액 수정 입력란 (활성화 시) */}
+                                    {editingUnit === unit.unitSeq && (
+                                        <div className="bg-primary/5 p-6 rounded-3xl flex flex-col sm:flex-row items-center gap-4 border border-primary/10 animate-in zoom-in duration-300">
+                                            <div className="flex-grow w-full relative">
+                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black">₩</span>
+                                                <input 
+                                                    type="number"
+                                                    value={tempAmount}
+                                                    onChange={(e) => setTempAmount(e.target.value)}
+                                                    className="w-full pl-10 pr-4 py-3 rounded-2xl border-2 border-primary border-indigo-200 focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none font-black text-primary bg-indigo-50/50 transition-all placeholder:text-slate-300"
+                                                    placeholder="수정할 금액을 입력하세요"
+                                                />
+                                            </div>
+                                            <button 
+                                                onClick={() => handleUpdateAmount(unit.unitSeq)}
+                                                className="w-full sm:w-auto px-10 py-3.5 bg-primary text-white rounded-2xl font-black text-sm shadow-lg shadow-primary/20 active:scale-95 transition-all"
+                                            >
+                                                저장하기
+                                            </button>
+                                        </div>
+                                    )}
 
                                     {/* 입찰 내역 */}
                                     <div className="space-y-4">
@@ -444,9 +521,9 @@ const EstimateListCustomer = () => {
 
                             <div className="pt-8 border-t border-white/10">
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-3">총 합계 요청 금액</p>
-                                <div className="flex justify-between items-baseline">
-                                    <span className="text-4xl font-black tracking-tighter text-secondary italic">₩{totalReqAmt.toLocaleString()}</span>
-                                </div>
+                                 <div className="flex justify-between items-center flex-wrap gap-2">
+                                     <span className="text-3xl font-black tracking-tighter text-secondary italic break-all">₩{totalReqAmt.toLocaleString()}</span>
+                                 </div>
                             </div>
 
                             <div className="space-y-4 pt-10">

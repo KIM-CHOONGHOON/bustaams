@@ -2174,14 +2174,28 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
             return res.status(400).json({ success: false, error: '요청 ID가 누락되었습니다.' });
         }
 
-        // 1. 본인의 요청인지 확인
-        const [check] = await connection.execute('SELECT REQ_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ? AND TRAVELER_ID = ?', [reqId, custId]);
+        // 1. 본인의 요청인지 확인 및 현재 상태 조회
+        const [check] = await connection.execute('SELECT DATA_STAT FROM TB_AUCTION_REQ WHERE REQ_ID = ? AND TRAVELER_ID = ?', [reqId, custId]);
         if (check.length === 0) {
             await connection.rollback();
             return res.status(403).json({ success: false, error: '취소 권한이 없거나 해당 요청을 찾을 수 없습니다.' });
         }
+        const currentReqStat = check[0].DATA_STAT;
 
-        // 2. 증빙 서류 업로드 처리 (GCS)
+        // [추가] 견적 리스트(AUCTION) 상태이거나 버스변경(BUS_CHANGE) 상태인 경우 단순 취소 처리 (페널티 없음)
+        if (currentReqStat === 'AUCTION' || currentReqStat === 'BUS_CHANGE') {
+            // 사용자의 요청대로 TB_AUCTION_REQ, TB_AUCTION_REQ_BUS 테이블의 상태만 변경
+            await connection.execute('UPDATE TB_AUCTION_REQ SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?', [custId, reqId]);
+            await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?', [custId, reqId]);
+            
+            // 기존 코드에서 예약 정보도 함께 취소 처리 (드라이버 혼선 방지 위해 유지 권장하나, 사용자 요청에 따라 최소화)
+            // await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND DATA_STAT NOT IN (\'CONFIRM\', \'DONE\')', [custId, reqId]);
+
+            await connection.commit();
+            return res.json({ success: true, message: '견적 요청 취소가 완료되었습니다.' });
+        }
+
+        // 2. 증빙 서류 업로드 처리 (GCS) - 페널티가 발생하는 경우에만 수행
         let gcsPath = null;
         if (req.file) {
             const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20, connection);
@@ -2206,9 +2220,9 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
             ]);
         }
 
-        // 3. 현재 취소 횟수 조회
+        // 3. 현재 취소 횟수 조회 (페널티 적용 대상)
         const [manageRows] = await connection.execute(
-            'SELECT CANCEL_CNT FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ? AND USER_TYPE = \'TRAVELER\'',
+            'SELECT CANCEL_CNT FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ?',
             [custId]
         );
 
@@ -2218,59 +2232,60 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
         } else {
             // 정보가 없으면 초기 행 생성
             await connection.execute(
-                'INSERT INTO TB_USER_CANCEL_MANAGE (CUST_ID, USER_TYPE, CANCEL_CNT, REG_ID, MOD_ID) VALUES (?, \'TRAVELER\', ?, 0, ?, ?)',
+                'INSERT INTO TB_USER_CANCEL_MANAGE (CUST_ID, CANCEL_CNT, REG_ID, MOD_ID) VALUES (?, 0, ?, ?)',
                 [custId, custId, custId]
             );
         }
 
         const newCnt = currentCnt + 1;
         let restrictMonths = 0;
-        let restrictStat = 'N'; // N: 정상, Y: 이용제한, P: 무기한(Permanent)
+        let restrictYn = 'N'; // N: 정상, Y: 이용제한
         let restrictEndDt = null;
 
+        // 페널티 정책 (누적 횟수에 따른 차등 제한)
         if (newCnt === 1) {
             restrictMonths = 3;
-            restrictStat = 'Y';
+            restrictYn = 'Y';
         } else if (newCnt === 2) {
             restrictMonths = 6;
-            restrictStat = 'Y';
+            restrictYn = 'Y';
         } else if (newCnt === 3) {
             restrictMonths = 9;
-            restrictStat = 'Y';
+            restrictYn = 'Y';
         } else if (newCnt >= 4) {
-            restrictStat = 'P'; // 무기한
+            restrictYn = 'Y'; // 무기한은 별도 플래그가 없으므로 아주 먼 미래나 관리자 처리 필요하나 일단 Y로 세팅
         }
 
-        // 취소 관리 테이블 업데이트
-        if (restrictStat === 'P') {
+        // 취소 관리 테이블 업데이트 (DB.md 스키마에 맞게 컬럼명 보정)
+        if (newCnt >= 4) {
             await connection.execute(`
                 UPDATE TB_USER_CANCEL_MANAGE 
                 SET CANCEL_CNT = ?, 
                     CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
-                    RESTRICT_STAT = 'P',
-                    RESTRICT_START_DT = NOW(),
-                    RESTRICT_END_DT = NULL,
+                    TRADE_RESTRICT_YN = 'Y',
+                    TRADE_RESTRICT_START_DT = NOW(),
+                    TRADE_RESTRICT_END_DT = '2099-12-31 23:59:59',
                     MOD_ID = ?, MOD_DT = NOW()
-                WHERE CUST_ID = ? AND USER_TYPE = 'TRAVELER'
+                WHERE CUST_ID = ?
             `, [newCnt, custId, custId]);
-        } else if (restrictStat === 'Y') {
+        } else if (restrictYn === 'Y') {
             await connection.execute(`
                 UPDATE TB_USER_CANCEL_MANAGE 
                 SET CANCEL_CNT = ?, 
                     CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
-                    RESTRICT_STAT = ?,
-                    RESTRICT_START_DT = NOW(),
-                    RESTRICT_END_DT = DATE_ADD(NOW(), INTERVAL ? MONTH),
+                    TRADE_RESTRICT_YN = ?,
+                    TRADE_RESTRICT_START_DT = NOW(),
+                    TRADE_RESTRICT_END_DT = DATE_ADD(NOW(), INTERVAL ? MONTH),
                     MOD_ID = ?, MOD_DT = NOW()
-                WHERE CUST_ID = ? AND USER_TYPE = 'TRAVELER'
-            `, [newCnt, restrictStat, restrictMonths, custId, custId]);
+                WHERE CUST_ID = ?
+            `, [newCnt, restrictYn, restrictMonths, custId, custId]);
         } else {
             await connection.execute(`
                 UPDATE TB_USER_CANCEL_MANAGE 
                 SET CANCEL_CNT = ?, 
                     CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
                     MOD_ID = ?, MOD_DT = NOW()
-                WHERE CUST_ID = ? AND USER_TYPE = 'TRAVELER'
+                WHERE CUST_ID = ?
             `, [newCnt, custId, custId]);
         }
 
@@ -2285,9 +2300,9 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
 
         await connection.execute(`
             INSERT INTO TB_USER_CANCEL_HIST (
-                CUST_ID, HIST_SEQ, USER_TYPE, CANCEL_REASON_GRP_CD, CANCEL_REASON_DTL_CD, 
+                CUST_ID, HIST_SEQ, CANCEL_REASON_GRP_CD, CANCEL_REASON_DTL_CD, 
                 CANCEL_REASON_TEXT, REASON_DOC_FILE_NM, REG_ID, MOD_ID
-            ) VALUES (?, ?, 'TRAVELER', 'CANCEL_REASON', ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, 'CANCEL_REASON', ?, ?, ?, ?, ?)
         `, [custId, histSeq, cancelCode || '06', cancelReasonText || '', gcsPath, custId, custId]);
 
         // 5. 기존 상태 변경 로직 (전체 요청, 차량 유닛, 응찰 정보)
@@ -2299,7 +2314,12 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
         res.json({ success: true, message: '여행 취소 처리가 완료되었습니다.' });
     } catch (error) {
         if (connection) await connection.rollback();
-        console.error('[Cancel Request] Error:', error);
+        console.error('[Cancel Request] Error Details:', {
+            message: error.message,
+            stack: error.stack,
+            sql: error.sql,
+            sqlMessage: error.sqlMessage
+        });
         res.status(500).json({ success: false, error: '취소 처리 중 오류가 발생했습니다.' });
     } finally {
         if (connection) connection.release();

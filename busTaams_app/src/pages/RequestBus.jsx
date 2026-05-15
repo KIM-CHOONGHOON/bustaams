@@ -620,19 +620,41 @@ const RequestBus = () => {
                                                             <span className="font-black text-teal-900">₩ 250,000</span>
                                                         </div>
 
-                                                        <div className="pt-6">
-                                                            <div className="bg-slate-50/80 rounded-[2rem] p-4 md:p-6 space-y-4 border border-slate-100">
-                                                                <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] block ml-1 text-center">고객 요청 청약 금액 (REQUESTED AMOUNT)</span>
-                                                                <div className="relative w-full overflow-hidden">
-                                                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-teal-800 font-black text-lg md:text-xl z-10">₩</span>
-                                                                    <input
-                                                                        type="text"
-                                                                        value={quoteAmounts[idx] !== undefined && quoteAmounts[idx] !== 0 ? quoteAmounts[idx].toLocaleString() : ''}
-                                                                        onChange={(e) => handleQuoteChange(idx, e.target.value)}
-                                                                        className="w-full min-w-0 pl-10 pr-2 py-1 bg-transparent border-none focus:ring-0 transition-all text-teal-900 font-black text-[28px] md:text-3xl leading-none tracking-tight text-right placeholder-slate-300 outline-none overflow-hidden"
-                                                                        placeholder="0"
-                                                                    />
-                                                                </div>
+                                                        <div className="pt-6 space-y-3 border-t border-dashed border-slate-100">
+                                                            <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest block">
+                                                                고객 요청 금액
+                                                            </span>
+
+                                                            <div className="flex items-center bg-teal-50/50 rounded-2xl px-3 py-4 border border-teal-100 overflow-hidden">
+                                                                <span className="shrink-0 font-black text-lg sm:text-xl mr-2 text-teal-800">
+                                                                    ₩
+                                                                </span>
+
+                                                                <input
+                                                                    type="text"
+                                                                    inputMode="numeric"
+                                                                    value={quoteAmounts[idx] !== undefined && quoteAmounts[idx] !== 0 ? quoteAmounts[idx].toLocaleString() : ''}
+                                                                    onChange={(e) => handleQuoteChange(idx, e.target.value)}
+                                                                    className="
+                                                                        flex-1
+                                                                        min-w-0
+                                                                        w-full
+                                                                        bg-transparent
+                                                                        border-none
+                                                                        focus:ring-0
+                                                                        text-teal-950
+                                                                        font-black
+                                                                        text-[18px]
+                                                                        sm:text-[22px]
+                                                                        md:text-[28px]
+                                                                        leading-none
+                                                                        tracking-[-0.08em]
+                                                                        text-right
+                                                                        placeholder-teal-200
+                                                                        outline-none
+                                                                    "
+                                                                    placeholder="0"
+                                                                />
                                                             </div>
                                                         </div>
 
@@ -642,16 +664,15 @@ const RequestBus = () => {
                                         </div>
 
                                         {/* Grand Total Section */}
-                                        <div className="pt-8 border-t-2 border-teal-800/10">
-                                            <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-[2.5rem] p-10 text-white shadow-2xl shadow-orange-950/30 relative overflow-hidden group">
-                                                <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-                                                    <div className="space-y-1">
-                                                        <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">총 예약 금액</p>
-                                                        <h4 className="font-headline font-black text-5xl tracking-tighter">₩ {grandTotal.toLocaleString()}</h4>
-                                                    </div>
-                                                    <div className="text-left md:text-right pb-1">
-                                                        <p className="text-[10px] font-bold opacity-60 uppercase tracking-widest">부가가치세 포함</p>
-                                                    </div>
+                                        <div className="pt-8 border-t border-teal-800/10">
+                                            <div className="flex flex-col gap-1 px-4">
+                                                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">총 예약 금액</p>
+                                                <div className="flex flex-wrap items-baseline gap-1.5">
+                                                    <span className="text-lg font-black text-teal-900/60">₩</span>
+                                                    <h4 className="font-headline font-black text-2xl sm:text-3xl tracking-tight text-teal-900">
+                                                        {grandTotal.toLocaleString()}
+                                                    </h4>
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-auto self-center">부가가치세 포함</span>
                                                 </div>
                                             </div>
                                         </div>

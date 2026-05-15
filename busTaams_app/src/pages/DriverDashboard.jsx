@@ -92,7 +92,6 @@ const DriverDashboard = () => {
         { icon: 'calendar_month', label: '운행 예정 리스트', path: '/upcoming-trips-driver' },
         { icon: 'pending_actions', label: '승인 진행 리스트', path: '/approval-pending-driver' },
         { icon: 'task_alt', label: '운행 완료 리스트', path: '/completed-trips-driver' },
-        { icon: 'event_busy', label: '유찰 리스트', path: '/failed-estimate-list-driver' },
         { icon: 'chat', label: '실시간 채팅', path: '/chat-list-driver' },
         { icon: 'credit_card', label: '카드/회비 관리', path: '/membership-card-mgmt' },
         { icon: 'settings_suggest', label: '요금제 선택', path: '/pass-select-driver' },

@@ -2,8 +2,8 @@ const { pool } = require('./db');
 
 async function checkSchema() {
     try {
-        const [rows] = await pool.execute('DESCRIBE TB_USER');
-        console.log('--- TB_USER Schema ---');
+        const [rows] = await pool.execute('DESCRIBE TB_BUS_RESERVATION');
+        console.log('--- TB_BUS_RESERVATION Schema ---');
         console.table(rows);
         process.exit(0);
     } catch (err) {

@@ -103,12 +103,12 @@ export const findPassword = (userId, phoneNo) => request('/app/auth/find-passwor
 });
 
 export const checkIdDuplicate = (userId) => request(`/app/auth/check-id?userId=${userId}`);
-export const checkEmailDuplicate = (email) => request(`/app/auth/check-email?email=${email}`);
-export const checkPhoneDuplicate = (phoneNo) => request(`/app/auth/check-phone?phoneNo=${phoneNo}`);
+export const checkEmailDuplicate = (email, userType) => request(`/app/auth/check-email?email=${email}&userType=${userType || 'TRAVELER'}`);
+export const checkPhoneDuplicate = (phoneNo, userType) => request(`/app/auth/check-phone?phoneNo=${phoneNo}&userType=${userType || 'TRAVELER'}`);
 
-export const sendAuthCode = (phoneNo, type = 'signup') => request('/app/auth/send-code', {
+export const sendAuthCode = (phoneNo, type = 'signup', userType) => request('/app/auth/send-code', {
     method: 'POST',
-    body: JSON.stringify({ phoneNo, type })
+    body: JSON.stringify({ phoneNo, type, userType })
 });
 
 export const verifyAuthCode = (phoneNo, code, type = 'signup') => request('/app/auth/verify-code', {

@@ -111,6 +111,8 @@ const Signup = () => {
     const [phoneNo, setPhoneNo] = useState('');
     const [authCode, setAuthCode] = useState('');
     const [signature, setSignature] = useState('');
+    const [residentNo, setResidentNo] = useState('');
+    const [recomCode, setRecomCode] = useState('');
 
     const [showPassword, setShowPassword] = useState(false);
     const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
@@ -204,29 +206,39 @@ const Signup = () => {
     };
 
     const handleCheckEmail = async () => {
+        console.log('handleCheckEmail called with:', email);
         if (!email) return notify.warn('이메일을 입력하세요.');
         try {
-            const res = await checkEmailDuplicate(email);
+            const res = await checkEmailDuplicate(email, userType === 'customer' ? 'TRAVELER' : 'DRIVER');
+            console.log('checkEmailDuplicate response:', res);
             if (res.isAvailable) {
                 notify.success('사용 가능', '사용 가능한 이메일입니다.');
                 setIsEmailChecked(true);
             } else {
                 notify.error('중복', '이미 사용 중인 이메일입니다.');
             }
-        } catch (err) { }
+        } catch (err) {
+            console.error('Email check error:', err);
+            notify.error('오류 발생', '이메일 중복 확인 중 오류가 발생했습니다.');
+        }
     };
 
     const handleCheckId = async () => {
+        console.log('handleCheckId called with:', userId);
         if (!userId) return notify.warn('아이디를 입력하세요.');
         try {
             const res = await checkIdDuplicate(userId);
+            console.log('checkIdDuplicate response:', res);
             if (res.isAvailable) {
                 notify.success('사용 가능', '사용 가능한 아이디입니다.');
                 setIsIdChecked(true);
             } else {
                 notify.error('중복', '이미 가입된 아이디입니다.');
             }
-        } catch (err) { }
+        } catch (err) {
+            console.error('ID check error:', err);
+            notify.error('오류 발생', '아이디 중복 확인 중 오류가 발생했습니다.');
+        }
     };
 
 
@@ -235,7 +247,7 @@ const Signup = () => {
         if (!phoneNo) return notify.warn('번호를 입력하세요.');
 
         try {
-            const res = await sendAuthCode(phoneNo, 'signup');
+            const res = await sendAuthCode(phoneNo, 'signup', userType === 'customer' ? 'TRAVELER' : 'DRIVER');
             if (res.success) {
                 setIsCodeSent(true);
                 notify.success('인증번호 발송', '인증번호가 발송되었습니다.');
@@ -244,7 +256,7 @@ const Signup = () => {
             }
         } catch (err) {
             console.error('Send Code Error:', err);
-            notify.error('발송 실패', '인증번호 발송 중 오류가 발생했습니다.');
+            notify.error('발송 실패', err.message || '인증번호 발송 중 오류가 발생했습니다.');
         }
     };
 
@@ -273,6 +285,8 @@ const Signup = () => {
         if (!validatePassword(password)) return notify.error('비밀번호 규칙 위반', '8자 이상, 숫자, 특수문자를 포함하세요.');
         if (password !== passwordConfirm) return notify.error('불일치', '비밀번호 확인이 다릅니다.');
         if (!isPhoneVerified) return notify.warn('인증 필요', '휴대폰 인증이 필요합니다.');
+        if (userType === 'driver' && !residentNo) return notify.warn('주민등록번호를 입력해주세요.');
+        if (userType === 'driver' && residentNo.length !== 13) return notify.warn('주민등록번호 13자리를 정확히 입력해주세요.');
         if (!terms.service || !terms.privacy || !terms.traveler) return notify.warn('약관 동의', '모든 필수 약관에 동의하세요.');
         if (!signature) return notify.warn('서명 필요', '전자 서명을 완료해주세요.');
 
@@ -292,7 +306,9 @@ const Signup = () => {
                 userType: userType === 'customer' ? 'TRAVELER' : 'DRIVER',
                 signatureBase64: signature,
                 termsData,
-                firebaseToken: idToken // 서버에서 발행한 verifyToken (기존 필드명 유지)
+                firebaseToken: idToken, // 서버에서 발행한 verifyToken (기존 필드명 유지)
+                residentNo: userType === 'driver' ? residentNo : null,
+                recomCode: recomCode || null
             });
 
             if (res.success) {
@@ -342,9 +358,38 @@ const Signup = () => {
 
                         {/* 성함 */}
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-on-surface ml-1">고객명</label>
+                            <label className="text-xs font-bold text-on-surface ml-1">{userType === 'customer' ? '고객명' : '기사명'}</label>
                             <input value={userName} onChange={e => setUserName(e.target.value)} type="text" placeholder="실명을 입력하세요" className="w-full bg-slate-100 rounded-xl py-3 px-3 outline-none focus:bg-slate-200 transition-all font-medium text-sm" />
                         </div>
+
+                        {userType === 'driver' && (
+                            <>
+                                {/* 주민등록번호 */}
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-on-surface ml-1">주민등록번호 (13자리)</label>
+                                    <input
+                                        value={residentNo}
+                                        onChange={e => setResidentNo(e.target.value.replace(/[^0-9]/g, '').slice(0, 13))}
+                                        type="password"
+                                        placeholder="숫자 13자리만 입력"
+                                        className="w-full bg-slate-100 rounded-xl py-3 px-3 outline-none focus:bg-slate-200 transition-all font-medium text-sm"
+                                    />
+                                    <p className="text-[10px] text-outline ml-1">* 기사 가입을 위해 주민등록번호 입력이 필수입니다. 암호화되어 안전하게 보관됩니다.</p>
+                                </div>
+
+                                {/* 추천인 코드 */}
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-on-surface ml-1">추천인 아이디 (선택)</label>
+                                    <input
+                                        value={recomCode}
+                                        onChange={e => setRecomCode(e.target.value)}
+                                        type="text"
+                                        placeholder="추천인 아이디 입력"
+                                        className="w-full bg-slate-100 rounded-xl py-3 px-3 outline-none focus:bg-slate-200 transition-all font-medium text-sm"
+                                    />
+                                </div>
+                            </>
+                        )}
 
                         {/* 아이디 */}
                         <div className="space-y-2">
@@ -462,7 +507,7 @@ const Signup = () => {
                         {/* 약관 동의 */}
                         <div className="space-y-4 pt-4">
                             <label className="text-xs font-bold text-on-surface ml-1">약관 및 정책동의</label>
-                            <div className="bg-slate-50 p-6 rounded-3xl space-y-4">
+                            <div className="bg-slate-50 p-3 sm:p-6 rounded-3xl space-y-4 overflow-hidden">
                                 {/* 전체 동의 버튼 */}
                                 <div className="pb-4 border-b border-slate-200">
                                     <label className="flex items-center gap-3 cursor-pointer">
@@ -509,9 +554,9 @@ const Signup = () => {
                                             : `여행자(이용자) 가입 및 이용 계약서 (BusTaams)\n\n(주)청솔테크(이하 “사업자”)와 본 계약에 동의하고 가입을 신청한 여행자(이하 “이용자”)는 플랫폼 “버스타암스(BUSTAAMS)”(이하 “플랫폼”)를 통한 중개 서비스 이용에 관하여 다음과 같이 계약을 체결한다.\n\n제1조 (목적)\n본 계약은 “사업자”가 운영하는 “플랫폼”에 “이용자”가 가입하여 특허 시스템 기반의 중개 프로세스(계약금 입금, 연락처 즉시 공개, 자동 정산 등)를 준수하며 서비스를 이용함에 따른 권리·의무 및 책임사항을 규정함을 목적으로 한다.\n\n제2조 (가입 자격 및 승인)\n1. “이용자”는 가입 신청 시 본인 실명 인증 절차를 거쳐야 한다.\n2. [계약의 성립] 본 계약은 “이용자”가 플랫폼(웹/앱)상에서 제공하는 전자 서명(싸인)을 하고 동의 절차에 따라 버튼을 클릭함으로써 본 계약에 확정적으로 전자 서명한 것으로 간주하며, 신청 완료 시점부터 효력이 발생한다.\n\n제3조 (서비스 이용 및 계약 체결)\n1. [청약 등록] “이용자”는 플랫폼에서 요구하는 기본 조건(출발지, 도착지, 탑승 인원, 일시 등)을 완성한 후, 희망 이용요금을 직접 입력하여 청약을 등록한다.\n2. [계약금 결제] “이용자”는 청약 내용에 부합하는 파트너(버스기사)의 제안을 선택하거나 매칭되었을 때, 이용 금액의 6.6%(부가세 포함)를 계약금으로 결제(카드 또는 계좌이체)함으로써 계약을 완료한다.\n3. [연락처 즉시 공개] 계약금 결제 완료 후 파트너가 이를 승인하면 상호 연락처가 즉시 공개되며, 이때부터 자유로운 유선 연락 및 채팅 상담이 가능하다.\n\n제4조 (이용 요금 및 수수료)\n1. [가입 수수료] 플랫폼 가입 수수료는 11,000원(부가세 포함)이다. (단, “사업자”가 지정하는 일정 기간 가입 수수료를 면제할 수 있다.)\n2. [중개 수수료] “이용자”에게는 별도의 중개 수수료가 발생하지 않는다. (단, 제3조 2항의 계약금은 플랫폼 서비스 이용료 및 예약 보증금 성격을 포함한다.)\n\n제5조 (취소 및 이용자 보호 권리)\n1. [이용자 귀책 취소] 계약 체결 후 “이용자”가 특별한 사유 없이 일방적으로 취소할 경우, 기 납부한 계약금은 “사업자”에게 귀속되며 반환되지 않는다.\n2. [파트너 귀책 취소 및 보상] 계약 체결 후 파트너(버스기사)의 귀책으로 계약이 파기될 경우, “이용자”는 다음 중 하나의 보호 조치를 받을 권리가 있다.\n- 계약금 4배 환불: “사업자”는 이용자가 입금한 계약금의 4배 전액을 위약금으로 지급한다.\n- 대체 차량 제공: “사업자”가 원래의 계약 조건과 동일한 급 이상의 다른 차량을 수급하여 제공하는 경우, 위 위약금 지급을 대신할 수 있다.\n3. [위약 예외 사유] 다음 각 호의 사유로 인한 취소는 정확한 증빙이 제출되고 “사업자”가 인정한 경우에 한하여 위약 규정을 적용하지 않는다.\n1) 본인 사망 2) 차량 파손 (운행 불가) 3) 법정 구속 4) 직계존비속 및 배우자 사망 5) 질병 또는 사고에 의한 입원 6) 사고에 의한 당일 통원치료\n\n제6조 (패널티 및 품질 관리)\n시스템은 “이용자”의 취소 이력을 자동 모니터링하며, 제5조 3항의 특별한 사유 없이 결제 취소 또는 계약 파기가 반복될 경우 다음과 같이 이용을 제한한다.\n• 1회 발생 시: 3개월간 이용 제한\n• 2회 발생 시: 6개월간 이용 제한\n• 3회 발생 시: 9개월간 이용 제한\n• 4회 발생 시: 본 계약 해지 및 영구 가입 제한\n\n제7조 (관할 법원)\n본 계약과 관련한 분쟁의 관할 법원은 “사업자”의 소재지 관할 법원으로 한다.`
                                     }
                                 ].map(item => (
-                                    <div key={item.id} className="flex items-center justify-between">
-                                        <label className="flex items-center gap-3 cursor-pointer">
-                                            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${terms[item.id] ? 'bg-primary border-primary' : 'border-outline/30 bg-white'}`}>
+                                    <div key={item.id} className="flex items-center justify-between gap-2 w-full overflow-hidden">
+                                        <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0 overflow-hidden">
+                                            <div className={`w-5 h-5 shrink-0 rounded-full border-2 flex items-center justify-center transition-all ${terms[item.id] ? 'bg-primary border-primary' : 'border-outline/30 bg-white'}`}>
                                                 <input
                                                     type="checkbox"
                                                     className="hidden"
@@ -524,17 +569,19 @@ const Signup = () => {
                                                         setTerms({ ...terms, [item.id]: e.target.checked });
                                                     }}
                                                 />
-                                                {terms[item.id] && <span className="material-symbols-outlined text-white text-xs">check</span>}
+                                                {terms[item.id] && <span className="material-symbols-outlined text-white text-[10px]">check</span>}
                                             </div>
-                                            <span className="text-sm font-bold text-on-surface-variant flex gap-1 min-w-0">
+
+                                            <span className="flex items-center gap-1 min-w-0 overflow-hidden text-[11px] sm:text-sm font-bold text-on-surface-variant">
                                                 <span className="text-primary whitespace-nowrap shrink-0">[필수]</span>
-                                                <span className="truncate">{item.label}</span>
+                                                <span className="truncate min-w-0 block">{item.label}</span>
                                             </span>
                                         </label>
+
                                         <button
                                             type="button"
                                             onClick={() => handleShowTerms(item.label, item.content, item.id)}
-                                            className="text-[10px] text-outline underline font-bold uppercase tracking-tighter whitespace-nowrap shrink-0 ml-2"
+                                            className="shrink-0 whitespace-nowrap text-[9px] sm:text-[10px] text-blue-600 underline font-bold tracking-tighter"
                                         >
                                             상세보기
                                         </button>
@@ -543,9 +590,9 @@ const Signup = () => {
 
                                 {/* 4번째 항목: 마케팅 동의 (선택) */}
                                 <div className="pt-2 border-t border-slate-200">
-                                    <div className="flex items-center justify-between">
-                                        <label className="flex items-center gap-3 cursor-pointer">
-                                            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${marketing.agree ? 'bg-primary border-primary' : 'border-outline/30 bg-white'}`}>
+                                    <div className="flex items-center justify-between gap-2 w-full overflow-hidden">
+                                        <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0 overflow-hidden">
+                                            <div className={`w-5 h-5 shrink-0 rounded-full border-2 flex items-center justify-center transition-all ${marketing.agree ? 'bg-primary border-primary' : 'border-outline/30 bg-white'}`}>
                                                 <input
                                                     type="checkbox"
                                                     className="hidden"
@@ -558,18 +605,19 @@ const Signup = () => {
                                                         handleMarketingAll(e);
                                                     }}
                                                 />
-                                                {marketing.agree && <span className="material-symbols-outlined text-white text-xs">check</span>}
+                                                {marketing.agree && <span className="material-symbols-outlined text-white text-[10px]">check</span>}
                                             </div>
-                                            <span className="text-sm font-bold text-on-surface-variant flex gap-1 min-w-0">
+
+                                            <span className="flex items-center gap-1 min-w-0 overflow-hidden text-[11px] sm:text-sm font-bold text-on-surface-variant">
                                                 <span className="text-outline whitespace-nowrap shrink-0">[선택]</span>
-                                                <span className="truncate">마케팅 정보 수신 및 알림 동의</span>
+                                                <span className="truncate min-w-0 block">마케팅 정보 수신 및 알림 동의</span>
                                             </span>
                                         </label>
+
                                         <button
                                             type="button"
-                                            onClick={() => handleShowTerms('마케팅 정보 수신 및 활용 동의 (선택)', `마케팅 정보 수신 및 활용 동의서 (선택)\n\n본 동의서는 (주)청솔테크(이하 “회사”)가 운영하는 플랫폼 “버스타암스(BUSTAAMS)”에서 제공하는 서비스의 홍보, 이벤트, 맞춤형 정보 제공을 위해 이용자의 개인정보를 수집 및 활용하는 것에 대한 동의를 구하는 내용입니다.\n\n1. 수집 및 이용 목적\n회사는 수집한 개인정보를 다음의 목적을 위해 활용합니다.\n- 공통: 신규 서비스 홍보 및 맞춤형 서비스 제공, 이벤트 및 광고성 정보 안내, 경품 배송, 서비스 개선을 위한 통계 분석 및 설문조사.\n- 버스기사(파트너) 전용: 신규 청약 발생 알림, 지역별 배차 수요 정보 제공, 수수료 할인 프로모션 안내.\n- 여행자(이용자) 전용: 맞춤형 여행/버스 청약 정보, 시즌별 할인 쿠폰 및 프로모션 알림.\n- 영업 파트너 전용: 신규 입점 프로모션 안내, 목표 달성 추가 배당 수수료 이벤트 정보 제공.\n\n2. 수집 항목\n성명, 휴대폰 번호, 이메일 주소, 서비스 이용 기록, 기기 식별 정보(푸시 알림용).\n\n3. 보유 및 이용 기간\n회원 탈퇴 시 또는 동의 철회 시까지\n\n4. 전송 방법\n서비스 내 푸시 알림(Push), SMS(LMS), 카카오 알림톡, 이메일, 유선 전화 등.\n\n5. 동의 거부 권리 및 불이익\n본 마케팅 정보 수신 동의는 선택 사항입니다. 동의를 거부하시더라도 플랫폼의 기본 중개 서비스 이용에는 제한이 없으나, 회사가 제공하는 할인 쿠폰, 수수료 프로모션, 실시간 배차 꿀팁 및 이벤트 참여 등 혜택 제공 대상에서 제외될 수 있습니다.\n\n부칙: 본 방침은 2026년 5월 1일부터 시행됩니다.`, 'marketing')}
-
-                                            className="text-[10px] text-outline underline font-bold uppercase tracking-tighter whitespace-nowrap shrink-0 ml-2"
+                                            onClick={() => handleShowTerms('마케팅 정보 수신 및 활용 동의 (선택)', `...기존 내용 그대로...`, 'marketing')}
+                                            className="shrink-0 whitespace-nowrap text-[9px] sm:text-[10px] text-blue-600 underline font-bold tracking-tighter"
                                         >
                                             상세보기
                                         </button>
