@@ -2,6 +2,7 @@
  * crypto.js - AES-256-GCM 양방향 암호화 유틸리티
  *
  * [대상 컬럼] ARCHITECTURE.md 기준: TB_USER.RESIDENT_NO_ENC(주민등록번호)만 DB 암호화 저장.
+ *             평문은 주민번호 **숫자 13자리 연속**(화면 입력 앞 6 + 뒤 7) 권장. 과거 `XXXXXX-Y`(뒤 1자) 저장분은 호환 복호 분기에서 처리.
  * [저장 포맷] "iv(hex):authTag(hex):cipherText(hex)" 단일 문자열
  * [키 출처]   .env ENCRYPTION_KEY (32 bytes hex = 64자)
  *
