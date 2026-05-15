@@ -11,6 +11,9 @@ const API_BASE = String(RAW_API).trim().replace(/\/$/, '') || 'http://127.0.0.1:
 
 const SCREEN_ID = 'CancellationOfBid';
 
+/** TB_USER_CANCEL_MANAGE.CANCEL_BUS_DRIVER_CNT — 서버 `MAX_DRIVER_BID_CANCEL_ACCUM` 과 동일 */
+const MAX_DRIVER_BID_CANCEL_ACCUM = 10;
+
 /** TB_FILE_MASTER: ORG_FILE_NM + FILE_EXT — 파일명에 확장자가 이미 있으면 중복 추가 안 함 */
 function proofAttachmentDisplayLabel(f) {
     const name = String(f?.orgFileNm ?? '').trim();
@@ -166,7 +169,7 @@ const CancellationOfBid = ({
 
     if (!open) return null;
 
-    const isCancelLimitReached = snapshotCancelCount === 2;
+    const isCancelLimitReached = snapshotCancelCount >= MAX_DRIVER_BID_CANCEL_ACCUM;
     const snapshotReady = snapshotCancelCount !== null && summaryError == null;
 
     const onFilesChosen = (list) => {
@@ -238,7 +241,10 @@ const CancellationOfBid = ({
                     code === 'NOT_BIDDING_OR_CONFIRM' ||
                     code === 'MAX_DRIVER_BID_CANCELS' ||
                     code === 'CANCEL_SNAPSHOT_STALE' ||
-                    code === 'BAD_CANCEL_SNAPSHOT'
+                    code === 'BAD_CANCEL_SNAPSHOT' ||
+                    code === 'AUCTION_REQ_BUS_MISMATCH' ||
+                    code === 'AUCTION_REQ_MISMATCH' ||
+                    code === 'USER_NOT_FOUND'
                 ) {
                     setNoticeModal(msg);
                     return;
