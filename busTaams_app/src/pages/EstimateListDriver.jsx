@@ -101,18 +101,13 @@ const EstimateListDriver = () => {
                             <div key={auction.id} className="group relative bg-white rounded-[2.5rem] p-8 shadow-xl shadow-teal-900/5 transition-all hover:-translate-y-2 duration-500 text-left border border-slate-100 flex flex-col justify-between h-full min-h-[380px]">
                                 <div className="absolute left-0 top-12 bottom-12 w-1.5 bg-secondary rounded-r-full opacity-80"></div>
                                 
-                                <div className="space-y-4 text-left">
-                                    <div className="flex justify-between items-start">
+                                    <div className="text-left space-y-2">
                                         <div className="text-left">
                                             <span className="text-[10px] font-black uppercase tracking-[0.3em] text-secondary mb-1 block italic">여행 정보</span>
-                                            <h3 className="font-headline text-2xl font-black text-[#191c1e] leading-tight text-left truncate max-w-[200px]">{auction.title || '여행 제목 없음'}</h3>
-                                        </div>
-                                        <div className="text-right">
-                                            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300 block mb-1">희망 청약가</span>
-                                            <p className="font-headline text-2xl font-black text-[#004e47] italic leading-none">₩{Number(auction.price).toLocaleString()}</p>
+                                            <h3 className="font-headline text-2xl font-black text-[#191c1e] leading-tight text-left">{auction.title || '여행 제목 없음'}</h3>
+                                            <p className="font-headline text-3xl font-black text-[#004e47] italic mt-3">₩{Number(auction.price).toLocaleString()}</p>
                                         </div>
                                     </div>
-
                                     <div className="pt-4 border-t border-slate-50 space-y-3">
                                         <div className="flex items-center gap-3 text-slate-600">
                                             <span className="material-symbols-outlined text-xl">route</span>
@@ -137,8 +132,7 @@ const EstimateListDriver = () => {
                                             <span className="text-xs font-bold uppercase tracking-wider">{auction.timeAgo} 등록됨</span>
                                         </div>
                                     </div>
-                                </div>
-
+                                
                                 <button onClick={() => navigate(`/estimate-detail-driver/${auction.id}`)} className="mt-8 w-full py-5 rounded-2xl bg-[#004e47] text-white font-black text-[11px] uppercase tracking-[0.3em] hover:bg-secondary transition-all active:scale-95 shadow-xl shadow-teal-900/10 italic">
                                     청약 선택
                                 </button>

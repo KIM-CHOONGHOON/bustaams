@@ -121,7 +121,7 @@ const ApprovalListCustomer = () => {
             form.P_NEXT_URL.value = data.returnUrl;
             form.P_RESERVED.value = "twotrs=Y&app_scheme=bustaams://"; // 이중화 승인 사용
             form.P_INI_PAYMENT.value = "CARD"; // 결제수단 추가 (필수)
-            form.P_CHARSET.value = "euc-kr"; // EUC-KR 사용 (모바일 한글 깨짐 방지)
+            form.P_CHARSET.value = "utf-8"; // UTF-8 사용 (한글 깨짐 방지)
 
             // 폼 전송
             form.submit();
@@ -146,6 +146,23 @@ const ApprovalListCustomer = () => {
         } catch (error) {
             console.error('Cancel error:', error);
             notify.error('오류 발생', '취소 중 오류가 발생했습니다.');
+        }
+    };
+
+    const handleRequestBusChange = async (unitSeq) => {
+        const confirmed = await notify.confirm('차량 변경요청', `차량 #${unitSeq}의 사양 변경을 요청하시겠습니까? 요청 시 기존 입찰 내역은 무효화될 수 있습니다.`);
+        if (!confirmed) return;
+        try {
+            const res = await api.post('/app/customer/request-bus-change', { reqId, busSeq: unitSeq });
+            if (res.success) {
+                notify.success('요청 완료', '차량 변경요청이 접수되었습니다. 새로운 견적을 기다려주세요.');
+                fetchEstimates();
+            } else {
+                notify.error('요청 실패', res.error || '처리 중 오류가 발생했습니다.');
+            }
+        } catch (error) {
+            console.error('Request bus change error:', error);
+            notify.error('오류 발생', '서버와의 통신 중 오류가 발생했습니다.');
         }
     };
 
@@ -469,16 +486,13 @@ const ApprovalListCustomer = () => {
                                                         {/* 액션 버튼 */}
                                                         <div className="pt-4 space-y-4">
                                                             <button 
-                                                                onClick={() => !est.isSelected && handleApproveBid(est.id, est.price, est.driverName)}
-                                                                disabled={est.isSelected}
-                                                                className={`w-full py-5 rounded-[2rem] font-black text-sm tracking-widest uppercase transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50 disabled:active:scale-100 ${
-                                                                    est.isSelected ? 'bg-secondary text-white shadow-xl shadow-secondary/30' : 'bg-orange-600 text-white shadow-xl shadow-orange-900/20 hover:scale-[1.02]'
-                                                                }`}
+                                                                onClick={() => handleRequestBusChange(unit.unitSeq)}
+                                                                className="w-full py-5 rounded-[2rem] font-black text-sm tracking-widest uppercase transition-all flex items-center justify-center gap-3 active:scale-95 bg-purple-600 text-white shadow-xl shadow-purple-900/20 hover:scale-[1.02]"
                                                             >
                                                                 <span className="material-symbols-outlined">
-                                                                    {est.isSelected ? 'check_circle' : 'approval'}
+                                                                    published_with_changes
                                                                 </span>
-                                                                {est.isSelected ? '승인 완료된 청약' : '승인 처리하기'}
+                                                                차량 변경요청
                                                             </button>
 
                                                             {/* 취소 버튼을 승인 버튼 밑으로 이동 */}
@@ -559,7 +573,7 @@ const ApprovalListCustomer = () => {
             <BottomNavCustomer />
 
             {/* 이니시스 결제용 숨김 폼 */}
-            <form id="SendPayForm" name="SendPayForm" method="POST" acceptCharset="euc-kr" style={{ display: 'none' }}>
+            <form id="SendPayForm" name="SendPayForm" method="POST" acceptCharset="utf-8" style={{ display: 'none' }}>
                 {/* PC 웹표준 필드 */}
                 <input type="hidden" name="version" value="1.0" />
                 <input type="hidden" name="mid" value="" />
@@ -588,7 +602,7 @@ const ApprovalListCustomer = () => {
                 <input type="hidden" name="P_NEXT_URL" value="" />
                 <input type="hidden" name="P_RESERVED" value="" />
                 <input type="hidden" name="P_INI_PAYMENT" value="" />
-                <input type="hidden" name="P_CHARSET" value="" />
+                <input type="hidden" name="P_CHARSET" value="utf-8" />
             </form>
         </div>
     );

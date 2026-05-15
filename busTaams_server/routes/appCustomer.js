@@ -848,6 +848,57 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
     }
 });
 
+/**
+ * 9. 차량 변경요청 처리
+ * - TB_AUCTION_REQ_BUS.DATA_STAT -> 'BUS_CHANGE'
+ * - TB_AUCTION_REQ.DATA_STAT -> 'AUCTION'
+ * - TB_AUCTION_REQ.BUS_CHANG_CNT -> BUS_CHANG_CNT + 1
+ */
+router.post('/request-bus-change', authenticateToken, async (req, res) => {
+    const connection = await pool.getConnection();
+    try {
+        const { reqId, busSeq } = req.body;
+        const custId = req.user.custId;
+
+        if (!reqId || !busSeq) {
+            return res.status(400).json({ success: false, error: '요청 ID와 차량 순번이 필요합니다.' });
+        }
+
+        await connection.beginTransaction();
+
+        // 1. 해당 차량 유닛 상태 변경
+        const [busUpdate] = await connection.execute(`
+            UPDATE TB_AUCTION_REQ_BUS 
+            SET DATA_STAT = 'BUS_CHANGE', MOD_ID = ?, MOD_DT = NOW()
+            WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?
+        `, [custId, reqId, busSeq]);
+
+        if (busUpdate.affectedRows === 0) {
+            throw new Error('해당 차량 정보를 찾을 수 없거나 업데이트에 실패했습니다.');
+        }
+
+        // 2. 전체 요청 상태 변경 및 변경 카운트 증가
+        await connection.execute(`
+            UPDATE TB_AUCTION_REQ 
+            SET DATA_STAT = 'AUCTION', 
+                BUS_CHANG_CNT = IFNULL(BUS_CHANG_CNT, 0) + 1,
+                MOD_ID = ?, 
+                MOD_DT = NOW()
+            WHERE REQ_ID = ?
+        `, [custId, reqId]);
+
+        await connection.commit();
+        res.json({ success: true, message: '차량 변경요청이 성공적으로 처리되었습니다.' });
+
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('Request bus change error:', error);
+        res.status(500).json({ success: false, error: error.message || '서버 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
 // [추가] 단건 견적 승인
 router.post('/approve-bid', authenticateToken, async (req, res) => {
     const { resId } = req.body;

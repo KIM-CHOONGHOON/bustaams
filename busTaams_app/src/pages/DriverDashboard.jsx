@@ -180,7 +180,7 @@ const DriverDashboard = () => {
                                             <p className="text-[10px] text-slate-400 font-medium mt-2">{auction.startDate} 운행</p>
                                         </div>
                                         <div className="flex justify-between items-center mt-4">
-                                            <span className="text-primary font-black text-xl tracking-tighter italic">₩{Number(auction.price).toLocaleString()} ~</span>
+                                            <span className="text-primary font-black text-xl tracking-tighter italic">₩{Number(auction.price).toLocaleString()}</span>
                                             <button 
                                                 onClick={() => navigate(`/estimate-detail-driver/${auction.id}`)}
                                                 className="bg-primary text-white rounded-full px-6 py-2.5 text-[12px] font-black shadow-lg shadow-primary/20 uppercase tracking-widest hover:bg-secondary transition-all"
