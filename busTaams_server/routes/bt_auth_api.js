@@ -132,7 +132,7 @@ function createAuthRouter(pool, admin, smsVerifiedPhoneStore, bucket, bucketName
             const {
                 userId, email, password, userName, phoneNo, userType,
                 firebaseIdToken, mktAgreeYn, signatureBase64, photoBase64, photoName, agreedTerms,
-                recomCode
+                recomCode, residentNo
             } = req.body;
 
             if (!userId || !password || !userName || !phoneNo || !signatureBase64 || !agreedTerms || !userType) {
@@ -152,6 +152,23 @@ function createAuthRouter(pool, admin, smsVerifiedPhoneStore, bucket, bucketName
             const hashedPassword = await bcrypt.hash(password, 10);
 
             connection = await pool.getConnection();
+
+            // [추가] 주민등록번호 중복 체크 (기 가입자 확인)
+            if (userType === 'DRIVER' && residentNo) {
+                const cleanedRrn = residentNo.replace(/-/g, '');
+                const [allUsers] = await connection.execute('SELECT RESIDENT_NO_ENC FROM TB_USER WHERE RESIDENT_NO_ENC IS NOT NULL');
+                const isDuplicate = allUsers.some(row => {
+                    try {
+                        return decrypt(row.RESIDENT_NO_ENC) === cleanedRrn;
+                    } catch (e) { return false; }
+                });
+
+                if (isDuplicate) {
+                    connection.release();
+                    return res.status(409).json({ error: '이미 가입된 사용자입니다. (주민번호 중복)' });
+                }
+            }
+
             await connection.beginTransaction();
 
             // 3. ID 생성 및 데이터 매핑
@@ -171,14 +188,16 @@ function createAuthRouter(pool, admin, smsVerifiedPhoneStore, bucket, bucketName
             // [DB] TB_USER INSERT
             const userQuery = `
                 INSERT INTO TB_USER (
-                    CUST_ID, USER_ID, EMAIL, PASSWORD, USER_NM, HP_NO, SNS_TYPE, 
+                    CUST_ID, USER_ID, EMAIL, PASSWORD, USER_NM, HP_NO, RESIDENT_NO_ENC, SNS_TYPE, 
                     SMS_AUTH_YN, USER_TYPE, RECOM_CODE, SIGNATURE_FILE_ID, PROFILE_FILE_ID,
                     JOIN_DT, USER_STAT, MOD_DT, MOD_ID
-                ) VALUES (?, ?, ?, ?, ?, ?, 'NONE', 'Y', ?, ?, ?, ?, NOW(), 'ACTIVE', NOW(), ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'NONE', 'Y', ?, ?, ?, ?, NOW(), 'ACTIVE', NOW(), ?)
             `;
 
             await connection.execute(userQuery, [
-                nextCustId, userId, email, hashedPassword, userName, phoneNo,
+                nextCustId, userId, email, hashedPassword, userName, 
+                phoneNo, 
+                residentNo ? encrypt(residentNo.replace(/-/g, '')) : null,
                 mappedUserType, mappedUserType === 'DRIVER' ? recomCode : null,
                 nextFileId, (mappedUserType === 'DRIVER' && photoBase64) ? nextProfileFileId : null,
                 nextCustId
