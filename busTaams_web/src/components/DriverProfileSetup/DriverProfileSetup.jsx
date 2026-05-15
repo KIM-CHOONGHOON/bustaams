@@ -72,8 +72,6 @@ const STEPS = [
 const DriverProfileSetup = ({ currentUser, onBack, close }) => {
   const [formData, setFormData] = useState({
     name: currentUser?.userNm || currentUser?.userName || currentUser?.name || '',
-    rrnFront: '',
-    rrnBack: '',
     phoneNo: (currentUser?.hpNo || currentUser?.phoneNo || currentUser?.phoneNumber || '').replace(/\D/g, ''),
     addrType: 'HOME',
     addrOtherLabel: '',
@@ -119,6 +117,8 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
   const [activeStep, setActiveStep] = useState(1);
   /** TB_COMMON_CODE 기반 회원등급 콤보 */
   const [feePolicyOptions, setFeePolicyOptions] = useState([]);
+  /** TB_USER.RESIDENT_NO_ENC 조회·마스킹 문자열(본 모달에서 수정 불가) */
+  const [residentNoDisplay, setResidentNoDisplay] = useState('');
 
   const certInputRef = useRef(null);
   const scrollRef = useRef(null);
@@ -129,7 +129,7 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
   const title1Ref = useRef(null);
   const title2Ref = useRef(null);
   const title3Ref = useRef(null);
-  /** 서버에 저장된 자격번호 스냅샷 — 변경 없으면 주민 6+7 검증 생략 */
+  /** 서버에 저장된 자격번호 스냅샷 — 변경 여부로 진위 호출 분기 */
   const qualCertBaselineRef = useRef('');
 
   const scrollToSection = useCallback((step) => {
@@ -354,6 +354,7 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
           setLicenseFieldsLocked(false);
           setQualFieldsLocked(false);
           qualCertBaselineRef.current = '';
+          setResidentNoDisplay(data.residentNoDisplay || '');
           await applyProfilePhotoBlob(profileFidResolved);
           return;
         }
@@ -374,8 +375,6 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
           zipcode: data.zipcode ?? prev.zipcode,
           streetAddress: data.address ?? prev.streetAddress,
           detailAddress: data.detailAddress ?? prev.detailAddress,
-          rrnFront: data.rrnFront || prev.rrnFront,
-          rrnBack: (data.rrnBack || '').replace(/\D/g, '').slice(0, 7),
           licenseType: data.licenseType || prev.licenseType,
           licenseNo: data.licenseNo ?? '',
           licenseSerialNo: data.licenseSerialNo ?? '',
@@ -384,6 +383,8 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
           qualCertNo: data.qualCertNo ?? '',
           bioText: data.bioText ?? prev.bioText,
         }));
+
+        setResidentNoDisplay(data.residentNoDisplay || '');
 
         await applyProfilePhotoBlob(profileFidResolved);
       } catch (e) {
@@ -476,16 +477,6 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    if (name === 'rrnFront') {
-      const v = value.replace(/\D/g, '').slice(0, 6);
-      setFormData((prev) => ({ ...prev, rrnFront: v }));
-      return;
-    }
-    if (name === 'rrnBack') {
-      const v = value.replace(/\D/g, '').slice(0, 7);
-      setFormData((prev) => ({ ...prev, rrnBack: v }));
-      return;
-    }
     if (name === 'addrType') {
       const vt = String(value).toUpperCase();
       setFormData((prev) => ({
@@ -575,16 +566,6 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
       alert('성명을 입력해 주세요. 자격 진위 연동 시에도 성명이 필요합니다.');
       return false;
     }
-    const rrnBack = String(formData.rrnBack || '').replace(/\D/g, '');
-    const qualChangedForRrn =
-      normQualCertBaseline(formData.qualCertNo) !== normQualCertBaseline(qualCertBaselineRef.current);
-    const needFullRrn = !profileExistsOnServer || qualChangedForRrn;
-    if (needFullRrn) {
-      if (!/^\d{6}$/.test(formData.rrnFront || '') || !/^\d{7}$/.test(rrnBack)) {
-        alert('주민등록번호는 앞 6자리·뒤 7자리 숫자를 모두 입력해 주세요.');
-        return false;
-      }
-    }
     if (!['HOME', 'OFFICE', 'OTHER'].includes(formData.addrType || '')) {
       alert('주소 구분을 선택해 주세요.');
       return false;
@@ -607,23 +588,10 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
     setIsSubmitting(true);
     const wasExistingProfile = profileExistsOnServer;
 
-    const rrnPayload = (() => {
-      if (needFullRrn) {
-        return `${formData.rrnFront}-${rrnBack}`;
-      }
-      const rf = String(formData.rrnFront || '').replace(/\D/g, '');
-      const rb = String(formData.rrnBack || '').replace(/\D/g, '');
-      if (rf.length === 6 && rb.length === 7) {
-        return `${rf}-${rb}`;
-      }
-      return '';
-    })();
-
     try {
       const payload = {
         userId: loginId,
         driverName: nameTrim,
-        rrn: rrnPayload,
         licenseType: formData.licenseType,
         licenseNo: formData.licenseNo,
         licenseSerialNo: formData.licenseSerialNo || undefined,
@@ -915,32 +883,20 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
                       type="text" 
                     />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-on-surface-variant px-1">주민등록번호</label>
-                    <div className="flex items-center gap-2">
-                      <input 
-                        name="rrnFront"
-                        value={formData.rrnFront}
-                        onChange={handleChange}
-                        maxLength={6}
-                        className="w-full h-14 px-5 rounded-xl bg-surface-container-high border-none focus:ring-2 focus:ring-primary/20 text-center font-bold" 
-                        placeholder="900101" 
-                        type="text" 
-                      />
-                      <span>-</span>
-                      <input 
-                        name="rrnBack"
-                        value={formData.rrnBack}
-                        onChange={handleChange}
-                        maxLength={7}
-                        inputMode="numeric"
-                        autoComplete="off"
-                        className="w-full min-w-0 shrink h-14 px-2 rounded-xl bg-surface-container-high border-none focus:ring-2 focus:ring-primary/20 text-center font-bold tracking-widest text-sm md:text-base" 
-                        placeholder="•••••••" 
-                        type="password" 
-                        aria-label="주민등록번호 뒷자리 7자리"
-                      />
-                    </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-bold text-on-surface-variant px-1">
+                      주민등록번호
+                      <span className="ml-2 text-xs font-semibold text-slate-500">(조회 전용 · TB_USER)</span>
+                    </label>
+                    <input
+                      readOnly
+                      name="residentNoDisplay"
+                      value={residentNoDisplay || ''}
+                      className="w-full h-14 px-5 rounded-xl bg-slate-50 border border-outline-variant/20 font-bold cursor-not-allowed opacity-95 tracking-wide"
+                      placeholder="등록된 주민번호가 없습니다. 회원가입·본인인증 등에서 등록해 주세요."
+                      type="text"
+                      aria-readonly="true"
+                    />
                   </div>
                 <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">

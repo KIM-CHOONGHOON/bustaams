@@ -118,6 +118,52 @@ function buildMonthGridCells(viewYear, viewMonth) {
 /** 좌우 동일 폭(50%)·동일 세로 — 컴팩트(기존 대비 약 1/2 높이 느낌) */
 const TOP_PAIR_HEIGHT_CLASS = 'lg:h-72';
 
+const TRADE_RESTRICT_MODAL_TITLE = '거래 제한 안내';
+const TRADE_RESTRICT_MODAL_BODY =
+  '취소 규정 위반으로 인해 현재 서비스 이용이 제한되었습니다. 고객센터에 문의해 주세요.';
+
+function TradeRestrictionModal({ open, onClose }) {
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-[2px]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="trade-restrict-modal-title"
+      aria-describedby="trade-restrict-modal-desc"
+    >
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-red-100 overflow-hidden">
+        <div className="flex items-start gap-4 p-6 bg-red-50 border-b border-red-100">
+          <div
+            className="w-12 h-12 shrink-0 rounded-full bg-red-600 text-white flex items-center justify-center shadow-md"
+            aria-hidden
+          >
+            <span className="material-symbols-outlined text-2xl">block</span>
+          </div>
+          <div className="min-w-0 pt-0.5">
+            <h2 id="trade-restrict-modal-title" className="text-lg font-bold text-red-900">
+              {TRADE_RESTRICT_MODAL_TITLE}
+            </h2>
+            <p id="trade-restrict-modal-desc" className="mt-2 text-sm text-red-800/90 leading-relaxed font-medium">
+              {TRADE_RESTRICT_MODAL_BODY}
+            </p>
+          </div>
+        </div>
+        <div className="p-4 bg-white flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-900"
+          >
+            닫기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /**
  * 상단: 여행 일정(캘린더) | 여행 상세 — 50:50, 동일 세로
  */
@@ -327,19 +373,6 @@ function QuickMenu({
 
   return (
     <section className="space-y-6">
-      {/* [추가] 거래 제한 안내 배너 */}
-      {tradeRestrictYn === 'Y' && (
-        <div className="mb-8 bg-red-50 border-2 border-red-200 p-6 rounded-2xl flex items-center gap-6 animate-pulse">
-          <div className="w-12 h-12 bg-red-600 text-white rounded-full flex items-center justify-center shrink-0 shadow-lg">
-            <span className="material-symbols-outlined text-2xl">block</span>
-          </div>
-          <div>
-            <h4 className="text-red-900 font-bold text-lg">거래 제한 안내</h4>
-            <p className="text-red-700/80 text-sm font-medium">취소 규정 위반으로 인해 현재 서비스 이용이 제한되었습니다. 고객센터에 문의해 주세요.</p>
-          </div>
-        </div>
-      )}
-
       <h3 className={SECTION_TITLE_CLASS}>등록/변경 메뉴</h3>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
         {[
@@ -358,16 +391,12 @@ function QuickMenu({
             <button
               key={item.id}
               type="button"
-              onClick={() => {
-                if (isDisabled) {
-                  alert('안내: 현재 서비스 이용이 제한되어 입찰 참여가 불가능합니다.');
-                  return;
-                }
-                item.action?.();
-              }}
-              className={`${menuBtn} ${isDisabled ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
+              disabled={isDisabled}
+              title={isDisabled ? '거래 제한으로 이용할 수 없습니다.' : undefined}
+              onClick={() => item.action?.()}
+              className={`${menuBtn} ${isDisabled ? 'opacity-45 grayscale cursor-not-allowed hover:bg-surface-container-lowest' : ''}`}
             >
-              <div className={`${iconBox} ${isDisabled ? 'bg-gray-200' : ''}`}>
+              <div className={`${iconBox} ${isDisabled ? 'bg-gray-200 group-hover:bg-gray-200 group-hover:text-inherit' : ''}`}>
                 <span className={`material-symbols-outlined text-[22px] md:text-[24px] ${isDisabled ? 'text-gray-400' : ''}`}>{item.icon}</span>
               </div>
               <span className={`${labelSm} ${isDisabled ? 'text-gray-400' : ''}`}>{item.label}</span>
@@ -388,6 +417,13 @@ const DriverDashboard = ({
 }) => {
   const driverCustId = currentUser?.custId || currentUser?.userId || '';
   const tradeRestrictYn = currentUser?.tradeRestrictYn || 'N';
+  const [tradeRestrictModalDismissed, setTradeRestrictModalDismissed] = useState(false);
+  const showTradeRestrictModal = tradeRestrictYn === 'Y' && !tradeRestrictModalDismissed;
+
+  useEffect(() => {
+    if (tradeRestrictYn === 'Y') setTradeRestrictModalDismissed(false);
+  }, [tradeRestrictYn]);
+
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth() + 1);
@@ -511,6 +547,11 @@ const DriverDashboard = ({
 
   return (
     <div className="bg-background text-on-background min-h-screen">
+      <TradeRestrictionModal
+        open={showTradeRestrictModal}
+        onClose={() => setTradeRestrictModalDismissed(true)}
+      />
+
       <main className="min-h-screen relative overflow-x-hidden">
         <div className="px-12 pb-12 pt-8 max-w-7xl mx-auto space-y-12">
           <DashboardTopSection
