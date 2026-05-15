@@ -10,18 +10,18 @@ const BUS_INFO = [
     { id: 'bus45', name: '45인승 일반', basePrice: 1200000, desc: '대형 | 표준 좌석' },
     { id: 'bus28', name: '28인승 우등', basePrice: 1500000, desc: '대형 | 안락한 독립 좌석' },
     { id: 'bus35', name: '35인승 중형', basePrice: 1100000, desc: '중형 | 실속형 단체 이동' },
-    { id: 'bus25', name: '25인승 중형', basePrice: 900000,  desc: '소규모 단체 | 콤팩트한 이동' },
-    { id: 'bus15', name: '15인승 소형', basePrice: 700000,  desc: '승합 | 빠른 소수 이동' },
-    { id: 'bus12', name: '12인승 미니', basePrice: 800000,  desc: '미니밴 | 프리미엄 승합' },
+    { id: 'bus25', name: '25인승 중형', basePrice: 900000, desc: '소규모 단체 | 콤팩트한 이동' },
+    { id: 'bus15', name: '15인승 소형', basePrice: 700000, desc: '승합 | 빠른 소수 이동' },
+    { id: 'bus12', name: '12인승 미니', basePrice: 800000, desc: '미니밴 | 프리미엄 승합' },
     { id: 'busPremium', name: '21인승 이하 프리미엄', basePrice: 2500000, desc: '최고급 | 우등 이상의 편안함' },
 ];
 
 const RequestBus = () => {
     const navigate = useNavigate();
     const { id } = useParams();
-    
+
     const [tripName, setTripName] = useState('');
-    
+
     // Bus types from DB
     const [busTypes, setBusTypes] = useState([]);
     const [busCounts, setBusCounts] = useState({});
@@ -89,7 +89,7 @@ const RequestBus = () => {
                 const response = await api.get('/common/codes/BUS_TYPE');
                 if (response.data) {
                     setBusTypes(response.data);
-                    
+
                     if (id) {
                         const resDetail = await api.get(`/app/customer/auction-req/${id}`);
                         if (resDetail.success && resDetail.data) {
@@ -97,9 +97,9 @@ const RequestBus = () => {
                             setTripName(data.TRIP_TITLE || '');
                             setDepAddress(data.START_ADDR || '');
                             setEndAddress(data.END_ADDR || '');
-                            
+
                             const formatInputDt = (dt) => {
-                                if(!dt) return '';
+                                if (!dt) return '';
                                 const dtStr = typeof dt === 'string' ? dt : new Date(dt).toISOString();
                                 return dtStr.replace(' ', 'T').replace('Z', '').substring(0, 16);
                             };
@@ -110,7 +110,7 @@ const RequestBus = () => {
                             if (response.data) {
                                 response.data.forEach(bus => initialCounts[bus.code] = 0);
                             }
-                            
+
                             const initialQuotes = {};
                             if (data.buses && Array.isArray(data.buses)) {
                                 data.buses.forEach((b, idx) => {
@@ -128,11 +128,11 @@ const RequestBus = () => {
                                 const endWays = data.vias.filter(v => v.VIA_TYPE === 'END_WAY');
                                 const endNodes = data.vias.filter(v => v.VIA_TYPE === 'END_NODE');
 
-                                if(startNodes.length > 0) setDepAddress(startNodes[0].addr);
+                                if (startNodes.length > 0) setDepAddress(startNodes[0].addr);
                                 setStops(startWays.map(v => v.addr));
-                                if(roundTrips.length > 0) setArrAddress(roundTrips[0].addr);
+                                if (roundTrips.length > 0) setArrAddress(roundTrips[0].addr);
                                 setReturnStops(endWays.map(v => v.addr));
-                                if(endNodes.length > 0) setEndAddress(endNodes[0].addr);
+                                if (endNodes.length > 0) setEndAddress(endNodes[0].addr);
                             }
                         }
                     } else {
@@ -228,15 +228,15 @@ const RequestBus = () => {
 
     const handleRequestSubmit = async (e) => {
         e.preventDefault();
-        if(selectedBuses.length === 0) {
+        if (selectedBuses.length === 0) {
             notify.warn('알림', '배차할 버스를 선택해주세요.');
             return;
         }
-        if(!depAddress || !arrAddress || !endAddress) {
+        if (!depAddress || !arrAddress || !endAddress) {
             notify.warn('알림', '출발지, 목적지, 최종도착지를 모두 입력해주세요.');
             return;
         }
-        if(!depDateTime || !arrDateTime) {
+        if (!depDateTime || !arrDateTime) {
             notify.warn('알림', '일시를 설정해주세요.');
             return;
         }
@@ -244,19 +244,19 @@ const RequestBus = () => {
 
         try {
             const vias = [];
-            
+
             // 1. 출발지 (START_NODE)
             vias.push({ viaType: 'START_NODE', addr: depAddress });
-            
+
             // 2. 출발 경유지 (START_WAY)
             stops.forEach(s => s && vias.push({ viaType: 'START_WAY', addr: s }));
-            
+
             // 3. 목적지 (ROUND_TRIP)
             vias.push({ viaType: 'ROUND_TRIP', addr: arrAddress });
-            
+
             // 4. 도착 경유지 (END_WAY)
             returnStops.forEach(s => s && vias.push({ viaType: 'END_WAY', addr: s }));
-            
+
             // 5. 최종 도착지 (END_NODE)
             vias.push({ viaType: 'END_NODE', addr: endAddress });
 
@@ -266,7 +266,7 @@ const RequestBus = () => {
                 startDt: depDateTime,
                 endDt: arrDateTime,
                 tripTitle: tripName || `${depAddress.split(' ')[0]} 여행`,
-                passengerCnt: 1, 
+                passengerCnt: 1,
                 buses: selectedBuses.map((bus, idx) => ({
                     busTypeCd: bus.code,
                     tollsAmt: 100000,
@@ -276,11 +276,11 @@ const RequestBus = () => {
                 vias
             };
 
-            const response = id 
+            const response = id
                 ? await api.put(`/app/customer/auction-req/${id}`, payload)
                 : await api.post('/app/customer/auction-req', payload);
 
-            if(response.success) {
+            if (response.success) {
                 await notify.success('성공', id ? '예약 정보가 성공적으로 수정되었습니다.' : '차량 청약 요청이 성공적으로 접수되었습니다.');
                 navigate('/customer-dashboard');
             } else {
@@ -368,9 +368,9 @@ const RequestBus = () => {
                             </button>
                         </div>
                         <div className="h-[450px]">
-                            <DaumPostcodeEmbed 
-                                onComplete={handlePostcodeComplete} 
-                                style={{ height: '100%', width: '100%' }} 
+                            <DaumPostcodeEmbed
+                                onComplete={handlePostcodeComplete}
+                                style={{ height: '100%', width: '100%' }}
                             />
                         </div>
                     </div>
@@ -380,8 +380,8 @@ const RequestBus = () => {
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100/50 py-4">
                 <div className="flex justify-between items-center w-full px-6 max-w-7xl mx-auto">
                     <div className="flex items-center gap-4">
-                        <button 
-                            onClick={() => navigate(-1)} 
+                        <button
+                            onClick={() => navigate(-1)}
                             className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-50 text-teal-700 hover:bg-teal-50 transition-all duration-300 group"
                         >
                             <span className="material-symbols-outlined text-2xl group-hover:-translate-x-0.5 transition-transform">arrow_back</span>
@@ -393,20 +393,20 @@ const RequestBus = () => {
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest -mt-1">BusTaams Premium</p>
                         </div>
                     </div>
-                    
+
                     <div className="flex items-center gap-3">
-                        <div 
+                        <div
                             className="w-11 h-11 rounded-2xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden"
                             onClick={() => navigate('/profile-customer')}
                         >
                             <div className="w-full h-full rounded-[14px] overflow-hidden bg-slate-50 flex items-center justify-center relative group">
                                 {profileImage ? (
-                                    <img 
-                                        alt="Customer Profile" 
-                                        src={profileImage.startsWith('http') ? 
-                                            `${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
-                                            `${import.meta.env.VITE_API_BASE_URL || ''}${profileImage.startsWith('/') ? '' : '/'}${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
-                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                                    <img
+                                        alt="Customer Profile"
+                                        src={profileImage.startsWith('http') ?
+                                            `${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` :
+                                            `${import.meta.env.VITE_API_BASE_URL || ''}${profileImage.startsWith('/') ? '' : '/'}${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`}
+                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                                         onError={(e) => {
                                             e.target.onerror = null;
                                             e.target.style.display = 'none';
@@ -433,7 +433,7 @@ const RequestBus = () => {
                     <div className="col-span-12 lg:col-span-5 flex flex-col justify-center mb-8 lg:mb-0">
                         <span className="text-teal-600 font-headline font-bold uppercase tracking-[0.3em] mb-4 block text-[12px]">전세 서비스</span>
                         <h2 className="font-headline font-extrabold text-5xl lg:text-7xl leading-[1.1] text-teal-900 mb-8 tracking-tight text-[48px]">
-                            당신만을 위한<br/>전용 버스.
+                            당신만을 위한<br />전용 버스.
                         </h2>
                         <p className="text-slate-600 text-lg lg:text-xl leading-relaxed max-w-md text-[18px]">
                             일생에 단 한 번뿐인 특별한 여행을 정의하세요. 럭셔리 비즈니스 코치부터 지속 가능한 운송 솔루션까지, 귀하의 단체에 꼭 필요한 사양을 요청하실 수 있습니다.
@@ -453,22 +453,22 @@ const RequestBus = () => {
                     <div className="col-span-12 lg:col-span-7">
                         <div className="bg-white rounded-[2rem] p-8 lg:p-12 shadow-2xl relative border border-slate-100">
                             <form className="space-y-10 text-left">
-                                 <section>
-                                     <div className="flex items-center gap-4 mb-8">
-                                         <div className="w-1.5 h-8 bg-red-600 rounded-full"></div>
-                                         <h3 className="font-headline font-black text-3xl text-teal-950 tracking-tight">어디로 가시나요?</h3>
-                                     </div>
-                                    
+                                <section>
+                                    <div className="flex items-center gap-4 mb-8">
+                                        <div className="w-1.5 h-8 bg-red-600 rounded-full"></div>
+                                        <h3 className="font-headline font-black text-3xl text-teal-950 tracking-tight">어디로 가시나요?</h3>
+                                    </div>
+
                                     <div className="space-y-6">
                                         {/* 여행 명칭 */}
                                         <div className="space-y-2">
                                             <label className="font-label text-xs font-bold uppercase tracking-wider text-slate-500 ml-2">여행 명칭</label>
                                             <div className="relative group">
                                                 <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-teal-600 transition-colors">edit_note</span>
-                                                <input 
-                                                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 transition-all font-bold text-teal-900 outline-none" 
-                                                    placeholder="예: 2024년 추계 워크숍" 
-                                                    type="text" 
+                                                <input
+                                                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 transition-all font-bold text-teal-900 outline-none"
+                                                    placeholder="예: 2024년 추계 워크숍"
+                                                    type="text"
                                                     value={tripName}
                                                     onChange={(e) => setTripName(e.target.value)}
                                                 />
@@ -545,46 +545,46 @@ const RequestBus = () => {
                                             </div>
                                         </div>
                                     </div>
-                                 </section>
+                                </section>
 
-                                 <section>
-                                     <h3 className="font-headline font-black text-2xl text-teal-950 mb-8 tracking-tight">필수 정보</h3>
-                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                                         <div className="space-y-2 cursor-pointer" onClick={() => openDateTimePopup('dep')}>
-                                             <label className="font-label text-xs font-bold uppercase tracking-wider text-slate-500 ml-2">출발 일시 <span className="text-red-500">*</span></label>
-                                             <div className="relative group">
-                                                 <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-teal-600">calendar_month</span>
-                                                 <input className="w-full pl-12 pr-4 py-4 bg-teal-50 border border-teal-100 rounded-xl focus:ring-2 focus:ring-teal-600/20 transition-all font-bold text-teal-900 cursor-pointer placeholder-teal-700/50 outline-none" type="text" placeholder="일시 설정 클릭" value={depDateTime} readOnly />
-                                             </div>
-                                         </div>
-                                         <div className="space-y-2 cursor-pointer" onClick={() => openDateTimePopup('arr')}>
-                                             <label className="font-label text-xs font-bold uppercase tracking-wider text-slate-500 ml-2">도착(목적지) 일시 <span className="text-red-500">*</span></label>
-                                             <div className="relative group">
-                                                 <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-teal-600">event_available</span>
-                                                 <input className="w-full pl-12 pr-4 py-4 bg-teal-50 border border-teal-100 rounded-xl focus:ring-2 focus:ring-teal-600/20 transition-all font-bold text-teal-900 cursor-pointer placeholder-teal-700/50 outline-none" type="text" placeholder="일시 설정 클릭" value={arrDateTime} readOnly />
-                                             </div>
-                                         </div>
-                                     </div>
+                                <section>
+                                    <h3 className="font-headline font-black text-2xl text-teal-950 mb-8 tracking-tight">필수 정보</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                        <div className="space-y-2 cursor-pointer" onClick={() => openDateTimePopup('dep')}>
+                                            <label className="font-label text-xs font-bold uppercase tracking-wider text-slate-500 ml-2">출발 일시 <span className="text-red-500">*</span></label>
+                                            <div className="relative group">
+                                                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-teal-600">calendar_month</span>
+                                                <input className="w-full pl-12 pr-4 py-4 bg-teal-50 border border-teal-100 rounded-xl focus:ring-2 focus:ring-teal-600/20 transition-all font-bold text-teal-900 cursor-pointer placeholder-teal-700/50 outline-none" type="text" placeholder="일시 설정 클릭" value={depDateTime} readOnly />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2 cursor-pointer" onClick={() => openDateTimePopup('arr')}>
+                                            <label className="font-label text-xs font-bold uppercase tracking-wider text-slate-500 ml-2">도착(목적지) 일시 <span className="text-red-500">*</span></label>
+                                            <div className="relative group">
+                                                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-teal-600">event_available</span>
+                                                <input className="w-full pl-12 pr-4 py-4 bg-teal-50 border border-teal-100 rounded-xl focus:ring-2 focus:ring-teal-600/20 transition-all font-bold text-teal-900 cursor-pointer placeholder-teal-700/50 outline-none" type="text" placeholder="일시 설정 클릭" value={arrDateTime} readOnly />
+                                            </div>
+                                        </div>
+                                    </div>
 
-                                     <div className="space-y-4">
-                                         <h3 className="font-headline font-black text-[15px] text-teal-950/70 uppercase tracking-widest ml-2">버스 구분 표준화 (차종 선택)</h3>
-                                         <div className="grid grid-cols-1 gap-3">
-                                             {busTypes.map((bus) => (
-                                                 <div key={bus.code} className="flex items-center justify-between p-5 bg-white rounded-3xl border border-slate-100 shadow-sm hover:border-teal-600/30 hover:shadow-md transition-all duration-300">
-                                                     <div>
-                                                         <p className="font-headline font-bold text-teal-900">{bus.name}</p>
-                                                         <p className="text-[11px] text-slate-500 font-medium">{bus.description}</p>
-                                                     </div>
-                                                     <div className="flex items-center gap-3 bg-white border border-slate-100 rounded-xl p-1 shadow-sm">
-                                                         <button onClick={(e) => { e.preventDefault(); updateBusCount(bus.code, -1); }} className="w-8 h-8 flex items-center justify-center text-teal-700 hover:bg-slate-50 rounded-lg transition-colors" type="button"><span className="material-symbols-outlined text-lg">remove</span></button>
-                                                         <span className="w-6 text-center font-bold text-teal-900">{busCounts[bus.code] || 0}</span>
-                                                         <button onClick={(e) => { e.preventDefault(); updateBusCount(bus.code, 1); }} className="w-8 h-8 flex items-center justify-center text-teal-700 hover:bg-slate-50 rounded-lg transition-colors" type="button"><span className="material-symbols-outlined text-lg">add</span></button>
-                                                     </div>
-                                                 </div>
-                                             ))}
-                                         </div>
-                                     </div>
-                                 </section>
+                                    <div className="space-y-4">
+                                        <h3 className="font-headline font-black text-[15px] text-teal-950/70 uppercase tracking-widest ml-2">버스 구분 표준화 (차종 선택)</h3>
+                                        <div className="grid grid-cols-1 gap-3">
+                                            {busTypes.map((bus) => (
+                                                <div key={bus.code} className="flex items-center justify-between p-5 bg-white rounded-3xl border border-slate-100 shadow-sm hover:border-teal-600/30 hover:shadow-md transition-all duration-300">
+                                                    <div>
+                                                        <p className="font-headline font-bold text-teal-900">{bus.name}</p>
+                                                        <p className="text-[11px] text-slate-500 font-medium">{bus.description}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 bg-white border border-slate-100 rounded-xl p-1 shadow-sm">
+                                                        <button onClick={(e) => { e.preventDefault(); updateBusCount(bus.code, -1); }} className="w-8 h-8 flex items-center justify-center text-teal-700 hover:bg-slate-50 rounded-lg transition-colors" type="button"><span className="material-symbols-outlined text-lg">remove</span></button>
+                                                        <span className="w-6 text-center font-bold text-teal-900">{busCounts[bus.code] || 0}</span>
+                                                        <button onClick={(e) => { e.preventDefault(); updateBusCount(bus.code, 1); }} className="w-8 h-8 flex items-center justify-center text-teal-700 hover:bg-slate-50 rounded-lg transition-colors" type="button"><span className="material-symbols-outlined text-lg">add</span></button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </section>
 
                                 {selectedBuses.length > 0 && (
                                     <section className="bg-slate-50/50 rounded-[3rem] p-6 md:p-10 space-y-10 border border-slate-100">
@@ -619,18 +619,18 @@ const RequestBus = () => {
                                                             <span className="text-sm font-black text-teal-900 uppercase">총 예상 경비</span>
                                                             <span className="font-black text-teal-900">₩ 250,000</span>
                                                         </div>
-                                                        
+
                                                         <div className="pt-6">
-                                                            <div className="bg-slate-50/80 rounded-[2rem] p-6 space-y-4 border border-slate-100">
+                                                            <div className="bg-slate-50/80 rounded-[2rem] p-4 md:p-6 space-y-4 border border-slate-100">
                                                                 <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] block ml-1 text-center">고객 요청 청약 금액 (REQUESTED AMOUNT)</span>
-                                                                <div className="relative">
-                                                                    <span className="absolute left-0 top-1/2 -translate-y-1/2 text-teal-800 font-black text-xl">₩</span>
-                                                                    <input 
-                                                                        type="text" 
+                                                                <div className="relative w-full overflow-hidden">
+                                                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-teal-800 font-black text-lg md:text-xl z-10">₩</span>
+                                                                    <input
+                                                                        type="text"
                                                                         value={quoteAmounts[idx] !== undefined && quoteAmounts[idx] !== 0 ? quoteAmounts[idx].toLocaleString() : ''}
                                                                         onChange={(e) => handleQuoteChange(idx, e.target.value)}
-                                                                        className="w-full pl-8 pr-0 py-1 bg-transparent border-none focus:ring-0 transition-all text-teal-900 font-black text-3xl text-right placeholder-slate-300 outline-none" 
-                                                                        placeholder="0" 
+                                                                        className="w-full min-w-0 pl-10 pr-2 py-1 bg-transparent border-none focus:ring-0 transition-all text-teal-900 font-black text-[28px] md:text-3xl leading-none tracking-tight text-right placeholder-slate-300 outline-none overflow-hidden"
+                                                                        placeholder="0"
                                                                     />
                                                                 </div>
                                                             </div>

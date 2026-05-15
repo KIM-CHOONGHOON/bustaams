@@ -298,6 +298,7 @@ router.get('/auctions/:id', authenticateToken, async (req, res) => {
                 DATE_FORMAT(r.START_DT, '%Y-%m-%d %H:%i') as startDate,
                 DATE_FORMAT(r.END_DT, '%Y-%m-%d %H:%i') as endDate,
                 r.PASSENGER_CNT as passengers, r.REQ_AMT as price,
+                (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'START_NODE' LIMIT 1) as startAddrVia,
                 (SELECT GROUP_CONCAT(VIA_ADDR ORDER BY VIA_SEQ ASC) FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'START_WAY') as startVia,
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' LIMIT 1) as roundTrip,
                 (SELECT GROUP_CONCAT(VIA_ADDR ORDER BY VIA_SEQ ASC) FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'END_WAY') as endVia,
@@ -312,7 +313,7 @@ router.get('/auctions/:id', authenticateToken, async (req, res) => {
 
         // 경로 시퀀스 가공
         const fullPath = [
-            { label: '출발지', addr: row.startAddr },
+            { label: '출발지', addr: row.startAddrVia || row.startAddr },
             ...(row.startVia ? row.startVia.split(',').map(v => ({ label: '출발 경유지', addr: v })) : []),
             ...(row.roundTrip ? [{ label: '목적지', addr: row.roundTrip }] : []),
             ...(row.endVia ? row.endVia.split(',').map(v => ({ label: '도착 경유지', addr: v })) : []),
@@ -526,8 +527,8 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
             );
         } else {
             await connection.execute(
-                'INSERT INTO TB_DRIVER_DETAIL (CUST_ID, BIRTH_YMD, ZIPCODE, ADDRESS, DETAIL_ADDRESS, SEX, ADDR_TYPE, SELF_INTRO, REG_ID, MOD_ID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [custId, birthYmd, zipcode, address, detailAddress, sex, addrType, selfIntro, custId, custId]
+                'INSERT INTO TB_DRIVER_DETAIL (CUST_ID, BIRTH_YMD, ZIPCODE, ADDRESS, DETAIL_ADDRESS, SEX, ADDR_TYPE, SELF_INTRO, FEE_POLICY, REG_ID, MOD_ID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [custId, birthYmd, zipcode, address, detailAddress, sex, addrType, selfIntro, 'DRIVER', custId, custId]
             );
         }
 
@@ -1071,9 +1072,11 @@ router.get('/mission-detail/:id', authenticateToken, async (req, res) => {
                 u.HP_NO as customerPhone,
                 u.EMAIL as customerEmail,
                 CASE 
-                    WHEN f.GCS_PATH IS NOT NULL THEN CONCAT('/api/common/display-image?path=', f.GCS_PATH) 
-                    WHEN u.USER_IMAGE IS NOT NULL AND u.USER_IMAGE LIKE 'http%' THEN CONCAT('/api/common/display-image?path=', u.USER_IMAGE)
-                    WHEN u.USER_IMAGE IS NOT NULL THEN CONCAT('/uploads/profiles/', u.USER_IMAGE)
+                    WHEN u.USER_IMAGE IS NOT NULL THEN 
+                        CASE 
+                            WHEN u.USER_IMAGE LIKE 'http%' THEN CONCAT('/api/common/display-image?path=', u.USER_IMAGE)
+                            ELSE CONCAT('/api/common/display-image?path=', u.USER_IMAGE)
+                        END
                     ELSE NULL 
                 END as customerImage,
                 (SELECT GROUP_CONCAT(VIA_ADDR ORDER BY VIA_SEQ ASC) FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'START_WAY') as startVia,

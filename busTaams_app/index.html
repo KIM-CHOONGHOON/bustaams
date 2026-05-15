@@ -6,14 +6,37 @@
     <title>busTaams | Mobility Solutions</title>
     <!-- PWA Settings -->
     <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/png" href="/icon-512.png" />
     <meta name="theme-color" content="#0052cc" />
     <link rel="apple-touch-icon" href="/icon-512.png" />
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('App SW Registered', reg))
+            .then(registration => {
+              console.log('App SW Registered');
+              
+              // 새로운 서비스 워커가 대기 중일 때 업데이트 실행
+              registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing;
+                newWorker.addEventListener('statechange', () => {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    console.log('New content available, reloading...');
+                    window.location.reload();
+                  }
+                });
+              });
+            })
             .catch(err => console.log('App SW Reg Error', err));
+        });
+
+        // 새로운 서비스 워커로 제어권이 넘어갔을 때 페이지 새로고침
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (!refreshing) {
+            window.location.reload();
+            refreshing = true;
+          }
         });
       }
     </script>

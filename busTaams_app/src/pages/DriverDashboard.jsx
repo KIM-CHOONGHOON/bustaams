@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api, { getNotifications } from '../api';
+import api, { getNotifications, logout } from '../api';
+import Swal from 'sweetalert2';
+import { notify } from '../utils/toast';
 import BottomNavDriver from '../components/BottomNavDriver';
 
 const DriverDashboard = () => {
@@ -64,6 +66,25 @@ const DriverDashboard = () => {
         fetchDashboardData();
     }, []);
 
+    const handleLogout = () => {
+        Swal.fire({
+            title: '로그아웃',
+            text: '정말 로그아웃 하시겠습니까?',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#00685f',
+            cancelButtonColor: '#d33',
+            confirmButtonText: '로그아웃',
+            cancelButtonText: '취소'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                logout();
+                navigate('/login', { replace: true });
+                notify.success('로그아웃', '성공적으로 로그아웃되었습니다.');
+            }
+        });
+    };
+
     const quickMenus = [
         { icon: 'badge', label: '기사 정보 등록', path: '/driver-certification' },
         { icon: 'directions_bus', label: '버스 정보 등록', path: '/bus-certification' },
@@ -107,6 +128,13 @@ const DriverDashboard = () => {
                                 {unreadCount > 99 ? '99+' : unreadCount}
                             </span>
                         )}
+                    </button>
+                    <button 
+                        onClick={handleLogout}
+                        className="p-2 rounded-full hover:bg-red-50 transition-colors group"
+                        title="로그아웃"
+                    >
+                        <span className="material-symbols-outlined text-teal-800 group-hover:text-red-500">logout</span>
                     </button>
                 </div>
             </header>

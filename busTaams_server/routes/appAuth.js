@@ -322,8 +322,8 @@ router.post('/register', async (req, res) => {
                 }
             }
         }
-
-        await connection.commit();
+ 
+         await connection.commit();
         console.log(`✅ App user registered: ${userId}`);
         res.status(201).json({ success: true, message: '앱 전용 회원가입 및 약관 동의가 완료되었습니다.' });
     } catch (err) {

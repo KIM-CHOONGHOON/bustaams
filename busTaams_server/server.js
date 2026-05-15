@@ -12,6 +12,7 @@ const { Storage } = require('@google-cloud/storage');
 require('dotenv').config();
 
 const app = express();
+app.set('trust proxy', true);
 const PORT = process.env.PORT || 8080;
 const JWT_SECRET_KEY = process.env.JWT_SECRET || 'bustaams-dev-secret-key-2026';
 
@@ -52,6 +53,7 @@ try {
 // --- 2. 미들웨어 설정 ---
 app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // --- 3. 라우터 등록 ---

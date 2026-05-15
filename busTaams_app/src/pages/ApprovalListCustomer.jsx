@@ -94,35 +94,38 @@ const ApprovalListCustomer = () => {
         try {
             // 1. 서버에서 결제 준비 데이터 가져오기
             const res = await api.post('/payment/ready', payData);
-            
-            // api.js의 request는 에러 발생 시 throw하므로 res는 성공 시의 데이터임
             const data = res;
 
-            // 2. 폼 데이터 설정
+            // 2. 폼 데이터 설정 (이니시스 모바일 전용)
             const form = document.getElementById('SendPayForm');
             if (!form) {
                 notify.error('오류 발생', '결제 폼을 찾을 수 없습니다.');
                 return;
             }
 
-            form.mid.value = data.mid;
-            form.oid.value = data.oid;
-            form.price.value = data.price;
-            form.timestamp.value = data.timestamp;
-            form.signature.value = data.signature;
-            form.mKey.value = data.mKey;
-            form.goodname.value = data.goodname;
-            form.buyername.value = data.buyername;
-            form.buyertel.value = data.buyertel;
-            form.buyeremail.value = data.buyeremail;
-            form.returnUrl.value = data.returnUrl;
+            console.log('>>> [Payment] Launching Mobile Payment Page:', data.oid);
+
+            // 모바일 결제 설정 (기기에 관계없이 모바일 전용 URL 사용)
+            form.action = "https://mobile.inicis.com/smart/payment/";
+            form.target = "_self";
+            form.method = "POST";
             
-            // 3. 결제창 호출
-            if (window.INIStdPay) {
-                window.INIStdPay.pay('SendPayForm');
-            } else {
-                notify.error('오류 발생', '이니시스 결제 모듈을 로드할 수 없습니다.');
-            }
+            // 모바일 필수 파라미터 매핑
+            form.P_MID.value = data.mid;
+            form.P_OID.value = data.oid;
+            form.P_AMT.value = data.price;
+            form.P_GOODS.value = data.goodname;
+            form.P_UNAME.value = data.buyername;
+            form.P_MOBILE.value = data.buyertel;
+            form.P_EMAIL.value = data.buyeremail;
+            form.P_NEXT_URL.value = data.returnUrl;
+            form.P_RESERVED.value = "twotrs=Y&app_scheme=bustaams://"; // 이중화 승인 사용
+            form.P_INI_PAYMENT.value = "CARD"; // 결제수단 추가 (필수)
+            form.P_CHARSET.value = "utf8"; // UTF-8 사용 명시
+
+            // 폼 전송
+            form.submit();
+            
         } catch (error) {
             console.error('Payment initiation error:', error);
             notify.error('오류 발생', error.message || '결제 요청 중 오류가 발생했습니다.');
@@ -556,7 +559,8 @@ const ApprovalListCustomer = () => {
             <BottomNavCustomer />
 
             {/* 이니시스 결제용 숨김 폼 */}
-            <form id="SendPayForm" name="SendPayForm" method="POST" style={{ display: 'none' }}>
+            <form id="SendPayForm" name="SendPayForm" method="POST" acceptCharset="utf-8" style={{ display: 'none' }}>
+                {/* PC 웹표준 필드 */}
                 <input type="hidden" name="version" value="1.0" />
                 <input type="hidden" name="mid" value="" />
                 <input type="hidden" name="oid" value="" />
@@ -572,6 +576,19 @@ const ApprovalListCustomer = () => {
                 <input type="hidden" name="returnUrl" value="" />
                 <input type="hidden" name="closeUrl" value={`${window.location.origin}/close-payment`} />
                 <input type="hidden" name="gopaymethod" value="Card" />
+
+                {/* 모바일 필드 (P_ 접두사) */}
+                <input type="hidden" name="P_MID" value="" />
+                <input type="hidden" name="P_OID" value="" />
+                <input type="hidden" name="P_AMT" value="" />
+                <input type="hidden" name="P_GOODS" value="" />
+                <input type="hidden" name="P_UNAME" value="" />
+                <input type="hidden" name="P_MOBILE" value="" />
+                <input type="hidden" name="P_EMAIL" value="" />
+                <input type="hidden" name="P_NEXT_URL" value="" />
+                <input type="hidden" name="P_RESERVED" value="" />
+                <input type="hidden" name="P_INI_PAYMENT" value="" />
+                <input type="hidden" name="P_CHARSET" value="" />
             </form>
         </div>
     );

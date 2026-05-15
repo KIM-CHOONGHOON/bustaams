@@ -59,8 +59,13 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
         const user = uRows[0];
         const custId = user.CUST_ID;
 
+        // 디버깅을 위한 파일 로그 추가
+        const fs = require('fs');
+        const logMsg = `\n[${new Date().toISOString()}] Dashboard Call - UserID: ${userId}, CustID: ${custId}`;
+        fs.appendFileSync('debug_stats.log', logMsg);
+
         // 2. 통계 조회 (진행중, 승인대기)
-        console.log(`[Dashboard] Fetching stats for CustID: ${custId}, UserID: ${userId}`);
+        console.log(`[Dashboard Debug] UserID: ${userId}, CustID: ${custId}`);
         const [statsRows] = await pool.execute(`
             SELECT 
                 COUNT(DISTINCT CASE 
@@ -76,11 +81,12 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
                     ))
                     THEN r.REQ_ID END) as countWaitingApproval
             FROM TB_AUCTION_REQ r
-            WHERE r.TRAVELER_ID IN (?, ?)
+            WHERE TRIM(r.TRAVELER_ID) = ? OR TRIM(r.TRAVELER_ID) = ?
         `, [custId, userId]);
 
         const stats = statsRows[0] || { countProgressing: 0, countWaitingApproval: 0 };
-        console.log(`[Dashboard] Stats Result:`, stats);
+        fs.appendFileSync('debug_stats.log', ` | Result: ${JSON.stringify(stats)}`);
+        console.log(`[Dashboard Debug] Final Stats Result:`, stats);
 
         const [restrictRows] = await pool.execute(`
             SELECT RESTRICT_STAT, RESTRICT_END_DT, CANCEL_CNT
@@ -535,11 +541,15 @@ router.get('/pending-requests', authenticateToken, async (req, res) => {
             statusFilter = `
                 r.DATA_STAT IN ('AUCTION', 'BUS_CHANGE') 
                 AND NOT EXISTS (SELECT 1 FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING')
+                AND NOT EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING')
             `;
         } else if (type === 'waiting') {
             statusFilter = `
                 r.DATA_STAT = 'BIDDING' 
-                OR (r.DATA_STAT IN ('AUCTION', 'BUS_CHANGE') AND EXISTS (SELECT 1 FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING'))
+                OR (r.DATA_STAT IN ('AUCTION', 'BUS_CHANGE') AND (
+                    EXISTS (SELECT 1 FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING')
+                    OR EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING')
+                ))
             `;
         } else {
             statusFilter = "r.DATA_STAT IN ('AUCTION', 'BIDDING', 'BUS_CHANGE')";
@@ -555,11 +565,11 @@ router.get('/pending-requests', authenticateToken, async (req, res) => {
                 DATE_FORMAT(START_DT, '%Y-%m-%d') as startDt, 
                 DATA_STAT as reqStat
             FROM TB_AUCTION_REQ r
-            WHERE TRAVELER_ID = ? AND ${statusFilter}
+            WHERE (TRIM(r.TRAVELER_ID) = ? OR TRIM(r.TRAVELER_ID) = ?) AND ${statusFilter}
             ORDER BY REG_DT DESC
         `;
 
-        const [rows] = await pool.execute(sql, [custId]);
+        const [rows] = await pool.execute(sql, [custId, userId]);
 
         // 각 요청에 대한 차량(buses) 정보 추가
         for (let row of rows) {
@@ -648,20 +658,36 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
         `, [reqId]);
 
         const fullRoute = [];
-        fullRoute.push({ type: 'START', addr: tripInfo.startAddr, title: '출발지' });
-
-        viaRows.forEach(v => {
-            // 이미 출발지와 도착지를 별도로 추가하므로 START_NODE와 END_NODE는 제외합니다.
-            if (v.type === 'START_NODE' || v.type === 'END_NODE') return;
-
-            let title = '경유지';
-            if (v.type === 'START_WAY') title = '출발 경유지';
-            else if (v.type === 'END_WAY') title = '도착 경유지';
-            else if (v.type === 'ROUND_TRIP') title = '목적지';
-            fullRoute.push({ type: v.type, addr: v.addr, title: title });
-        });
-
-        fullRoute.push({ type: 'END', addr: tripInfo.endAddr, title: '도착지' });
+        if (viaRows.length > 0) {
+            viaRows.forEach(v => {
+                let title = '경유지';
+                let type = v.type;
+                if (v.type === 'START_NODE') { 
+                    title = '출발지'; 
+                    type = 'START'; 
+                }
+                else if (v.type === 'START_WAY') {
+                    title = '출발 경유지';
+                    type = 'VIA';
+                }
+                else if (v.type === 'ROUND_TRIP') {
+                    title = '목적지';
+                    type = 'ROUND_TRIP';
+                }
+                else if (v.type === 'END_WAY') {
+                    title = '도착 경유지';
+                    type = 'VIA';
+                }
+                else if (v.type === 'END_NODE') {
+                    title = '도착지';
+                    type = 'END';
+                }
+                fullRoute.push({ type: type, addr: v.addr, title: title });
+            });
+        } else {
+            fullRoute.push({ type: 'START', addr: tripInfo.startAddr, title: '출발지' });
+            fullRoute.push({ type: 'END', addr: tripInfo.endAddr, title: '도착지' });
+        }
         tripInfo.fullRoute = fullRoute;
 
         // 2. 차량별 입찰 정보 조회

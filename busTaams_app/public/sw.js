@@ -1,12 +1,25 @@
-// 기본 서비스 워커 (앱 설치 가능하게 만들기 위함)
-const CACHE_NAME = 'bustaams-app-v1';
+// 기본 서비스 워커 (자동 업데이트 지원)
+const CACHE_NAME = 'bustaams-app-v2';
 
 self.addEventListener('install', (event) => {
-  console.log('App Service Worker: Installed');
+  console.log('App Service Worker: Installing New Version');
+  self.skipWaiting(); // 새로운 서비스 워커를 즉시 활성화
 });
 
 self.addEventListener('activate', (event) => {
   console.log('App Service Worker: Activated');
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cache) => {
+          if (cache !== CACHE_NAME) {
+            console.log('App Service Worker: Clearing Old Cache');
+            return caches.delete(cache);
+          }
+        })
+      );
+    })
+  );
 });
 
 self.addEventListener('fetch', (event) => {

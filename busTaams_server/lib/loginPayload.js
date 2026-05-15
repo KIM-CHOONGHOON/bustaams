@@ -148,7 +148,9 @@ function buildPostLoginUserDto({ user, cancelRow, subscriptionRow }, opts = {}) 
         email: user.email || user.EMAIL || '',
         snsType: user.SNS_TYPE || 'NONE',
         profileFileId: user.PROFILE_FILE_ID != null ? String(user.PROFILE_FILE_ID) : null,
-        profileImgPath: user.PROFILE_IMG_PATH || null,
+        profileImgPath: (user.USER_IMAGE && !user.USER_IMAGE.startsWith('http') && !user.USER_IMAGE.startsWith('/')) 
+            ? `/api/common/display-image?path=${encodeURIComponent(user.USER_IMAGE)}` 
+            : (user.USER_IMAGE || null),
         smsAuthYn: user.SMS_AUTH_YN || 'N',
         userStat: user.USER_STAT || 'ACTIVE',
         joinDt: user.JOIN_DT || null,

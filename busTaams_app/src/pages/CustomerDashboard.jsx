@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api, { getNotifications } from '../api';
+import api, { getNotifications, logout } from '../api';
 import Swal from 'sweetalert2';
 import { notify } from '../utils/toast';
 import BottomNavCustomer from '../components/BottomNavCustomer';
@@ -28,20 +28,20 @@ const CustomerDashboard = () => {
             // 1. 대시보드 통계 가져오기
             try {
                 const statsRes = await api.get('/app/customer/dashboard');
-                if (statsRes.success && statsRes.data) {
+                if (statsRes.success && statsRes.stats) {
                     setStats({
-                        progressing: statsRes.data.countProgressing || 0,
-                        waiting: statsRes.data.countWaitingApproval || 0
+                        progressing: statsRes.stats.countProgressing || 0,
+                        waiting: statsRes.stats.countWaitingApproval || 0
                     });
-                    if (statsRes.data.userName) {
-                        setUserName(statsRes.data.userName);
+                    if (statsRes.user && statsRes.user.userNm) {
+                        setUserName(statsRes.user.userNm);
                     }
-                    if (statsRes.data.profileImage) {
-                        setProfileImage(statsRes.data.profileImage);
+                    if (statsRes.user && statsRes.user.userImage) {
+                        setProfileImage(statsRes.user.userImage);
                         setImageVersion(Date.now());
                     }
-                    if (statsRes.data.restriction) {
-                        setRestriction(statsRes.data.restriction);
+                    if (statsRes.restriction) {
+                        setRestriction(statsRes.restriction);
                     }
                 }
             } catch (err) {
@@ -92,6 +92,25 @@ const CustomerDashboard = () => {
         navigate('/request-bus');
     };
 
+    const handleLogout = () => {
+        Swal.fire({
+            title: '로그아웃',
+            text: '정말 로그아웃 하시겠습니까?',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#00685f',
+            cancelButtonColor: '#d33',
+            confirmButtonText: '로그아웃',
+            cancelButtonText: '취소'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                logout();
+                navigate('/login', { replace: true });
+                notify.success('로그아웃', '성공적으로 로그아웃되었습니다.');
+            }
+        });
+    };
+
 
 
     return (
@@ -135,6 +154,13 @@ const CustomerDashboard = () => {
                             <span className="material-symbols-outlined text-slate-500 text-2xl hidden items-center justify-center w-full h-full">account_circle</span>
                         )}
                     </div>
+                    <button 
+                        onClick={handleLogout}
+                        className="p-2 rounded-full hover:bg-red-50 transition-colors group"
+                        title="로그아웃"
+                    >
+                        <span className="material-symbols-outlined text-slate-500 group-hover:text-red-500">logout</span>
+                    </button>
                 </div>
             </header>
 
