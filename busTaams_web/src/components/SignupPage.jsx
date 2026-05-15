@@ -13,6 +13,7 @@ const SignupPage = ({ onBack }) => {
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [recomCode, setRecomCode] = useState('');
+  const [residentNo, setResidentNo] = useState(''); // 주민등록번호 (버스기사 전용)
   const [verificationCode, setVerificationCode] = useState('');
   const [isPhoneVerified, setIsPhoneVerified] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -63,6 +64,18 @@ const SignupPage = ({ onBack }) => {
 
   const validatePassword = (v) =>
     /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/.test(v);
+
+  const validateResidentNo = (rrn) => {
+    const cleaned = rrn.replace(/-/g, '');
+    if (cleaned.length !== 13) return false;
+    const multipliers = [2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5];
+    let sum = 0;
+    for (let i = 0; i < 12; i++) {
+      sum += parseInt(cleaned[i], 10) * multipliers[i];
+    }
+    const checkDigit = (11 - (sum % 11)) % 10;
+    return checkDigit === parseInt(cleaned[12], 10);
+  };
 
   const handleAllAgree = (e) => {
     const c = e.target.checked;
@@ -194,6 +207,13 @@ const SignupPage = ({ onBack }) => {
     if (password !== passwordConfirm) { setPasswordConfirmError('비밀번호가 일치하지 않습니다.'); valid = false; }
     else setPasswordConfirmError('');
     if (!isPhoneVerified) { setPhoneError('휴대폰 인증을 완료해주세요.'); valid = false; }
+
+    // 버스기사 주민등록번호 검증
+    if (userRole === 'driver') {
+      if (!residentNo) { setFormError('주민등록번호를 입력해주세요.'); valid = false; }
+      else if (!validateResidentNo(residentNo)) { setFormError('올바른 형식의 주민등록번호를 입력해주세요.'); valid = false; }
+    }
+
     if (userRole === 'driver' && !photoPreview) { setFormError('기사님 프로필 사진을 등록해 주세요.'); valid = false; }
     if (!hasSignature) { setFormError('전자 서명을 해주세요.'); valid = false; }
     if (!agreements.term1 || !agreements.term2) { setFormError('필수 약관에 동의해주세요.'); valid = false; }
@@ -223,7 +243,8 @@ const SignupPage = ({ onBack }) => {
           signatureBase64,
           photoBase64: photoPreview,
           photoName: profilePhoto?.name || 'profile.png',
-          recomCode
+          recomCode,
+          residentNo: userRole === 'driver' ? residentNo.replace(/-/g, '') : null
         })
       });
       const data = await res.json();
@@ -286,7 +307,9 @@ const SignupPage = ({ onBack }) => {
 
           {/* Role Tabs */}
           <div style={{ display: 'flex', padding: '4px', background: '#e6e8ea', borderRadius: '9999px', marginBottom: '2rem', width: 'fit-content' }}>
-            {[{ key: 'traveler', label: '일반고객(여행자)' }, { key: 'salesperson', label: '일반고객(영업사원)' }, { key: 'driver', label: '버스기사' }].map(({ key, label }) => (
+            {[{ key: 'traveler', label: '일반고객(여행자)' }, { key: 'salesperson', label: '일반고객(영업사원)' }, { key: 'driver', label: '버스기사' }]
+              .filter(role => role.key !== 'salesperson')
+              .map(({ key, label }) => (
               <button
                 key={key}
                 type="button"
@@ -363,6 +386,25 @@ const SignupPage = ({ onBack }) => {
               {/* 추천인 코드 + 프로필 사진 (버스기사 전용) */}
               {userRole === 'driver' && (
                 <div className="animate-in fade-in slide-in-from-top-2 duration-300 flex flex-col gap-6">
+                   {/* 주민등록번호 (버스기사 필수) */}
+                  <div>
+                    <label style={labelStyle}>주민등록번호 (필수)</label>
+                    <input
+                      type="text"
+                      value={residentNo}
+                      onChange={e => {
+                        let val = e.target.value.replace(/[^0-9]/g, '');
+                        if (val.length > 6) {
+                          val = val.substring(0, 6) + '-' + val.substring(6, 13);
+                        }
+                        setResidentNo(val);
+                      }}
+                      placeholder="000000-0000000"
+                      maxLength={14}
+                      style={inputStyle}
+                    />
+                  </div>
+
                   {/* 프로필 사진 업로드 */}
                   <div>
                     <label style={labelStyle}>프로필 사진 (필수)</label>

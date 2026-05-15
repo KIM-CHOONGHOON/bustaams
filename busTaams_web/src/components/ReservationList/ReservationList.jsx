@@ -3,6 +3,7 @@ import QuotationList from '../QuotationList/QuotationList';
 import QuotationDetail from '../QuotationDetail/QuotationDetail';
 import CancelTripReasonModal from './CancelTripReasonModal';
 import BusReRegistrationModal from './BusReRegistrationModal';
+import AdjustBusPriceModal from './AdjustBusPriceModal';
 
 const ReservationList = ({ user, onBack }) => {
   console.log('[DEBUG] ReservationList Rendered, user:', user);
@@ -15,6 +16,8 @@ const ReservationList = ({ user, onBack }) => {
   const [cancelTripData, setCancelTripData] = useState(null);
   const [showBusReRegModal, setShowBusReRegModal] = useState(false);
   const [reRegReqId, setReRegReqId] = useState(null);
+  const [showAdjustPriceModal, setShowAdjustPriceModal] = useState(false);
+  const [adjustPriceBusData, setAdjustPriceBusData] = useState(null);
 
 
   const fetchReservations = () => {
@@ -150,6 +153,11 @@ const ReservationList = ({ user, onBack }) => {
         alert('서버와 통신 중 오류가 발생했습니다.');
       }
     }
+  };
+  
+  const handleOpenAdjustPrice = (bus) => {
+    setAdjustPriceBusData(bus);
+    setShowAdjustPriceModal(true);
   };
 
   const handleOpenQuotations = (reqId) => {
@@ -432,6 +440,14 @@ const ReservationList = ({ user, onBack }) => {
                                   >
                                      버스변경
                                   </button>
+                                  {bus.BUS_STAT === 'AUCTION' && !bus.RES_STAT && (
+                                    <button 
+                                      onClick={() => handleOpenAdjustPrice(bus)}
+                                      className="px-4 py-2 bg-primary/5 text-primary text-[10px] font-black rounded-full hover:bg-primary/10 transition-all border border-primary/10" 
+                                    >
+                                       가격변경
+                                    </button>
+                                  )}
                                   {bus.RES_STAT && (
                                     <button 
                                       onClick={() => handleBusCancel(bus)}
@@ -501,6 +517,17 @@ const ReservationList = ({ user, onBack }) => {
           onClose={() => setShowBusReRegModal(false)}
           onSuccess={() => {
             setShowBusReRegModal(false);
+            fetchReservations();
+          }}
+        />
+      )}
+
+      {showAdjustPriceModal && adjustPriceBusData && (
+        <AdjustBusPriceModal
+          bus={adjustPriceBusData}
+          onClose={() => setShowAdjustPriceModal(false)}
+          onSuccess={() => {
+            setShowAdjustPriceModal(false);
             fetchReservations();
           }}
         />

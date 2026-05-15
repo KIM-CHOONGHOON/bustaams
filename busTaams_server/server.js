@@ -189,10 +189,10 @@ async function fetchDriverDetailLicenseRow(connection, loginUserId) {
     const withBirth = `SELECT LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO, LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT,
                     QUAL_CERT_NO, QUAL_CERT_VERIFY_STATUS,
                     BIRTH_YMD, SEX
-             FROM TB_DRIVER_DETAIL WHERE USER_ID = ? LIMIT 1`;
+             FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1`;
     const base = `SELECT LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO, LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT,
                     QUAL_CERT_NO, QUAL_CERT_VERIFY_STATUS
-             FROM TB_DRIVER_DETAIL WHERE USER_ID = ? LIMIT 1`;
+             FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1`;
     try {
         const [rows] = await connection.execute(withBirth, [loginUserId]);
         return rows[0] || null;
@@ -216,9 +216,9 @@ async function fetchDriverDetailQualBirthRow(connection, loginUserId) {
     const attempts = [
         `SELECT QUAL_CERT_NO, IFNULL(QUAL_CERT_VERIFY_STATUS, 'UNVERIFIED') AS QUAL_CERT_VERIFY_STATUS,
                 BIRTH_YMD, SEX
-         FROM TB_DRIVER_DETAIL WHERE USER_ID = ? LIMIT 1`,
+         FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1`,
         `SELECT QUAL_CERT_NO, IFNULL(QUAL_CERT_VERIFY_STATUS, 'UNVERIFIED') AS QUAL_CERT_VERIFY_STATUS
-         FROM TB_DRIVER_DETAIL WHERE USER_ID = ? LIMIT 1`
+         FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1`
     ];
     for (const sql of attempts) {
         try {
@@ -240,14 +240,14 @@ async function selectDriverDetailForProfileSetup(connection, loginUserId) {
                             IFNULL(QUAL_CERT_VERIFY_STATUS, 'UNVERIFIED') AS QUAL_CERT_VERIFY_STATUS,
                             QUAL_CERT_VERIFY_DT,
                             FEE_POLICY
-                     FROM TB_DRIVER_DETAIL WHERE USER_ID = ? LIMIT 1`;
+                     FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1`;
     const baseSqlWithFee = `SELECT ZIPCODE, ADDRESS, DETAIL_ADDRESS, ADDR_TYPE, ADDR_NAME,
                             BIRTH_YMD, SEX, COALESCE(SELF_INTRO, '') AS SELF_INTRO,
                             FEE_POLICY
-                     FROM TB_DRIVER_DETAIL WHERE USER_ID = ? LIMIT 1`;
+                     FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1`;
     const baseSql = `SELECT ZIPCODE, ADDRESS, DETAIL_ADDRESS, ADDR_TYPE, ADDR_NAME,
                             BIRTH_YMD, SEX, COALESCE(SELF_INTRO, '') AS SELF_INTRO
-                     FROM TB_DRIVER_DETAIL WHERE USER_ID = ? LIMIT 1`;
+                     FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1`;
     try {
         const [dr] = await connection.execute(fullSql, [loginUserId]);
         return dr[0] || null;
@@ -266,7 +266,7 @@ async function selectDriverDetailForProfileSetup(connection, loginUserId) {
         if (!pickFeePolicyRawFromRow(r)) {
             try {
                 const [fr] = await connection.execute(
-                    `SELECT FEE_POLICY FROM TB_DRIVER_DETAIL WHERE USER_ID = ? LIMIT 1`,
+                    `SELECT FEE_POLICY FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1`,
                     [loginUserId]
                 );
                 const fv = fr[0]?.FEE_POLICY ?? fr[0]?.fee_policy;
@@ -1351,13 +1351,13 @@ app.post('/api/auction/cancel-bus', async (req, res) => {
                     CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, 
                     TRADE_RESTRICT_YN, TRADE_RESTRICT_START_DT, TRADE_RESTRICT_END_DT,
                     REG_ID, MOD_ID, REG_DT, MOD_DT
-                ) VALUES (?, 1, 1, 'Y', DATE_ADD(CURDATE(), INTERVAL 1 DAY), DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH), ?, ?, NOW(), NOW())
+                ) VALUES (?, 1, 1, 'Y', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 3 MONTH), ?, ?, NOW(), NOW())
                 ON DUPLICATE KEY UPDATE 
                     CANCEL_CNT = CANCEL_CNT + 1,
                     CANCEL_TRAVELER_PARTIAL_BUS_CNT = CANCEL_TRAVELER_PARTIAL_BUS_CNT + 1,
                     TRADE_RESTRICT_YN = 'Y',
-                    TRADE_RESTRICT_START_DT = DATE_ADD(CURDATE(), INTERVAL 1 DAY),
-                    TRADE_RESTRICT_END_DT = DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH),
+                    TRADE_RESTRICT_START_DT = CURDATE(),
+                    TRADE_RESTRICT_END_DT = DATE_ADD(CURDATE(), INTERVAL 3 MONTH),
                     MOD_ID = ?,
                     MOD_DT = NOW()
             `, [custId, custId, custId, custId]);
@@ -1483,13 +1483,13 @@ app.post('/api/auction/complex-cancel', async (req, res) => {
                 CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_ALL_CNT, 
                 TRADE_RESTRICT_YN, TRADE_RESTRICT_START_DT, TRADE_RESTRICT_END_DT,
                 REG_ID, MOD_ID, REG_DT, MOD_DT
-            ) VALUES (?, 1, 1, 'Y', DATE_ADD(CURDATE(), INTERVAL 1 DAY), DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH), ?, ?, NOW(), NOW())
+            ) VALUES (?, 1, 1, 'Y', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 3 MONTH), ?, ?, NOW(), NOW())
             ON DUPLICATE KEY UPDATE 
                 CANCEL_CNT = CANCEL_CNT + 1,
                 CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
                 TRADE_RESTRICT_YN = 'Y',
-                TRADE_RESTRICT_START_DT = DATE_ADD(CURDATE(), INTERVAL 1 DAY),
-                TRADE_RESTRICT_END_DT = DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH),
+                TRADE_RESTRICT_START_DT = CURDATE(),
+                TRADE_RESTRICT_END_DT = DATE_ADD(CURDATE(), INTERVAL 3 MONTH),
                 MOD_ID = ?,
                 MOD_DT = NOW()
         `, [custId, custId, custId, custId]);
@@ -1576,6 +1576,90 @@ app.post('/api/auction/re-register-bus', async (req, res) => {
     }
 });
 
+// [신규] 버스 개별 가격 조정 API
+app.post('/api/auction/update-bus-price', async (req, res) => {
+    let connection;
+    try {
+        const { reqId, reqBusSeq, newPrice, custId } = req.body;
+        
+        if (!reqId || !reqBusSeq || newPrice === undefined) {
+            return res.status(400).json({ error: 'reqId, reqBusSeq, and newPrice are required' });
+        }
+
+        const secureModId = String(custId || 'SYSTEM').substring(0, 10);
+        const price = Number(newPrice);
+
+        // 수수료 계산 (6.6%, 5.5%, 1.1%)
+        const resFeeTotalAmt = Math.round(price * 0.066);
+        const resFeeRefundAmt = Math.round(price * 0.055);
+        const resFeeAttributionAmt = parseFloat((price * 0.011).toFixed(3));
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        // [추가] 응찰한 기사가 있는지 확인 (응찰자가 있으면 가격 수정 불가)
+        const [bidRows] = await connection.execute(`
+            SELECT COUNT(*) as bidCount 
+            FROM TB_BUS_RESERVATION 
+            WHERE REQ_ID = ? AND CAST(REQ_BUS_SEQ AS UNSIGNED) = CAST(? AS UNSIGNED)
+              AND DATA_STAT NOT IN ('TRAVELER_CANCEL', 'BUS_CANCEL', 'BUS_CHANGE')
+        `, [reqId, reqBusSeq]);
+
+        if (bidRows[0].bidCount > 0) {
+            await connection.rollback();
+            return res.status(400).json({ error: '이미 응찰한 기사가 있어 가격을 수정할 수 없습니다.' });
+        }
+
+        // 1. TB_AUCTION_REQ_BUS 업데이트 (상태가 'AUCTION'인 경우에만 가격 수정 허용)
+        const [busUpdate] = await connection.execute(`
+            UPDATE TB_AUCTION_REQ_BUS 
+            SET RES_BUS_AMT = ?,
+                RES_FEE_TOTAL_AMT = ?,
+                RES_FEE_REFUND_AMT = ?,
+                RES_FEE_ATTRIBUTION_AMT = ?,
+                MOD_ID = ?,
+                MOD_DT = NOW()
+            WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT = 'AUCTION'
+        `, [price, resFeeTotalAmt, resFeeRefundAmt, resFeeAttributionAmt, secureModId, reqId, reqBusSeq]);
+
+        if (busUpdate.affectedRows === 0) {
+            await connection.rollback();
+            return res.status(400).json({ error: '기사가 응찰을 시작했거나 상태가 변경되어 가격을 수정할 수 없습니다.' });
+        }
+
+        // 2. TB_AUCTION_REQ (마스터) 총 금액 재계산 및 업데이트
+        // 모든 버스의 RES_BUS_AMT 합계를 구함
+        const [sumRows] = await connection.execute(
+            'SELECT SUM(RES_BUS_AMT) as totalAmt FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ? AND DATA_STAT NOT IN (\'TRAVELER_CANCEL\', \'BUS_CANCEL\', \'CANCELED\')',
+            [reqId]
+        );
+        const totalAmt = sumRows[0].totalAmt || 0;
+
+        await connection.execute(`
+            UPDATE TB_AUCTION_REQ 
+            SET REQ_AMT = ?,
+                MOD_ID = ?,
+                MOD_DT = NOW()
+            WHERE REQ_ID = ?
+        `, [totalAmt, secureModId, reqId]);
+
+        await connection.commit();
+        res.status(200).json({ 
+            success: true, 
+            message: '가격이 성공적으로 변경되었습니다.',
+            totalAmt: totalAmt
+        });
+
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('Update Bus Price Error:', error);
+        res.status(500).json({ error: '가격 변경 처리 중 서버 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+
 app.post('/api/auction/bus-change', async (req, res) => {
     let connection;
     try {
@@ -1650,13 +1734,13 @@ app.post('/api/auction/bus-change', async (req, res) => {
                     CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_ALL_CNT, 
                     TRADE_RESTRICT_YN, TRADE_RESTRICT_START_DT, TRADE_RESTRICT_END_DT,
                     REG_ID, MOD_ID, REG_DT, MOD_DT
-                ) VALUES (?, 1, 1, 'Y', DATE_ADD(CURDATE(), INTERVAL 1 DAY), DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH), ?, ?, NOW(), NOW())
+                ) VALUES (?, 1, 1, 'Y', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 3 MONTH), ?, ?, NOW(), NOW())
                 ON DUPLICATE KEY UPDATE 
                     CANCEL_CNT = CANCEL_CNT + 1,
                     CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
                     TRADE_RESTRICT_YN = 'Y',
-                    TRADE_RESTRICT_START_DT = DATE_ADD(CURDATE(), INTERVAL 1 DAY),
-                    TRADE_RESTRICT_END_DT = DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH),
+                    TRADE_RESTRICT_START_DT = CURDATE(),
+                    TRADE_RESTRICT_END_DT = DATE_ADD(CURDATE(), INTERVAL 3 MONTH),
                     MOD_ID = ?, MOD_DT = NOW()
             `, [secureModId, secureModId, secureModId, secureModId]);
         } else {
@@ -1671,13 +1755,13 @@ app.post('/api/auction/bus-change', async (req, res) => {
                     CUST_ID, CANCEL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, 
                     TRADE_RESTRICT_YN, TRADE_RESTRICT_START_DT, TRADE_RESTRICT_END_DT,
                     REG_ID, MOD_ID, REG_DT, MOD_DT
-                ) VALUES (?, 1, 1, 'Y', DATE_ADD(CURDATE(), INTERVAL 1 DAY), DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH), ?, ?, NOW(), NOW())
+                ) VALUES (?, 1, 1, 'Y', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 3 MONTH), ?, ?, NOW(), NOW())
                 ON DUPLICATE KEY UPDATE 
                     CANCEL_CNT = CANCEL_CNT + 1,
                     CANCEL_TRAVELER_PARTIAL_BUS_CNT = CANCEL_TRAVELER_PARTIAL_BUS_CNT + 1,
                     TRADE_RESTRICT_YN = 'Y',
-                    TRADE_RESTRICT_START_DT = DATE_ADD(CURDATE(), INTERVAL 1 DAY),
-                    TRADE_RESTRICT_END_DT = DATE_ADD(DATE_ADD(CURDATE(), INTERVAL 1 DAY), INTERVAL 3 MONTH),
+                    TRADE_RESTRICT_START_DT = CURDATE(),
+                    TRADE_RESTRICT_END_DT = DATE_ADD(CURDATE(), INTERVAL 3 MONTH),
                     MOD_ID = ?, MOD_DT = NOW()
             `, [secureModId, secureModId, secureModId, secureModId]);
         }
@@ -1904,10 +1988,14 @@ app.get('/api/auction/bids/:reqId', async (req, res) => {
                 v.AMENITIES as amenitiesList,
                 v.HAS_ADAS as hasAdas
             FROM TB_BUS_RESERVATION res
+            INNER JOIN TB_AUCTION_REQ_BUS ab ON res.REQ_ID = ab.REQ_ID 
+                AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED)
             LEFT JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID
             LEFT JOIN TB_DRIVER_DETAIL di ON res.DRIVER_ID = di.CUST_ID
             LEFT JOIN TB_BUS_DRIVER_VEHICLE v ON res.BUS_ID = v.BUS_ID
             WHERE res.REQ_ID = ?
+              AND res.DATA_STAT IN ('AUCTION', 'BIDDING', 'CONFIRM')
+              AND ab.DATA_STAT NOT IN ('TRAVELER_CANCEL', 'BUS_CANCEL', 'BUS_CHANGE', 'CANCELED')
             ORDER BY res.REG_DT DESC
         `;
 
@@ -1970,7 +2058,7 @@ app.get('/api/auction/history/:custId', async (req, res) => {
                     FROM TB_BUS_RESERVATION res 
                     WHERE res.REQ_ID = r.REQ_ID 
                       AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED)
-                      AND res.DATA_STAT IN ('AUCTION', 'BIDDING')
+                      AND res.DATA_STAT IN ('AUCTION', 'BIDDING', 'CONFIRM', 'DONE')
                     ORDER BY CASE WHEN res.DATA_STAT IN ('CONFIRM', 'DONE') THEN 0 ELSE 1 END ASC
                     LIMIT 1
                 ) as RES_STAT,
@@ -1978,9 +2066,9 @@ app.get('/api/auction/history/:custId', async (req, res) => {
                     SELECT res.DRIVER_BIDDING_PRICE 
                     FROM TB_BUS_RESERVATION res 
                     WHERE res.REQ_ID = r.REQ_ID 
-                      AND res.TRAVELER_ID = r.TRAVELER_ID
                       AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED)
-                      AND res.DATA_STAT IN ('AUCTION', 'BIDDING')
+                      AND res.DATA_STAT IN ('AUCTION', 'BIDDING', 'CONFIRM', 'DONE')
+                    ORDER BY CASE WHEN res.DATA_STAT IN ('CONFIRM', 'DONE') THEN 0 ELSE 1 END ASC
                     LIMIT 1
                 ) as FINAL_CONFIRM_AMT,
                 (
@@ -1988,9 +2076,9 @@ app.get('/api/auction/history/:custId', async (req, res) => {
                     FROM TB_BUS_RESERVATION res 
                     LEFT JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID
                     WHERE res.REQ_ID = r.REQ_ID 
-                      AND res.TRAVELER_ID = r.TRAVELER_ID
                       AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED)
-                      AND res.DATA_STAT IN ('AUCTION', 'BIDDING')
+                      AND res.DATA_STAT IN ('AUCTION', 'BIDDING', 'CONFIRM', 'DONE')
+                    ORDER BY CASE WHEN res.DATA_STAT IN ('CONFIRM', 'DONE') THEN 0 ELSE 1 END ASC
                     LIMIT 1
                 ) as DRIVER_NM,
                 (
@@ -1998,27 +2086,27 @@ app.get('/api/auction/history/:custId', async (req, res) => {
                     FROM TB_BUS_RESERVATION res 
                     LEFT JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID
                     WHERE res.REQ_ID = r.REQ_ID 
-                      AND res.TRAVELER_ID = r.TRAVELER_ID
                       AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED)
-                      AND res.DATA_STAT IN ('AUCTION', 'BIDDING')
+                      AND res.DATA_STAT IN ('AUCTION', 'BIDDING', 'CONFIRM', 'DONE')
+                    ORDER BY CASE WHEN res.DATA_STAT IN ('CONFIRM', 'DONE') THEN 0 ELSE 1 END ASC
                     LIMIT 1
                 ) as PROFILE_PHOTO_ID,
                 (
                     SELECT res.DRIVER_ID 
                     FROM TB_BUS_RESERVATION res 
                     WHERE res.REQ_ID = r.REQ_ID 
-                      AND res.TRAVELER_ID = r.TRAVELER_ID
                       AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED)
-                      AND res.DATA_STAT IN ('AUCTION', 'BIDDING')
+                      AND res.DATA_STAT IN ('AUCTION', 'BIDDING', 'CONFIRM', 'DONE')
+                    ORDER BY CASE WHEN res.DATA_STAT IN ('CONFIRM', 'DONE') THEN 0 ELSE 1 END ASC
                     LIMIT 1
                 ) as DRIVER_ID,
                 (
                     SELECT res.RES_ID 
                     FROM TB_BUS_RESERVATION res 
                     WHERE res.REQ_ID = r.REQ_ID 
-                      AND res.TRAVELER_ID = r.TRAVELER_ID
                       AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED)
-                      AND res.DATA_STAT IN ('AUCTION', 'BIDDING')
+                      AND res.DATA_STAT IN ('AUCTION', 'BIDDING', 'CONFIRM', 'DONE')
+                    ORDER BY CASE WHEN res.DATA_STAT IN ('CONFIRM', 'DONE') THEN 0 ELSE 1 END ASC
                     LIMIT 1
                 ) as RES_ID
             FROM TB_AUCTION_REQ r
