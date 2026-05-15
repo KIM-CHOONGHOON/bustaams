@@ -131,14 +131,13 @@ const CustomerDashboard = ({ user, setShowAccountSettings, onBusRegister, onView
             <span className="text-secondary font-bold tracking-[0.2em] uppercase text-[9px] mb-2 block">Elevated Travel</span>
             <h3 className="font-headline text-2xl font-extrabold text-teal-900 tracking-tight italic">주요 서비스</h3>
           </header>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             {[
               { id: 'onBusRegister',       icon: 'directions_bus',   label: '여행버스 예약 등록', action: onBusRegister },
               { id: 'onViewReservationList', icon: 'event_available', label: '예약 목록 조회',     action: onViewReservationList },
               { id: 'onViewConfirmedList',   icon: 'task_alt',         label: '확정 예약 목록',     action: onViewConfirmedList },
               { id: 'onShowTripHistory',     icon: 'history',          label: '이용 내역 확인',     action: () => setShowTripHistory(true) },
               { id: 'onReviewManage',        icon: 'rate_review',      label: '리뷰 관리',          action: () => setShowReviewManage(true) },
-              { id: 'onOpenLiveChat',        icon: 'forum',            label: '실시간 채팅',        action: onOpenLiveChat },
             ].map((srv) => {
               const isRestrictedAction = srv.id === 'onBusRegister';
               const isDisabled = isRestrictedAction && user?.tradeRestrictYn === 'Y';
