@@ -1,7 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 
-/** Same-origin `/api` + Vite proxy; trim trailing slash from env */
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
+/** DriverProfileSetup 등과 동일 — 비우면 Vite 프록시용 상대 `/api` + 로컬 기본 호스트 */
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080')
+    .trim()
+    .replace(/\/$/, '');
 
 const COMMON_VIEW_ROOT_ID = 'common-view-root';
 const COMMON_VIEW_MODAL_ID = 'common-view-modal';
@@ -126,10 +129,10 @@ function CommonView({ close, fileId, custId, userId: userIdLegacy, docTitle, met
 
     /* ── URL 헬퍼 ── */
     const streamUrl = isDocMode
-        ? `${API_BASE || ''}${STREAM_PATH}?custId=${encodeURIComponent(ownerCustId)}&fileId=${encodeURIComponent(docFileId)}`
+        ? `${API_BASE}${STREAM_PATH}?custId=${encodeURIComponent(ownerCustId)}&fileId=${encodeURIComponent(docFileId)}`
         : null;
     const downloadUrl = isDocMode
-        ? `${API_BASE || ''}${DL_PATH}?custId=${encodeURIComponent(ownerCustId)}&fileId=${encodeURIComponent(docFileId)}`
+        ? `${API_BASE}${DL_PATH}?custId=${encodeURIComponent(ownerCustId)}&fileId=${encodeURIComponent(docFileId)}`
         : null;
 
     const ext = (docMeta?.fileExt || '').toLowerCase();
@@ -169,15 +172,16 @@ function CommonView({ close, fileId, custId, userId: userIdLegacy, docTitle, met
         : '';
     const displayTitle = docTitle || categoryLabel || '문서 뷰어';
 
-    return (
-        <div
-            id={COMMON_VIEW_ROOT_ID}
-            data-common-view-id="commonViewDocumentViewer"
-            className="fixed inset-0 z-[200] flex min-h-0 items-center justify-center overflow-y-auto bg-gray-900/50 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-200"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="common-view-title"
-        >
+    return createPortal(
+        (
+            <div
+                id={COMMON_VIEW_ROOT_ID}
+                data-common-view-id="commonViewDocumentViewer"
+                className="fixed inset-0 z-[200] flex min-h-0 items-center justify-center overflow-y-auto bg-gray-900/50 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-200"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="common-view-title"
+            >
             <button type="button" className="absolute inset-0 cursor-default" aria-label="Close overlay" onClick={close} />
             <div
                 id={COMMON_VIEW_MODAL_ID}
@@ -614,7 +618,9 @@ function CommonView({ close, fileId, custId, userId: userIdLegacy, docTitle, met
                     </div>
                 </div>
             </div>
-        </div>
+            </div>
+        ),
+        document.body
     );
 }
 
