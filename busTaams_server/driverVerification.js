@@ -695,13 +695,20 @@ async function runDriverVerificationsForProfileSetup({
     const skipKoroad =
         existingRow &&
         isLicenseUnchanged(existingRow, incomingLicense);
-    const skipTs =
-        existingRow &&
-        isQualCertUnchanged(existingRow, { qualCertNo });
+    /** 자격번호 미입력이거나 DB와 동일(하이픈·공백 무시)이면 TS 자격 진위 호출 안 함 */
+    const skipTsEmpty = !normQualCertForCompare(qualCertNo);
+    const skipTsUnchanged =
+        !skipTsEmpty && existingRow && isQualCertUnchanged(existingRow, { qualCertNo });
+    const skipTs = skipTsEmpty || skipTsUnchanged;
+    const qualSkipReason = skipTsEmpty
+        ? 'empty_qual_no_verify'
+        : skipTsUnchanged
+          ? 'unchanged_from_db'
+          : 'disabled_or_first';
 
     const out = {
         license: { skipped: true, reason: skipKoroad ? 'unchanged_from_db' : 'disabled_or_first' },
-        qual: { skipped: true, reason: skipTs ? 'unchanged_from_db' : 'disabled_or_first' }
+        qual: { skipped: true, reason: qualSkipReason }
     };
 
     if (koroadOn && !skipKoroad) {
@@ -761,7 +768,9 @@ async function runDriverVerificationsForProfileSetup({
         console.log('[driverVerification] TS 운수종사자 자격 진위 API 호출 완료');
     } else if (tsOn && skipTs) {
         console.log(
-            '[driverVerification] TS 자격 진위 생략: 저장 요청 자격번호가 DB와 동일(하이픈·공백 무시)으로 판단'
+            skipTsEmpty
+                ? '[driverVerification] TS 자격 진위 생략: 자격번호 미입력'
+                : '[driverVerification] TS 자격 진위 생략: 저장 요청 자격번호가 DB와 동일(하이픈·공백 무시)으로 판단'
         );
     }
 

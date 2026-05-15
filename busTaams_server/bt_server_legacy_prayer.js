@@ -769,8 +769,8 @@ app.put('/api/user/profile', async (req, res) => {
                 updateParts.push('MOD_ID = ?');
                 params.push(custId);
 
-                const sql = `UPDATE TB_USER SET ${updateParts.join(', ')} WHERE CUST_ID = ? OR USER_ID = ?`;
-                params.push(custId, custId);
+                const sql = `UPDATE TB_USER SET ${updateParts.join(', ')} WHERE CUST_ID = ?`;
+                params.push(custId);
 
                 console.log('[STEP 9] Executing Update...');
                 await connection.execute(sql, params);
@@ -907,7 +907,7 @@ app.post('/api/driver/profile', async (req, res) => {
 
             const query = `
                 INSERT INTO TB_DRIVER_DETAIL (
-                    USER_ID, LICENSE_NO, CERT_PHOTO_URL, ACCIDENT_FREE_DOC,
+                    CUST_ID, LICENSE_NO, CERT_PHOTO_URL, ACCIDENT_FREE_DOC,
                     MEMBERSHIP_TYPE, SELF_INTRO, PROFILE_IMG_URL, REG_ID, MOD_ID
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
@@ -992,7 +992,7 @@ app.get('/api/driver/profile-setup', async (req, res) => {
                     'UNVERIFIED' as QUAL_CERT_VERIFY_STATUS, NULL as QUAL_CERT_VERIFY_DT,
                     NULL as QUAL_CERT_FILE_ID
                  FROM TB_USER u
-                 LEFT JOIN TB_DRIVER_DETAIL di ON u.CUST_ID = di.USER_ID
+                 LEFT JOIN TB_DRIVER_DETAIL di ON u.CUST_ID = di.CUST_ID
                  WHERE u.CUST_ID = ?`,
                 [custId]
             );
@@ -2172,7 +2172,7 @@ app.get('/api/auction/bids/:reqId', async (req, res) => {
                 v.HAS_ADAS as hasAdas
             FROM TB_BUS_RESERVATION res
             LEFT JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID
-            LEFT JOIN TB_DRIVER_DETAIL di ON res.DRIVER_ID = di.USER_ID
+            LEFT JOIN TB_DRIVER_DETAIL di ON res.DRIVER_ID = di.CUST_ID
             LEFT JOIN TB_BUS_DRIVER_VEHICLE v ON res.BUS_ID = v.BUS_ID
             WHERE res.REQ_ID = ?
             ORDER BY res.REG_DT DESC
@@ -2431,7 +2431,7 @@ app.get('/api/auction/bid-detail/:bidId', async (req, res) => {
                 v.VEHICLE_PHOTOS_JSON as busPhotos
             FROM TB_BUS_RESERVATION res
             JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID
-            LEFT JOIN TB_DRIVER_DETAIL di ON res.DRIVER_ID = di.USER_ID
+            LEFT JOIN TB_DRIVER_DETAIL di ON res.DRIVER_ID = di.CUST_ID
             LEFT JOIN TB_BUS_DRIVER_VEHICLE v ON res.BUS_ID = v.BUS_ID
             WHERE res.RES_ID = ?
         `;
@@ -2577,7 +2577,7 @@ app.post('/api/driver/profile-setup', async (req, res) => {
             // 4. TB_DRIVER_DETAIL 저장 (Upsert)
             const detailQuery = `
                 INSERT INTO TB_DRIVER_DETAIL (
-                    USER_ID, LICENSE_NO, SELF_INTRO, REG_ID, MOD_ID
+                    CUST_ID, LICENSE_NO, SELF_INTRO, REG_ID, MOD_ID
                 ) VALUES (?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE 
                     LICENSE_NO = VALUES(LICENSE_NO),
@@ -2804,7 +2804,7 @@ app.get('/api/driver/detail/:driverId', async (req, res) => {
                 dd.SELF_INTRO as selfIntro
              FROM TB_USER u
              LEFT JOIN TB_BUS_DRIVER_VEHICLE v ON u.CUST_ID = v.CUST_ID
-             LEFT JOIN TB_DRIVER_DETAIL dd ON u.USER_ID = dd.USER_ID
+             LEFT JOIN TB_DRIVER_DETAIL dd ON u.CUST_ID = dd.CUST_ID
              WHERE u.CUST_ID = ?`,
             [driverId]
         );

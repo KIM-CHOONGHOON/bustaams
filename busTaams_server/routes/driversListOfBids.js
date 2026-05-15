@@ -4,17 +4,12 @@
  *
  * 등록: `app.get('/api/DriversListOfBids', DriversListOfBids)` (Express Router 대신 직접 등록 — 404 방지)
  *
- * 조회: TB_BUS_RESERVATION 의 상태 컬럼 — 운영 대부분 `DATA_STAT`, 일부 DDL(`sql/tb_bus_reservation.sql`)은 `RES_STAT`.
- *       기본: IN ('BIDDING','CONFIRM'), CONFIRM 이면서 TB_AUCTION_REQ.START_DT 가 당일이면 제외.
+ * 조회: TB_BUS_RESERVATION.DATA_STAT. 기본: IN ('BIDDING','CONFIRM'), CONFIRM 이면서 TB_AUCTION_REQ.START_DT 가 당일이면 제외.
  *       `?mode=cancelled`: `DRIVER_CANCEL`(기사 청약 취소) 만. ORDER BY r.RES_ID DESC.
  */
 
 const SCREEN_ID = 'DriversListOfBids';
 const API_PATH = '/api/DriversListOfBids';
-
-function isSchemaMismatchError(e) {
-    return e && (e.errno === 1054 || e.code === 'ER_BAD_FIELD_ERROR');
-}
 
 /** 본 목록에 나오는 DATA_STAT 만 매핑 */
 function statusPresentation(dataStat) {
@@ -61,7 +56,8 @@ function createDriversListOfBidsHandler(pool) {
             });
         }
 
-        const baseWhereForStatCol = (statCol) =>
+        const statCol = 'DATA_STAT';
+        const baseWhere =
             mode === 'cancelled'
                 ? `r.DRIVER_ID = ? AND r.${statCol} = 'DRIVER_CANCEL'`
                 : `
@@ -78,54 +74,37 @@ function createDriversListOfBidsHandler(pool) {
         try {
             connection = await pool.getConnection();
 
-            let listTotal = 0;
-            /** @type {any[]} */
-            let items = [];
+            const [countRows] = await connection.execute(
+                `SELECT COUNT(*) AS c
+                   FROM TB_BUS_RESERVATION r
+                   LEFT JOIN TB_AUCTION_REQ ar ON ar.REQ_ID = r.REQ_ID
+                  WHERE ${baseWhere}`,
+                [driverId]
+            );
+            const listTotal = Number(countRows[0]?.c) || 0;
 
-            for (let attempt = 0; attempt < 2; attempt++) {
-                const statCol = attempt === 0 ? 'DATA_STAT' : 'RES_STAT';
-                const baseWhere = baseWhereForStatCol(statCol);
-                try {
-                    const [countRows] = await connection.execute(
-                        `SELECT COUNT(*) AS c
-                           FROM TB_BUS_RESERVATION r
-                           LEFT JOIN TB_AUCTION_REQ ar ON ar.REQ_ID = r.REQ_ID
-                          WHERE ${baseWhere}`,
-                        [driverId]
-                    );
-                    listTotal = Number(countRows[0]?.c) || 0;
-
-                    const [rows] = await connection.execute(
-                        `SELECT r.RES_ID AS resId,
-                                r.REQ_ID AS reqId,
-                                r.REQ_BUS_SEQ AS reqBusSeq,
-                                r.TRAVELER_ID AS travelerId,
-                                r.DRIVER_ID AS driverId,
-                                r.BUS_ID AS busId,
-                                r.DRIVER_BIDDING_PRICE AS driverBiddingPrice,
-                                r.${statCol} AS dataStat,
-                                r.REG_DT AS regDt,
-                                ar.REG_DT AS quoteRequestDt,
-                                ar.TRIP_TITLE AS tripTitle,
-                                ar.START_DT AS tripStartDt,
-                                ar.END_DT AS tripEndDt
-                           FROM TB_BUS_RESERVATION r
-                           LEFT JOIN TB_AUCTION_REQ ar ON ar.REQ_ID = r.REQ_ID
-                          WHERE ${baseWhere}
-                          ORDER BY r.RES_ID DESC
-                          LIMIT ${limitSql} OFFSET ${offsetSql}`,
-                        [driverId]
-                    );
-                    items = rows || [];
-                    break;
-                } catch (e) {
-                    if (attempt === 0 && isSchemaMismatchError(e)) {
-                        console.warn('DriversListOfBids: retry with RES_STAT (DATA_STAT missing)', e.code || e.errno);
-                        continue;
-                    }
-                    throw e;
-                }
-            }
+            const [queryRows] = await connection.execute(
+                `SELECT r.RES_ID AS resId,
+                        r.REQ_ID AS reqId,
+                        r.REQ_BUS_SEQ AS reqBusSeq,
+                        r.TRAVELER_ID AS travelerId,
+                        r.DRIVER_ID AS driverId,
+                        r.BUS_ID AS busId,
+                        r.DRIVER_BIDDING_PRICE AS driverBiddingPrice,
+                        r.${statCol} AS dataStat,
+                        r.REG_DT AS regDt,
+                        ar.REG_DT AS quoteRequestDt,
+                        ar.TRIP_TITLE AS tripTitle,
+                        ar.START_DT AS tripStartDt,
+                        ar.END_DT AS tripEndDt
+                   FROM TB_BUS_RESERVATION r
+                   LEFT JOIN TB_AUCTION_REQ ar ON ar.REQ_ID = r.REQ_ID
+                  WHERE ${baseWhere}
+                  ORDER BY r.RES_ID DESC
+                  LIMIT ${limitSql} OFFSET ${offsetSql}`,
+                [driverId]
+            );
+            const items = queryRows || [];
 
             const rows = items.map((r) => {
                 const pres = statusPresentation(r.dataStat);

@@ -8,7 +8,11 @@
 
 const multer = require('multer');
 const { Storage } = require('@google-cloud/storage');
-const { executeDriverBidCancellation, MSGS } = require('../lib/driverBidCancellation');
+const {
+    executeDriverBidCancellation,
+    MSGS,
+    MAX_DRIVER_BID_CANCEL_ACCUM,
+} = require('../lib/driverBidCancellation');
 const { fetchLastHistProofFileMetas } = require('../lib/driverCancelProofAccess');
 
 const SCREEN_ID = 'CancellationOfBid';
@@ -64,7 +68,13 @@ function mountCancellationOfBid(app, pool) {
             const rawCnt = m != null ? m.cancelBusDriverCnt : null;
             const cumulativeCancelCount =
                 m != null
-                    ? Math.max(0, Math.min(2, Number.isFinite(Number(rawCnt)) ? Math.trunc(Number(rawCnt)) : 0))
+                    ? Math.max(
+                          0,
+                          Math.min(
+                              MAX_DRIVER_BID_CANCEL_ACCUM,
+                              Number.isFinite(Number(rawCnt)) ? Math.trunc(Number(rawCnt)) : 0
+                          )
+                      )
                     : 0;
             const yn = m != null && String(m.tradeRestrictYn || '').toUpperCase() === 'Y' ? 'Y' : 'N';
             const tradeRestrictLabel =
@@ -85,38 +95,6 @@ function mountCancellationOfBid(app, pool) {
                 },
             });
         } catch (e) {
-            if (
-                connection &&
-                e &&
-                (e.errno === 1054 || e.code === 'ER_BAD_FIELD_ERROR')
-            ) {
-                try {
-                    const [cRows] = await connection.execute(
-                        `SELECT COUNT(*) AS cnt
-                           FROM TB_BUS_RESERVATION
-                          WHERE DRIVER_ID = ? AND DATA_STAT = 'DRIVER_CANCEL'`,
-                        [driverId]
-                    );
-                    const cumulativeCancelCount = Number(cRows[0]?.cnt) || 0;
-                    let lastProofAttachments = [];
-                    try {
-                        lastProofAttachments = await fetchLastHistProofFileMetas(connection, driverId);
-                    } catch (e3) {
-                        console.warn('CancellationOfBid summary fallback lastProofAttachments:', e3.message || e3);
-                    }
-                    return res.json({
-                        CancellationOfBid: {
-                            screenId: SCREEN_ID,
-                            cumulativeCancelCount,
-                            tradeRestrictYn: 'N',
-                            tradeRestrictLabel: '정상 (N)',
-                            lastProofAttachments,
-                        },
-                    });
-                } catch (e2) {
-                    console.error('CancellationOfBid summary fallback:', e2);
-                }
-            }
             console.error('CancellationOfBid summary:', e);
             return res.status(500).json({ error: e.message, CancellationOfBid: { screenId: SCREEN_ID } });
         } finally {
@@ -158,10 +136,12 @@ function mountCancellationOfBid(app, pool) {
             }
             if (
                 !Number.isFinite(cancelBusDriverCntSnapshot) ||
-                ![0, 1, 2].includes(cancelBusDriverCntSnapshot)
+                cancelBusDriverCntSnapshot < 0 ||
+                cancelBusDriverCntSnapshot > MAX_DRIVER_BID_CANCEL_ACCUM ||
+                !Number.isInteger(cancelBusDriverCntSnapshot)
             ) {
                 return res.status(400).json({
-                    error: '청약 취소 누적 건수(cancelBusDriverCntSnapshot: 0~2)가 필요합니다.',
+                    error: `청약 취소 누적 건수(cancelBusDriverCntSnapshot: 0~${MAX_DRIVER_BID_CANCEL_ACCUM})가 필요합니다.`,
                     CancellationOfBid: { screenId: SCREEN_ID },
                 });
             }

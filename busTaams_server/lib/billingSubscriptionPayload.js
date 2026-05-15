@@ -1,5 +1,6 @@
 const { plainOrLegacyDecrypt } = require('../crypto');
 const { normalizeDriverFeePolicyDtlCd } = require('./feePolicyDtl');
+const { custIdMatchCandidates } = require('./bustaamsIds');
 
 function cardLastFourFromEnc(enc) {
     if (enc == null || String(enc).trim() === '') return '';
@@ -53,7 +54,7 @@ async function resolveMonthlyFeeKrw(connection, feePolicyRaw) {
         const monthlyFeeKrw = labelKo ? amount : null;
         return { monthlyFeeKrw, feePolicy: code, feePolicyLabelKo: labelKo };
     } catch (e) {
-        if (e.code !== 'ER_NO_SUCH_TABLE' && e.code !== 'ER_BAD_FIELD_ERROR' && e.errno !== 1054) throw e;
+        if (e.code !== 'ER_NO_SUCH_TABLE') throw e;
     }
 
     return { monthlyFeeKrw: null, feePolicy: code, feePolicyLabelKo: null };
@@ -90,45 +91,34 @@ async function buildBillingSubscriptionPayload(pool, rawDriverId, screenId) {
         connection = await pool.getConnection();
 
         let userRows;
-        try {
-            [userRows] = await connection.execute(
-                `SELECT CUST_ID, USER_ID, USER_NM FROM TB_USER WHERE CUST_ID = ? OR USER_ID = ? LIMIT 1`,
-                [raw, raw]
-            );
-        } catch (e) {
-            if (e.code === 'ER_BAD_FIELD_ERROR' || e.errno === 1054) {
-                [userRows] = await connection.execute(
-                    `SELECT CUST_ID, USER_ID FROM TB_USER WHERE CUST_ID = ? OR USER_ID = ? LIMIT 1`,
-                    [raw, raw]
-                );
-            } else {
-                throw e;
-            }
-        }
+        const custCands = custIdMatchCandidates(raw);
+        const custPh = custCands.map(() => '?').join(', ');
+        [userRows] = await connection.execute(
+            `SELECT CUST_ID, USER_NM FROM TB_USER WHERE TRIM(CUST_ID) IN (${custPh}) LIMIT 1`,
+            custCands
+        );
         const user = userRows[0];
         if (!user) {
             base.monthlyFeeUnsetReason = '회원 정보를 찾을 수 없습니다.';
             base.infoMessage =
-                'TB_USER 에서 기사를 찾지 못했습니다. driverId(custId 또는 userId)를 확인하세요.';
+                'TB_USER 에서 기사를 찾지 못했습니다. driverId는 TB_USER.CUST_ID(및 동일 숫자의 0패딩 형태)여야 합니다.';
             return base;
         }
 
         const custId = String(user.CUST_ID || '').trim();
-        const userId = String(user.USER_ID || '').trim();
         const userNmRaw = user.USER_NM != null ? String(user.USER_NM) : '';
         const driverNmTrunc = truncateUserNmKo(userNmRaw, 10);
         base.driverUserNmTrunc10 = driverNmTrunc;
 
         let detailPolicy = null;
         try {
-            /** 로그인 기사의 TB_USER.USER_ID 로 등급(FEE_POLICY) 조회 */
             const [dRows] = await connection.execute(
-                `SELECT FEE_POLICY FROM TB_DRIVER_DETAIL WHERE USER_ID = ? LIMIT 1`,
-                [userId]
+                `SELECT FEE_POLICY FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1`,
+                [custId]
             );
             detailPolicy = dRows[0]?.FEE_POLICY != null ? String(dRows[0].FEE_POLICY).trim() : '';
         } catch (e) {
-            if (e.code !== 'ER_NO_SUCH_TABLE' && e.code !== 'ER_BAD_FIELD_ERROR' && e.errno !== 1054) throw e;
+            if (e.code !== 'ER_NO_SUCH_TABLE') throw e;
         }
 
         const feeResolved = await resolveMonthlyFeeKrw(connection, detailPolicy || null);
@@ -178,7 +168,7 @@ async function buildBillingSubscriptionPayload(pool, rawDriverId, screenId) {
                 });
             }
         } catch (e) {
-            if (e.code !== 'ER_NO_SUCH_TABLE' && e.code !== 'ER_BAD_FIELD_ERROR' && e.errno !== 1054) throw e;
+            if (e.code !== 'ER_NO_SUCH_TABLE') throw e;
         }
         base.paymentCards = paymentCards;
 
@@ -197,7 +187,7 @@ async function buildBillingSubscriptionPayload(pool, rawDriverId, screenId) {
                  WHERE DRIVER_ID = ?
                  ORDER BY PAY_REQ_DT DESC, PAY_HIST_SEQ DESC
                  LIMIT 100`,
-                [userId]
+                [custId]
             );
             for (const row of hRows) {
                 paymentHistory.push({
@@ -216,7 +206,7 @@ async function buildBillingSubscriptionPayload(pool, rawDriverId, screenId) {
                 });
             }
         } catch (e) {
-            if (e.code !== 'ER_NO_SUCH_TABLE' && e.code !== 'ER_BAD_FIELD_ERROR' && e.errno !== 1054) throw e;
+            if (e.code !== 'ER_NO_SUCH_TABLE') throw e;
         }
         base.paymentHistory = paymentHistory;
 

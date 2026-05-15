@@ -17,10 +17,6 @@ function daysBetweenYmdUtc(fromStr, toStr) {
     return Math.round((t1 - t0) / 86400000);
 }
 
-function isSchemaMismatchError(e) {
-    return e && (e.errno === 1054 || e.code === 'ER_BAD_FIELD_ERROR');
-}
-
 /** mysql2 Row 필드명 대소문자 차이 흡수 */
 function rowCol(row, logical) {
     if (!row || logical == null) return undefined;
@@ -140,14 +136,8 @@ module.exports = function registerBusOperationCompletionList(pool, app) {
             /** @type {Map<string, Array<{reqBusUuid:string|null,busTypeCd:string|null,reqBusCnt:number,reqAmtKrw:number,sortOrder:number}>>} */
             const busesByReq = new Map();
             if (reqIdList.length && connection) {
-                let busRows;
                 const ph = reqIdList.map(() => '?').join(', ');
-                try {
-                    [busRows] = await connection.execute(SQL_BUSES_PROJECT(ph), reqIdList);
-                } catch (e2) {
-                    if (!isSchemaMismatchError(e2)) throw e2;
-                    [busRows] = [];
-                }
+                const [busRows] = await connection.execute(SQL_BUSES_PROJECT(ph), reqIdList);
                 for (const b of busRows) {
                     const k = String(b.reqId ?? b.req_id ?? '').trim().toLowerCase();
                     if (!k) continue;
