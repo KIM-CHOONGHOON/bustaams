@@ -9,6 +9,17 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080')
 const COMMON_VIEW_ROOT_ID = 'common-view-root';
 const COMMON_VIEW_MODAL_ID = 'common-view-modal';
 
+/** 표시·다운로드 파일명 — DB에 이미 동일 확장자가 붙어 있으면 중복 부착 안 함 */
+function joinOrgFileDisplayName(orgFileNm, fileExt) {
+    const nm = String(orgFileNm ?? '').trim() || 'file';
+    const rawExt = String(fileExt ?? '').replace(/^\./, '').trim();
+    if (!rawExt) return nm;
+    const ext = rawExt.toLowerCase();
+    const suffix = `.${ext}`;
+    if (nm.toLowerCase().endsWith(suffix)) return nm;
+    return `${nm}.${ext}`;
+}
+
 /** 문서 카테고리 코드 → 한국어 표시 */
 const COMMON_VIEW_CATEGORY_LABEL = {
     Business_License: '사업자 등록증',
@@ -156,7 +167,7 @@ function CommonView({ close, fileId, custId, userId: userIdLegacy, docTitle, met
         }
         const a = document.createElement('a');
         a.href = downloadUrl;
-        if (docMeta) a.download = `${docMeta.orgFileNm}.${docMeta.fileExt}`;
+        if (docMeta) a.download = joinOrgFileDisplayName(docMeta.orgFileNm, docMeta.fileExt);
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -273,7 +284,7 @@ function CommonView({ close, fileId, custId, userId: userIdLegacy, docTitle, met
                                         <li className="flex flex-col">
                                             <span className="text-[10px] text-slate-400 uppercase tracking-widest mb-1">파일명</span>
                                             <span className="text-sm font-semibold text-on-surface break-all">
-                                                {docMeta.orgFileNm}.{docMeta.fileExt}
+                                                {joinOrgFileDisplayName(docMeta.orgFileNm, docMeta.fileExt)}
                                             </span>
                                         </li>
                                         <li className="flex flex-col">
@@ -372,7 +383,7 @@ function CommonView({ close, fileId, custId, userId: userIdLegacy, docTitle, met
                                         {docMeta && (
                                             <div className="mt-4 flex flex-wrap gap-3">
                                                 <div className="bg-surface-container-high px-4 py-2 rounded-full text-sm text-on-surface-variant font-medium">
-                                                    {docMeta.orgFileNm}.{docMeta.fileExt}
+                                                    {joinOrgFileDisplayName(docMeta.orgFileNm, docMeta.fileExt)}
                                                 </div>
                                                 <div className="bg-surface-container-high px-4 py-2 rounded-full text-sm text-on-surface-variant font-medium">
                                                     {(docMeta.fileExt || '').toUpperCase()}

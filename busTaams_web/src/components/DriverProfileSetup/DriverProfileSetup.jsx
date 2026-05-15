@@ -607,7 +607,11 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
         detailAddress: formData.detailAddress || '',
         feePolicy: feePol,
         qualCertBase64:
-          qualCert && String(qualCert).startsWith('data:') ? qualCert : undefined
+          qualCert && String(qualCert).startsWith('data:') ? qualCert : undefined,
+        qualCertFileName:
+          qualCert && String(qualCert).startsWith('data:')
+            ? String(qualCertPickLabel || '').trim() || undefined
+            : undefined,
       };
 
       const res = await fetch(`${API_BASE}/api/driver/profile-setup`, {
