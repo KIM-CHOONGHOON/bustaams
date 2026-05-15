@@ -883,11 +883,8 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
                       type="text" 
                     />
                   </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-bold text-on-surface-variant px-1">
-                      주민등록번호
-                      <span className="ml-2 text-xs font-semibold text-slate-500">(조회 전용 · TB_USER)</span>
-                    </label>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-on-surface-variant px-1">주민등록번호</label>
                     <input
                       readOnly
                       name="residentNoDisplay"
@@ -1178,22 +1175,22 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
                           )
                       )}
 
-                      {profileExistsOnServer && qualFieldsLocked && !qualCert && (
-                        <p className="text-xs font-semibold text-amber-600 flex items-center gap-1">
-                          <span className="material-symbols-outlined text-sm">lock</span>
-                          자격증 파일을 교체하려면 위 「수정」 버튼을 먼저 클릭하세요.
-                        </p>
-                      )}
+                      <p className="text-xs text-on-surface-variant leading-relaxed">
+                        서버에 자격증 사본이 있어도 아래 영역을 클릭하면 언제든지 다른 파일을 선택할 수 있습니다. 하단
+                        「{submitPrimaryLabel}」제출 시 새 파일로 반영됩니다. (자격번호 입력란만 「수정」으로 잠금 해제 후
+                        편집할 수 있습니다.)
+                      </p>
                       <input 
                         type="file" 
                         ref={certInputRef} 
                         className="hidden" 
                         accept={ACCEPT_DOC} 
                         onChange={handleFileChangeCert} 
+                        disabled={isSubmitting}
                       />
-                      {/* 신규 등록 또는 수정 모드(잠금 해제)일 때만 업로드 가능 */}
+                      {/* 자격증 파일: 자격번호 필드 잠금(qualFieldsLocked)과 무관하게 항상 교체 선택 가능 */}
                       {(() => {
-                        const disabled = profileExistsOnServer && qualFieldsLocked;
+                        const disabled = isSubmitting;
                         const serverRegistered = hasQualCertFileOnServer && !qualCert;
                         const serverFullName = qualServerDisplayFilename(
                           qualCertServerOrgNm,
@@ -1203,6 +1200,15 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
                           !!(qualCert && String(qualCert).includes('application/pdf'));
                         return (
                           <div 
+                            role="button"
+                            tabIndex={disabled ? -1 : 0}
+                            onKeyDown={(ev) => {
+                              if (disabled) return;
+                              if (ev.key === 'Enter' || ev.key === ' ') {
+                                ev.preventDefault();
+                                certInputRef.current?.click();
+                              }
+                            }}
                             onClick={() => {
                               if (disabled) return;
                               certInputRef.current?.click();
@@ -1210,7 +1216,7 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
                             className={`w-full min-h-[200px] border-2 border-dashed rounded-2xl flex flex-col items-stretch justify-center gap-3 transition-colors group px-2 py-4 ${
                               disabled
                                 ? 'cursor-not-allowed bg-slate-50/80 opacity-60 border-outline-variant'
-                                : 'cursor-pointer hover:bg-slate-50 border-outline-variant'
+                                : 'cursor-pointer hover:bg-slate-50 hover:border-primary/30 border-outline-variant'
                             }`}
                           >
                             {qualCert ? (
@@ -1284,6 +1290,11 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
                                   {formatFileSizeBytes(qualCertServerSize) && (
                                     <p className="text-[11px] text-on-surface-variant">
                                       용량 {formatFileSizeBytes(qualCertServerSize)}
+                                    </p>
+                                  )}
+                                  {!disabled && (
+                                    <p className="text-[11px] font-semibold text-primary pt-1">
+                                      클릭하여 다른 파일로 교체
                                     </p>
                                   )}
                                 </div>
