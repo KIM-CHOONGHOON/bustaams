@@ -121,7 +121,7 @@ const ApprovalListCustomer = () => {
             form.P_NEXT_URL.value = data.returnUrl;
             form.P_RESERVED.value = "twotrs=Y&app_scheme=bustaams://"; // 이중화 승인 사용
             form.P_INI_PAYMENT.value = "CARD"; // 결제수단 추가 (필수)
-            form.P_CHARSET.value = "utf8"; // UTF-8 사용 명시
+            form.P_CHARSET.value = "euc-kr"; // EUC-KR 사용 (모바일 한글 깨짐 방지)
 
             // 폼 전송
             form.submit();
@@ -559,7 +559,7 @@ const ApprovalListCustomer = () => {
             <BottomNavCustomer />
 
             {/* 이니시스 결제용 숨김 폼 */}
-            <form id="SendPayForm" name="SendPayForm" method="POST" acceptCharset="utf-8" style={{ display: 'none' }}>
+            <form id="SendPayForm" name="SendPayForm" method="POST" acceptCharset="euc-kr" style={{ display: 'none' }}>
                 {/* PC 웹표준 필드 */}
                 <input type="hidden" name="version" value="1.0" />
                 <input type="hidden" name="mid" value="" />
