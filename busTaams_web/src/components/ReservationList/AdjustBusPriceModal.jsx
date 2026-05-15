@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080').replace(/\/$/, '');
+
 const AdjustBusPriceModal = ({ bus, onClose, onSuccess }) => {
   const [newPrice, setNewPrice] = useState(bus.UNIT_REQ_AMT || 0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -29,7 +31,7 @@ const AdjustBusPriceModal = ({ bus, onClose, onSuccess }) => {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch('/api/auction/update-bus-price', {
+      const response = await fetch(`${API_BASE}/api/auction/update-bus-price`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
