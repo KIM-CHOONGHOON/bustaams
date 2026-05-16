@@ -13,7 +13,8 @@ const {
 const { 
     generateNextNumericId, 
     verifyFirebasePhoneIdTokenIfRequired,
-    sendAlimTalkAndLog
+    sendAlimTalkAndLog,
+    orgFileNmAndExt,
 } = require('../lib/bt_common_utils');
 
 const aligoService = require('../services/bt_comm_handler');
@@ -220,21 +221,35 @@ function createAuthRouter(pool, admin, smsVerifiedPhoneStore, bucket, bucketName
             await sigGcsFile.save(sigBuffer, { metadata: { contentType: 'image/png' }, resumable: false });
             uploadedFiles.push(sigGcsFile);
 
+            const { orgFileNm: sigOrgNm, fileExt: sigExt } = orgFileNmAndExt('signature.png', {
+                ext: 'png',
+                mime: 'image/png',
+                orgName: 'signature.png',
+            });
+
             await connection.execute(`
                 INSERT INTO TB_FILE_MASTER (
                     FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, 
                     ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT, REG_ID, MOD_DT, MOD_ID
-                ) VALUES (?, 'SIGNATURE', ?, ?, ?, 'png', ?, NOW(), ?, NOW(), ?)
-            `, [nextFileId, bucketName, `https://storage.googleapis.com/${bucketName}/${sigGcsPath}`, nextFileId, sigBuffer.length, nextCustId, nextCustId]);
+                ) VALUES (?, 'SIGNATURE', ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)
+            `, [nextFileId, bucketName, `https://storage.googleapis.com/${bucketName}/${sigGcsPath}`, sigOrgNm, sigExt, sigBuffer.length, nextCustId, nextCustId]);
 
             // 4-1. 프로필 사진 처리 (기사 전용)
             if (mappedUserType === 'DRIVER' && photoBase64) {
-                const photoExt = photoBase64.match(/data:image\/(\w+);base64/)?.[1] || 'png';
+                const photoMimeMatch = photoBase64.match(/^data:image\/([^;]+);base64,/);
+                const rawMimeSub = photoMimeMatch?.[1] || 'png';
                 const photoBuffer = Buffer.from(photoBase64.replace(/^data:image\/\w+;base64,/, ""), 'base64');
-                const photoFileName = `${nextProfileFileId}.${photoExt}`;
+                const parsedLike = {
+                    buffer: photoBuffer,
+                    ext: rawMimeSub,
+                    mime: `image/${rawMimeSub}`,
+                    orgName: String(photoName || 'photo').replace(/[^a-zA-Z0-9._-가-힣]/g, '_'),
+                };
+                const { orgFileNm, fileExt } = orgFileNmAndExt(photoName, parsedLike);
+                const photoFileName = `${nextProfileFileId}.${fileExt}`;
                 const photoGcsPath = `profiles/${photoFileName}`;
                 const photoGcsFile = bucket.file(photoGcsPath);
-                await photoGcsFile.save(photoBuffer, { metadata: { contentType: `image/${photoExt}` }, resumable: false });
+                await photoGcsFile.save(photoBuffer, { metadata: { contentType: `image/${rawMimeSub}` }, resumable: false });
                 uploadedFiles.push(photoGcsFile);
 
                 await connection.execute(`
@@ -242,7 +257,7 @@ function createAuthRouter(pool, admin, smsVerifiedPhoneStore, bucket, bucketName
                         FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, 
                         ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT, REG_ID, MOD_DT, MOD_ID
                     ) VALUES (?, 'PROFILE', ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)
-                `, [nextProfileFileId, bucketName, `https://storage.googleapis.com/${bucketName}/${photoGcsPath}`, photoName || photoFileName, photoExt, photoBuffer.length, nextCustId, nextCustId]);
+                `, [nextProfileFileId, bucketName, `https://storage.googleapis.com/${bucketName}/${photoGcsPath}`, orgFileNm, fileExt, photoBuffer.length, nextCustId, nextCustId]);
             }
 
             // 5. 약관 동의 이력

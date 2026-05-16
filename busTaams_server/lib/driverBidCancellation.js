@@ -4,6 +4,7 @@
  */
 
 const { allocateSequentialFileIds } = require('./allocateFileIds');
+const { orgFileNmAndExt } = require('./bt_common_utils');
 
 /** 누적 허용: 10회까지(11회째부터 거절). 스냅샷·클램프에 동일 적용. */
 const MAX_DRIVER_BID_CANCEL_ACCUM = 10;
@@ -20,6 +21,18 @@ function addDays(dt, days) {
     const x = new Date(dt.getTime());
     x.setDate(x.getDate() + days);
     return new Date(x.getFullYear(), x.getMonth(), x.getDate(), 0, 1, 1, 0);
+}
+
+/**
+ * 기사 청약 취소 누적 건수(nextCnt)에 따른 거래 제한 종료일.
+ * - 1~9회: 시작일 기준 +7일 (기존과 동일)
+ * - 10회(상한 도달): 종료일 **9999-12-31** (YYYYMMDD **99991231** 대응). 자동 만료로 해제되지 않으며 **관리자가 TB_USER_CANCEL_MANAGE 등을 조정**해야 거래 가능.
+ */
+function tradeRestrictEndDtForDriverBidAccum(nextCnt, startRestrict) {
+    if (nextCnt >= MAX_DRIVER_BID_CANCEL_ACCUM) {
+        return new Date(9999, 11, 31, 23, 59, 59, 0);
+    }
+    return addDays(startRestrict, 7);
 }
 
 /** TB_USER.USER_TYPE → TB_USER_CANCEL_MANAGE.USER_TYPE (설계: TB_USER와 동일 ENUM 권장) */
@@ -185,9 +198,9 @@ async function executeDriverBidCancellation(connection, bucket, p) {
         return {ok: false, status: 409, code: 'AUCTION_REQ_MISMATCH', message: MSGS.AUCTION_REQ_MISMATCH};
     }
 
-    /* TB_USER_CANCEL_MANAGE — 누적 + 거래제한 (취소 등록일 당일 0:01:01 시작, 종료는 항상 +7일) */
+    /* TB_USER_CANCEL_MANAGE — 누적 + 거래제한 (시작: 취소 등록일 당일 0:01:01; 종료: 1~9회 +7일, 10회 9999-12-31) */
     const startRestrict = cancelRegistrationDay000101();
-    const restrictEnd = addDays(startRestrict, 7);
+    const restrictEnd = tradeRestrictEndDtForDriverBidAccum(nextCnt, startRestrict);
 
     if (!manageRow) {
         const [ins] = await connection.execute(
@@ -229,16 +242,20 @@ async function executeDriverBidCancellation(connection, bucket, p) {
         const gcsPath = `${DRIVER_CANCEL_FILE_CATEGORY}/${driverCustId}/${fileId}`;
         const objKey = `${gcsPath}/${fileId}`;
         const hint = f.originalname || 'file';
-        const leaf = hint.replace(/\\/g, '/').split('/').pop() || 'file';
-        const dot = leaf.lastIndexOf('.');
-        let orgBase = leaf;
-        let ext = 'bin';
-        if (dot > 0) {
-            orgBase = leaf.slice(0, dot);
-            ext = leaf.slice(dot + 1).toLowerCase() || 'bin';
-        }
-        ext = String(ext).replace(/[^\w]/g, '').slice(0, 5) || 'bin';
-        const orgNm = orgBase.replace(/[^a-zA-Z0-9._-가-힣]/g, '_').replace(/\.+$/, '') || 'file';
+        const mime = f.mimetype || 'application/octet-stream';
+        let extFromMime = '';
+        if (mime.includes('pdf')) extFromMime = 'pdf';
+        else if (mime.includes('jpeg') || mime.includes('jpg')) extFromMime = 'jpeg';
+        else if (mime.includes('png')) extFromMime = 'png';
+        else if (mime.includes('webp')) extFromMime = 'webp';
+        else if (mime.includes('gif')) extFromMime = 'gif';
+
+        const { orgFileNm, fileExt } = orgFileNmAndExt(hint, {
+            buffer: f.buffer,
+            ext: extFromMime,
+            mime,
+            orgName: hint,
+        });
 
         const gcsFile = bucket.file(objKey);
         await gcsFile.save(f.buffer, {
@@ -255,8 +272,8 @@ async function executeDriverBidCancellation(connection, bucket, p) {
                 DRIVER_CANCEL_FILE_CATEGORY,
                 gcsBucketNm,
                 gcsPath,
-                orgNm,
-                ext,
+                orgFileNm,
+                fileExt,
                 f.buffer.length,
                 modId,
                 modId,

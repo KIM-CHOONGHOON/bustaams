@@ -1,0 +1,19 @@
+---
+description: bustaams 스키마에 DDL 금지 — 테이블/컬럼 생성·변경·삭제 불가
+alwaysApply: true
+---
+
+# bustaams DB 스키마 — DDL 절대 금지
+
+- **`bustaams` 스키마**(및 운영과 동일한 DB)에 대해 다음은 **코드·마이그레이션 스크립트·에이전트 작업 모두에서 금지**한다.
+  - 테이블 **삭제** (`DROP TABLE`)
+  - **신규 테이블 추가** (`CREATE TABLE` — 앱 부트스트랩·ensure 테이블 포함)
+  - 컬럼 **추가·삭제·타입 변경** (`ALTER TABLE … ADD/DROP/MODIFY` 등)
+
+- 애플리케이션 서버 코드는 **스키마를 바꾸지 않는다.** 필요한 컬럼 유무는 `INFORMATION_SCHEMA` 조회 등으로 분기하고, 없으면 기능을 제한하거나 명확한 오류를 반환한다.
+
+- 스키마 변경이 필요하면 **DBA·별도 마이그레이션 저장소·승인된 DDL 문서**에서만 수행한다. 이 저장소에 있는 SQL 파일은 **참고·수동 실행용**일 수 있으나, **런타임 자동 실행으로 스키마를 바꾸지 않는다.**
+
+- 리뷰 시 `CREATE TABLE`, `ALTER TABLE`, `DROP TABLE`, `ADD COLUMN`, `DROP COLUMN` 문자열이 **서버/배치 코드**에 들어가지 않았는지 확인한다.
+
+- CI: `.github/workflows/bustaams-schema-ddl-guard.yml` → `scripts/ci/check-bustaams-no-ddl.sh` 로 `busTaams_server`·`busTaams_web` 추적 소스를 검사한다. 로컬에서 동일 검사: `bash scripts/ci/check-bustaams-no-ddl.sh`

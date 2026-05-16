@@ -24,6 +24,7 @@ const {
     isQualCertUnchanged,
 } = require('./driverVerification');
 const { canonicalFileMasterFileId, fileIdMatchCandidates, custIdMatchCandidates } = require('./lib/bustaamsIds');
+const { parseDataUrlPayload, orgFileNmAndExt, joinOrgFileDisplayName } = require('./lib/bt_common_utils');
 const {
     DRIVER_FEE_POLICY_DTL_CDS,
     DRIVER_FEE_POLICY_DTL_CDS_SQL_IN,
@@ -183,60 +184,102 @@ function formatDateYmd(v) {
     return s.length >= 10 ? s.slice(0, 10) : s;
 }
 
-/** 진위 검증 생략 비교용 — TB_DRIVER_DETAIL 기존 행(면허·자격 컬럼) */
+/** 진위 검증 생략 비교용 — TB_DRIVER_DETAIL 기존 행(면허·자격 컬럼, 스키마에 있는 컬럼만 SELECT) */
 async function fetchDriverDetailLicenseRow(connection, custId) {
     const param = String(custId ?? '').trim();
     if (!param) return null;
-    const sql = `SELECT LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO, LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT,
-                    QUAL_CERT_NO, QUAL_CERT_VERIFY_STATUS,
-                    BIRTH_YMD, SEX
-             FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1`;
-    const base = `SELECT LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO, LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT,
-                    QUAL_CERT_NO, QUAL_CERT_VERIFY_STATUS
-             FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1`;
+    const ddMap = await driverDetailColumnMap(connection);
+    const custK = ddCol(ddMap, 'CUST_ID');
+    if (!custK) return null;
+    const parts = [];
+    for (const n of [
+        'LICENSE_TYPE',
+        'LICENSE_NO',
+        'LICENSE_SERIAL_NO',
+        'LICENSE_ISSUE_DT',
+        'LICENSE_EXPIRY_DT',
+        'QUAL_CERT_NO',
+        'BIRTH_YMD',
+        'SEX'
+    ]) {
+        const c = ddCol(ddMap, n);
+        if (c) parts.push(`${c} AS ${n}`);
+    }
+    if (ddHas(ddMap, 'QUAL_CERT_VERIFY_STATUS')) {
+        const s = ddCol(ddMap, 'QUAL_CERT_VERIFY_STATUS');
+        parts.push(`IFNULL(${s}, 'UNVERIFIED') AS QUAL_CERT_VERIFY_STATUS`);
+    }
+    if (!parts.length) return null;
+    const sql = `SELECT ${parts.join(', ')} FROM TB_DRIVER_DETAIL WHERE ${custK} = ? LIMIT 1`;
     try {
-        const [rows] = await connection.execute(withBirth, [loginUserId]);
+        const [rows] = await connection.execute(sql, [param]);
         return rows[0] || null;
     } catch (e) {
-        if (e.code === 'ER_BAD_FIELD_ERROR') {
-            try {
-                const [rows2] = await connection.execute(base, [loginUserId]);
-                return rows2[0] || null;
-            } catch (e2) {
-                if (e2.code === 'ER_BAD_FIELD_ERROR') return null;
-                throw e2;
-            }
-        }
+        if (e.code === 'ER_BAD_FIELD_ERROR') return null;
         throw e;
     }
-    const [rows] = await connection.execute(sql, [param]);
-    return rows[0] || null;
 }
 
-/** 프로필 저장 시 자격번호·생년 분기 — LICENSE_TYPE 유무와 무관하게 조회 */
+/** 프로필 저장 시 자격번호·생년 분기 — 실제 테이블에 있는 컬럼만 조회(DDL 없음) */
 async function fetchDriverDetailQualBirthRow(connection, custId) {
     const param = String(custId ?? '').trim();
     if (!param) return null;
-    const sql = `SELECT QUAL_CERT_NO, IFNULL(QUAL_CERT_VERIFY_STATUS, 'UNVERIFIED') AS QUAL_CERT_VERIFY_STATUS,
-                BIRTH_YMD, SEX
-         FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1`;
+    const ddMap = await driverDetailColumnMap(connection);
+    const custK = ddCol(ddMap, 'CUST_ID');
+    if (!custK) return null;
+    const parts = [];
+    const qn = ddCol(ddMap, 'QUAL_CERT_NO');
+    if (qn) parts.push(`${qn} AS QUAL_CERT_NO`);
+    if (ddHas(ddMap, 'QUAL_CERT_VERIFY_STATUS')) {
+        const s = ddCol(ddMap, 'QUAL_CERT_VERIFY_STATUS');
+        parts.push(`IFNULL(${s}, 'UNVERIFIED') AS QUAL_CERT_VERIFY_STATUS`);
+    }
+    const by = ddCol(ddMap, 'BIRTH_YMD');
+    if (by) parts.push(`${by} AS BIRTH_YMD`);
+    const sx = ddCol(ddMap, 'SEX');
+    if (sx) parts.push(`${sx} AS SEX`);
+    if (!parts.length) return null;
+    const sql = `SELECT ${parts.join(', ')} FROM TB_DRIVER_DETAIL WHERE ${custK} = ? LIMIT 1`;
     const [rows] = await connection.execute(sql, [param]);
     return rows[0] || null;
 }
 
-/** GET profile-setup용 — TB_DRIVER_DETAIL 프로필·면허·등급 컬럼 일괄 조회 */
+/** GET profile-setup용 — 존재하는 컬럼만 조회 */
 async function selectDriverDetailForProfileSetup(connection, custId) {
     const param = String(custId ?? '').trim();
     if (!param) return null;
-    const fullSql = `SELECT ZIPCODE, ADDRESS, DETAIL_ADDRESS, ADDR_TYPE, ADDR_NAME,
-                            BIRTH_YMD, SEX, COALESCE(SELF_INTRO, '') AS SELF_INTRO,
-                            LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO,
-                            LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT, QUAL_CERT_NO,
-                            IFNULL(QUAL_CERT_VERIFY_STATUS, 'UNVERIFIED') AS QUAL_CERT_VERIFY_STATUS,
-                            QUAL_CERT_VERIFY_DT,
-                            FEE_POLICY
-                     FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1`;
-    const [dr] = await connection.execute(fullSql, [param]);
+    const ddMap = await driverDetailColumnMap(connection);
+    const custK = ddCol(ddMap, 'CUST_ID');
+    if (!custK) return null;
+    const parts = [];
+    const pushBare = (u) => {
+        const c = ddCol(ddMap, u);
+        if (c) parts.push(`${c} AS ${u}`);
+    };
+    pushBare('ZIPCODE');
+    pushBare('ADDRESS');
+    pushBare('DETAIL_ADDRESS');
+    pushBare('ADDR_TYPE');
+    pushBare('ADDR_NAME');
+    pushBare('BIRTH_YMD');
+    pushBare('SEX');
+    const si = ddCol(ddMap, 'SELF_INTRO');
+    if (si) parts.push(`COALESCE(${si}, '') AS SELF_INTRO`);
+    pushBare('LICENSE_TYPE');
+    pushBare('LICENSE_NO');
+    pushBare('LICENSE_SERIAL_NO');
+    pushBare('LICENSE_ISSUE_DT');
+    pushBare('LICENSE_EXPIRY_DT');
+    pushBare('QUAL_CERT_NO');
+    if (ddHas(ddMap, 'QUAL_CERT_VERIFY_STATUS')) {
+        const s = ddCol(ddMap, 'QUAL_CERT_VERIFY_STATUS');
+        parts.push(`IFNULL(${s}, 'UNVERIFIED') AS QUAL_CERT_VERIFY_STATUS`);
+    }
+    pushBare('QUAL_CERT_VERIFY_DT');
+    pushBare('FEE_POLICY');
+    if (!parts.length) return null;
+    const sql = `SELECT ${parts.join(', ')} FROM TB_DRIVER_DETAIL WHERE ${custK} = ? LIMIT 1`;
+    const [dr] = await connection.execute(sql, [param]);
     return dr[0] || null;
 }
 
@@ -321,25 +364,8 @@ async function seedBusTypeCodesIfEmpty(connection) {
 
 
 
-/** 업로드 원본명 → TB_FILE_MASTER 용 (확장자 제외 이름 + 확장자) */
-function orgFileNmAndExt(fileNameHint, parsed) {
-    const hint = (fileNameHint || parsed.orgName || 'file').trim();
-    const leaf = hint.replace(/\\/g, '/').split('/').pop() || 'file';
-    const idx = leaf.lastIndexOf('.');
-    let base = leaf;
-    let ext = String(parsed.ext || '')
-        .replace(/^\./, '')
-        .toLowerCase()
-        .trim();
-    if (idx > 0) {
-        base = leaf.slice(0, idx);
-        const fromName = leaf.slice(idx + 1).toLowerCase();
-        if (fromName) ext = fromName;
-    }
-    if (!ext) ext = 'bin';
-    const orgFileNm = base.replace(/[^a-zA-Z0-9._-가-힣]/g, '_').replace(/\.+$/, '') || 'file';
-    return { orgFileNm, fileExt: ext };
-}
+
+
 
 const BUS_DOC_FILE_CATEGORY = {
     BIZ_REG: 'BIZ_REG',
@@ -409,36 +435,73 @@ async function tableColumnExists(connection, tableName, columnName) {
     return rows.length > 0;
 }
 
+/** INFORMATION_SCHEMA 기준 실제 컬럼명 — 대문자 키 → DDL 원본 이름(대소문자 유지) */
+async function driverDetailColumnMap(connection) {
+    const [rows] = await connection.execute(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND LOWER(TABLE_NAME) = 'tb_driver_detail'`
+    );
+    const map = new Map();
+    for (const r of rows) {
+        const raw = String(r.COLUMN_NAME ?? '').trim();
+        if (!raw) continue;
+        map.set(raw.toUpperCase(), raw);
+    }
+    return map;
+}
+
+function qiMysqlIdent(raw) {
+    return '`' + String(raw).replace(/`/g, '``') + '`';
+}
+
+function ddHas(ddMap, upperName) {
+    return ddMap.has(String(upperName || '').toUpperCase());
+}
+
+function ddCol(ddMap, upperName) {
+    const raw = ddMap.get(String(upperName || '').toUpperCase());
+    return raw != null ? qiMysqlIdent(raw) : null;
+}
+
+/**
+ * TB_DRIVER_DETAIL 프로필 UPSERT — 컬럼명은 스키마 실제 표기 사용(Linux 대소문자 이슈 방지).
+ * @param {{ verifyDtCoalesce?: boolean }} opts — QUAL_CERT_VERIFY_DT 만료 시 COALESCE(VALUES, 기존값)
+ */
+async function executeDriverDetailProfileUpsert(connection, ddMap, keysUpper, valueByKey, opts = {}) {
+    const cols = keysUpper.filter((k) => ddHas(ddMap, k));
+    if (!cols.length || !cols.includes('CUST_ID')) {
+        throw new Error('TB_DRIVER_DETAIL에 CUST_ID(또는 동일 PK) 컬럼이 없습니다.');
+    }
+    const insertSqlCols = cols.map((k) => ddCol(ddMap, k)).join(', ');
+    const ph = cols.map(() => '?').join(', ');
+    const updateCols = cols.filter((k) => {
+        if (k === 'CUST_ID') return false;
+        if (opts.verifyDtCoalesce && k === 'QUAL_CERT_VERIFY_DT') return false;
+        return true;
+    });
+    const updates = updateCols.map((k) => `${ddCol(ddMap, k)} = VALUES(${ddCol(ddMap, k)})`);
+    if (opts.verifyDtCoalesce && ddHas(ddMap, 'QUAL_CERT_VERIFY_DT')) {
+        const qcd = ddCol(ddMap, 'QUAL_CERT_VERIFY_DT');
+        updates.push(`${qcd} = COALESCE(VALUES(${qcd}), ${qcd})`);
+    }
+    if (ddHas(ddMap, 'MOD_DT')) updates.push(`${ddCol(ddMap, 'MOD_DT')} = NOW()`);
+    const sql = `
+                    INSERT INTO TB_DRIVER_DETAIL (${insertSqlCols})
+                    VALUES (${ph})
+                    ON DUPLICATE KEY UPDATE
+                        ${updates.join(',\n                        ')}
+                    `;
+    const vals = cols.map((k) => valueByKey[k]);
+    await connection.execute(sql, vals);
+}
+
 function formatCommonCodeFnumForLabel(v) {
     if (v == null || v === '') return '-';
     const n = Number(v);
     if (!Number.isFinite(n)) return String(v).trim();
     if (Math.abs(n - Math.round(n)) < 1e-9) return String(Math.round(n));
     return String(n);
-}
-
-async function ensureDriverDetailProfileColumns(connection) {
-    const cols = [
-        ['ADDR_TYPE', "VARCHAR(20) NULL COMMENT 'HOME|OFFICE|OTHER'"],
-        ['ADDR_NAME', "VARCHAR(40) NULL COMMENT 'OTHER address label'"],
-        ['BIRTH_YMD', "VARCHAR(6) NULL COMMENT 'YYMMDD (=주민등록 앞 6자리)'"],
-        ['SEX', "CHAR(1) NULL COMMENT 'RRN gender digit'"],
-        ['SELF_INTRO', 'TEXT NULL'],
-        ['FEE_POLICY', "VARCHAR(30) NULL COMMENT 'TB_COMMON_CODE GRP_CD=FEE_POLICY DTL_CD'"]
-    ];
-    for (const [name, ddl] of cols) {
-        if (!(await tableColumnExists(connection, 'TB_DRIVER_DETAIL', name))) {
-            await connection.execute(`ALTER TABLE TB_DRIVER_DETAIL ADD COLUMN \`${name}\` ${ddl}`);
-        }
-    }
-}
-
-async function ensureDriverDocsFileSizeColumn(connection) {
-    if (!(await tableColumnExists(connection, 'TB_DRIVER_DOCS', 'FILE_SIZE'))) {
-        await connection.execute(
-            'ALTER TABLE TB_DRIVER_DOCS ADD COLUMN `FILE_SIZE` BIGINT NULL COMMENT \'bytes\''
-        );
-    }
 }
 
 /** TB_DRIVER_DOCS — 운수종사 자격 사본: fileId = LPAD(DOC_TYPE_SEQ,20,\'0\') */
@@ -536,18 +599,26 @@ function bucketForName(name) {
 }
 
 async function canAccessBusFile(connection, custId, fileId) {
+    const fid = String(fileId ?? '').trim();
+    if (!fid) return false;
     const [buses] = await connection.execute(
         `SELECT BUS_ID, BIZ_REG_FILE_ID, TRANS_LIC_FILE_ID, INS_CERT_FILE_ID, VEHICLE_PHOTOS_JSON
          FROM TB_BUS_DRIVER_VEHICLE WHERE CUST_ID = ?`,
         [custId]
     );
     for (const b of buses) {
-        if (b.BIZ_REG_FILE_ID === fileId || b.TRANS_LIC_FILE_ID === fileId || b.INS_CERT_FILE_ID === fileId) return true;
+        if (
+            String(b.BIZ_REG_FILE_ID ?? '').trim() === fid ||
+            String(b.TRANS_LIC_FILE_ID ?? '').trim() === fid ||
+            String(b.INS_CERT_FILE_ID ?? '').trim() === fid
+        ) {
+            return true;
+        }
         let photos = b.VEHICLE_PHOTOS_JSON;
         if (typeof photos === 'string') {
             try { photos = JSON.parse(photos); } catch (e) { photos = []; }
         }
-        if (Array.isArray(photos) && photos.some((p) => String(p) === String(fileId))) return true;
+        if (Array.isArray(photos) && photos.some((p) => String(p ?? '').trim() === fid)) return true;
     }
     return false;
 }
@@ -641,21 +712,29 @@ app.put('/api/user/profile', async (req, res) => {
 
                 const photoData = photoBase64.replace(/^data:image\/\w+;base64,/, "");
                 const photoBuffer = Buffer.from(photoData, 'base64');
-                const photoExt = photoBase64.match(/data:image\/(\w+);base64/)?.[1] || 'png';
-                const photoFileName = `${nextFileId}.${photoExt}`;
+                const photoMimeMatch = photoBase64.match(/^data:image\/([^;]+);base64,/);
+                const rawMimeSub = photoMimeMatch?.[1] || 'png';
                 const bucketName = process.env.GCS_BUCKET_NAME || 'bustaams-secure-data';
+                const parsedLike = {
+                    buffer: photoBuffer,
+                    ext: rawMimeSub,
+                    mime: `image/${rawMimeSub}`,
+                    orgName: String(photoName || `profile_${nextFileId}`).replace(/[^a-zA-Z0-9._-가-힣]/g, '_'),
+                };
+                const { orgFileNm, fileExt } = orgFileNmAndExt(photoName, parsedLike);
+                const photoFileName = `${nextFileId}.${fileExt}`;
                 const photoGcsPathForDB = `https://storage.googleapis.com/${bucketName}/profiles/${photoFileName}`;
                 const photoActualGcsPath = `profiles/${photoFileName}`;
-                
+
                 const photoGcsFile = bucket.file(photoActualGcsPath);
-                await photoGcsFile.save(photoBuffer, { metadata: { contentType: `image/${photoExt}` }, resumable: false });
+                await photoGcsFile.save(photoBuffer, { metadata: { contentType: `image/${rawMimeSub}` }, resumable: false });
 
                 await connection.execute(`
                     INSERT INTO TB_FILE_MASTER (
                         FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, 
                         ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT, REG_ID, MOD_DT, MOD_ID
                     ) VALUES (?, 'PROFILE', ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)
-                `, [nextFileId, bucketName, photoGcsPathForDB, photoName || photoFileName, photoExt, photoBuffer.length, custId, custId]);
+                `, [nextFileId, bucketName, photoGcsPathForDB, orgFileNm, fileExt, photoBuffer.length, custId, custId]);
             }
 
             // 2. 동적 쿼리 생성
@@ -802,7 +881,7 @@ app.post('/api/driver/profile', async (req, res) => {
                     ) VALUES (?, 'PROFILE_IMG', ?, ?, ?, 'png', 0, NOW(), ?)
                 `;
                 const profileGcsPath = profileImgUrl.split(`${bucketName}/`)[1];
-                await connection.execute(fileQuery, [profileFileId, bucketName, profileGcsPath, 'profile.png', userId]); // 여기서 userId는 프론트엔드에서 넘어온 CUST_ID임
+                await connection.execute(fileQuery, [profileFileId, bucketName, profileGcsPath, 'profile', userId]); // ORG_FILE_NM 확장자 제외
             }
 
             if (licenseImgUrl) {
@@ -816,7 +895,7 @@ app.post('/api/driver/profile', async (req, res) => {
                     ) VALUES (?, 'DRIVER_LICENSE', ?, ?, ?, 'png', 0, NOW(), ?)
                 `;
                 const licenseGcsPath = licenseImgUrl.split(`${bucketName}/`)[1];
-                await connection.execute(fileQuery, [licenseFileId, bucketName, licenseGcsPath, 'license.png', userId]);
+                await connection.execute(fileQuery, [licenseFileId, bucketName, licenseGcsPath, 'license', userId]);
             }
 
             const legCands = custIdMatchCandidates(String(userId).trim());
@@ -920,24 +999,26 @@ app.get('/api/driver/profile-setup', async (req, res) => {
         const profileCanon = canonicalFileMasterFileId(u.PROFILE_FILE_ID);
 
         connection = await pool.getConnection();
-        await ensureDriverDetailProfileColumns(connection);
 
         let detail = null;
         try {
             detail = await selectDriverDetailForProfileSetup(connection, resolvedCustId);
         } catch (e) {
-            if (e.code !== 'ER_NO_SUCH_TABLE') throw e;
-            detail = null;
+            if (e.code === 'ER_NO_SUCH_TABLE' || e.code === 'ER_BAD_FIELD_ERROR') detail = null;
+            else throw e;
         }
 
         let qualDocRow = null;
         try {
-            const [qr] = await connection.execute(
-                `SELECT DOC_TYPE_SEQ, ORG_FILE_NM, ORG_FILE_EXT, FILE_SIZE
-                 FROM TB_DRIVER_DOCS
-                 WHERE CUST_ID = ? AND DOC_TYPE = ? ORDER BY DOC_TYPE_SEQ DESC LIMIT 1`,
-                [resolvedCustId, QUALIFICATION_DOC_TYPE]
-            );
+            const hasDriverDocsFileSize = await tableColumnExists(connection, 'TB_DRIVER_DOCS', 'FILE_SIZE');
+            const docSel = hasDriverDocsFileSize
+                ? `SELECT DOC_TYPE_SEQ, ORG_FILE_NM, ORG_FILE_EXT, FILE_SIZE
+                   FROM TB_DRIVER_DOCS
+                   WHERE CUST_ID = ? AND DOC_TYPE = ? ORDER BY DOC_TYPE_SEQ DESC LIMIT 1`
+                : `SELECT DOC_TYPE_SEQ, ORG_FILE_NM, ORG_FILE_EXT
+                   FROM TB_DRIVER_DOCS
+                   WHERE CUST_ID = ? AND DOC_TYPE = ? ORDER BY DOC_TYPE_SEQ DESC LIMIT 1`;
+            const [qr] = await connection.execute(docSel, [resolvedCustId, QUALIFICATION_DOC_TYPE]);
             qualDocRow = qr[0] || null;
         } catch (_) {
             qualDocRow = null;
@@ -1354,27 +1435,28 @@ app.post('/api/auction/complex-cancel', async (req, res) => {
         // 1. 파일 처리 (GCS 업로드 및 TB_FILE_MASTER 등록)
         let fileId = null;
         if (fileData) {
-            const parsed = parseDataUrlPayload(fileData, fileName);
-            if (parsed) {
-                // 새로운 FILE_ID 생성
-                const [maxRows] = await connection.execute('SELECT MAX(FILE_ID) as maxId FROM TB_FILE_MASTER');
-                fileId = generateNextNumericId(maxRows[0].maxId || '0', 20);
-                
-                const gcsPath = `cancel_docs/${custId}/${fileId}_${parsed.orgName}.${parsed.ext}`;
-                const gcsFile = bucket.file(gcsPath);
-                
-                // GCS에 파일 저장
-                await gcsFile.save(parsed.buffer, { 
-                    metadata: { contentType: parsed.mime }, 
-                    resumable: false 
-                });
+                const parsed = parseDataUrlPayload(fileData, fileName);
+                if (parsed) {
+                    // 새로운 FILE_ID 생성
+                    const [maxRows] = await connection.execute('SELECT MAX(FILE_ID) as maxId FROM TB_FILE_MASTER');
+                    fileId = generateNextNumericId(maxRows[0].maxId || '0', 20);
 
-                // TB_FILE_MASTER 기록
-                await connection.execute(`
-                    INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT)
-                    VALUES (?, 'CANCEL_DOC', ?, ?, ?, ?, ?, NOW())
-                `, [fileId, bucketName, gcsPath, parsed.orgName, parsed.ext, parsed.buffer.length]);
-            }
+                    const { orgFileNm, fileExt } = orgFileNmAndExt(fileName, parsed);
+                    const gcsPath = `cancel_docs/${custId}/${fileId}_${orgFileNm}.${fileExt}`;
+                    const gcsFile = bucket.file(gcsPath);
+
+                    // GCS에 파일 저장
+                    await gcsFile.save(parsed.buffer, {
+                        metadata: { contentType: parsed.mime },
+                        resumable: false
+                    });
+
+                    // TB_FILE_MASTER 기록
+                    await connection.execute(`
+                        INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT)
+                        VALUES (?, 'CANCEL_DOC', ?, ?, ?, ?, ?, NOW())
+                    `, [fileId, bucketName, gcsPath, orgFileNm, fileExt, parsed.buffer.length]);
+                }
         }
 
         // 2. TB_AUCTION_REQ 상태 확인 및 변경
@@ -2310,6 +2392,7 @@ app.post('/api/driver/profile-setup', async (req, res) => {
             qualCertNo,
             bioText,
             qualCertBase64,
+            qualCertFileName,
             driverName,
             addrType,
             addrName,
@@ -2369,11 +2452,19 @@ app.post('/api/driver/profile-setup', async (req, res) => {
         }
 
         connection = await pool.getConnection();
-        await ensureDriverDetailProfileColumns(connection);
-        await ensureDriverDocsFileSizeColumn(connection);
+        const ddMap = await driverDetailColumnMap(connection);
+        const hasDriverDocsFileSize = await tableColumnExists(connection, 'TB_DRIVER_DOCS', 'FILE_SIZE');
+        const hasFullLicense = [
+            'LICENSE_TYPE',
+            'LICENSE_NO',
+            'LICENSE_SERIAL_NO',
+            'LICENSE_ISSUE_DT',
+            'LICENSE_EXPIRY_DT'
+        ].every((n) => ddHas(ddMap, n));
+        const hasQualPair = ddHas(ddMap, 'QUAL_CERT_NO') && ddHas(ddMap, 'QUAL_CERT_VERIFY_STATUS');
+        const hasQualVerifyDtCol = ddHas(ddMap, 'QUAL_CERT_VERIFY_DT');
 
-        const hasLicenseCols = await tableColumnExists(connection, 'TB_DRIVER_DETAIL', 'LICENSE_TYPE');
-        const licenseRowForVerify = hasLicenseCols
+        const licenseRowForVerify = hasFullLicense
             ? await fetchDriverDetailLicenseRow(connection, custId)
             : null;
         const qualBirthRow = await fetchDriverDetailQualBirthRow(connection, custId);
@@ -2493,92 +2584,78 @@ app.post('/api/driver/profile-setup', async (req, res) => {
 
             const detailAddrNameDb = addrT === 'OTHER' ? addrNm : null;
 
-            if (!hasLicenseCols) {
-                await connection.execute(
-                    `
-                    INSERT INTO TB_DRIVER_DETAIL (
-                        CUST_ID, ZIPCODE, ADDRESS, DETAIL_ADDRESS, ADDR_TYPE, ADDR_NAME,
-                        BIRTH_YMD, SEX, SELF_INTRO, FEE_POLICY
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE
-                        ZIPCODE = VALUES(ZIPCODE),
-                        ADDRESS = VALUES(ADDRESS),
-                        DETAIL_ADDRESS = VALUES(DETAIL_ADDRESS),
-                        ADDR_TYPE = VALUES(ADDR_TYPE),
-                        ADDR_NAME = VALUES(ADDR_NAME),
-                        BIRTH_YMD = VALUES(BIRTH_YMD),
-                        SEX = VALUES(SEX),
-                        SELF_INTRO = VALUES(SELF_INTRO),
-                        FEE_POLICY = VALUES(FEE_POLICY),
-                        MOD_DT = NOW()
-                    `,
-                    [
-                        ddPkVal,
-                        zipTrim || null,
-                        addrRoad || null,
-                        detailTrim || null,
-                        addrT,
-                        detailAddrNameDb,
-                        birthYmdYyMmDd || null,
-                        sexDigit,
-                        bioText ?? '',
-                        feePolicyTrim
-                    ]
+            const KEYS_DD_MIN = [
+                'CUST_ID',
+                'ZIPCODE',
+                'ADDRESS',
+                'DETAIL_ADDRESS',
+                'ADDR_TYPE',
+                'ADDR_NAME',
+                'BIRTH_YMD',
+                'SEX',
+                'SELF_INTRO',
+                'FEE_POLICY'
+            ];
+            const KEYS_DD_LICENSE_EXTRA = [
+                'LICENSE_TYPE',
+                'LICENSE_NO',
+                'LICENSE_SERIAL_NO',
+                'LICENSE_ISSUE_DT',
+                'LICENSE_EXPIRY_DT'
+            ];
+            const KEYS_DD_QUAL_PAIR = ['QUAL_CERT_NO', 'QUAL_CERT_VERIFY_STATUS'];
+            const KEYS_DD_QUAL_DT = ['QUAL_CERT_VERIFY_DT'];
+
+            const vkDd = {
+                CUST_ID: ddPkVal,
+                ZIPCODE: zipTrim || null,
+                ADDRESS: addrRoad || null,
+                DETAIL_ADDRESS: detailTrim || null,
+                ADDR_TYPE: addrT,
+                ADDR_NAME: detailAddrNameDb,
+                BIRTH_YMD: birthYmdYyMmDd || null,
+                SEX: sexDigit,
+                SELF_INTRO: bioText ?? '',
+                FEE_POLICY: feePolicyTrim,
+                LICENSE_TYPE: licenseType,
+                LICENSE_NO: licenseNo,
+                LICENSE_SERIAL_NO: licenseSerialNo || null,
+                LICENSE_ISSUE_DT: licenseIssueDt,
+                LICENSE_EXPIRY_DT: licenseExpiryDt,
+                QUAL_CERT_NO: qualCertNoTrim,
+                QUAL_CERT_VERIFY_STATUS: qualCertVerifyStatus,
+                QUAL_CERT_VERIFY_DT: qualCertVerifyDt
+            };
+
+            if (!hasFullLicense) {
+                await executeDriverDetailProfileUpsert(connection, ddMap, KEYS_DD_MIN, vkDd);
+            } else if (!hasQualPair) {
+                await executeDriverDetailProfileUpsert(
+                    connection,
+                    ddMap,
+                    [...KEYS_DD_MIN, ...KEYS_DD_LICENSE_EXTRA],
+                    vkDd
+                );
+            } else if (!hasQualVerifyDtCol) {
+                await executeDriverDetailProfileUpsert(
+                    connection,
+                    ddMap,
+                    [...KEYS_DD_MIN, ...KEYS_DD_LICENSE_EXTRA, ...KEYS_DD_QUAL_PAIR],
+                    vkDd
                 );
             } else {
-                await connection.execute(
-                    `
-                    INSERT INTO TB_DRIVER_DETAIL (
-                        CUST_ID, ZIPCODE, ADDRESS, DETAIL_ADDRESS, ADDR_TYPE, ADDR_NAME,
-                        BIRTH_YMD, SEX, SELF_INTRO, FEE_POLICY,
-                        LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO, LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT,
-                        QUAL_CERT_NO, QUAL_CERT_VERIFY_STATUS, QUAL_CERT_VERIFY_DT
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE
-                        ZIPCODE = VALUES(ZIPCODE),
-                        ADDRESS = VALUES(ADDRESS),
-                        DETAIL_ADDRESS = VALUES(DETAIL_ADDRESS),
-                        ADDR_TYPE = VALUES(ADDR_TYPE),
-                        ADDR_NAME = VALUES(ADDR_NAME),
-                        BIRTH_YMD = VALUES(BIRTH_YMD),
-                        SEX = VALUES(SEX),
-                        SELF_INTRO = VALUES(SELF_INTRO),
-                        FEE_POLICY = VALUES(FEE_POLICY),
-                        LICENSE_TYPE = VALUES(LICENSE_TYPE),
-                        LICENSE_NO = VALUES(LICENSE_NO),
-                        LICENSE_SERIAL_NO = VALUES(LICENSE_SERIAL_NO),
-                        LICENSE_ISSUE_DT = VALUES(LICENSE_ISSUE_DT),
-                        LICENSE_EXPIRY_DT = VALUES(LICENSE_EXPIRY_DT),
-                        QUAL_CERT_NO = VALUES(QUAL_CERT_NO),
-                        QUAL_CERT_VERIFY_STATUS = VALUES(QUAL_CERT_VERIFY_STATUS),
-                        QUAL_CERT_VERIFY_DT = COALESCE(VALUES(QUAL_CERT_VERIFY_DT), QUAL_CERT_VERIFY_DT),
-                        MOD_DT = NOW()
-                    `,
-                    [
-                        ddPkVal,
-                        zipTrim || null,
-                        addrRoad || null,
-                        detailTrim || null,
-                        addrT,
-                        detailAddrNameDb,
-                        birthYmdYyMmDd || null,
-                        sexDigit,
-                        bioText ?? '',
-                        feePolicyTrim,
-                        licenseType,
-                        licenseNo,
-                        licenseSerialNo || null,
-                        licenseIssueDt,
-                        licenseExpiryDt,
-                        qualCertNoTrim,
-                        qualCertVerifyStatus,
-                        qualCertVerifyDt
-                    ]
+                await executeDriverDetailProfileUpsert(
+                    connection,
+                    ddMap,
+                    [...KEYS_DD_MIN, ...KEYS_DD_LICENSE_EXTRA, ...KEYS_DD_QUAL_PAIR, ...KEYS_DD_QUAL_DT],
+                    vkDd,
+                    { verifyDtCoalesce: true }
                 );
             }
 
             if (qualCertBase64 && String(qualCertBase64).startsWith('data:')) {
-                const parsed = parseDataUrlPayload(String(qualCertBase64), 'qualification');
+                const hintNm = qualCertFileName != null ? String(qualCertFileName).trim() : '';
+                const parsed = parseDataUrlPayload(String(qualCertBase64), hintNm || 'qualification');
                 if (parsed?.buffer?.length) {
                     const MAX_DOC = 10 * 1024 * 1024;
                     if (parsed.buffer.length > MAX_DOC) {
@@ -2599,8 +2676,8 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                     }
 
                     const seqPadded = String(nextSeq).padStart(20, '0');
-                    const gcsRelPath = `QUALIFICATION/${seqPadded}.${parsed.ext}`;
-                    const orgBase = path.parse(parsed.orgName || `qual.${parsed.ext}`).name || 'qual';
+                    const { orgFileNm, fileExt } = orgFileNmAndExt(hintNm || undefined, parsed);
+                    const gcsRelPath = `QUALIFICATION/${seqPadded}.${fileExt}`;
 
                     const qualBuckets = bucketForName(DRIVER_QUAL_GCS_BUCKET);
                     const gcsFile = qualBuckets.file(gcsRelPath);
@@ -2609,24 +2686,44 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                         resumable: false
                     });
 
-                    await connection.execute(
-                        `
+                    if (hasDriverDocsFileSize) {
+                        await connection.execute(
+                            `
                         INSERT INTO TB_DRIVER_DOCS (
                             CUST_ID, DOC_TYPE, DOC_TYPE_SEQ, GCS_BUCKET_NM, GCS_PATH,
                             ORG_FILE_NM, ORG_FILE_EXT, FILE_SIZE, REG_DT
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
                         `,
-                        [
-                            custId,
-                            QUALIFICATION_DOC_TYPE,
-                            nextSeq,
-                            DRIVER_QUAL_GCS_BUCKET,
-                            gcsRelPath,
-                            orgBase,
-                            parsed.ext,
-                            parsed.buffer.length
-                        ]
-                    );
+                            [
+                                custId,
+                                QUALIFICATION_DOC_TYPE,
+                                nextSeq,
+                                DRIVER_QUAL_GCS_BUCKET,
+                                gcsRelPath,
+                                orgFileNm,
+                                fileExt,
+                                parsed.buffer.length
+                            ]
+                        );
+                    } else {
+                        await connection.execute(
+                            `
+                        INSERT INTO TB_DRIVER_DOCS (
+                            CUST_ID, DOC_TYPE, DOC_TYPE_SEQ, GCS_BUCKET_NM, GCS_PATH,
+                            ORG_FILE_NM, ORG_FILE_EXT, REG_DT
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+                        `,
+                            [
+                                custId,
+                                QUALIFICATION_DOC_TYPE,
+                                nextSeq,
+                                DRIVER_QUAL_GCS_BUCKET,
+                                gcsRelPath,
+                                orgFileNm,
+                                fileExt
+                            ]
+                        );
+                    }
                     latestQualSeqPadded = seqPadded;
                 }
             }
@@ -2655,11 +2752,16 @@ app.post('/api/driver/profile-setup', async (req, res) => {
             let qualPostMeta = {};
             if (qualCertFileIdOut) {
                 try {
-                    const [metaRows] = await pool.execute(
-                        `SELECT ORG_FILE_NM, ORG_FILE_EXT, FILE_SIZE FROM TB_DRIVER_DOCS
-                         WHERE CUST_ID = ? AND DOC_TYPE = ? AND LPAD(DOC_TYPE_SEQ, 20, '0') = ? LIMIT 1`,
-                        [custId, QUALIFICATION_DOC_TYPE, qualCertFileIdOut]
-                    );
+                    const metaSql = hasDriverDocsFileSize
+                        ? `SELECT ORG_FILE_NM, ORG_FILE_EXT, FILE_SIZE FROM TB_DRIVER_DOCS
+                         WHERE CUST_ID = ? AND DOC_TYPE = ? AND LPAD(DOC_TYPE_SEQ, 20, '0') = ? LIMIT 1`
+                        : `SELECT ORG_FILE_NM, ORG_FILE_EXT FROM TB_DRIVER_DOCS
+                         WHERE CUST_ID = ? AND DOC_TYPE = ? AND LPAD(DOC_TYPE_SEQ, 20, '0') = ? LIMIT 1`;
+                    const [metaRows] = await pool.execute(metaSql, [
+                        custId,
+                        QUALIFICATION_DOC_TYPE,
+                        qualCertFileIdOut
+                    ]);
                     if (metaRows[0]) {
                         const ex = String(metaRows[0].ORG_FILE_EXT || '')
                             .replace(/^\./, '')
@@ -2673,7 +2775,9 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                                     : '',
                             qualCertFileExt: ex,
                             qualCertFileSize:
-                                metaRows[0].FILE_SIZE != null ? Number(metaRows[0].FILE_SIZE) : null
+                                hasDriverDocsFileSize && metaRows[0].FILE_SIZE != null
+                                    ? Number(metaRows[0].FILE_SIZE)
+                                    : null
                         };
                     }
                 } catch (_) {
@@ -3158,7 +3262,7 @@ app.get('/api/driver/qual-cert/download', async (req, res) => {
         const gcsFile = bucketForName(GCS_BUCKET_NM).file(GCS_PATH);
         const [exists] = await gcsFile.exists();
         if (!exists) return res.status(404).json({ error: '스토리지에 파일이 없습니다.' });
-        const safeNm = `${ORG_FILE_NM || 'qual_cert'}.${((ORG_FILE_EXT || '').replace(/^\./, '') || 'file')}`;
+        const safeNm = joinOrgFileDisplayName(ORG_FILE_NM || 'qual_cert', (ORG_FILE_EXT || '').replace(/^\./, '') || 'file');
         res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(safeNm)}`);
         gcsFile.createReadStream().on('error', (err) => {
             console.error('GCS download (qual-cert):', err);
@@ -3270,7 +3374,7 @@ app.get('/api/common-view/bus-document/download', async (req, res) => {
         else if (ext === 'jpg' || ext === 'jpeg') ct = 'image/jpeg';
         else if (ext === 'webp')               ct = 'image/webp';
 
-        const downloadName = `${ORG_FILE_NM || 'file'}.${ext}`;
+        const downloadName = joinOrgFileDisplayName(ORG_FILE_NM || 'file', ext);
         res.setHeader('Content-Type', ct);
         res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(downloadName)}`);
         gcsFile.createReadStream().on('error', (err) => {
@@ -3345,12 +3449,12 @@ app.get('/api/driver/bus-documents/file', async (req, res) => {
         if (!ok) return res.status(403).json({ error: '접근할 수 없는 파일입니다.' });
 
         const [rows] = await connection.execute(
-            `SELECT GCS_PATH, ORG_FILE_NM, FILE_EXT FROM TB_FILE_MASTER WHERE FILE_ID = ?`,
+            `SELECT GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT FROM TB_FILE_MASTER WHERE FILE_ID = ?`,
             [fileId]
         );
         if (rows.length === 0) return res.status(404).json({ error: '파일을 찾을 수 없습니다.' });
-        const { GCS_PATH, ORG_FILE_NM, FILE_EXT } = rows[0];
-        const gcsFile = bucket.file(GCS_PATH);
+        const { GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT } = rows[0];
+        const gcsFile = bucketForName(GCS_BUCKET_NM).file(GCS_PATH);
         const [exists] = await gcsFile.exists();
         if (!exists) return res.status(404).json({ error: '스토리지에 파일이 없습니다.' });
 
@@ -3362,7 +3466,10 @@ app.get('/api/driver/bus-documents/file', async (req, res) => {
         else if (ext === 'webp') ct = 'image/webp';
 
         res.setHeader('Content-Type', ct);
-        res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(ORG_FILE_NM || 'file')}`);
+        res.setHeader(
+            'Content-Disposition',
+            `inline; filename*=UTF-8''${encodeURIComponent(joinOrgFileDisplayName(ORG_FILE_NM || 'file', ext))}`
+        );
         gcsFile.createReadStream().on('error', (err) => {
             console.error('GCS read:', err);
             if (!res.headersSent) res.status(500).end();
@@ -3452,7 +3559,7 @@ app.get('/api/common-view/driver-cancel-proof/download', async (req, res) => {
         else if (ext === 'jpg' || ext === 'jpeg') ct = 'image/jpeg';
         else if (ext === 'webp') ct = 'image/webp';
 
-        const downloadName = `${row.ORG_FILE_NM || 'file'}.${ext}`;
+        const downloadName = joinOrgFileDisplayName(row.ORG_FILE_NM || 'file', ext);
         res.setHeader('Content-Type', ct);
         res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(downloadName)}`);
         gcsFile.createReadStream().on('error', (err) => {
@@ -3499,7 +3606,10 @@ app.get('/api/driver/driver-cancel-proof/file', async (req, res) => {
         else if (ext === 'webp') ct = 'image/webp';
 
         res.setHeader('Content-Type', ct);
-        res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(row.ORG_FILE_NM || 'file')}`);
+        res.setHeader(
+            'Content-Disposition',
+            `inline; filename*=UTF-8''${encodeURIComponent(joinOrgFileDisplayName(row.ORG_FILE_NM || 'file', ext))}`
+        );
         gcsFile.createReadStream().on('error', (err) => {
             console.error('GCS read (driver-cancel-proof):', err);
             if (!res.headersSent) res.status(500).end();

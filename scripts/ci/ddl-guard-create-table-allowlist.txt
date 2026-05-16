@@ -1,0 +1,3 @@
+# CREATE TABLE 문자열이 허용되는 소스 파일(한 줄에 하나, 저장소 루트 기준 상대 경로).
+# 예외 추가 시 PR에서 근거·제거 계획을 명시할 것.
+busTaams_server/server.js
