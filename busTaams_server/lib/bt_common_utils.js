@@ -37,12 +37,87 @@ function parseDataUrlPayload(dataUrl, fileNameHint = 'file') {
     const buf = Buffer.from(m[2], 'base64');
     let ext = 'bin';
     if (mime.includes('pdf')) ext = 'pdf';
-    else if (mime.includes('jpeg') || mime.includes('jpg')) ext = 'jpg';
+    else if (mime.includes('jpeg') || mime.includes('jpg')) ext = 'jpeg';
     else if (mime.includes('png')) ext = 'png';
     else if (mime.includes('webp')) ext = 'webp';
     else if (mime.includes('gif')) ext = 'gif';
     const safe = String(fileNameHint || 'file').replace(/[^a-zA-Z0-9._-가-힣]/g, '_');
     return { buffer: buf, ext, mime, orgName: safe };
+}
+
+/**
+ * TB_FILE_MASTER.FILE_EXT 저장용 — 소문자·무점, jpg/jpeg → jpeg 통일
+ */
+function normalizeFileExtForMaster(ext) {
+    let e = String(ext ?? '')
+        .replace(/^\./, '')
+        .replace(/[^\w]/g, '')
+        .toLowerCase()
+        .trim();
+    if (!e) return '';
+    if (e === 'jpg' || e === 'jpeg') return 'jpeg';
+    return e.slice(0, 15);
+}
+
+/** 파일명 본문에서 `.{ext}`(및 jpg/jpeg 동등) 반복 접미사 제거 → ORG_FILE_NM 은 확장자 미포함 */
+function stripExtensionLayersFromBase(base, fileExt) {
+    let b = String(base ?? '').trim();
+    const canon = normalizeFileExtForMaster(fileExt);
+    const variants = !canon ? [] : canon === 'jpeg' ? ['jpeg', 'jpg'] : [canon];
+    if (!b || variants.length === 0) return b.replace(/\.+$/, '').trim() || 'file';
+    for (let guard = 0; guard < 24; guard += 1) {
+        let hit = false;
+        const lb = b.toLowerCase();
+        for (const v of variants) {
+            const suf = `.${v.toLowerCase()}`;
+            if (lb.endsWith(suf)) {
+                b = b.slice(0, -suf.length);
+                hit = true;
+                break;
+            }
+        }
+        if (!hit) break;
+    }
+    return b.replace(/\.+$/, '').trim() || 'file';
+}
+
+/**
+ * 업로드 힌트 + parseDataUrlPayload 결과 → TB_FILE_MASTER 용 ORG_FILE_NM(확장자 제외)·FILE_EXT
+ */
+function orgFileNmAndExt(fileNameHint, parsed) {
+    const p = parsed && typeof parsed === 'object' ? parsed : {};
+    const mimeHintExt = normalizeFileExtForMaster(p.ext || '');
+    const hintRaw = String(fileNameHint || p.orgName || 'file').trim();
+    const leaf = hintRaw.replace(/\\/g, '/').split('/').pop() || 'file';
+    const idx = leaf.lastIndexOf('.');
+    let base = leaf;
+    let ext = mimeHintExt;
+    if (idx > 0) {
+        base = leaf.slice(0, idx);
+        ext = normalizeFileExtForMaster(leaf.slice(idx + 1)) || ext;
+    }
+    if (!ext) ext = mimeHintExt;
+    if (!ext) ext = 'bin';
+
+    base = stripExtensionLayersFromBase(base, ext);
+
+    const orgFileNm = base.replace(/[^a-zA-Z0-9._-가-힣]/g, '_').replace(/\.+$/, '') || 'file';
+    let fileExt = ext;
+    if ((!fileExt || fileExt === 'bin') && mimeHintExt) fileExt = mimeHintExt;
+    if (!fileExt || fileExt === 'bin') fileExt = 'bin';
+    fileExt = normalizeFileExtForMaster(fileExt) || 'bin';
+    return { orgFileNm, fileExt };
+}
+
+/** 표시·다운로드 파일명 — ORG_FILE_NM 에 이미 동일 확장자가 있으면 중복 부착 안 함 */
+function joinOrgFileDisplayName(orgFileNm, fileExt) {
+    const nm = String(orgFileNm ?? '').trim() || 'file';
+    const rawExt = String(fileExt ?? '').replace(/^\./, '').trim();
+    if (!rawExt) return nm;
+    const ext = rawExt.toLowerCase();
+    const suffix = `.${ext}`;
+    if (nm.toLowerCase().endsWith(suffix)) return nm;
+    return `${nm}.${ext}`;
 }
 
 /** Firebase 서비스 계정이 있으면 true */
@@ -105,6 +180,10 @@ module.exports = {
     generateNextNumericId,
     formatDateYmd,
     parseDataUrlPayload,
+    normalizeFileExtForMaster,
+    stripExtensionLayersFromBase,
+    orgFileNmAndExt,
+    joinOrgFileDisplayName,
     sendAlimTalkAndLog,
     firebaseAdminConfigured,
     verifyFirebasePhoneIdTokenIfRequired,

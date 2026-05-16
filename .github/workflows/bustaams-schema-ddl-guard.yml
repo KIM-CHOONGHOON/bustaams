@@ -1,0 +1,16 @@
+# bustaams DB: 애플리케이션 소스에서 DDL(테이블/컬럼 추가·삭제·변경) 금지
+name: bustaams schema DDL guard
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+
+jobs:
+  no-ddl-in-app-sources:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check application sources for DDL
+        run: bash scripts/ci/check-bustaams-no-ddl.sh

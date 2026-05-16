@@ -4,7 +4,8 @@ const {
     generateNextNumericId, 
     sendAlimTalkAndLog,
     trimAddress,
-    parseDataUrlPayload
+    parseDataUrlPayload,
+    orgFileNmAndExt,
 } = require('../lib/bt_common_utils');
 const { rollbackMomMember } = require('../lib/driverBidMomMember');
 
@@ -263,13 +264,14 @@ function createAuctionTripRouter(pool, admin, bucket, bucketName) {
                 if (parsed) {
                     const [maxRows] = await connection.execute('SELECT MAX(FILE_ID) as maxId FROM TB_FILE_MASTER');
                     fileId = generateNextNumericId(maxRows[0].maxId || '0', 20);
-                    const gcsPath = `cancel_docs/${custId}/${fileId}_${parsed.orgName}.${parsed.ext}`;
+                    const { orgFileNm, fileExt } = orgFileNmAndExt(fileName, parsed);
+                    const gcsPath = `cancel_docs/${custId}/${fileId}_${orgFileNm}.${fileExt}`;
                     const gcsFile = bucket.file(gcsPath);
                     await gcsFile.save(parsed.buffer, { metadata: { contentType: parsed.mime }, resumable: false });
                     await connection.execute(`
                         INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT)
                         VALUES (?, 'CANCEL_DOC', ?, ?, ?, ?, ?, NOW())
-                    `, [fileId, bucketName, gcsPath, parsed.orgName, parsed.ext, parsed.buffer.length]);
+                    `, [fileId, bucketName, gcsPath, orgFileNm, fileExt, parsed.buffer.length]);
                 }
             }
 
