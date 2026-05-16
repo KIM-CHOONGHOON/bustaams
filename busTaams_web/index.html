@@ -1,22 +1,23 @@
 <!doctype html>
 <html lang="ko">
   <head>
-    <script type="text/javascript">
-      // 이니시스 SDK의 고질적인 toLowerCase 에러 방지용 보호 코드
-      (function() {
-        var orgGetAttribute = HTMLScriptElement.prototype.getAttribute;
-        HTMLScriptElement.prototype.getAttribute = function(name) {
-          var val = orgGetAttribute.apply(this, arguments);
-          if (name === 'src' && val === null) return '';
-          return val;
-        };
-      })();
-    </script>
-    <script id="inistdpay_js" type="text/javascript" src="https://stdpay.inicis.com/stdjs/INIStdPay.js" charset="UTF-8"></script>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>busTaams - 전세버스 최저가 역경매 서비스</title>
+    <!-- PWA Settings -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0052cc" />
+    <link rel="apple-touch-icon" href="/icon-512.png" />
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('SW Registered', reg))
+            .catch(err => console.log('SW Reg Error', err));
+        });
+      }
+    </script>
     <!-- Google Fonts for Radiant Traveler Design System -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

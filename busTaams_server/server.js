@@ -10,7 +10,7 @@ const path = require('path');
 const admin = require('firebase-admin');
 const { pool, getNextId } = require('./db');
 const { Storage } = require('@google-cloud/storage');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const { encrypt, decrypt } = require('./crypto');
 
 /**
@@ -4884,5 +4884,3 @@ app.listen(PORT, () => {
         if (connection) connection.release();
     }
 })();
-
->>>>>>> 44d2817b1b404f9da3159a6894dd7f0493bfe810

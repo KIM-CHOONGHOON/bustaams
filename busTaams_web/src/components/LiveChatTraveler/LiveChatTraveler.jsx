@@ -65,7 +65,6 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
   const [partners, setPartners] = useState([]);
   const [reqId, setReqId] = useState('');
   const [resId, setResId] = useState('');
-  const [chatSeq, setChatSeq] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loadingPartners, setLoadingPartners] = useState(false);
@@ -73,7 +72,6 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
   const [error, setError] = useState(null);
   const [sending, setSending] = useState(false);
   const scrollRef = useRef(null);
-  const lastHistSeqRef = useRef(0);
 
   const fetchPartners = useCallback(async () => {
     if (!travelerSession) return;
@@ -123,57 +121,31 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
     if (row) setResId(row.resId);
   }, [reqId, partners]);
 
-  const fetchMessages = useCallback(
-    async (opts = {}) => {
-      const incremental = opts.incremental === true;
-      if (!travelerSession || !reqId || !resId) {
+  const fetchMessages = useCallback(async () => {
+    if (!travelerSession || !reqId || !resId) {
+      setMessages([]);
+      return;
+    }
+    setLoadingMessages(true);
+    setError(null);
+    try {
+      const r = await fetch(
+        `${API_BASE}/api/live-chat-traveler/messages?travelerId=${encodeURIComponent(travelerSession)}&reqId=${encodeURIComponent(reqId)}&resId=${encodeURIComponent(resId)}`
+      );
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
         setMessages([]);
+        setError(data.error || `메시지 조회 오류 (${r.status})`);
         return;
       }
-      if (!incremental) {
-        setLoadingMessages(true);
-        lastHistSeqRef.current = 0;
-      }
-      setError(null);
-      try {
-        const after = incremental ? lastHistSeqRef.current : 0;
-        let url = `${API_BASE}/api/live-chat-traveler/messages?travelerId=${encodeURIComponent(travelerSession)}&reqId=${encodeURIComponent(reqId)}&resId=${encodeURIComponent(resId)}`;
-        if (after > 0) url += `&afterHistSeq=${encodeURIComponent(String(after))}`;
-        const r = await fetch(url);
-        const data = await r.json().catch(() => ({}));
-        if (!r.ok) {
-          if (!incremental) setMessages([]);
-          setError(data.error || `메시지 조회 오류 (${r.status})`);
-          return;
-        }
-        if (data.chatSeq != null) setChatSeq(Number(data.chatSeq));
-        const items = Array.isArray(data.items) ? data.items : [];
-        if (incremental && items.length > 0) {
-          setMessages((prev) => {
-            const map = new Map(prev.map((m) => [Number(m.histSeq), m]));
-            for (const it of items) map.set(Number(it.histSeq), it);
-            return Array.from(map.values()).sort((a, b) => Number(a.histSeq) - Number(b.histSeq));
-          });
-        } else if (!incremental) {
-          setMessages(items);
-        }
-        const maxIncoming = items.reduce((m, x) => Math.max(m, Number(x.histSeq) || 0), 0);
-        if (!incremental) {
-          lastHistSeqRef.current = maxIncoming;
-        } else if (maxIncoming > lastHistSeqRef.current) {
-          lastHistSeqRef.current = maxIncoming;
-        }
-      } catch (e) {
-        if (!incremental) {
-          setError(e.message || '네트워크 오류');
-          setMessages([]);
-        }
-      } finally {
-        if (!incremental) setLoadingMessages(false);
-      }
-    },
-    [travelerSession, reqId, resId]
-  );
+      setMessages(Array.isArray(data.items) ? data.items : []);
+    } catch (e) {
+      setError(e.message || '네트워크 오류');
+      setMessages([]);
+    } finally {
+      setLoadingMessages(false);
+    }
+  }, [travelerSession, reqId, resId]);
 
   useEffect(() => {
     if (!open) return;
@@ -191,25 +163,19 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
   useEffect(() => {
     if (!reqId) {
       setMessages([]);
-      lastHistSeqRef.current = 0;
-      setChatSeq(null);
       return;
     }
     setMessages([]);
-    lastHistSeqRef.current = 0;
-    setChatSeq(null);
   }, [reqId]);
 
   useEffect(() => {
     if (!open || !reqId || !resId) return;
-    fetchMessages({ incremental: false });
+    fetchMessages();
   }, [open, reqId, resId, fetchMessages]);
 
   useEffect(() => {
     if (!open || !travelerSession || !reqId || !resId) return;
-    const id = window.setInterval(() => {
-      fetchMessages({ incremental: true });
-    }, 5000);
+    const id = window.setInterval(fetchMessages, 5000);
     return () => window.clearInterval(id);
   }, [open, travelerSession, reqId, resId, fetchMessages]);
 
@@ -234,12 +200,8 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
         setError(data.error || `전송 실패 (${r.status})`);
         return;
       }
-      if (data.chatSeq != null) setChatSeq(Number(data.chatSeq));
-      if (data.histSeq != null) {
-        lastHistSeqRef.current = Math.max(lastHistSeqRef.current, Number(data.histSeq) || 0);
-      }
       setInput('');
-      await fetchMessages({ incremental: false });
+      await fetchMessages();
     } catch (e) {
       setError(e.message || '네트워크 오류');
     } finally {

@@ -1,14 +1,20 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import CommonView from '../CommonView/CommonView';
 
-const API_BASE =
-    (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '') || 'http://127.0.0.1:8080';
+/** API 필드 `busId` = DB `TB_BUS_DRIVER_VEHICLE.BUS_ID` (`VARCHAR(10)` 0패딩 — `BusTaams 테이블.md`). */
+/** `ownerId` = 세션 `userId` | `custId` | `userUuid` | `uuid` — REST에는 `userId` 필드로 전달. */
+/** 끝 슬래시 제거. 비어 있으면 동일 출처 `/api` + Vite proxy(개발) 사용 */
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const ALLOWED_DOC_TYPES   = [...ALLOWED_IMAGE_TYPES, 'application/pdf'];
 const ACCEPT_IMAGE = ALLOWED_IMAGE_TYPES.join(',');
 const ACCEPT_DOC   = ALLOWED_DOC_TYPES.join(',');
 
+/**
+ * HTML(index)이 오면 JSON 파싱 전에 안내 — `Unexpected token '<'` 방지
+ * @returns {{ res: Response, data: unknown }}
+ */
 async function fetchJson(url, init) {
     const res = await fetch(url, init);
     const text = await res.text();
@@ -48,9 +54,9 @@ function toManufactureYearLabel(y) {
 
 const defaultAmenities = () => ({
     wifi: false,
-    usb: false,
+    usb: true,
     screen: false,
-    fridge: false,
+    fridge: true,
     table: false,
 });
 
@@ -63,105 +69,11 @@ function readFileAsDataUrl(file) {
     });
 }
 
-function fileLabelFromMeta(orgFileNm, fileExt) {
-    const nm = (orgFileNm || '').trim() || '파일';
-    const ext = String(fileExt || '')
-        .replace(/^\./, '')
-        .toLowerCase()
-        .trim();
-    if (!ext) return nm;
-    const suffix = `.${ext}`;
-    if (nm.toLowerCase().endsWith(suffix)) return nm;
-    return `${nm}.${ext}`;
-}
-
-/** 로컬 파일에서 미리보기용 확장자 힌트 (PDF/이미지 구분) */
-function fileExtFromUpload(file) {
-    if (!file) return '';
-    const nm = file.name || '';
-    const i = nm.lastIndexOf('.');
-    if (i > 0) return nm.slice(i + 1).toLowerCase().replace(/[^\w]/g, '');
-    const t = file.type || '';
-    if (t === 'application/pdf') return 'pdf';
-    if (t === 'image/jpeg') return 'jpeg';
-    if (t === 'image/png') return 'png';
-    if (t === 'image/webp') return 'webp';
-    if (t === 'image/gif') return 'gif';
-    return '';
-}
-
-function docSlotExt(slot) {
-    const fe = String(slot?.fileExt || '')
-        .replace(/^\./, '')
-        .toLowerCase()
-        .trim();
-    if (fe) return fe;
-    const lb = slot?.label || '';
-    const idx = lb.lastIndexOf('.');
-    return idx > 0 ? lb.slice(idx + 1).toLowerCase() : '';
-}
-
-/** 원격 서류·차량 사진 스트림 미리보기 */
-function RemoteBusFileThumb({ url, isPdf, variant }) {
-    const [fail, setFail] = useState(false);
-    if (isPdf) {
-        return (
-            <iframe
-                title="문서 미리보기"
-                src={url}
-                className="w-full h-24 rounded border border-surface-container-low bg-white pointer-events-none"
-            />
-        );
-    }
-    if (fail) {
-        return (
-            <span className="text-[10px] text-outline text-center px-1 leading-tight block">
-                미리보기 실패
-                <span className="block font-normal opacity-80 mt-0.5">「파일보기」 또는 네트워크 확인</span>
-            </span>
-        );
-    }
-    const imgCls =
-        variant === 'photo'
-            ? 'w-full h-full object-cover'
-            : 'max-h-16 w-full object-contain mx-auto rounded';
-    return <img src={url} alt="" className={imgCls} onError={() => setFail(true)} />;
-}
-
-/** 주행거리 상한 (km) */
-const MILEAGE_MAX_KM = 9_999_999;
-
-/** 상태에는 숫자만 문자열로 저장, 상한·정수만 허용. 표시는 mileageStoredToFormatted(ko-KR 콤마) */
-function mileageClampFromInput(value) {
-    const d = String(value || '').replace(/\D/g, '');
-    if (!d) return '';
-    let n = Number(d);
-    if (!Number.isFinite(n) || n < 0) return '';
-    n = Math.trunc(n);
-    if (n > MILEAGE_MAX_KM) n = MILEAGE_MAX_KM;
-    return String(n);
-}
-
-function mileageStoredToFormatted(storedMileage) {
-    if (storedMileage === '' || storedMileage == null) return '';
-    let n = Number(String(storedMileage));
-    if (!Number.isFinite(n) || n < 0) return '';
-    n = Math.trunc(Math.min(n, MILEAGE_MAX_KM));
-    return n.toLocaleString('ko-KR');
-}
-
-/** API에서 받은 숫자/문자열 → 상태용 숫자 문자열 (정수·상한) */
-function mileageFromServer(raw) {
-    if (raw == null || raw === '') return '';
-    let n = Number(raw);
-    if (!Number.isFinite(n) || n < 0) return '';
-    n = Math.trunc(n);
-    if (n > MILEAGE_MAX_KM) n = MILEAGE_MAX_KM;
-    return String(n);
-}
-
 const BusInformationSetup = ({ close, currentUser }) => {
-    const custId = String(currentUser?.custId || '').trim();
+    const ownerId =
+        currentUser?.userId ||
+        currentUser?.custId ||
+        '';
 
     const [busCodes, setBusCodes] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -188,7 +100,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     /** null이면 formData 기준으로 표시, 포커스 시 네 자리 입력용 */
     const [yearDigitsInput, setYearDigitsInput] = useState(null);
-    /** CommonView: { fileId, docTitle } | null */
+    /** CommonView 대상: { fileId, docTitle } | null (TB_FILE_MASTER.FILE_ID) */
     const [commonViewTarget, setCommonViewTarget] = useState(null);
 
     const currentYear = new Date().getFullYear();
@@ -209,10 +121,10 @@ const BusInformationSetup = ({ close, currentUser }) => {
     const fileUrl = useCallback(
         (fileId) => {
             const base = API_BASE || '';
-            const path = `/api/driver/bus-documents/file?custId=${encodeURIComponent(custId || '')}&fileId=${encodeURIComponent(fileId)}`;
+            const path = `/api/driver/bus-documents/file?userId=${encodeURIComponent(ownerId || '')}&fileId=${encodeURIComponent(fileId)}`;
             return base ? `${base}${path}` : path;
         },
-        [custId]
+        [ownerId]
     );
 
     useEffect(() => {
@@ -225,9 +137,9 @@ const BusInformationSetup = ({ close, currentUser }) => {
     useEffect(() => {
         let cancelled = false;
         (async () => {
-            if (!custId) {
+            if (!ownerId) {
                 setLoading(false);
-                setLoadError('로그인 정보(CUST_ID)가 없습니다.');
+                setLoadError('로그인 정보가 없습니다.');
                 return;
             }
             setLoading(true);
@@ -236,7 +148,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
                 const api = (p) => (API_BASE ? `${API_BASE}${p}` : p);
                 const [codesOut, busOut] = await Promise.all([
                     fetchJson(api(`/api/common-codes?grpCd=BUS_TYPE`)),
-                    fetchJson(api(`/api/driver/bus?custId=${encodeURIComponent(custId)}`)),
+                    fetchJson(api(`/api/driver/bus?userId=${encodeURIComponent(ownerId)}`)),
                 ]);
                 const codesData = codesOut.data;
                 const busData = busOut.data;
@@ -263,7 +175,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
                         vehicleNo: bus.vehicleNo || '',
                         modelNm: bus.modelNm || '',
                         manufactureYear: myLabel,
-                        mileage: mileageFromServer(bus.mileage),
+                        mileage: bus.mileage != null ? String(bus.mileage) : '',
                         serviceClass: bus.serviceClass || (items[0]?.dtlCd ?? ''),
                         amenities: am,
                         hasAdas: !!bus.hasAdas,
@@ -271,30 +183,9 @@ const BusInformationSetup = ({ close, currentUser }) => {
                         insuranceExpDt: bus.insuranceExpDt || '',
                     });
                     setDocSlots({
-                        biz: bus.bizRegFile?.fileId
-                            ? {
-                                  mode: 'remote',
-                                  fileId: bus.bizRegFile.fileId,
-                                  label: fileLabelFromMeta(bus.bizRegFile.orgFileNm, bus.bizRegFile.fileExt),
-                                  fileExt: bus.bizRegFile.fileExt,
-                              }
-                            : null,
-                        trans: bus.transLicFile?.fileId
-                            ? {
-                                  mode: 'remote',
-                                  fileId: bus.transLicFile.fileId,
-                                  label: fileLabelFromMeta(bus.transLicFile.orgFileNm, bus.transLicFile.fileExt),
-                                  fileExt: bus.transLicFile.fileExt,
-                              }
-                            : null,
-                        ins: bus.insCertFile?.fileId
-                            ? {
-                                  mode: 'remote',
-                                  fileId: bus.insCertFile.fileId,
-                                  label: fileLabelFromMeta(bus.insCertFile.orgFileNm, bus.insCertFile.fileExt),
-                                  fileExt: bus.insCertFile.fileExt,
-                              }
-                            : null,
+                        biz: bus.bizRegFile?.fileId ? { mode: 'remote', fileId: bus.bizRegFile.fileId } : null,
+                        trans: bus.transLicFile?.fileId ? { mode: 'remote', fileId: bus.transLicFile.fileId } : null,
+                        ins: bus.insCertFile?.fileId ? { mode: 'remote', fileId: bus.insCertFile.fileId } : null,
                     });
                     const nextPhotos = Array(8).fill(null);
                     (bus.vehiclePhotoFileIds || []).slice(0, 8).forEach((fid, i) => {
@@ -306,7 +197,6 @@ const BusInformationSetup = ({ close, currentUser }) => {
                     setFormData((prev) => ({
                         ...prev,
                         serviceClass: items[0]?.dtlCd || 'NORMAL',
-                        amenities: defaultAmenities(),
                     }));
                     setDocSlots({ biz: null, trans: null, ins: null });
                     setPhotoSlots(Array(8).fill(null));
@@ -320,7 +210,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
         return () => {
             cancelled = true;
         };
-    }, [custId]);
+    }, [ownerId]);
 
     useEffect(() => {
         return () => {
@@ -340,11 +230,8 @@ const BusInformationSetup = ({ close, currentUser }) => {
                 ...prev,
                 amenities: { ...prev.amenities, [name]: checked },
             }));
-        } else if (name === 'mileage') {
-            setFormData((prev) => ({
-                ...prev,
-                mileage: mileageClampFromInput(value),
-            }));
+        } else if (name === 'hasAdas') {
+            setFormData((prev) => ({ ...prev, hasAdas: checked }));
         } else {
             setFormData((prev) => ({ ...prev, [name]: value }));
         }
@@ -368,10 +255,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
         setDocSlots((prev) => {
             const cur = prev[key];
             if (cur?.mode === 'local' && cur.previewUrl) URL.revokeObjectURL(cur.previewUrl);
-            return {
-                ...prev,
-                [key]: { mode: 'local', file, previewUrl, label: file.name, fileExt: fileExtFromUpload(file) },
-            };
+            return { ...prev, [key]: { mode: 'local', file, previewUrl } };
         });
     };
 
@@ -415,8 +299,8 @@ const BusInformationSetup = ({ close, currentUser }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!custId) {
-            alert('로그인 정보(CUST_ID)가 없습니다.');
+        if (!ownerId) {
+            alert('로그인 정보가 없습니다.');
             return;
         }
         if (!formData.serviceClass) {
@@ -440,11 +324,11 @@ const BusInformationSetup = ({ close, currentUser }) => {
 
             if (!existingBusId) {
                 const body = {
-                    custId,
+                    userId: ownerId,
                     vehicleNo: formData.vehicleNo,
                     modelNm: formData.modelNm,
                     manufactureYear: formData.manufactureYear,
-                    mileage: Math.min(Number(formData.mileage) || 0, MILEAGE_MAX_KM),
+                    mileage: Number(formData.mileage) || 0,
                     serviceClass: formData.serviceClass,
                     amenities: amenitiesPayload,
                     hasAdas: formData.hasAdas,
@@ -489,12 +373,12 @@ const BusInformationSetup = ({ close, currentUser }) => {
             }
 
             const patchBody = {
-                custId,
+                userId: ownerId,
                 busId: existingBusId,
                 vehicleNo: formData.vehicleNo,
                 modelNm: formData.modelNm,
                 manufactureYear: formData.manufactureYear,
-                mileage: Math.min(Number(formData.mileage) || 0, MILEAGE_MAX_KM),
+                mileage: Number(formData.mileage) || 0,
                 serviceClass: formData.serviceClass,
                 amenities: amenitiesPayload,
                 hasAdas: formData.hasAdas,
@@ -510,7 +394,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
             });
             if (!patchRes.ok) throw new Error(patchData?.error || '차량 정보 수정에 실패했습니다.');
 
-            const docBody = { custId, busId: existingBusId };
+            const docBody = { userId: ownerId, busId: existingBusId };
             let hasDoc = false;
             if (docSlots.biz?.mode === 'local' && docSlots.biz.file) {
                 docBody.businessLicenseBase64 = await readFileAsDataUrl(docSlots.biz.file);
@@ -552,7 +436,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    custId,
+                    userId: ownerId,
                     busId: existingBusId,
                     vehiclePhotos,
                 }),
@@ -571,28 +455,19 @@ const BusInformationSetup = ({ close, currentUser }) => {
     const docPreview = (slot) => {
         if (!slot) return null;
         if (slot.mode === 'remote') {
-            const ext = docSlotExt(slot);
-            const isPdf = ext === 'pdf';
-            const url = fileUrl(slot.fileId);
             return (
-                <div className="flex flex-col items-center justify-center gap-1 min-h-[72px] px-1 w-full">
-                    <span className="material-symbols-outlined text-3xl text-primary shrink-0" aria-hidden>
-                        {isPdf ? 'picture_as_pdf' : 'description'}
-                    </span>
-                    <div className="w-full">
-                        <RemoteBusFileThumb url={url} isPdf={isPdf} variant="doc" />
-                    </div>
-                    <span className="text-[10px] font-bold text-on-surface text-center break-all leading-tight">{slot.label}</span>
-                </div>
+                <img
+                    src={fileUrl(slot.fileId)}
+                    alt=""
+                    className="max-h-28 object-contain mx-auto"
+                    onError={(e) => {
+                        e.target.style.display = 'none';
+                    }}
+                />
             );
         }
         if (slot.file?.type === 'application/pdf') {
-            return (
-                <div className="flex flex-col items-center gap-1">
-                    <span className="material-symbols-outlined text-3xl text-primary">picture_as_pdf</span>
-                    <span className="text-xs text-outline text-center break-all">{slot.label || slot.file.name}</span>
-                </div>
-            );
+            return <span className="text-xs text-outline">{slot.file.name}</span>;
         }
         return <img src={slot.previewUrl} alt="" className="max-h-28 object-contain mx-auto" />;
     };
@@ -601,13 +476,20 @@ const BusInformationSetup = ({ close, currentUser }) => {
         if (!slot) return null;
         if (slot.mode === 'remote') {
             return (
-                <div className="w-full h-full min-h-[48px] flex items-center justify-center bg-surface-container-low/30">
-                    <RemoteBusFileThumb url={fileUrl(slot.fileId)} isPdf={false} variant="photo" />
-                </div>
+                <img
+                    src={fileUrl(slot.fileId)}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                        e.target.style.display = 'none';
+                    }}
+                />
             );
         }
         return <img src={slot.previewUrl} alt="" className="w-full h-full object-cover" />;
     };
+
+    const gridCols = busCodes.length <= 3 ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-3';
 
     return (
         <>
@@ -751,13 +633,12 @@ const BusInformationSetup = ({ close, currentUser }) => {
                                             <label className="text-xs font-bold text-primary px-1">주행 거리 (km)</label>
                                             <input
                                                 name="mileage"
-                                                value={mileageStoredToFormatted(formData.mileage)}
+                                                value={formData.mileage}
                                                 onChange={handleChange}
                                                 className="w-full bg-surface-container-high border-none outline-none rounded-xl p-4 focus:ring-2 focus:ring-primary/20 transition-all font-bold text-gray-900"
                                                 placeholder="0"
-                                                type="text"
-                                                inputMode="numeric"
-                                                autoComplete="off"
+                                                type="number"
+                                                min="0"
                                             />
                                         </div>
                                     </div>
@@ -770,46 +651,34 @@ const BusInformationSetup = ({ close, currentUser }) => {
                                     <h2 className="text-3xl font-bold text-on-surface mb-2" style={{ fontFamily: "'Plus Jakarta Sans'" }}>
                                         02. 서비스 등급
                                     </h2>
-                                    <p className="text-sm text-outline">
-                                        공통코드에서 버스 종류(<span className="font-mono text-xs">GRP_CD=BUS_TYPE</span>,{' '}
-                                        <span className="font-mono text-xs">USE_YN=Y</span>)만 표시 순서(
-                                        <span className="font-mono text-xs">DISP_ORD</span> 오름차순)대로 보여 줍니다. 버튼 선택 시{' '}
-                                        <span className="font-mono text-xs">DTL_CD</span>가 백엔드로 전달되어{' '}
-                                        <span className="font-mono text-xs">SERVICE_CLASS</span>에 저장됩니다.
-                                    </p>
+                                    <p className="text-sm text-outline">버스 종류(공통코드 BUS_TYPE) 중 하나를 선택합니다.</p>
                                 </div>
-                                <div className="col-span-12 md:col-span-8">
-                                    {/* 박스 면적 ≈ 1/4(한 변 ≈ 1/2): 기존 대비 가로·세로 각각 약 절반 */}
-                                    <div className="grid grid-cols-3 gap-2 w-full max-w-[21rem]">
-                                        {busCodes.map((c) => (
-                                            <button
-                                                key={c.dtlCd}
-                                                type="button"
-                                                onClick={() => handleClassChange(c.dtlCd)}
-                                                className={`relative flex aspect-square min-h-[2.75rem] w-full flex-col rounded-xl border-2 transition-all overflow-hidden ${
-                                                    formData.serviceClass === c.dtlCd
-                                                        ? 'bg-primary text-white border-primary shadow-md ring-2 ring-primary/30'
-                                                        : 'bg-surface-container-low border-outline-variant/40 hover:bg-white hover:border-primary/40'
-                                                }`}
-                                            >
+                                <div className={`col-span-12 md:col-span-8 grid ${gridCols} gap-3`}>
+                                    {busCodes.map((c) => (
+                                        <button
+                                            key={c.dtlCd}
+                                            type="button"
+                                            onClick={() => handleClassChange(c.dtlCd)}
+                                            className={`p-4 rounded-2xl text-left transition-colors border-2 ${
+                                                formData.serviceClass === c.dtlCd
+                                                    ? 'bg-primary text-white border-primary shadow-lg'
+                                                    : 'bg-surface-container-low border-transparent hover:bg-white hover:border-outline-variant'
+                                            }`}
+                                        >
+                                            <span className="font-bold text-sm block">{c.cdNmKo}</span>
+                                            {c.cdDescKo && (
                                                 <span
-                                                    className="absolute top-1 left-1 text-[2.25rem] sm:text-4xl leading-none select-none"
-                                                    aria-hidden
-                                                >
-                                                    🚌
-                                                </span>
-                                                <span
-                                                    className={`flex flex-1 items-center justify-center text-center px-1.5 pt-5 text-[10px] sm:text-xs font-bold leading-tight break-keep ${
-                                                        formData.serviceClass === c.dtlCd ? 'text-white' : 'text-gray-900'
+                                                    className={`text-[10px] block mt-1 ${
+                                                        formData.serviceClass === c.dtlCd ? 'text-white/85' : 'text-outline'
                                                     }`}
                                                 >
-                                                    {c.cdNmKo}
+                                                    {c.cdDescKo}
                                                 </span>
-                                            </button>
-                                        ))}
-                                    </div>
+                                            )}
+                                        </button>
+                                    ))}
                                     {!busCodes.length && (
-                                        <p className="mt-3 text-sm text-outline">버스 종류 코드를 불러오지 못했습니다.</p>
+                                        <p className="col-span-full text-sm text-outline">버스 종류 코드를 불러오지 못했습니다.</p>
                                     )}
                                 </div>
                             </section>
@@ -1047,11 +916,12 @@ const BusInformationSetup = ({ close, currentUser }) => {
                 </div>
             </div>
         </div>
+        {/* 서류 뷰어 — CommonView 중첩 모달 (소유 기사 본인 파일만) */}
         {commonViewTarget && (
             <CommonView
                 close={() => setCommonViewTarget(null)}
                 fileId={commonViewTarget.fileId}
-                custId={custId}
+                userId={ownerId}
                 docTitle={commonViewTarget.docTitle}
             />
         )}
