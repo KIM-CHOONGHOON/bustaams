@@ -3,8 +3,8 @@
  * GET /api/bus-operation-completion-list
  *   ?driverId|userId|driverUuid=&from=&to=
  *
- * `BusTaams 테이블.md`: TB_BUS_RESERVATION.DRIVER_ID = TB_USER.CUST_ID(varchar(10)) —
- * 쿼리의 driverId/userId/userUuid 문자열을 CUST_ID로 해석해 매칭(해석 실패 시 원문으로 비교).
+ * 정본: BusTaams_Project — TB_BUS_RESERVATION.DRIVER_ID = TB_USER.CUST_ID(varchar(10)).
+ * TB_AUCTION_REQ_BUS: REQ_ID + REQ_BUS_SEQ, 금액 RES_BUS_AMT 또는 TOLLS_AMT+FUEL_COST.
  */
 const { resolveCustIdByUserKey } = require('../lib/resolveCustIdByUserKey');
 const RANGE_ERROR_MSG = '조회 범위는 1년 이내만 가능합니다.';
@@ -15,10 +15,6 @@ function daysBetweenYmdUtc(fromStr, toStr) {
     const t0 = Date.UTC(fy, fm - 1, fd);
     const t1 = Date.UTC(ty, tm - 1, td);
     return Math.round((t1 - t0) / 86400000);
-}
-
-function isSchemaMismatchError(e) {
-    return e && (e.errno === 1054 || e.code === 'ER_BAD_FIELD_ERROR');
 }
 
 /** mysql2 Row 필드명 대소문자 차이 흡수 */
@@ -34,11 +30,16 @@ function rowCol(row, logical) {
 }
 
 function mapBusRow(b, idx) {
-    const busPk = b.reqBusId ?? b.req_bus_id ?? null;
+    const rid = b.reqId ?? b.req_id;
+    const seq = b.reqBusSeq ?? b.req_bus_seq;
+    const busPk =
+        b.reqBusId ??
+        b.req_bus_id ??
+        (rid != null && seq != null ? `${String(rid).trim()}-${seq}` : null);
     return {
         reqBusId: busPk,
         busTypeCd: String(b.busTypeCd ?? b.bus_type_cd ?? '').trim() || null,
-        reqBusCnt: Number(b.reqBusCnt ?? b.req_bus_cnt) || 0,
+        reqBusCnt: 1,
         reqAmtKrw: Number(b.reqAmt ?? b.req_amt) || 0,
         sortOrder: idx + 1,
     };
@@ -68,26 +69,16 @@ SELECT
    AND DATE(r.END_DT) <= ?
  ORDER BY r.END_DT DESC`;
 
-/** ARCHITECTURE TB_AUCTION_REQ_BUS: REQ_BUS_ID, REQ_ID — REQ_BUS_CNT/REQ_AMT 없을 수 있음 */
-const SQL_BUSES_ARCH_WIDE = (ph) => `
+/** Project TB_AUCTION_REQ_BUS — 행당 버스 1대, 금액은 RES_BUS_AMT 우선 */
+const SQL_BUSES_PROJECT = (ph) => `
 SELECT REQ_ID AS reqId,
-       REQ_BUS_ID AS reqBusId,
+       REQ_BUS_SEQ AS reqBusSeq,
+       CONCAT(REQ_ID, '-', REQ_BUS_SEQ) AS reqBusId,
        BUS_TYPE_CD AS busTypeCd,
-       COALESCE(REQ_BUS_CNT, 1) AS reqBusCnt,
-       COALESCE(REQ_AMT, COALESCE(TOLLS_AMT, 0) + COALESCE(FUEL_COST, 0), 0) AS reqAmt
+       COALESCE(RES_BUS_AMT, COALESCE(TOLLS_AMT, 0) + COALESCE(FUEL_COST, 0), 0) AS reqAmt
  FROM TB_AUCTION_REQ_BUS
  WHERE REQ_ID IN (${ph})
- ORDER BY REQ_ID, REG_DT ASC, REQ_BUS_ID ASC`;
-
-const SQL_BUSES_ARCH_NARROW = (ph) => `
-SELECT REQ_ID AS reqId,
-       REQ_BUS_ID AS reqBusId,
-       BUS_TYPE_CD AS busTypeCd,
-       1 AS reqBusCnt,
-       COALESCE(TOLLS_AMT, 0) + COALESCE(FUEL_COST, 0) AS reqAmt
- FROM TB_AUCTION_REQ_BUS
- WHERE REQ_ID IN (${ph})
- ORDER BY REQ_ID, REG_DT ASC, REQ_BUS_ID ASC`;
+ ORDER BY REQ_ID, REG_DT ASC, REQ_BUS_SEQ ASC`;
 
 module.exports = function registerBusOperationCompletionList(pool, app) {
     app.get('/api/bus-operation-completion-list', async (req, res) => {
@@ -145,14 +136,8 @@ module.exports = function registerBusOperationCompletionList(pool, app) {
             /** @type {Map<string, Array<{reqBusUuid:string|null,busTypeCd:string|null,reqBusCnt:number,reqAmtKrw:number,sortOrder:number}>>} */
             const busesByReq = new Map();
             if (reqIdList.length && connection) {
-                let busRows;
                 const ph = reqIdList.map(() => '?').join(', ');
-                try {
-                    [busRows] = await connection.execute(SQL_BUSES_ARCH_WIDE(ph), reqIdList);
-                } catch (e2) {
-                    if (!isSchemaMismatchError(e2)) throw e2;
-                    [busRows] = await connection.execute(SQL_BUSES_ARCH_NARROW(ph), reqIdList);
-                }
+                const [busRows] = await connection.execute(SQL_BUSES_PROJECT(ph), reqIdList);
                 for (const b of busRows) {
                     const k = String(b.reqId ?? b.req_id ?? '').trim().toLowerCase();
                     if (!k) continue;

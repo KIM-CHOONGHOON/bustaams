@@ -37,17 +37,24 @@ SELECT res.RES_ID AS resId,
    AND res.DATA_STAT IN ('CONFIRM','DONE')
  LIMIT 1`;
 
-const SQL_MESSAGES = `
+const SQL_MESSAGES_BASE = `
 SELECT h.HIST_SEQ AS histSeq,
        h.MSG_KIND AS msgKind,
        h.MSG_BODY AS msgBody,
        h.SENDER_ROLE AS senderRole,
        h.REG_DT AS regDt
   FROM TB_CHAT_LOG_HIST h
- INNER JOIN TB_CHAT_LOG c ON c.CHAT_SEQ = h.CHAT_SEQ
+ INNER JOIN TB_CHAT_LOG c ON c.CHAT_LOG_SEQ = h.CHAT_LOG_SEQ
  WHERE c.REQ_ID = ?
-   AND c.RES_ID = ?
- ORDER BY h.REG_DT ASC, h.HIST_SEQ ASC`;
+   AND c.RES_ID = ?`;
+
+async function chatSeqForThread(connection, reqId, resId) {
+    const [r] = await connection.execute(
+        `SELECT CHAT_LOG_SEQ AS chatSeq FROM TB_CHAT_LOG WHERE REQ_ID = ? AND RES_ID = ? LIMIT 1`,
+        [reqId, resId]
+    );
+    return r[0]?.chatSeq != null ? Number(r[0].chatSeq) : null;
+}
 
 module.exports = function createLiveChatTravelerRouter(pool) {
     const router = express.Router();
@@ -140,7 +147,15 @@ module.exports = function createLiveChatTravelerRouter(pool) {
                 return res.status(403).json({ error: '채팅할 수 있는 견적이 아니거나 조건에 맞지 않습니다.' });
             }
 
-            const [rows] = await connection.execute(SQL_MESSAGES, [reqId, resId]);
+            const chatSeq = await chatSeqForThread(connection, reqId, resId);
+            const afterRaw = req.query.afterHistSeq != null ? parseInt(String(req.query.afterHistSeq), 10) : 0;
+            const afterHistSeq = Number.isFinite(afterRaw) && afterRaw > 0 ? afterRaw : 0;
+            const sql =
+                afterHistSeq > 0
+                    ? `${SQL_MESSAGES_BASE} AND h.HIST_SEQ > ? ORDER BY h.REG_DT ASC, h.HIST_SEQ ASC`
+                    : `${SQL_MESSAGES_BASE} ORDER BY h.REG_DT ASC, h.HIST_SEQ ASC`;
+            const params = afterHistSeq > 0 ? [reqId, resId, afterHistSeq] : [reqId, resId];
+            const [rows] = await connection.execute(sql, params);
 
             const items = rows.map((row) => ({
                 histSeq: row.histSeq,
@@ -150,7 +165,7 @@ module.exports = function createLiveChatTravelerRouter(pool) {
                 regDt: row.regDt,
             }));
 
-            res.status(200).json({ items });
+            res.status(200).json({ chatSeq, items });
         } catch (error) {
             console.error('live-chat-traveler/messages GET:', error);
             res.status(500).json({ error: error.message });
@@ -196,7 +211,7 @@ module.exports = function createLiveChatTravelerRouter(pool) {
                 /* ignore */
             }
 
-            const { histSeq } = await insertTripChatMessage(connection, {
+            const { histSeq, chatSeq } = await insertTripChatMessage(connection, {
                 reqId,
                 resId,
                 travelerCustId,
@@ -217,6 +232,7 @@ module.exports = function createLiveChatTravelerRouter(pool) {
 
             res.status(201).json({
                 ok: true,
+                chatSeq,
                 histSeq,
                 msgKind: 'TEXT',
                 msgBody: text,

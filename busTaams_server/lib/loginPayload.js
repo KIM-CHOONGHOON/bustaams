@@ -1,4 +1,5 @@
 const { plainOrLegacyDecrypt } = require('../crypto');
+const { canonicalFileMasterFileId } = require('./bustaamsIds');
 
 const DEFAULT_CANCEL = {
     cancelCnt: 0,
@@ -29,15 +30,25 @@ function getMainDashboardBranch(userType) {
 
 function mapCancelRow(row) {
     if (!row) return { ...DEFAULT_CANCEL };
+    
+    // DB 플래그(YN)를 직접 체크
+    const isRestricted = row.TRADE_RESTRICT_YN === 'Y';
+
+    // [DEBUG] 로그
+    if (isRestricted) {
+        console.log(`[DEBUG] Final Restriction: TRUE (based on TRADE_RESTRICT_YN='Y')`);
+    }
+
     return {
         cancelCnt: row.CANCEL_CNT != null ? Number(row.CANCEL_CNT) : 0,
         cancelBusDriverCnt: row.CANCEL_BUS_DRIVER_CNT != null ? Number(row.CANCEL_BUS_DRIVER_CNT) : 0,
         cancelTravelerAllCnt: row.CANCEL_TRAVELER_ALL_CNT != null ? Number(row.CANCEL_TRAVELER_ALL_CNT) : 0,
         cancelTravelerPartialBusCnt: row.CANCEL_TRAVELER_PARTIAL_BUS_CNT != null
             ? Number(row.CANCEL_TRAVELER_PARTIAL_BUS_CNT) : 0,
-        tradeRestrictYn: (row.TRADE_RESTRICT_YN || 'N').toString().toUpperCase() === 'Y' ? 'Y' : 'N',
-        restrictStat: row.RESTRICT_STAT || 'N',
-        restrictEndDt: row.RESTRICT_END_DT || null,
+        tradeRestrictYn: isRestricted ? 'Y' : 'N', // 최종 판정
+        dbTradeRestrictYn: row.TRADE_RESTRICT_YN || 'N', // DB 원본 값
+        tradeRestrictStartDt: row.TRADE_RESTRICT_START_DT || null,
+        tradeRestrictEndDt: row.TRADE_RESTRICT_END_DT || null,
     };
 }
 
@@ -58,12 +69,12 @@ function getCurrentYyyyMm() {
 }
 
 /**
- * TB_USER_CANCEL_MANAGE: SERVER 환경.md CUST_ID 조인·BUSTAAMS 컬럼명 혼용 대응
+ * TB_USER_CANCEL_MANAGE — CUST_ID 기준
  */
 async function fetchCancelManageForUser(pool, user) {
-    const cust = user.CUST_ID != null && String(user.CUST_ID).trim() !== '' ? String(user.CUST_ID).trim() : '';
-    const loginId = user.USER_ID != null && String(user.USER_ID).trim() !== '' ? String(user.USER_ID).trim() : '';
-    const cols = `CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, CANCEL_TRAVELER_ALL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, TRADE_RESTRICT_YN, RESTRICT_STAT, RESTRICT_END_DT`;
+    const custRaw = user.CUST_ID != null && String(user.CUST_ID).trim() !== '' ? String(user.CUST_ID).trim() : '';
+    const cust = custRaw ? custRaw.padStart(10, '0') : '';
+    const cols = `CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, CANCEL_TRAVELER_ALL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, TRADE_RESTRICT_YN, TRADE_RESTRICT_START_DT, TRADE_RESTRICT_END_DT`;
 
     const tryQ = async (sql, args) => {
         const [rows] = await pool.execute(sql, args);
@@ -78,11 +89,6 @@ async function fetchCancelManageForUser(pool, user) {
             );
             if (row) return row;
         } catch (e) {
-            // CUST_ID 컬럼이 없는 구형 스키마 대응 (필요 시)
-            if (e.code === 'ER_BAD_FIELD_ERROR' || e.errno === 1054) {
-                // 운영 환경이 CUST_ID 체계이므로 여기서는 더 이상 USER_ID로 시도하지 않고 종료
-                return null;
-            }
             if (e.code === 'ER_NO_SUCH_TABLE') return null;
             throw e;
         }
@@ -105,14 +111,13 @@ async function fetchSubscriptionForDriver(pool, custId) {
         );
         return rows[0] || null;
     } catch (e) {
-        if (e.code === 'ER_NO_SUCH_TABLE' || e.code === 'ER_BAD_FIELD_ERROR' || e.errno === 1054) return null;
+        if (e.code === 'ER_NO_SUCH_TABLE') return null;
         throw e;
     }
 }
 
 /**
  * 로그인 응답 `user` DTO — JSON 키는 `BusTaams 테이블.md` `TB_USER` 컬럼 id를 camelCase(`CUST_ID`→`custId`)로 맞춤.
- * (중복 필드 `userName`/`phoneNo`/`tbUserId`는 사용하지 않음; 클라이언트 `normalizeUserSession`이 구 세션·호환용으로 정리.)
  * @param {object} params
  * @param {object} params.user — TB_USER 행
  * @param {object|null} params.cancelRow — TB_USER_CANCEL_MANAGE 또는 null(기본 0)
@@ -139,6 +144,9 @@ function buildPostLoginUserDto({ user, cancelRow, subscriptionRow }, opts = {}) 
         subscription = mapSubscriptionRow(subscriptionRow);
     }
 
+    // 최상위 레벨에서도 확인 가능하도록 추가
+    const isRestricted = cancelManage && cancelManage.tradeRestrictYn === 'Y';
+
     return {
         custId: user.CUST_ID != null ? String(user.CUST_ID).trim() : '',
         userId: user.USER_ID != null ? String(user.USER_ID).trim() : '',
@@ -147,16 +155,17 @@ function buildPostLoginUserDto({ user, cancelRow, subscriptionRow }, opts = {}) 
         hpNo,
         email: user.email || user.EMAIL || '',
         snsType: user.SNS_TYPE || 'NONE',
-        profileFileId: user.PROFILE_FILE_ID != null ? String(user.PROFILE_FILE_ID) : null,
-        profileImgPath: (user.USER_IMAGE && !user.USER_IMAGE.startsWith('http') && !user.USER_IMAGE.startsWith('/')) 
+        profileFileId: canonicalFileMasterFileId(user.PROFILE_FILE_ID),
+        profileImgPath: user.PROFILE_IMG_PATH || (user.USER_IMAGE && !user.USER_IMAGE.startsWith('http') && !user.USER_IMAGE.startsWith('/')) 
             ? `/api/common/display-image?path=${encodeURIComponent(user.USER_IMAGE)}` 
-            : (user.USER_IMAGE || null),
+            : (user.PROFILE_IMG_PATH || user.USER_IMAGE || null),
         smsAuthYn: user.SMS_AUTH_YN || 'N',
         userStat: user.USER_STAT || 'ACTIVE',
         joinDt: user.JOIN_DT || null,
         cancelManage,
         subscription,
         mainDashboard: main,
+        tradeRestrictYn: isRestricted ? 'Y' : 'N', // 최상위 필드 추가
     };
 }
 

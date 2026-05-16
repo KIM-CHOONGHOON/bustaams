@@ -1,8 +1,6 @@
-console.log('>>> DB INITIALIZING...');
+require('./loadEnv');
 const mysql = require('mysql2/promise');
-const { Storage } = require('@google-cloud/storage');
 const { randomBytes } = require('crypto');
-require('dotenv').config();
 
 const rawPort = String(process.env.DB_PORT ?? '').trim();
 const parsedPort = parseInt(rawPort, 10);
