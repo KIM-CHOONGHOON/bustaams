@@ -1,5 +1,24 @@
 const API_BASE_URL = '/api';
 
+/**
+ * 이미지 경로를 생성하는 공통 함수
+ * @param {string} path - 이미지 경로
+ * @param {number|string} imageVersion - 캐시 방지를 위한 버전 (기본값: 현재 시간)
+ * @returns {string} - 완성된 이미지 URL
+ */
+export const getImageUrl = (path, imageVersion = Date.now()) => {
+    if (!path) return '';
+    if (path.startsWith('http')) return `${path}${path.includes('?') ? '&' : '?'}t=${imageVersion}`;
+    
+    // 이미 API_BASE_URL(/api)로 시작하는 경우 중복 방지
+    if (path.startsWith(API_BASE_URL)) {
+        return `${path}${path.includes('?') ? '&' : '?'}t=${imageVersion}`;
+    }
+    
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    return `${API_BASE_URL}${cleanPath}${path.includes('?') ? '&' : '?'}t=${imageVersion}`;
+};
+
 // 공통 fetch 래퍼
 export const request = async (url, options = {}, isFormData = false) => {
     const token = localStorage.getItem('accessToken');

@@ -68,8 +68,7 @@ module.exports = function createPaymentRouter(pool, app) {
         console.log('>>> [Payment Ready] Requested:', req.body);
         try {
             let { price, goodname, buyername, buyertel, buyeremail, resId, reqId } = req.body;
-            // 개발 모드: 결제 대금 무조건 1,000원으로 고정
-            price = 1000;
+            // price = 1000; // 실제 금액 사용을 위해 하드코딩 주석 처리 또는 제거
 
             if (!price) {
                 console.warn('>>> [Payment Ready] Missing price');

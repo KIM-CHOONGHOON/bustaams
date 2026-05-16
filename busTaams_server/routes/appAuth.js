@@ -45,6 +45,22 @@ const sendAligoSMS = async (phoneNo, authCode) => {
 const JWT_SECRET_KEY = process.env.JWT_SECRET || 'bustaams-dev-secret-key-2026';
 
 /**
+ * 주민등록번호 유효성 검증 (체크섬)
+ */
+const validateResidentNo = (rrn) => {
+    if (!rrn || !/^[0-9]{13}$/.test(rrn)) return false;
+    const digits = rrn.split('').map(Number);
+    const weights = [2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5];
+    let sum = 0;
+    for (let i = 0; i < 12; i++) {
+        sum += digits[i] * weights[i];
+    }
+    const remainder = sum % 11;
+    const checkValue = (11 - remainder) % 10;
+    return checkValue === digits[12];
+};
+
+/**
  * [App 전용] 아이디 중복 확인 (평문 매칭)
  */
 router.get('/check-id', async (req, res) => {
@@ -108,7 +124,7 @@ router.post('/register', async (req, res) => {
     try {
         await connection.beginTransaction();
 
-        const {
+        let {
             userId, password, userName, phoneNo, userType, 
             signatureBase64, termsData, mktChannelYN, email, smsAuthYn,
             firebaseToken, residentNo, recomCode
@@ -146,22 +162,48 @@ router.post('/register', async (req, res) => {
     }
 
 
-        const finalUserType = userType || 'TRAVELER';
+        // userType 대문자 정규화 (DRIVER, TRAVELER 등)
+        const finalUserType = (userType || 'TRAVELER').toUpperCase();
 
-        // [추가] 기사 주민번호 중복 체크 (DRIVER 타입인 경우)
+        // [추가] 기사 주민번호 유효성 및 중복 체크 (DRIVER 타입인 경우)
         if (finalUserType === 'DRIVER') {
             if (!residentNo) {
                 await connection.rollback();
                 return res.status(400).json({ error: '기사 회원은 주민등록번호 입력이 필수입니다.' });
             }
-            const encryptedRRN = encrypt(residentNo);
-            const [rrnRows] = await connection.execute(
-                'SELECT USER_ID FROM TB_USER WHERE USER_TYPE = "DRIVER" AND RESIDENT_NO_ENC = ?',
-                [encryptedRRN]
-            );
-            if (rrnRows.length > 0) {
+            
+            // 공백 제거
+            residentNo = String(residentNo).replace(/\s/g, '');
+            
+            // 1. 형식 및 체크섬 검증
+            if (!validateResidentNo(residentNo)) {
                 await connection.rollback();
-                return res.status(400).json({ error: `이미 가입된 기사 입니다. [${rrnRows[0].USER_ID}]` });
+                return res.status(400).json({ error: '올바르지 않은 주민등록번호 형식입니다.' });
+            }
+
+            // 2. 중복 체크 (암호화된 컬럼이므로 전체 기사를 조회하여 복호화 비교)
+            const [allDrivers] = await connection.execute(
+                'SELECT USER_ID, RESIDENT_NO_ENC FROM TB_USER WHERE USER_TYPE = "DRIVER" AND RESIDENT_NO_ENC IS NOT NULL'
+            );
+            
+            let existingUserId = null;
+            for (const driver of allDrivers) {
+                try {
+                    const decrypted = decrypt(driver.RESIDENT_NO_ENC);
+                    // 평문 비교 (둘 다 trim하여 비교)
+                    if (decrypted && decrypted.trim() === residentNo.trim()) {
+                        existingUserId = driver.USER_ID;
+                        break;
+                    }
+                } catch (err) {
+                    // 복호화 실패 시 로그만 남기고 다음으로 진행 (레거시 데이터 등)
+                    console.error(`[Registration] RRN Decrypt Error for user ${driver.USER_ID}:`, err);
+                }
+            }
+
+            if (existingUserId) {
+                await connection.rollback();
+                return res.status(400).json({ error: `이미 가입된 고객입니다. 아이디: [${existingUserId}]` });
             }
         }
 
@@ -208,21 +250,21 @@ router.post('/register', async (req, res) => {
             const gcsPath = `https://storage.googleapis.com/${bucketName}/${fileName}`;
             signFileId = fileId;
 
-            // TB_FILE_MASTER 삽입 (REG_ID, MOD_ID를 CUST_ID로 설정, FILE_SIZE 추가)
+            // TB_FILE_MASTER 삽입 (REG_ID 제거, MOD_ID를 CUST_ID로 설정, FILE_SIZE 추가)
             const fileQuery = `
-                INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_ID, MOD_ID)
-                VALUES (?, 'SIGNATURE', ?, ?, ?, 'png', ?, ?, ?)
+                INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, MOD_ID)
+                VALUES (?, 'SIGNATURE', ?, ?, ?, 'png', ?, ?)
             `;
-            await connection.execute(fileQuery, [fileId, bucketName, gcsPath, `${userId}_signature.png`, buffer.length, custId, custId]);
+            await connection.execute(fileQuery, [fileId, bucketName, gcsPath, `${userId}_signature.png`, buffer.length, custId]);
         }
 
-        // 3. TB_USER 삽입 (CUST_ID, RESIDENT_NO_ENC, RECOM_CODE 추가)
+        // 3. TB_USER 삽입 (REG_ID 제거, CUST_ID, RESIDENT_NO_ENC, RECOM_CODE 추가)
         const userQuery = `
             INSERT INTO TB_USER (
                 CUST_ID, USER_ID, EMAIL, PASSWORD, USER_NM, HP_NO, SNS_TYPE, 
                 SMS_AUTH_YN, USER_TYPE, JOIN_DT, USER_STAT, SIGNATURE_FILE_ID,
-                RESIDENT_NO_ENC, RECOM_CODE, REG_ID, MOD_ID
-            ) VALUES (?, ?, ?, ?, ?, ?, 'NONE', ?, ?, NOW(), 'ACTIVE', ?, ?, ?, ?, ?)
+                RESIDENT_NO_ENC, RECOM_CODE, MOD_ID
+            ) VALUES (?, ?, ?, ?, ?, ?, 'NONE', ?, ?, NOW(), 'ACTIVE', ?, ?, ?, ?)
         `;
         
         await connection.execute(userQuery, [
@@ -237,18 +279,17 @@ router.post('/register', async (req, res) => {
             signFileId, // SIGNATURE_FILE_ID
             finalUserType === 'DRIVER' ? encrypt(residentNo) : null,
             recomCode || null,
-            custId, // REG_ID
             custId  // MOD_ID
         ]);
 
         // 3.5 TB_USER_CANCEL_MANAGE 초기화 (취소 건수 0으로 설정)
-        // 중복 키 오류 방지를 위해 INSERT IGNORE 사용
+        // 중복 키 오류 방지를 위해 INSERT IGNORE 사용 (REG_ID 제거)
         const cancelManageQuery = `
             INSERT IGNORE INTO TB_USER_CANCEL_MANAGE (
                 CUST_ID, USER_TYPE, CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, 
                 CANCEL_TRAVELER_ALL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, 
-                RESTRICT_STAT, TRADE_RESTRICT_YN, REG_ID, MOD_ID
-            ) VALUES (?, ?, 0, 0, 0, 0, 'N', 'N', ?, ?)
+                TRADE_RESTRICT_YN, REG_ID, MOD_ID
+            ) VALUES (?, ?, 0, 0, 0, 0, 'N', ?, ?)
         `;
         await connection.execute(cancelManageQuery, [custId, finalUserType, custId, custId]);
 
@@ -264,7 +305,9 @@ router.post('/register', async (req, res) => {
                 // 앱에서 보내는 다양한 명칭 매핑
                 if (normalizedType === 'PERSONAL' || normalizedType === 'PRIVACY_POLICY' || normalizedType === 'PRIVACY_INFO') normalizedType = 'PRIVACY';
                 if (normalizedType === 'SERVICE_TERMS' || normalizedType === 'SERVICE_AGREEMENT') normalizedType = 'SERVICE';
-                if (normalizedType === 'TRAVELER' || normalizedType === 'TRAVELER_SERVICE') normalizedType = 'TRAVELER_SERVICE';
+                if (normalizedType === 'TRAVELER' || normalizedType === 'TRAVELER_SERVICE') {
+                    normalizedType = (finalUserType === 'DRIVER') ? 'DRIVER_SERVICE' : 'TRAVELER_SERVICE';
+                }
                 if (normalizedType === 'DRIVER' || normalizedType === 'DRIVER_SERVICE') normalizedType = 'DRIVER_SERVICE';
                 if (normalizedType === 'ADVERTISING' || normalizedType === 'AD' || normalizedType === 'PROMOTION' || normalizedType === 'EVENT' || normalizedType === '마케팅') normalizedType = 'MARKETING';
                 if (normalizedType === 'PARTNER' || normalizedType === 'PARTNER_AGREEMENT' || normalizedType === 'CONTRACT') normalizedType = 'PARTNER_CONTRACT';

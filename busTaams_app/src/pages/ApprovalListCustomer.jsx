@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import api from '../api';
+import api, { getImageUrl } from '../api';
 import { notify } from '../utils/toast';
 import BottomNavCustomer from '../components/BottomNavCustomer';
 
@@ -14,6 +14,10 @@ const ApprovalListCustomer = () => {
     const [loading, setLoading] = useState(true);
     const [customerProfile, setCustomerProfile] = useState(null);
     const [imageVersion, setImageVersion] = useState(Date.now());
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
+
+
 
     const fetchDashboardData = async () => {
         try {
@@ -65,7 +69,7 @@ const ApprovalListCustomer = () => {
     const handleApproveBid = async (bidId, price, driverName) => {
         const confirmed = await notify.confirm('청약 승인 및 결제', `${driverName} 기사님의 청약을 승인하고 결제를 진행하시겠습니까?`);
         if (!confirmed) return;
-        
+
         initiatePayment({
             resId: bidId,
             price: price,
@@ -76,14 +80,63 @@ const ApprovalListCustomer = () => {
         });
     };
 
+    //const handleApproveAll = async () => {
+    //    const totalResFee = units.reduce((acc, unit) => acc + (Number(unit.unitResFee) || 0), 0);
+    //    const confirmed = await notify.confirm('전체 청약 승인 및 결제', `진행 중인 모든 청약을 승인하고 예약금(6.6%)인 총 ${totalResFee.toLocaleString()}원을 결제하시겠습니까?`);
+    //    if (!confirmed) return;
+    //
+    //    initiatePayment({
+    //        reqId: reqId,
+    //        price: totalResFee,
+    //        goodname: `${tripSummary.title} 예약금 결제`,
+    //        buyername: customerProfile?.custNm || '구매자',
+    //        buyertel: customerProfile?.phoneNo || '010-0000-0000',
+    //        buyeremail: customerProfile?.email || 'test@example.com'
+    //    });
+    //};
+
     const handleApproveAll = async () => {
-        const confirmed = await notify.confirm('전체 청약 승인 및 결제', `진행 중인 모든 청약을 승인하고 총 ${totalReqAmt.toLocaleString()}원을 결제하시겠습니까?`);
+        const totalResFee = units.reduce(
+            (acc, unit) => acc + (Number(unit.unitResFee) || 0),
+            0
+        );
+
+        const confirmed = await notify.confirm(
+            '전체 청약 승인',
+            `진행 중인 모든 청약을 승인하시겠습니까?\n\n예약금: ${totalResFee.toLocaleString()}원`
+        );
+
         if (!confirmed) return;
 
+        // 2026-05-30 까지는 계좌입금 방식
+        const now = new Date();
+        const limitDate = new Date('2026-05-30T23:59:59');
+
+        if (now <= limitDate) {
+
+            await notify.info(
+                '예약금 입금 안내',
+                `
+    은행명 : 국민은행\n
+
+    계좌번호 : 123456-01-123456\n
+
+    예금주 : (주)버스타암즈\n
+
+    입금금액 : ${totalResFee.toLocaleString()}원\n
+
+    ※ 입금 확인 후 예약이 승인됩니다.
+                `
+            );
+
+            return;
+        }
+
+        // 이후 카드결제 진행
         initiatePayment({
             reqId: reqId,
-            price: totalReqAmt,
-            goodname: `${tripSummary.title} 전체 승인`,
+            price: totalResFee,
+            goodname: `${tripSummary.title} 예약금 결제`,
             buyername: customerProfile?.custNm || '구매자',
             buyertel: customerProfile?.phoneNo || '010-0000-0000',
             buyeremail: customerProfile?.email || 'test@example.com'
@@ -109,23 +162,47 @@ const ApprovalListCustomer = () => {
             form.action = "https://mobile.inicis.com/smart/payment/";
             form.target = "_self";
             form.method = "POST";
-            
+
             // 모바일 필수 파라미터 매핑
             form.P_MID.value = data.mid;
             form.P_OID.value = data.oid;
             form.P_AMT.value = data.price;
-            form.P_GOODS.value = data.goodname;
-            form.P_UNAME.value = data.buyername;
-            form.P_MOBILE.value = data.buyertel;
+
+            // 1. 상품명 정제: 특수문자 제거 및 13자 제한 (UTF-8 기준 약 40바이트 이내)
+            const cleanGoodName = data.goodname.replace(/[^\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\uA960-\uA97F\uD7B0-\uD7FF0-9a-zA-Z\s]/g, '');
+            // 한글 1자=3바이트이므로 13자까지만 허용하여 40바이트 제한 준수
+            const finalGoodName = cleanGoodName.length > 13 ? cleanGoodName.substring(0, 12) + '..' : cleanGoodName;
+
+            // 2. 구매자명 정제: 특수문자 제거
+            const cleanBuyerName = data.buyername.replace(/[^\uAC00-\uD7AF0-9a-zA-Z\s]/g, '');
+
+            // 3. 전화번호 정제: 하이픈 제거 (이니시스 모바일 필수)
+            const cleanMobile = data.buyertel.replace(/[^0-9]/g, '');
+
+            form.P_GOODS.value = finalGoodName;
+            form.P_UNAME.value = cleanBuyerName;
+            form.P_MOBILE.value = cleanMobile;
             form.P_EMAIL.value = data.buyeremail;
             form.P_NEXT_URL.value = data.returnUrl;
-            form.P_RESERVED.value = "twotrs=Y&app_scheme=bustaams://"; // 이중화 승인 사용
-            form.P_INI_PAYMENT.value = "CARD"; // 결제수단 추가 (필수)
-            form.P_CHARSET.value = "utf-8"; // UTF-8 사용 (한글 깨짐 방지)
+
+            // 4. P_RESERVED: 인코딩 및 앱 스킴 설정
+            // twotrs=Y (신모바일 승인응답), cp_cls=euc-kr (콘텐츠 인코딩)
+            form.P_RESERVED.value = "twotrs=Y&app_scheme=bustaams://&cp_cls=euc-kr&vbank_receipt=Y";
+            form.P_INI_PAYMENT.value = "CARD";
+
+            // 5. P_CHARSET: 'euc-kr' 사용 (사용자 요청 강제 설정)
+            form.P_CHARSET.value = "euc-kr";
+
+            console.log('>>> [Payment] Submitting Form with:', {
+                goodname: finalGoodName,
+                buyername: cleanBuyerName,
+                mobile: cleanMobile,
+                charset: 'euc-kr'
+            });
 
             // 폼 전송
             form.submit();
-            
+
         } catch (error) {
             console.error('Payment initiation error:', error);
             notify.error('오류 발생', error.message || '결제 요청 중 오류가 발생했습니다.');
@@ -220,11 +297,9 @@ const ApprovalListCustomer = () => {
                         <div className="flex items-center gap-4">
                             <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border-2 border-white shadow-sm transition-transform hover:scale-110 active:scale-95 cursor-pointer" onClick={() => navigate('/profile-customer')}>
                                 {customerProfile?.profileImage ? (
-                                    <img 
-                                        src={customerProfile.profileImage.startsWith('http') ? 
-                                            `${customerProfile.profileImage}${customerProfile.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
-                                            `${import.meta.env.VITE_API_BASE_URL || ''}${customerProfile.profileImage.startsWith('/') ? '' : '/'}${customerProfile.profileImage}${customerProfile.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
-                                        alt="Profile" 
+                                    <img
+                                        src={getImageUrl(customerProfile.profileImage, imageVersion)}
+                                        alt="Profile"
                                         className="w-full h-full object-cover"
                                         onError={(e) => {
                                             e.target.onerror = null;
@@ -250,6 +325,7 @@ const ApprovalListCustomer = () => {
     }
 
     const totalReqAmt = units.reduce((acc, unit) => acc + (Number(unit.unitReqAmt) || 0), 0);
+    const totalResFee = units.reduce((acc, unit) => acc + (Number(unit.unitResFee) || 0), 0);
 
     return (
         <div className="bg-background text-on-surface min-h-screen pb-32 font-body text-left">
@@ -264,11 +340,9 @@ const ApprovalListCustomer = () => {
                     <div className="flex items-center gap-4">
                         <div className="flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 overflow-hidden border-2 border-white shadow-sm transition-transform hover:scale-110 active:scale-95 cursor-pointer" onClick={() => navigate('/profile-customer')}>
                             {customerProfile?.profileImage ? (
-                                <img 
-                                    src={customerProfile.profileImage.startsWith('http') ? 
-                                        `${customerProfile.profileImage}${customerProfile.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
-                                        `${import.meta.env.VITE_API_BASE_URL || ''}${customerProfile.profileImage.startsWith('/') ? '' : '/'}${customerProfile.profileImage}${customerProfile.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
-                                    alt="Profile" 
+                                <img
+                                    src={getImageUrl(customerProfile.profileImage, imageVersion)}
+                                    alt="Profile"
                                     className="w-full h-full object-cover"
                                     onError={(e) => {
                                         e.target.onerror = null;
@@ -279,9 +353,7 @@ const ApprovalListCustomer = () => {
                             ) : (
                                 <span className="material-symbols-outlined text-slate-400">account_circle</span>
                             )}
-                            {customerProfile?.profileImage && (
-                                <span className="material-symbols-outlined text-slate-400 hidden items-center justify-center w-full h-full">account_circle</span>
-                            )}
+                            <span className="material-symbols-outlined text-slate-400 hidden items-center justify-center w-full h-full">account_circle</span>
                         </div>
                     </div>
                 </div>
@@ -297,9 +369,8 @@ const ApprovalListCustomer = () => {
                     </div>
                     <div className="md:col-span-4 text-right">
                         <span className={`inline-flex items-center gap-2 px-6 py-2 rounded-full text-xs font-bold shadow-lg ${getBusStatusDisplay(tripSummary.status).color}`}>
-                            <span className={`w-2.5 h-2.5 rounded-full ${
-                                tripSummary.status === 'CONFIRM' ? 'bg-teal-500' : (tripSummary.status.includes('CANCEL') ? 'bg-error' : 'bg-secondary')
-                            }`}></span>
+                            <span className={`w-2.5 h-2.5 rounded-full ${tripSummary.status === 'CONFIRM' ? 'bg-teal-500' : (tripSummary.status.includes('CANCEL') ? 'bg-error' : 'bg-secondary')
+                                }`}></span>
                             {getBusStatusDisplay(tripSummary.status).label}
                         </span>
                     </div>
@@ -310,19 +381,18 @@ const ApprovalListCustomer = () => {
                         <div className="bg-white rounded-[2.5rem] p-8 shadow-[0_40px_60px_rgba(0,0,0,0.03)] border border-slate-50 relative overflow-hidden">
                             <div className="absolute top-0 left-0 w-2 h-full bg-primary/20"></div>
                             <h2 className="text-2xl font-black mb-10 flex items-center gap-3 italic text-teal-800">
-                                <span className="material-symbols-outlined text-primary" style={{fontVariationSettings: "'FILL' 1"}}>route</span>
+                                <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>route</span>
                                 여행 경로
                             </h2>
                             <div className="space-y-0 relative">
                                 <div className="absolute left-[11px] top-4 bottom-4 w-0.5 bg-slate-100"></div>
-                                
+
                                 {tripSummary.fullRoute && tripSummary.fullRoute.map((step, idx) => (
                                     <div key={idx} className="relative pl-12 pb-10 last:pb-0 group">
-                                        <div className={`absolute left-0 top-1 w-6 h-6 rounded-full border-4 border-white z-10 shadow-md transition-all group-hover:scale-125 flex items-center justify-center ${
-                                            step.type === 'START' ? 'bg-primary w-8 h-8 -left-1 -top-0' : 
-                                            step.type === 'END' ? 'bg-secondary w-8 h-8 -left-1 -top-0' : 
-                                            step.type === 'ROUND_TRIP' ? 'bg-teal-600 w-7 h-7 -left-0.5 top-0.5' : 'bg-slate-200'
-                                        }`}>
+                                        <div className={`absolute left-0 top-1 w-6 h-6 rounded-full border-4 border-white z-10 shadow-md transition-all group-hover:scale-125 flex items-center justify-center ${step.type === 'START' ? 'bg-primary w-8 h-8 -left-1 -top-0' :
+                                            step.type === 'END' ? 'bg-secondary w-8 h-8 -left-1 -top-0' :
+                                                step.type === 'ROUND_TRIP' ? 'bg-teal-600 w-7 h-7 -left-0.5 top-0.5' : 'bg-slate-200'
+                                            }`}>
                                             {(step.type === 'START' || step.type === 'END' || step.type === 'ROUND_TRIP') && (
                                                 <span className="material-symbols-outlined text-white text-[14px]">
                                                     {step.type === 'START' ? 'location_on' : step.type === 'END' ? 'flag' : 'autorenew'}
@@ -330,16 +400,14 @@ const ApprovalListCustomer = () => {
                                             )}
                                         </div>
                                         <div className="text-left">
-                                            <p className={`text-[10px] font-black uppercase tracking-widest mb-1 leading-none ${
-                                                step.type === 'START' ? 'text-primary' : 
-                                                step.type === 'END' ? 'text-secondary' : 
-                                                step.type === 'ROUND_TRIP' ? 'text-teal-600' : 'text-slate-300'
-                                            }`}>
+                                            <p className={`text-[10px] font-black uppercase tracking-widest mb-1 leading-none ${step.type === 'START' ? 'text-primary' :
+                                                step.type === 'END' ? 'text-secondary' :
+                                                    step.type === 'ROUND_TRIP' ? 'text-teal-600' : 'text-slate-300'
+                                                }`}>
                                                 {step.title}
                                             </p>
-                                            <h3 className={`font-black tracking-tight ${
-                                                (step.type === 'START' || step.type === 'END' || step.type === 'ROUND_TRIP') ? 'text-xl text-slate-900' : 'text-lg text-slate-500'
-                                            }`}>{step.addr}</h3>
+                                            <h3 className={`font-black tracking-tight ${(step.type === 'START' || step.type === 'END' || step.type === 'ROUND_TRIP') ? 'text-xl text-slate-900' : 'text-lg text-slate-500'
+                                                }`}>{step.addr}</h3>
                                             {step.time && (
                                                 <p className="text-xs text-on-surface-variant font-bold mt-2 bg-slate-50 inline-block px-3 py-1 rounded-lg italic">
                                                     {step.time}
@@ -379,8 +447,25 @@ const ApprovalListCustomer = () => {
 
                                     <div className="space-y-4">
                                         {unit.estimates.length === 0 ? (
-                                            <div className="py-12 bg-slate-50/50 rounded-[2rem] text-center border-2 border-dashed border-slate-100">
-                                                <p className="text-xs font-black text-slate-300 uppercase tracking-widest italic">응찰 내역이 없습니다.</p>
+                                            <div className="py-12 bg-slate-50/50 rounded-[2rem] text-center border-2 border-dashed border-slate-100 flex flex-col items-center gap-6">
+                                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest italic">현재 응찰 내역이 없습니다.</p>
+                                                <div className="w-full max-w-xs space-y-3">
+                                                    <button
+                                                        onClick={() => handleRequestBusChange(unit.unitSeq)}
+                                                        className="w-full py-4 rounded-2xl font-black text-xs tracking-widest uppercase transition-all flex items-center justify-center gap-2 active:scale-95 bg-purple-600 text-white shadow-lg shadow-purple-900/10"
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">published_with_changes</span>
+                                                        차량 변경요청
+                                                    </button>
+                                                    {unit.unitStat !== 'TRAVELER_CANCEL' && unit.unitStat !== 'CONFIRM' && (
+                                                        <button
+                                                            onClick={() => handleCancelBus(unit.unitSeq)}
+                                                            className="w-full py-2 text-[10px] font-black text-error border border-error/10 rounded-xl hover:bg-error/5 transition-all active:scale-95 uppercase tracking-widest"
+                                                        >
+                                                            이 차량 청약 요청 취소
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                         ) : (
                                             unit.estimates.map((est) => (
@@ -388,14 +473,27 @@ const ApprovalListCustomer = () => {
                                                     <div className="flex flex-col gap-8">
                                                         {/* 기사 및 차량 헤더 */}
                                                         <div className="flex flex-col sm:flex-row items-center gap-8 border-b border-slate-50 pb-6">
-                                                            <div className="w-24 h-24 rounded-[2rem] overflow-hidden shadow-xl border-4 border-white group-hover:rotate-3 transition-transform shrink-0">
-                                                                <img src={est.image} alt={est.driverName} className="w-full h-full object-cover" />
+                                                            <div className="w-24 h-24 rounded-[2rem] overflow-hidden shadow-xl border-4 border-white group-hover:rotate-3 transition-transform shrink-0 bg-slate-100 flex items-center justify-center">
+                                                                {est.image ? (
+                                                                    <img
+                                                                        src={getImageUrl(est.image)}
+                                                                        alt={est.driverName}
+                                                                        className="w-full h-full object-cover"
+                                                                        onError={(e) => {
+                                                                            e.target.onerror = null;
+                                                                            e.target.src = ''; // Clear source to show background icon
+                                                                            e.target.className = 'hidden';
+                                                                            if (e.target.nextSibling) e.target.nextSibling.classList.remove('hidden');
+                                                                        }}
+                                                                    />
+                                                                ) : null}
+                                                                <span className={`material-symbols-outlined text-4xl text-slate-300 ${est.image ? 'hidden' : ''}`}>person</span>
                                                             </div>
                                                             <div className="flex-grow text-left">
                                                                 <div className="flex flex-wrap items-center gap-3 mb-3">
                                                                     <h5 className="font-black text-xl tracking-tighter italic">{est.driverName} 기사님</h5>
                                                                     <span className="flex items-center bg-secondary/10 px-3 py-1 rounded-full text-secondary text-[11px] font-black">
-                                                                        <span className="material-symbols-outlined text-[12px] mr-1" style={{fontVariationSettings: "'FILL' 1"}}>star</span>
+                                                                        <span className="material-symbols-outlined text-[12px] mr-1" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
                                                                         {est.rating}
                                                                     </span>
                                                                 </div>
@@ -407,27 +505,39 @@ const ApprovalListCustomer = () => {
                                                             </div>
                                                         </div>
 
-                                                        {/* 차량 사진 리스트 (수직 스택) */}
-                                                        <div className="space-y-4">
-                                                            <div className="flex justify-between items-center px-2">
-                                                                <h6 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] italic flex items-center gap-2">
-                                                                    <span className="material-symbols-outlined text-[14px]">gallery_thumbnail</span>
-                                                                    차량 사진 ({est.busImages.length})
-                                                                </h6>
-                                                            </div>
-                                                            <div className="grid grid-cols-1 gap-6">
-                                                                {est.busImages.map((img, iIdx) => (
-                                                                    <div key={iIdx} className="relative w-full aspect-[16/9] rounded-[2.5rem] overflow-hidden shadow-2xl border-8 border-white group/photo">
-                                                                        <img src={img} alt={`차량 사진 ${iIdx + 1}`} className="w-full h-full object-cover transition-transform duration-700 group-hover/photo:scale-110" />
-                                                                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-end p-8">
-                                                                            <span className="text-white text-xs font-black uppercase tracking-[0.3em] bg-white/20 backdrop-blur-md px-4 py-2 rounded-full border border-white/30">Vehicle Photo {iIdx + 1}</span>
+                                                        {/* 차량 사진 리스트 */}
+                                                        {est.busImages && est.busImages.length > 0 && (
+                                                            <div className="space-y-4">
+                                                                <div className="flex justify-between items-center px-2">
+                                                                    <h6 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] italic flex items-center gap-2">
+                                                                        <span className="material-symbols-outlined text-[14px]">gallery_thumbnail</span>
+                                                                        차량 사진 ({est.busImages.length})
+                                                                    </h6>
+                                                                </div>
+                                                                <div className="grid grid-cols-1 gap-6">
+                                                                    {est.busImages.map((img, iIdx) => (
+                                                                        <div key={iIdx} className="relative w-full aspect-[16/9] rounded-[2.5rem] overflow-hidden shadow-2xl border-8 border-white group/photo bg-slate-100 flex items-center justify-center">
+                                                                            <img
+                                                                                src={getImageUrl(img)}
+                                                                                alt={`차량 사진 ${iIdx + 1}`}
+                                                                                className="w-full h-full object-cover transition-transform duration-700 group-hover/photo:scale-110"
+                                                                                onError={(e) => {
+                                                                                    e.target.onerror = null;
+                                                                                    e.target.className = 'hidden';
+                                                                                    if (e.target.nextSibling) e.target.nextSibling.classList.remove('hidden');
+                                                                                }}
+                                                                            />
+                                                                            <span className="material-symbols-outlined text-5xl text-slate-200 hidden">directions_bus</span>
+                                                                            <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-end p-8">
+                                                                                <span className="text-white text-xs font-black uppercase tracking-[0.3em] bg-white/20 backdrop-blur-md px-4 py-2 rounded-full border border-white/30">Vehicle Photo {iIdx + 1}</span>
+                                                                            </div>
                                                                         </div>
-                                                                    </div>
-                                                                ))}
+                                                                    ))}
+                                                                </div>
                                                             </div>
-                                                        </div>
+                                                        )}
 
-                                                        {/* 차량 상세 스펙 (편의시설, 안전, 보험 등) */}
+                                                        {/* 차량 상세 스펙 */}
                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                             <div className="bg-slate-50/80 p-6 rounded-[2rem] space-y-4">
                                                                 <h6 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] italic flex items-center gap-2">
@@ -483,32 +593,33 @@ const ApprovalListCustomer = () => {
                                                             </div>
                                                         </div>
 
-                                                        {/* 액션 버튼 */}
-                                                        <div className="pt-4 space-y-4">
-                                                            <button 
-                                                                onClick={() => handleRequestBusChange(unit.unitSeq)}
-                                                                className="w-full py-5 rounded-[2rem] font-black text-sm tracking-widest uppercase transition-all flex items-center justify-center gap-3 active:scale-95 bg-purple-600 text-white shadow-xl shadow-purple-900/20 hover:scale-[1.02]"
-                                                            >
-                                                                <span className="material-symbols-outlined">
-                                                                    published_with_changes
-                                                                </span>
-                                                                차량 변경요청
-                                                            </button>
-
-                                                            {/* 취소 버튼을 승인 버튼 밑으로 이동 */}
-                                                            {unit.unitStat !== 'TRAVELER_CANCEL' && unit.unitStat !== 'CONFIRM' && (
-                                                                <button 
-                                                                    onClick={() => handleCancelBus(unit.unitSeq)}
-                                                                    className="w-full py-3 text-[10px] font-black text-error border border-error/10 rounded-2xl hover:bg-error/5 transition-all active:scale-95 uppercase tracking-[0.2em]"
+                                                        {/* 차량 관리 버튼 */}
+                                                        <div className="pt-4">
+                                                            <div className="grid grid-cols-1 gap-3">
+                                                                <button
+                                                                    onClick={() => handleRequestBusChange(unit.unitSeq)}
+                                                                    className="w-full py-4 rounded-[1.5rem] font-black text-[11px] tracking-widest uppercase transition-all flex items-center justify-center gap-2 active:scale-95 bg-slate-100 text-slate-600 hover:bg-purple-50 hover:text-purple-700"
                                                                 >
-                                                                    이 차량 청약 요청 취소
+                                                                    <span className="material-symbols-outlined text-sm">published_with_changes</span>
+                                                                    차량 변경요청
                                                                 </button>
-                                                            )}
+
+                                                                {unit.unitStat !== 'TRAVELER_CANCEL' && unit.unitStat !== 'CONFIRM' && (
+                                                                    <button
+                                                                        onClick={() => handleCancelBus(unit.unitSeq)}
+                                                                        className="w-full py-2 text-[10px] font-black text-slate-400 hover:text-error transition-all active:scale-95 uppercase tracking-widest"
+                                                                    >
+                                                                        이 차량 청약 요청 취소
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
                                             ))
                                         )}
+
+
                                     </div>
                                 </div>
                             ))}
@@ -518,7 +629,7 @@ const ApprovalListCustomer = () => {
                     <div className="lg:col-span-5 space-y-8">
                         <div className="bg-slate-900 rounded-[3rem] p-8 text-white sticky top-28 shadow-2xl shadow-slate-900/20 border border-slate-800">
                             <h2 className="text-2xl font-black mb-8 italic tracking-tighter">최종 승인 요약</h2>
-                            
+
                             <div className="space-y-6 mb-10">
                                 {units.map((unit) => (
                                     <div key={unit.unitSeq} className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/10 group hover:bg-white/10 transition-all">
@@ -533,30 +644,37 @@ const ApprovalListCustomer = () => {
                                 ))}
                             </div>
 
-                            <div className="pt-8 border-t border-white/10">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-3">총 합계 금액</p>
-                                <div className="flex justify-between items-baseline">
-                                    <span className="text-4xl font-black tracking-tighter text-secondary italic">₩{totalReqAmt.toLocaleString()}</span>
+                            <div className="pt-8 border-t border-white/10 space-y-4">
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-1">총 합계 금액</p>
+                                    <span className="text-xl font-bold text-slate-300 italic">₩{totalReqAmt.toLocaleString()}</span>
+                                </div>
+                                <div className="bg-secondary/10 p-4 rounded-2xl border border-secondary/20">
+                                    <p className="text-[10px] font-black text-secondary uppercase tracking-[0.3em] mb-1">총 예약금 결제 금액 (6.6%)</p>
+                                    <div className="flex justify-between items-baseline">
+                                        <span className="text-4xl font-black tracking-tighter text-secondary italic">₩{totalResFee.toLocaleString()}</span>
+                                    </div>
                                 </div>
                             </div>
 
                             <div className="space-y-4 pt-10">
                                 {tripSummary.status === 'BIDDING' && (
                                     <div className="space-y-3">
-                                        <button 
+                                        <button
                                             onClick={handleApproveAll}
                                             className="w-full py-5 bg-secondary text-white rounded-2xl font-black text-sm tracking-widest uppercase shadow-xl shadow-secondary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 group"
                                         >
                                             <span className="material-symbols-outlined text-xl group-hover:rotate-12 transition-transform">task_alt</span>
-                                            전체 승인하기
+                                            전체 승인 및 예약금 결제하기
                                         </button>
-                                        <p className="text-[10px] text-slate-500 font-bold text-center uppercase tracking-tighter italic">
+                                        <p className="text-[10px] text-slate-400 font-bold text-center uppercase tracking-tighter italic leading-relaxed">
+                                            * 전체 금액의 6.6% 예약금이 선결제됩니다.<br />
                                             * 승인 시 기사님들에게 예약 확정 알림이 전송됩니다.
                                         </p>
                                     </div>
                                 )}
                                 {tripSummary.status !== 'TRAVELER_CANCEL' && tripSummary.status !== 'CONFIRM' && (
-                                    <button 
+                                    <button
                                         onClick={handleCancelRequest}
                                         className="w-full bg-white/5 text-error border border-error/20 py-5 rounded-[2rem] font-black text-lg hover:bg-error/10 active:scale-95 transition-all flex items-center justify-center gap-3 italic"
                                     >
@@ -573,7 +691,7 @@ const ApprovalListCustomer = () => {
             <BottomNavCustomer />
 
             {/* 이니시스 결제용 숨김 폼 */}
-            <form id="SendPayForm" name="SendPayForm" method="POST" acceptCharset="utf-8" style={{ display: 'none' }}>
+            <form id="SendPayForm" name="SendPayForm" method="POST" acceptCharset="euc-kr" style={{ display: 'none' }}>
                 {/* PC 웹표준 필드 */}
                 <input type="hidden" name="version" value="1.0" />
                 <input type="hidden" name="mid" value="" />
@@ -602,7 +720,7 @@ const ApprovalListCustomer = () => {
                 <input type="hidden" name="P_NEXT_URL" value="" />
                 <input type="hidden" name="P_RESERVED" value="" />
                 <input type="hidden" name="P_INI_PAYMENT" value="" />
-                <input type="hidden" name="P_CHARSET" value="utf-8" />
+                <input type="hidden" name="P_CHARSET" value="euc-kr" />
             </form>
         </div>
     );

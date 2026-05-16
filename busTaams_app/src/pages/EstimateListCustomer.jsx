@@ -90,7 +90,10 @@ const EstimateListCustomer = () => {
 
     // 개별 차량 요청 금액 수정
     const handleUpdateAmount = async (unitSeq) => {
-        if (!tempAmount || isNaN(tempAmount)) {
+        // 콤마 제거 후 숫자 값만 추출
+        const rawValue = typeof tempAmount === 'string' ? tempAmount.replace(/,/g, '') : tempAmount;
+        
+        if (!rawValue || isNaN(rawValue)) {
             notify.error('입력 오류', '올바른 금액을 입력해주세요.');
             return;
         }
@@ -99,7 +102,7 @@ const EstimateListCustomer = () => {
             const res = await api.post('/app/customer/update-unit-amount', { 
                 reqId, 
                 unitSeq, 
-                newAmount: tempAmount 
+                newAmount: rawValue 
             });
             if (res.success) {
                 notify.success('수정 완료', '요청 금액이 수정되었습니다.');
@@ -326,7 +329,7 @@ const EstimateListCustomer = () => {
                                                             setEditingUnit(null);
                                                         } else {
                                                             setEditingUnit(unit.unitSeq);
-                                                            setTempAmount(unit.unitReqAmt);
+                                                            setTempAmount(Number(unit.unitReqAmt || 0).toLocaleString());
                                                         }
                                                     }}
                                                     className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-primary transition-colors mt-1"
@@ -346,9 +349,12 @@ const EstimateListCustomer = () => {
                                             <div className="flex-grow w-full relative">
                                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black">₩</span>
                                                 <input 
-                                                    type="number"
+                                                    type="text"
                                                     value={tempAmount}
-                                                    onChange={(e) => setTempAmount(e.target.value)}
+                                                    onChange={(e) => {
+                                                        const value = e.target.value.replace(/[^0-9]/g, '');
+                                                        setTempAmount(value ? Number(value).toLocaleString() : '');
+                                                    }}
                                                     className="w-full pl-10 pr-4 py-3 rounded-2xl border-2 border-primary border-indigo-200 focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none font-black text-primary bg-indigo-50/50 transition-all placeholder:text-slate-300"
                                                     placeholder="수정할 금액을 입력하세요"
                                                 />
@@ -480,21 +486,29 @@ const EstimateListCustomer = () => {
                                                                     채팅문의
                                                                 </button>
                                                             </div>
-                                                            {/* 취소 버튼을 승인 버튼 밑으로 이동 */}
-                                                            {unit.unitStat !== 'TRAVELER_CANCEL' && unit.unitStat !== 'CONFIRM' && (
-                                                                <button 
-                                                                    onClick={() => handleCancelBus(unit.unitSeq)}
-                                                                    className="w-full py-3 text-[10px] font-black text-error border border-error/10 rounded-xl hover:bg-error/5 transition-all active:scale-95 uppercase tracking-widest"
-                                                                >
-                                                                    이 차량 청약 요청 취소
-                                                                </button>
-                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
                                             ))
                                         )}
                                     </div>
+
+                                    {/* 버스 취소 버튼 (차량 레벨로 이동) */}
+                                    {units.length > 1 && unit.unitStat !== 'TRAVELER_CANCEL' && unit.unitStat !== 'CONFIRM' && unit.unitStat !== 'BUS_CANCEL' && (
+                                        <div className="mt-6 pt-6 border-t border-slate-100">
+                                            <button 
+                                                onClick={() => handleCancelBus(unit.unitSeq)}
+                                                disabled={tripSummary.busChangCnt >= 3}
+                                                className={`w-full py-4 rounded-2xl font-black text-xs tracking-widest uppercase transition-all active:scale-95 border ${
+                                                    tripSummary.busChangCnt >= 3 
+                                                    ? 'text-slate-300 border-slate-100 bg-slate-50 cursor-not-allowed' 
+                                                    : 'text-error border-error/20 hover:bg-error/5 bg-white'
+                                                }`}
+                                            >
+                                                {tripSummary.busChangCnt >= 3 ? '버스 취소 횟수 초과 (최대 3회)' : '이 차량 버스 취소하기'}
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -517,6 +531,18 @@ const EstimateListCustomer = () => {
                                         </div>
                                     </div>
                                 ))}
+
+                                {tripSummary.busChangCnt > 0 && (
+                                    <div className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-error/20 group hover:bg-white/10 transition-all">
+                                        <div className="text-left">
+                                            <p className="text-[10px] font-black text-error/70 uppercase tracking-widest mb-1">버스 취소/변경 횟수</p>
+                                            <p className="text-sm font-bold text-error">{tripSummary.busChangCnt} / 3회</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="material-symbols-outlined text-error">info</span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="pt-8 border-t border-white/10">

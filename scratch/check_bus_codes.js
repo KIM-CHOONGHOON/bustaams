@@ -1,0 +1,24 @@
+
+const mysql = require('mysql2/promise');
+require('dotenv').config({ path: 'c:/Users/LG/AI자동화/project_bustaams/busTaams_server/.env' });
+
+async function checkCode() {
+    const pool = mysql.createPool({
+        host: process.env.DB_HOST,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME,
+        port: process.env.DB_PORT
+    });
+
+    try {
+        const [rows] = await pool.execute("SELECT * FROM TB_COMMON_CODE WHERE GRP_CD = 'BUS_TYPE'");
+        console.log('BUS_TYPE Codes:', JSON.stringify(rows, null, 2));
+    } catch (err) {
+        console.error('Error:', err);
+    } finally {
+        await pool.end();
+    }
+}
+
+checkCode();

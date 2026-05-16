@@ -115,7 +115,7 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
                     (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'END_NODE' LIMIT 1) as endAddrVia
                  FROM TB_AUCTION_REQ r
                  JOIN TB_AUCTION_REQ_BUS b ON r.REQ_ID = b.REQ_ID
-                 WHERE b.BUS_TYPE_CD = ? AND b.DATA_STAT = 'AUCTION' AND r.START_DT >= CURDATE()
+                 WHERE b.BUS_TYPE_CD = ? AND b.DATA_STAT IN ('AUCTION', 'BUS_CHANGE', 'DRIVER_CANCEL') AND r.START_DT >= CURDATE()
                  ORDER BY r.REG_DT DESC LIMIT 3`,
                 [busType]
             );
@@ -252,7 +252,7 @@ router.get('/auctions', authenticateToken, async (req, res) => {
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'END_NODE' LIMIT 1) as endAddrVia
              FROM TB_AUCTION_REQ r
              JOIN TB_AUCTION_REQ_BUS b ON r.REQ_ID = b.REQ_ID
-             WHERE b.BUS_TYPE_CD = ? AND b.DATA_STAT = 'AUCTION' AND r.START_DT >= CURDATE()
+             WHERE b.BUS_TYPE_CD = ? AND b.DATA_STAT IN ('AUCTION' , 'BUS_CHANGE', 'DRIVER_CANCEL') AND r.START_DT >= CURDATE()
              ORDER BY r.REG_DT DESC`,
             [busType]
         );
@@ -452,6 +452,27 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
         // 주민등록번호 유효성 검증
         if (!validateRRN(residentNo)) {
             throw new Error('유효하지 않은 주민등록번호입니다.');
+        }
+
+        // 공백 및 하이픈 제거
+        const cleanResidentNo = residentNo.replace(/[^0-9]/g, '');
+
+        // 0. 중복 체크 (암호화된 컬럼이므로 전체 기사를 조회하여 복호화 비교)
+        // 본인(userId)은 제외하고 검색
+        const [allDrivers] = await connection.execute(
+            'SELECT USER_ID, RESIDENT_NO_ENC FROM TB_USER WHERE USER_TYPE = "DRIVER" AND RESIDENT_NO_ENC IS NOT NULL AND USER_ID != ?',
+            [req.user.userId]
+        );
+
+        for (const driver of allDrivers) {
+            try {
+                const decrypted = decrypt(driver.RESIDENT_NO_ENC);
+                if (decrypted && decrypted.replace(/[^0-9]/g, '') === cleanResidentNo) {
+                    throw new Error(`이미 다른 계정에서 사용 중인 주민등록번호입니다. (ID: ${driver.USER_ID})`);
+                }
+            } catch (err) {
+                console.error(`[Profile Update] RRN Decrypt Error for user ${driver.USER_ID}:`, err);
+            }
         }
 
         // 날짜 유효성 검증 (과거여야 함)
@@ -846,30 +867,44 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
         if (busRows.length === 0) throw new Error('등록된 버스 정보가 없습니다. 마이페이지에서 버스를 등록해주세요.');
         const { BUS_ID: busId, SERVICE_CLASS: serviceClass } = busRows[0];
 
-        // 2. 해당 경매에서 기사의 차종과 일치하는 'AUCTION' 상태의 슬롯 조회
+        // 2. 해당 경매에서 기사의 차종과 일치하는 'AUCTION' 상태의 슬롯 조회 (잠금 처리)
+        console.log(`[BID_PROCESS] Start finding slot for reqId: ${reqId}, custId: ${custId}, serviceClass: ${serviceClass}`);
         const [reqBusRows] = await connection.execute(
             `SELECT REQ_BUS_SEQ, RES_BUS_AMT, REG_ID 
              FROM TB_AUCTION_REQ_BUS 
-             WHERE REQ_ID = ? AND BUS_TYPE_CD = ? AND DATA_STAT = 'AUCTION' 
-             LIMIT 1`,
+             WHERE REQ_ID = ? AND BUS_TYPE_CD = ? AND DATA_STAT IN ('AUCTION', 'BUS_CHANGE', 'DRIVER_CANCEL') 
+             LIMIT 1 FOR UPDATE`,
             [reqId, serviceClass]
         );
 
         if (reqBusRows.length === 0) {
+            console.log(`[BID_PROCESS] No available slot for reqId: ${reqId}, serviceClass: ${serviceClass}`);
             throw new Error('해당 차종으로 입찰 가능한 슬롯이 없거나 이미 입찰이 완료되었습니다.');
         }
 
         const { REQ_BUS_SEQ: reqBusSeq, RES_BUS_AMT: busAmt, REG_ID: travelerId } = reqBusRows[0];
+        console.log(`[BID_PROCESS] Selected slot: REQ_BUS_SEQ=${reqBusSeq}, busAmt=${busAmt}`);
 
-        // 3. TB_AUCTION_REQ_BUS 상태 업데이트 (BIDDING)
-        await connection.execute(
+        if (!reqBusSeq || reqBusSeq === 0) {
+            console.error(`[BID_PROCESS] INVALID REQ_BUS_SEQ: ${reqBusSeq} for REQ_ID: ${reqId}`);
+            throw new Error('입찰 데이터 오류가 발생했습니다. (SEQ=0)');
+        }
+
+        // 3. TB_AUCTION_REQ_BUS 상태 업데이트 (BIDDING) - 원자적 상태 체크 추가
+        const [updateResult] = await connection.execute(
             `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'BIDDING', MOD_ID = ?, MOD_DT = NOW() 
-             WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?`,
+             WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT IN ('AUCTION', 'BUS_CHANGE', 'DRIVER_CANCEL')`,
             [custId, reqId, reqBusSeq]
         );
 
+        if (updateResult.affectedRows === 0) {
+            console.log(`[BID_PROCESS] Slot already taken by another driver: REQ_BUS_SEQ=${reqBusSeq}`);
+            throw new Error('다른 기사가 이미 해당 슬롯에 입찰하였습니다. 다시 시도해주세요.');
+        }
+
         // 4. TB_BUS_RESERVATION 등록
         const resId = await getNextId('TB_BUS_RESERVATION', 'RES_ID', 10, connection);
+        console.log(`[BID_PROCESS] Generated RES_ID: ${resId} for reqBusSeq: ${reqBusSeq}`);
 
         // 수수료 계산 (마스터 로직과 동일하게 6.6%, 5.5%, 1.1%)
         const feeTotal = Math.floor(busAmt * 0.066);
@@ -884,6 +919,7 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'BIDDING', ?, ?)`,
             [resId, reqId, reqBusSeq, travelerId, custId, busId, busAmt, feeTotal, feeRefund, feeAttribution, custId, custId]
         );
+        console.log(`[BID_PROCESS] Reservation inserted successfully for resId: ${resId}`);
 
         // 5. 전체 차량 입찰 완료 여부 확인 및 마스터 상태 업데이트
         const [pendingRows] = await connection.execute(
@@ -1050,21 +1086,26 @@ router.get('/mission-detail/:id', authenticateToken, async (req, res) => {
 
         // 1. CUST_ID 조회
         const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
-        if (uRows.length === 0) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+        if (uRows.length === 0) return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
         const custId = uRows[0].CUST_ID;
 
         // 2. 상세 정보 및 리뷰 정보 조인 조회
+        // TB_CODE_MASTER를 조인하여 차종 명칭(busTypeNm)을 가져옵니다.
         const [rows] = await pool.execute(`
             SELECT 
                 b.RES_ID as id,
                 r.REQ_ID,
                 r.TRIP_TITLE as title,
-                r.START_ADDR as startAddr,
+                r.START_ADDR as startAddrMaster,
                 r.END_ADDR as endAddrMaster,
+                (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'START_NODE' LIMIT 1) as startAddrVia,
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'END_NODE' LIMIT 1) as endAddrVia,
                 DATE_FORMAT(r.START_DT, '%Y.%m.%d %H:%i') as startDate,
                 DATE_FORMAT(r.END_DT, '%Y.%m.%d %H:%i') as endDate,
                 b.DRIVER_BIDDING_PRICE as price,
+                b.DATA_STAT,
+                rb.RES_BUS_AMT as targetPrice,
+                COALESCE(cm.CD_NM_KO, rb.BUS_TYPE_CD, '차종 미정') as busTypeNm,
                 db.MODEL_NM as model,
                 db.VEHICLE_NO as busNumber,
                 db.VEHICLE_PHOTOS_JSON as vehiclePhotos,
@@ -1072,12 +1113,8 @@ router.get('/mission-detail/:id', authenticateToken, async (req, res) => {
                 u.HP_NO as customerPhone,
                 u.EMAIL as customerEmail,
                 CASE 
-                    WHEN u.USER_IMAGE IS NOT NULL THEN 
-                        CASE 
-                            WHEN u.USER_IMAGE LIKE 'http%' THEN CONCAT('/api/common/display-image?path=', u.USER_IMAGE)
-                            ELSE CONCAT('/api/common/display-image?path=', u.USER_IMAGE)
-                        END
-                    ELSE NULL 
+                    WHEN f.GCS_PATH IS NOT NULL THEN CONCAT('/api/common/display-image?path=', f.GCS_PATH)
+                    ELSE u.USER_IMAGE 
                 END as customerImage,
                 (SELECT GROUP_CONCAT(VIA_ADDR ORDER BY VIA_SEQ ASC) FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'START_WAY') as startVia,
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' LIMIT 1) as roundTrip,
@@ -1088,17 +1125,22 @@ router.get('/mission-detail/:id', authenticateToken, async (req, res) => {
                 DATE_FORMAT(rev.REG_DT, '%Y.%m.%d') as reviewDate
             FROM TB_BUS_RESERVATION b
             JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID
+            LEFT JOIN TB_AUCTION_REQ_BUS rb ON b.REQ_ID = rb.REQ_ID AND b.REQ_BUS_SEQ = rb.REQ_BUS_SEQ
+            LEFT JOIN TB_COMMON_CODE cm ON cm.GRP_CD = 'BUS_TYPE' AND cm.DTL_CD = rb.BUS_TYPE_CD
             LEFT JOIN TB_USER u ON r.TRAVELER_ID = u.CUST_ID
             LEFT JOIN TB_FILE_MASTER f ON u.PROFILE_FILE_ID = f.FILE_ID
             LEFT JOIN TB_BUS_DRIVER_VEHICLE db ON b.BUS_ID = db.BUS_ID
             LEFT JOIN TB_TRIP_REVIEW rev ON b.RES_ID = rev.RES_ID
-            WHERE TRIM(b.RES_ID) = TRIM(?) AND b.DRIVER_ID = ?
-        `, [id, custId]);
+            WHERE (b.RES_ID = ? OR b.REQ_ID = ?) AND b.DRIVER_ID = ?
+            ORDER BY b.REG_DT DESC
+            LIMIT 1
+        `, [id, id, custId]);
 
         if (rows.length === 0) return res.status(404).json({ success: false, error: '운행 정보를 찾을 수 없습니다.' });
 
         const row = rows[0];
-        const endAddr = row.endAddrVia || row.endAddrMaster;
+        const startAddr = row.startAddrVia || row.startAddrMaster || '';
+        const endAddr = row.endAddrVia || row.endAddrMaster || '';
 
         let image = null;
         if (row.vehiclePhotos) {
@@ -1119,11 +1161,12 @@ router.get('/mission-detail/:id', authenticateToken, async (req, res) => {
 
         const data = {
             ...row,
+            startAddr,
             endAddr,
             image,
             breakdown,
             waypoints: [
-                { type: 'START', addr: row.startAddr, time: row.startDate || '출발' },
+                { type: 'START', addr: startAddr, time: row.startDate || '출발' },
                 ...(row.startVia ? row.startVia.split(',').map(v => ({ type: 'START_WAY', addr: v, time: '경유' })) : []),
                 ...(row.roundTrip ? [{ type: 'ROUND', addr: row.roundTrip, time: '목적지' }] : []),
                 ...(row.endVia ? row.endVia.split(',').map(v => ({ type: 'END_WAY', addr: v, time: '경유' })) : []),

@@ -1,49 +1,21 @@
-const mysql = require('mysql2/promise');
-require('dotenv').config();
+const { pool } = require('../db');
 
-async function checkDb() {
-    const pool = await mysql.createPool({
-        host: process.env.DB_HOST || '127.0.0.1',
-        port: process.env.DB_PORT || 3307,
-        user: process.env.DB_USER || 'master',
-        password: process.env.DB_PASSWORD || '!QAZ2wsx2026@',
-        database: process.env.DB_NAME || 'bustaams',
-        waitForConnections: true,
-        connectionLimit: 10,
-        queueLimit: 0
-    });
-
+async function check() {
     try {
-        console.log('--- TB_AUCTION_REQ ---');
-        const [reqs] = await pool.execute("SELECT REQ_ID, TRIP_TITLE, TRAVELER_ID, DATA_STAT FROM TB_AUCTION_REQ WHERE REQ_ID IN ('0000000001', '0000000003')");
-        console.table(reqs);
-
-        console.log('\n--- TB_BUS_RESERVATION ---');
-        const [bids] = await pool.execute("SELECT RES_ID, REQ_ID, DRIVER_ID, BUS_ID, DATA_STAT FROM TB_BUS_RESERVATION WHERE REQ_ID IN ('0000000001', '0000000003')");
-        console.table(bids);
-
-        if (bids.length > 0) {
-            const driverIds = bids.map(b => b.DRIVER_ID).filter(Boolean);
-            const busIds = bids.map(b => b.BUS_ID).filter(Boolean);
-
-            if (driverIds.length > 0) {
-                console.log('\n--- TB_USER (Drivers) ---');
-                const [drivers] = await pool.execute(`SELECT CUST_ID, USER_NM, USER_ID FROM TB_USER WHERE CUST_ID IN (${driverIds.map(() => '?').join(',')})`, driverIds);
-                console.table(drivers);
-            }
-
-            if (busIds.length > 0) {
-                console.log('\n--- TB_BUS_DRIVER_VEHICLE ---');
-                const [vehicles] = await pool.execute(`SELECT BUS_ID, MODEL_NM, VEHICLE_NO FROM TB_BUS_DRIVER_VEHICLE WHERE BUS_ID IN (${busIds.map(() => '?').join(',')})`, busIds);
-                console.table(vehicles);
-            }
-        }
-
+        const [rows] = await pool.execute(`
+            SELECT b.*, r.TRIP_TITLE, r.START_ADDR, r.END_ADDR, rb.RES_BUS_AMT, rb.BUS_TYPE_CD
+            FROM TB_BUS_RESERVATION b
+            JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID
+            LEFT JOIN TB_AUCTION_REQ_BUS rb ON b.REQ_ID = rb.REQ_ID AND b.REQ_BUS_SEQ = rb.REQ_BUS_SEQ
+            WHERE b.RES_ID = '0000000003'
+        `);
+        console.log('Data for RES_ID 0000000003:');
+        console.log(JSON.stringify(rows, null, 2));
     } catch (err) {
         console.error(err);
     } finally {
-        await pool.end();
+        process.exit();
     }
 }
 
-checkDb();
+check();

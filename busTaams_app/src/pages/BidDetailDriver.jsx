@@ -1,9 +1,63 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import BottomNavDriver from '../components/BottomNavDriver';
 
 const BidDetailDriver = () => {
     const navigate = useNavigate();
+    const { id } = useParams();
+    const [bidData, setBidData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        const fetchBidDetail = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    navigate('/login');
+                    return;
+                }
+
+                const response = await fetch(`/api/app-driver/mission-detail/${id}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    setBidData(result.data);
+                } else {
+                    setError(result.error || '데이터를 불러오는데 실패했습니다.');
+                }
+            } catch (err) {
+                console.error('Fetch bid detail error:', err);
+                setError('서버 통신 오류가 발생했습니다.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (id) fetchBidDetail();
+    }, [id, navigate]);
+
+    if (loading) {
+        return (
+            <div className="bg-background min-h-screen flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-primary"></div>
+            </div>
+        );
+    }
+
+    if (error || !bidData) {
+        return (
+            <div className="bg-background min-h-screen flex flex-col items-center justify-center p-6 text-center">
+                <span className="material-symbols-outlined text-6xl text-red-400 mb-4">error</span>
+                <p className="text-lg font-bold text-slate-600 mb-6">{error || '데이터가 없습니다.'}</p>
+                <button onClick={() => navigate(-1)} className="bg-primary text-white px-8 py-3 rounded-2xl font-bold">뒤로 가기</button>
+            </div>
+        );
+    }
 
     return (
         <div className="bg-background text-on-surface min-h-[100dvh] pb-32 font-body text-left">
@@ -24,7 +78,9 @@ const BidDetailDriver = () => {
                 <section className="space-y-8 text-left">
                     <div className="flex items-baseline justify-between text-left">
                         <h2 className="font-headline font-black text-3xl text-primary italic uppercase tracking-tighter text-left">고객 요청 요약</h2>
-                        <span className="text-[10px] font-black text-secondary bg-secondary/10 px-4 py-1.5 rounded-full uppercase tracking-widest italic">진행 중인 요청</span>
+                        <span className="text-[10px] font-black text-secondary bg-secondary/10 px-4 py-1.5 rounded-full uppercase tracking-widest italic">
+                            {bidData.DATA_STAT === 'BIDDING' ? '승인 대기 중' : '운행 예정'}
+                        </span>
                     </div>
 
                     <div className="bg-white rounded-[2.5rem] p-8 shadow-2xl shadow-teal-900/5 relative overflow-hidden text-left border border-white">
@@ -32,7 +88,7 @@ const BidDetailDriver = () => {
                         <div className="space-y-8 text-left">
                             <div>
                                 <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em] mb-2 italic">운행 제목</p>
-                                <h3 className="font-headline font-black text-2xl text-primary italic leading-tight text-left">2024년 추계 워크숍 전용 배차</h3>
+                                <h3 className="font-headline font-black text-2xl text-primary italic leading-tight text-left">{bidData.title}</h3>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
@@ -44,11 +100,9 @@ const BidDetailDriver = () => {
                                         <div className="text-left">
                                             <p className="text-[10px] font-black uppercase text-slate-300 mb-1 italic">운행 경로</p>
                                             <div className="flex flex-wrap items-center gap-2 font-black text-on-surface text-sm italic">
-                                                <span>서울역</span>
+                                                <span>{bidData.startAddr.split(' ').slice(0, 2).join(' ')}</span>
                                                 <span className="material-symbols-outlined text-xs text-slate-200">arrow_forward</span>
-                                                <span>대전</span>
-                                                <span className="material-symbols-outlined text-xs text-slate-200">arrow_forward</span>
-                                                <span>부산</span>
+                                                <span>{bidData.endAddr.split(' ').slice(0, 2).join(' ')}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -58,7 +112,7 @@ const BidDetailDriver = () => {
                                         </div>
                                         <div className="text-left">
                                             <p className="text-[10px] font-black uppercase text-slate-300 mb-1 italic">운행 일정</p>
-                                            <p className="font-black text-on-surface text-sm italic">2024. 10. 24 — 10. 26 (2박 3일)</p>
+                                            <p className="font-black text-on-surface text-sm italic">{bidData.startDate} — {bidData.endDate}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -69,7 +123,7 @@ const BidDetailDriver = () => {
                                         </div>
                                         <div className="text-left">
                                             <p className="text-[10px] font-black uppercase text-slate-300 mb-1 italic">차량 정보</p>
-                                            <p className="font-black text-on-surface text-sm italic">21인승 프리미엄 리무진 1대</p>
+                                            <p className="font-black text-on-surface text-sm italic">{bidData.busTypeNm || '차종 정보 없음'}</p>
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-4 text-left">
@@ -78,7 +132,7 @@ const BidDetailDriver = () => {
                                         </div>
                                         <div className="text-left">
                                             <p className="text-[10px] font-black uppercase text-slate-300 mb-1 italic">고객 희망 예산</p>
-                                            <p className="font-black text-on-surface text-sm italic">₩1,500,000 (Target)</p>
+                                            <p className="font-black text-on-surface text-sm italic">₩{bidData.targetPrice?.toLocaleString()} (Target)</p>
                                         </div>
                                     </div>
                                 </div>
@@ -96,7 +150,11 @@ const BidDetailDriver = () => {
                             <label className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-300 px-4 block italic">현재 입찰 금액</label>
                             <div className="relative text-left">
                                 <span className="absolute left-8 top-1/2 -translate-y-1/2 font-black text-slate-200 text-3xl italic">₩</span>
-                                <input className="w-full bg-slate-50 border-4 border-transparent group-focus-within:border-primary/20 rounded-3xl py-6 pl-16 pr-8 font-headline text-4xl font-black text-primary focus:outline-none transition-all italic tracking-tighter" defaultValue="1,650,000" type="text" />
+                                <input 
+                                    className="w-full bg-slate-50 border-4 border-transparent group-focus-within:border-primary/20 rounded-3xl py-6 pl-16 pr-8 font-headline text-4xl font-black text-primary focus:outline-none transition-all italic tracking-tighter" 
+                                    defaultValue={bidData.price?.toLocaleString()} 
+                                    type="text" 
+                                />
                             </div>
                         </div>
 
@@ -107,7 +165,7 @@ const BidDetailDriver = () => {
                             <div className="space-y-2 text-left">
                                 <p className="text-[10px] font-black uppercase tracking-widest text-primary italic">AI 입찰 전략 분석</p>
                                 <p className="text-sm font-bold text-slate-500 italic leading-relaxed text-left">
-                                    주변 기사님들의 유사 요건 평균 입찰가는 <span className="text-primary font-black">₩1,580,000 ~ ₩1,720,000</span> 입니다. 현재 입찰가는 경쟁력 있는 구간에 위치해 있습니다.
+                                    현재 입찰가는 <span className="text-primary font-black">₩{(bidData.price * 0.95).toLocaleString()} ~ ₩{(bidData.price * 1.05).toLocaleString()}</span> 구간에서 경쟁력을 유지하고 있습니다.
                                 </p>
                             </div>
                         </div>
@@ -116,12 +174,13 @@ const BidDetailDriver = () => {
 
                 {/* Breakdown Grid */}
                 <section className="space-y-8 text-left">
-                    <h2 className="font-headline font-black text-2xl text-primary italic uppercase tracking-widest text-left">항목별 상세 비용</h2>
+                    <h2 className="font-headline font-black text-2xl text-primary italic uppercase tracking-widest text-left">항목별 상세 비용 (예상)</h2>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
                         {[
-                            { label: '숙박/식사비', value: '200,000' },
-                            { label: '통행/주차료', value: '100,000' },
-                            { label: '유류비(인덱스)', value: '150,000' }
+                            { label: '기본 운행비', value: bidData.breakdown?.base?.toLocaleString() },
+                            { label: '숙박/식사비', value: bidData.breakdown?.lodging?.toLocaleString() },
+                            { label: '통행/주차료', value: bidData.breakdown?.tolls?.toLocaleString() },
+                            { label: '유류비', value: bidData.breakdown?.fuel?.toLocaleString() }
                         ].map((item, i) => (
                             <div key={i} className="bg-white p-6 rounded-[2rem] border border-slate-50 group hover:border-primary/20 transition-all text-left">
                                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-300 mb-2 italic">{item.label}</p>

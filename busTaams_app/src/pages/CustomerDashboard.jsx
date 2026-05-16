@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api, { getNotifications, logout } from '../api';
+import api, { getNotifications, logout, getImageUrl } from '../api';
 import Swal from 'sweetalert2';
 import { notify } from '../utils/toast';
 import BottomNavCustomer from '../components/BottomNavCustomer';
@@ -137,9 +137,7 @@ const CustomerDashboard = () => {
                         {profileImage ? (
                             <img 
                                 alt="Profile" 
-                                src={profileImage.startsWith('http') ? 
-                                    `${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
-                                    `${import.meta.env.VITE_API_BASE_URL || ''}${profileImage.startsWith('/') ? '' : '/'}${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                src={getImageUrl(profileImage, imageVersion)} 
                                 className="w-full h-full object-cover" 
                                 onError={(e) => {
                                     e.target.onerror = null;

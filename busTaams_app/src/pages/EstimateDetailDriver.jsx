@@ -69,11 +69,14 @@ const EstimateDetailDriver = () => {
                 });
             }
         } catch (err) {
-            console.error('Bid submit error:', err);
+            console.error('Bid submit error details:', err);
+            // 서버에서 넘어온 구체적인 에러 메시지가 있는지 확인합니다.
+            const serverMessage = err.message || '서버와 통신 중 오류가 발생했습니다.';
+            
             Swal.fire({
                 icon: 'error',
-                title: '통신 오류',
-                text: '서버와 통신 중 오류가 발생했습니다.',
+                title: '입찰 실패',
+                text: serverMessage,
                 confirmButtonColor: '#004e47'
             });
         }

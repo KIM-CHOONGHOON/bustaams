@@ -1,32 +1,46 @@
 const mysql = require('mysql2/promise');
-const dbConfig = {
-    host: '127.0.0.1',
-    port: 3307,
-    user: 'master',
-    password: '!QAZ2wsx2026@',
-    database: 'bustaams'
-};
+const dotenv = require('dotenv');
+dotenv.config({ path: './busTaams_server/.env' });
 
-async function check() {
-    let connection;
+async function checkSchema() {
+    const connection = await mysql.createConnection({
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME
+    });
+
     try {
-        connection = await mysql.createConnection(dbConfig);
-        
-        const reqId = '0000000005';
-        
-        console.log(`--- Checking TB_AUCTION_REQ for REQ_ID: ${reqId} ---`);
-        const [reqRows] = await connection.execute('SELECT * FROM TB_AUCTION_REQ WHERE REQ_ID = ?', [reqId]);
-        console.log(JSON.stringify(reqRows, null, 2));
+        console.log('--- TB_BUS_RESERVATION ---');
+        const [rows1] = await connection.execute('DESCRIBE TB_BUS_RESERVATION');
+        console.table(rows1);
 
-        console.log(`--- Checking TB_AUCTION_REQ_VIA for REQ_ID: ${reqId} ---`);
-        const [viaRows] = await connection.execute('SELECT * FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = ? ORDER BY VIA_SEQ ASC', [reqId]);
-        console.log(JSON.stringify(viaRows, null, 2));
+        console.log('--- TB_AUCTION_REQ ---');
+        const [rows2] = await connection.execute('DESCRIBE TB_AUCTION_REQ');
+        console.table(rows2);
+
+        console.log('--- TB_AUCTION_REQ_BUS ---');
+        const [rows3] = await connection.execute('DESCRIBE TB_AUCTION_REQ_BUS');
+        console.table(rows3);
+        
+        console.log('--- Data for REQ_ID 0000000003 ---');
+        const [data] = await connection.execute('SELECT * FROM TB_AUCTION_REQ WHERE REQ_ID = "0000000003"');
+        console.log(data);
+
+        console.log('--- TB_BUS_RESERVATION for REQ_ID 0000000003 ---');
+        const [resData] = await connection.execute('SELECT * FROM TB_BUS_RESERVATION WHERE REQ_ID = "0000000003"');
+        console.table(resData);
+
+        console.log('--- TB_AUCTION_REQ_VIA for REQ_ID 0000000003 ---');
+        const [viaData] = await connection.execute('SELECT * FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = "0000000003"');
+        console.table(viaData);
 
     } catch (err) {
-        console.error('Error:', err);
+        console.error(err);
     } finally {
-        if (connection) await connection.end();
+        await connection.end();
     }
 }
 
-check();
+checkSchema();

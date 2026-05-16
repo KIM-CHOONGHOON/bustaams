@@ -113,6 +113,7 @@ const Signup = () => {
     const [signature, setSignature] = useState('');
     const [residentNo, setResidentNo] = useState('');
     const [recomCode, setRecomCode] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const [showPassword, setShowPassword] = useState(false);
     const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
@@ -160,7 +161,7 @@ const Signup = () => {
     };
 
     const validatePassword = (pw) => {
-        const regex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/;
+        const regex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])[A-Za-z\d!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]{8,}$/;
         return regex.test(pw);
     };
 
@@ -278,23 +279,91 @@ const Signup = () => {
         }
     };
 
+    const validateResidentNo = (rrn) => {
+        if (!/^[0-9]{13}$/.test(rrn)) return false;
+        const digits = rrn.split('').map(Number);
+        const weights = [2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5];
+        let sum = 0;
+        for (let i = 0; i < 12; i++) {
+            sum += digits[i] * weights[i];
+        }
+        const remainder = sum % 11;
+        const checkValue = (11 - remainder) % 10;
+        return checkValue === digits[12];
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!isIdChecked) return notify.warn('아이디 중복 확인이 필요합니다.');
-        if (!userName) return notify.warn('성함을 입력해주세요.');
-        if (!validatePassword(password)) return notify.error('비밀번호 규칙 위반', '8자 이상, 숫자, 특수문자를 포함하세요.');
-        if (password !== passwordConfirm) return notify.error('불일치', '비밀번호 확인이 다릅니다.');
-        if (!isPhoneVerified) return notify.warn('인증 필요', '휴대폰 인증이 필요합니다.');
-        if (userType === 'driver' && !residentNo) return notify.warn('주민등록번호를 입력해주세요.');
-        if (userType === 'driver' && residentNo.length !== 13) return notify.warn('주민등록번호 13자리를 정확히 입력해주세요.');
-        if (!terms.service || !terms.privacy || !terms.traveler) return notify.warn('약관 동의', '모든 필수 약관에 동의하세요.');
-        if (!signature) return notify.warn('서명 필요', '전자 서명을 완료해주세요.');
+        if (isSubmitting) return;
+
+        // 즉시 상태 변경하여 중복 클릭 방지
+        setIsSubmitting(true);
 
         try {
+            if (!isEmailChecked) {
+                notify.warn('이메일 중복 확인이 필요합니다.');
+                setIsSubmitting(false);
+                return;
+            }
+            if (!isIdChecked) {
+                notify.warn('아이디 중복 확인이 필요합니다.');
+                setIsSubmitting(false);
+                return;
+            }
+            if (!userName) {
+                notify.warn('성함을 입력해주세요.');
+                setIsSubmitting(false);
+                return;
+            }
+            if (!validatePassword(password)) {
+                notify.error('비밀번호 규칙 위반', '8자 이상, 숫자, 특수문자를 포함하세요.');
+                setIsSubmitting(false);
+                return;
+            }
+            if (password !== passwordConfirm) {
+                notify.error('불일치', '비밀번호 확인이 다릅니다.');
+                setIsSubmitting(false);
+                return;
+            }
+            if (!isPhoneVerified) {
+                notify.warn('인증 필요', '휴대폰 인증이 필요합니다.');
+                setIsSubmitting(false);
+                return;
+            }
+
+            if (userType === 'driver') {
+                if (!residentNo) {
+                    notify.warn('주민등록번호를 입력해주세요.');
+                    setIsSubmitting(false);
+                    return;
+                }
+                if (residentNo.length !== 13) {
+                    notify.warn('주민등록번호 13자리를 정확히 입력해주세요.');
+                    setIsSubmitting(false);
+                    return;
+                }
+                if (!validateResidentNo(residentNo)) {
+                    notify.error('유효하지 않은 번호', '올바른 형식의 주민등록번호가 아닙니다.');
+                    setIsSubmitting(false);
+                    return;
+                }
+            }
+
+            if (!terms.service || !terms.privacy || !terms.traveler) {
+                notify.warn('약관 동의', '모든 필수 약관에 동의하세요.');
+                setIsSubmitting(false);
+                return;
+            }
+            if (!signature) {
+                notify.warn('서명 필요', '전자 서명을 완료해주세요.');
+                setIsSubmitting(false);
+                return;
+            }
+
             const termsData = [
                 { type: 'service', agreed: terms.service },
                 { type: 'privacy', agreed: terms.privacy },
-                { type: 'traveler_service', agreed: terms.traveler },
+                { type: userType === 'customer' ? 'traveler_service' : 'driver_service', agreed: terms.traveler },
                 {
                     type: 'marketing', agreed: marketing.agree,
                     channels: { sms: marketing.sms ? 'Y' : 'N', push: marketing.push ? 'Y' : 'N', email: marketing.email ? 'Y' : 'N', tel: marketing.tel ? 'Y' : 'N' }
@@ -306,18 +375,58 @@ const Signup = () => {
                 userType: userType === 'customer' ? 'TRAVELER' : 'DRIVER',
                 signatureBase64: signature,
                 termsData,
-                firebaseToken: idToken, // 서버에서 발행한 verifyToken (기존 필드명 유지)
+                firebaseToken: idToken,
                 residentNo: userType === 'driver' ? residentNo : null,
                 recomCode: recomCode || null
             });
 
             if (res.success) {
-                notify.success('가입 완료');
-                navigate('/login');
+                notify.success('가입 완료', '회원가입이 성공적으로 완료되었습니다.');
+                setTimeout(() => {
+                    navigate('/login');
+                }, 1500);
             } else {
-                notify.error('가입 실패', res.error);
+                // 주민번호 중복 시 팝업 알림
+                if (res.error && res.error.includes('이미 가입된 고객입니다')) {
+                    Swal.fire({
+                        icon: 'info',
+                        title: '가입 확인',
+                        text: res.error,
+                        confirmButtonText: '확인',
+                        confirmButtonColor: '#004e47',
+                        customClass: {
+                            popup: 'rounded-[2rem]',
+                            confirmButton: 'rounded-xl px-8 py-3 font-bold'
+                        }
+                    });
+                } else {
+                    notify.error('가입 실패', res.error || '회원가입 처리 중 오류가 발생했습니다.');
+                }
+                setIsSubmitting(false);
             }
-        } catch (err) { }
+        } catch (err) {
+            console.error('Signup error:', err);
+            const errorMessage = err.message || '서버 통신 중 오류가 발생했습니다.';
+
+            // 주민번호 중복 또는 이미 가입된 계정 관련 에러 메시지 처리
+            if (errorMessage.includes('이미 가입된 고객입니다')) {
+                Swal.fire({
+                    icon: 'info',
+                    title: '가입 확인',
+                    text: errorMessage,
+                    confirmButtonText: '확인',
+                    confirmButtonColor: '#004e47',
+                    customClass: {
+                        popup: 'rounded-[2rem]',
+                        confirmButton: 'rounded-xl px-8 py-3 font-bold'
+                    }
+                });
+            } else {
+                notify.error('오류 발생', errorMessage);
+            }
+            setIsSubmitting(false);
+        }
+        // 가입 성공 시에는 navigate로 이동하므로 여기서 setIsSubmitting(false)를 하지 않음 (중복 클릭 방지 유지)
     };
 
     return (
@@ -616,7 +725,24 @@ const Signup = () => {
 
                                         <button
                                             type="button"
-                                            onClick={() => handleShowTerms('마케팅 정보 수신 및 활용 동의 (선택)', `...기존 내용 그대로...`, 'marketing')}
+                                            onClick={() => handleShowTerms('마케팅 정보 수신 및 활용 동의 (선택)', `본 동의서는 (주)청솔테크(이하 “회사”)가 운영하는 플랫폼 “버스타암스(BUSTAAMS)”에서 제공하는 서비스의 홍보, 이벤트, 맞춤형 정보 제공을 위해 이용자의 개인정보를 수집 및 활용하는 것에 대한 동의를 구하는 내용입니다.
+
+1. 수집 및 이용 목적
+회사는 수집한 개인정보를 다음의 목적을 위해 활용합니다.
+• 공통: 신규 서비스 홍보 및 이벤트 정보 안내, 맞춤형 혜택 제공, 마케팅 전략 수립 및 통계 분석
+• 기사 회원: 운행 관련 프로모션, 차량 관리 서비스 안내, 제휴 서비스 홍보
+• 여행 회원: 여행 상품 추천, 할인 쿠폰 제공, 지역 축제 및 행사 정보 안내
+
+2. 수집 항목
+• 이름, 휴대전화번호, 이메일, 주소, 서비스 이용 기록, 접속 로그
+
+3. 보유 및 이용 기간
+• 회원 탈퇴 시 또는 동의 철회 시까지
+(단, 관련 법령에 의해 보존이 필요한 경우 해당 기간까지 보관)
+
+4. 동의 거부 권리 및 불이익
+• 귀하는 본 마케팅 정보 활용 동의를 거부할 권리가 있습니다.
+• 거부 시에도 버스타암스의 기본 서비스(예약, 운행 등) 이용에는 제한이 없으나, 이벤트 참여 및 맞춤형 혜택 안내를 받지 못할 수 있습니다.`, 'marketing')}
                                             className="shrink-0 whitespace-nowrap text-[9px] sm:text-[10px] text-blue-600 underline font-bold tracking-tighter"
                                         >
                                             상세보기
@@ -644,9 +770,19 @@ const Signup = () => {
                         {/* 전자 서명 */}
                         <SignaturePad onSave={setSignature} onClear={() => setSignature('')} />
 
-                        {/* 제출 버튼 */}
                         <div className="pt-8">
-                            <button type="submit" className="w-full bg-[#004e47] text-white font-headline font-bold py-5 rounded-[2rem] shadow-xl shadow-primary/20 hover:shadow-primary/40 active:scale-[0.98] transition-all text-xl">계정 생성</button>
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className={`w-full text-white font-headline font-bold py-5 rounded-[2rem] shadow-xl transition-all text-xl flex items-center justify-center gap-2 ${isSubmitting ? 'bg-slate-400 cursor-not-allowed shadow-none' : 'bg-[#004e47] shadow-primary/20 hover:shadow-primary/40 active:scale-[0.98]'}`}
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                                        <span>처리 중...</span>
+                                    </>
+                                ) : '계정 생성'}
+                            </button>
                         </div>
                     </form>
 

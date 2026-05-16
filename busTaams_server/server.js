@@ -55,6 +55,7 @@ app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // --- 3. 라우터 등록 ---
 
@@ -104,7 +105,15 @@ try {
 app.get('/api/health', (req, res) => res.json({ status: 'ok', serverTime: new Date() }));
 
 // Root path for testing
-app.get('/', (req, res) => res.send('BusTaams API Server is running.'));
+// 모든 요청을 index.html로 (SPA 지원)
+app.get('*', (req, res) => {
+    // API 경로는 제외하고 서빙
+    if (!req.path.startsWith('/api')) {
+        res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    } else {
+        res.status(404).json({ error: 'API endpoint not found' });
+    }
+});
 
 app.listen(PORT, () => {
     console.log(`\n==================================================`);
