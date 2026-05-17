@@ -37,7 +37,6 @@ function formatDateTime(iso) {
 }
 
 /**
- * 버스 여행 완료 상세 — `버스 여행 완료 상세 화면.md`
  * 모달: 헤더「버스 운행 완료 상세 정보」·닫기.
  * 본문 1행 2열: 좌「여행자 등록 정보」+「요청 차량」, 우「왕복 운행 타임라인」. `TB_AUCTION_REQ_BUS` = auctionReqBuses.
  *

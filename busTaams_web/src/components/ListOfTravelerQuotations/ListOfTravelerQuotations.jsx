@@ -1,77 +1,34 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import TravelerQuoteRequestDetails from '../TravelerQuoteRequestDetails/TravelerQuoteRequestDetails';
 
-/** TB_AUCTION_REQ.DATA_STAT (`reqStat`) — BusTaams_Project 설계 비고와 동일 */
-const AUCTION_REQ_STAT_LABEL = {
-  AUCTION: '입찰대기',
-  BIDDING: '응찰등록',
-  CONFIRM: '예약확정',
-  DONE: '운행종료',
-  TRAVELER_CANCEL: '전체취소',
-  DRIVER_CANCEL: '응찰취소',
-  BUS_CHANGE: '버스변경',
-  BUS_CANCEL: '버스취소',
-  OTHER: '기타',
-};
-
-function pickReqBusSeq(item) {
-  const n = Number(item?.reqBusSeq);
-  if (Number.isFinite(n) && n >= 0) return n;
-  return 1;
-}
-
 /**
  * 여행자 견적 목록 (ListOfTravelerQuotations)
- * - 운전기사 대시보드 → 바로가기 → 「여행자 견적 목록 조회」·「견적 요청 목록」(`presentation`으로 헤더만 구분)
- * - GET /api/list-of-traveler-quotations?driverId= — 마스터 DATA_STAT=AUCTION, waypointCount=VIA_TYPE IN (START_WAY,END_WAY). driverId 있으면 동일 출발일 확정(CONFIRM) 제외
+ * - 운전기사 대시보드 → 바로가기 메뉴 → 「여행자 견적 목록」 클릭 시 호출
+ * - GET /api/list-of-traveler-quotations?driverUuid= — BIDDING + 기사별 동일출발일 제외(CONFIRM)
+ * - 항목 클릭 → TravelerQuoteRequestDetails 모달 호출 (reqId 전달)
  * - 배경 클릭으로 닫히지 않음 / X 버튼·닫기 버튼으로만 닫힘
  */
-const ListOfTravelerQuotations = ({ close, currentUser, presentation = 'traveler' }) => {
-  const isQuoteRequestPresentation = presentation === 'quoteRequest';
-  const titleEn = isQuoteRequestPresentation ? 'Quote Request List' : 'List of Traveler Quotations';
-  const titleKo = isQuoteRequestPresentation ? '견적 요청 목록' : '여행자 견적 목록';
-  const titleId = isQuoteRequestPresentation ? 'quote-request-list-title' : 'traveler-quotation-list-title';
+const ListOfTravelerQuotations = ({ close, currentUser }) => {
   const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080').replace(/\/$/, '');
 
   const [items, setItems] = useState([]);
-  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
-  /** @type {null | { reqId: string, reqBusSeq: number }} */
-  const [selectedQuote, setSelectedQuote] = useState(null);
-
-  const handleCloseAll = () => {
-    setSelectedQuote(null);
-    close?.();
-  };
+  const [selectedReqId, setSelectedReqId] = useState(null);
 
   const fetchList = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const driverId =
-        (currentUser?.custId != null && String(currentUser.custId).trim()) ||
-        (currentUser?.CUST_ID != null && String(currentUser.CUST_ID).trim()) ||
-        '';
-      const q = driverId
-        ? `?driverId=${encodeURIComponent(driverId)}`
+      const driverUuid =
+        currentUser?.uuid || currentUser?.userUuid || currentUser?.USER_UUID_STR;
+      const q = driverUuid
+        ? `?driverUuid=${encodeURIComponent(driverUuid)}`
         : '';
       const res = await fetch(`${API_BASE}/api/list-of-traveler-quotations${q}`);
-      const text = await res.text();
-      let json;
-      try {
-        json = JSON.parse(text);
-      } catch {
-        if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
-        throw new Error('목록 응답 형식이 올바르지 않습니다.');
-      }
-      if (!res.ok) {
-        const msg = typeof json?.error === 'string' ? json.error : `서버 오류 (${res.status})`;
-        throw new Error(msg);
-      }
-      const list = json.items || [];
-      setItems(list);
-      setTotal(json.total != null ? Number(json.total) : list.length);
+      if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
+      const json = await res.json();
+      setItems(json.items || []);
     } catch (err) {
       setLoadError(err.message || '목록을 불러오는 데 실패했습니다.');
     } finally {
@@ -80,16 +37,6 @@ const ListOfTravelerQuotations = ({ close, currentUser, presentation = 'traveler
   }, [API_BASE, currentUser]);
 
   useEffect(() => { fetchList(); }, [fetchList]);
-
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.key !== 'Escape') return;
-      if (selectedQuote) return;
-      close?.();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [close, selectedQuote]);
 
   const formatDt = (dtStr) => {
     if (!dtStr) return '-';
@@ -100,42 +47,27 @@ const ListOfTravelerQuotations = ({ close, currentUser, presentation = 'traveler
 
   return (
     <>
-      {selectedQuote && (
-        <TravelerQuoteRequestDetails
-          key={`${selectedQuote.reqId}-${selectedQuote.reqBusSeq}`}
-          reqId={selectedQuote.reqId}
-          reqBusSeq={selectedQuote.reqBusSeq}
-          close={() => setSelectedQuote(null)}
-          currentUser={currentUser}
-          onBidInsertSuccess={fetchList}
-        />
-      )}
       <div
         className="fixed inset-0 z-[150] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200"
-        style={{ fontFamily: "'Manrope', 'Plus Jakarta Sans', sans-serif" }}
+        style={{ fontFamily: "'Manrope', sans-serif" }}
       >
         <div className="absolute inset-0" aria-hidden="true" />
 
         <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={titleId}
           className="relative my-auto flex flex-col w-full max-w-4xl max-h-[90vh] rounded-3xl bg-white shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* 헤더 — ARCHITECTURE: Display·Headlines Plus Jakarta, 본문 Manrope */}
+          {/* 헤더 */}
           <div className="flex items-center justify-between px-8 py-5 border-b border-gray-100">
             <div>
-              <p className="text-xs font-semibold text-teal-600 uppercase tracking-widest mb-0.5" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-                {titleEn}
+              <p className="text-xs font-semibold text-teal-600 uppercase tracking-widest mb-0.5">
+                List of Traveler Quotations
               </p>
-              <h2 id={titleId} className="text-xl font-bold text-gray-900 font-headline tracking-tight">
-                {titleKo}
-              </h2>
+              <h2 className="text-xl font-bold text-gray-900">여행자 견적 목록</h2>
             </div>
             <button
               type="button"
-              onClick={handleCloseAll}
+              onClick={close}
               className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
               aria-label="닫기"
             >
@@ -151,8 +83,8 @@ const ListOfTravelerQuotations = ({ close, currentUser, presentation = 'traveler
               <div className="mb-5 px-4 py-3 rounded-xl bg-teal-50 border border-teal-100 flex items-center gap-3">
                 <span className="material-symbols-outlined text-teal-600 text-[20px]">sell</span>
                 <span className="text-sm font-semibold text-teal-800">
-                  {total > 0
-                    ? `현재 입찰 가능한 역경매 견적 요청이 ${total}건 있습니다.`
+                  {items.length > 0
+                    ? `현재 입찰 가능한 역경매 견적 요청이 ${items.length}건 있습니다.`
                     : '현재 입찰 가능한 견적 요청이 없습니다.'}
                 </span>
               </div>
@@ -193,26 +125,21 @@ const ListOfTravelerQuotations = ({ close, currentUser, presentation = 'traveler
               <div className="space-y-4">
                 {items.map((item) => (
                   <button
-                    key={`${item.reqId}-${item.reqBusSeq ?? '0'}`}
+                    key={item.reqId}
                     type="button"
-                    className="group w-full rounded-2xl border border-gray-100 bg-white p-5 text-left transition-all hover:border-teal-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40"
-                    onClick={() =>
-                      setSelectedQuote({
-                        reqId: String(item.reqId).trim(),
-                        reqBusSeq: pickReqBusSeq(item),
-                      })
-                    }
+                    onClick={() => setSelectedReqId(item.reqId)}
+                    className="w-full text-left rounded-2xl border border-gray-100 bg-white hover:border-teal-200 hover:shadow-md transition-all duration-200 p-5 group"
                   >
                     <div className="flex items-start justify-between gap-4">
                       {/* 왼쪽: 여정 정보 */}
                       <div className="flex-1 min-w-0">
                         {/* 여정 제목 + 상태 배지 */}
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-base font-bold text-gray-900 truncate">
+                          <span className="text-base font-bold text-gray-900 group-hover:text-teal-700 transition-colors truncate">
                             {item.tripTitle || `${item.startAddr} → ${item.endAddr}`}
                           </span>
                           <span className="shrink-0 px-2 py-0.5 rounded-full text-[11px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
-                            {AUCTION_REQ_STAT_LABEL[item.reqStat] ?? item.reqStat ?? '—'}
+                            BIDDING
                           </span>
                         </div>
                         {/* 노선 */}
@@ -234,26 +161,24 @@ const ListOfTravelerQuotations = ({ close, currentUser, presentation = 'traveler
                           </div>
                           <div className="flex items-center gap-1.5 text-gray-500">
                             <span className="material-symbols-outlined text-[15px]">group</span>
-                            <span>탑승: <span className="font-medium text-gray-700">{Number(item.passengerCnt ?? 0)}명</span></span>
+                            <span>탑승: <span className="font-medium text-gray-700">{item.passengerCnt}명</span></span>
                           </div>
                           <div className="flex items-center gap-1.5 text-gray-500">
                             <span className="material-symbols-outlined text-[15px]">directions_bus</span>
-                            <span>{item.busType || '—'} <span className="font-medium text-gray-700">× {Number(item.busCnt ?? 0)}대</span></span>
+                            <span>{item.busType} <span className="font-medium text-gray-700">× {item.busCnt}대</span></span>
                           </div>
-                          <div className="flex items-center gap-1.5 text-gray-500">
-                            <span className="material-symbols-outlined text-[15px]">timer</span>
-                            <span>입찰 마감: <span className="font-medium text-gray-700">{formatDt(item.expireDt)}</span></span>
-                          </div>
-                          {Number(item.waypointCount) > 0 && (
+                          {item.waypointCount > 0 && (
                             <div className="flex items-center gap-1.5 text-gray-500">
                               <span className="material-symbols-outlined text-[15px]">route</span>
-                              <span>경유지(출발·복귀행): <span className="font-medium text-gray-700">{item.waypointCount}곳</span></span>
+                              <span>경유지: <span className="font-medium text-gray-700">{item.waypointCount}곳</span></span>
                             </div>
                           )}
-                          <div className="flex items-center gap-1.5 text-teal-600">
-                            <span className="material-symbols-outlined text-[15px]">payments</span>
-                            <span className="font-bold">개산 총액: ₩{Number(item.estTotalServicePrice ?? 0).toLocaleString()}</span>
-                          </div>
+                          {item.estTotalServicePrice > 0 && (
+                            <div className="flex items-center gap-1.5 text-teal-600">
+                              <span className="material-symbols-outlined text-[15px]">payments</span>
+                              <span className="font-bold">개산 총액: ₩{Number(item.estTotalServicePrice).toLocaleString()}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -266,7 +191,7 @@ const ListOfTravelerQuotations = ({ close, currentUser, presentation = 'traveler
                           </div>
                           <div className="text-center mt-0.5">{formatDt(item.regDt)}</div>
                         </div>
-                        <span className="material-symbols-outlined text-gray-400 group-hover:text-teal-600 text-[28px]">
+                        <span className="material-symbols-outlined text-gray-300 group-hover:text-teal-500 transition-colors text-[20px]">
                           chevron_right
                         </span>
                       </div>
@@ -281,7 +206,7 @@ const ListOfTravelerQuotations = ({ close, currentUser, presentation = 'traveler
           <div className="flex justify-end px-8 py-4 border-t border-gray-100 bg-gray-50/50">
             <button
               type="button"
-              onClick={handleCloseAll}
+              onClick={close}
               className="px-6 py-2.5 rounded-full border border-gray-300 text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-colors"
             >
               닫기
@@ -289,6 +214,15 @@ const ListOfTravelerQuotations = ({ close, currentUser, presentation = 'traveler
           </div>
         </div>
       </div>
+
+      {/* 상세 모달 */}
+      {selectedReqId && (
+        <TravelerQuoteRequestDetails
+          reqId={selectedReqId}
+          close={() => setSelectedReqId(null)}
+          currentUser={currentUser}
+        />
+      )}
     </>
   );
 };

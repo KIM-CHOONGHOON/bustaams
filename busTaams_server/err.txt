@@ -1,0 +1,1 @@
+Error: Cannot add or update a child row: a foreign key constraint fails (`bustaams`.`TB_USER_TERMS_HIST`, CONSTRAINT `FK_TERMS_SIGN` FOREIGN KEY (`SIGN_FILE_UUID`) REFERENCES `TB_FILE_MASTER` (`FILE_UUID`))

@@ -20,7 +20,8 @@ const ReviewManageModal = ({ user, onClose }) => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`http://localhost:8080/api/auction/total-history/${user.custId}`);
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+      const res = await fetch(`${apiBase}/api/auction/total-history/${user.custId}`);
       if (res.ok) {
         const data = await res.json();
         // DONE 상태인 여정들만 그룹화하여 목록 구성
@@ -66,7 +67,8 @@ const ReviewManageModal = ({ user, onClose }) => {
 
     setSubmitting(true);
     try {
-      const response = await fetch('http://localhost:8080/api/review/submit', {
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+      const response = await fetch(`${apiBase}/api/review/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
