@@ -252,6 +252,10 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
           if (v === 'DRIVER_GENNERAL') v = 'DRIVER_GENERAL';
           return v || '';
         })();
+        const addrTypeNorm =
+          data.addrType != null && String(data.addrType).trim() !== ''
+            ? String(data.addrType).trim().toUpperCase()
+            : null;
         setFormData((prev) => ({
           ...prev,
           FEE_POLICY: feePolicyLoaded,
@@ -267,14 +271,14 @@ const DriverProfileSetup = ({ currentUser, onBack, close }) => {
                 )
                   .replace(/\D/g, '')
                   .slice(0, 11),
-                addrType: data.addrType || prev.addrType,
-                addrOtherLabel: data.addrName || '',
-                zipcode: data.zipcode ?? '',
-                streetAddress: data.address ?? '',
-                detailAddress: data.detailAddress ?? '',
-                bioText: data.bioText ?? prev.bioText,
               }
             : {}),
+          bioText: data.bioText != null ? data.bioText : prev.bioText,
+          addrType: addrTypeNorm || prev.addrType,
+          addrOtherLabel: data.addrName != null ? String(data.addrName) : prev.addrOtherLabel,
+          zipcode: data.zipcode != null ? String(data.zipcode) : prev.zipcode,
+          streetAddress: data.address != null ? String(data.address) : prev.streetAddress,
+          detailAddress: data.detailAddress != null ? String(data.detailAddress) : prev.detailAddress,
         }));
 
         /** TB_USER.PROFILE_FILE_ID → GET /profile-photo (서버에서 TB_FILE_MASTER·GCS) — exists 무관 */

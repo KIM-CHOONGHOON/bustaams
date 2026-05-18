@@ -194,43 +194,66 @@ function formatDateYmd(v) {
     return s.length >= 10 ? s.slice(0, 10) : s;
 }
 
-/** 진위 검증 생략 비교용 — TB_DRIVER_DETAIL 기존 행(면허·자격 컬럼) */
-async function fetchDriverDetailLicenseRow(connection, custId) {
+/** TB_DRIVER_DETAIL 행에서 컬럼 조회(대소문자 무관) */
+function detailCol(row, colName) {
+    if (!row) return undefined;
+    const up = String(colName || '').toUpperCase();
+    if (Object.prototype.hasOwnProperty.call(row, colName) && row[colName] !== undefined) {
+        return row[colName];
+    }
+    for (const k of Object.keys(row)) {
+        if (String(k).toUpperCase() === up) return row[k];
+    }
+    return undefined;
+}
+
+function normDetailStrCmp(v) {
+    if (v == null || v === '') return '';
+    if (typeof Buffer !== 'undefined' && Buffer.isBuffer(v)) return v.toString('utf8').trim();
+    return String(v).trim();
+}
+
+/** 생년월일(YYMMDD) — BIRTH_YMD / YMD 등 스키마 차이 흡수 */
+function birthYmdFromDriverDetailRow(row) {
+    const v = detailCol(row, 'BIRTH_YMD') ?? detailCol(row, 'YMD') ?? detailCol(row, 'birth_ymd');
+    if (v == null || v === '') return '';
+    return String(v).trim().slice(0, 6);
+}
+
+function sexFromDriverDetailRow(row) {
+    const v = detailCol(row, 'SEX');
+    if (v == null || v === '') return '';
+    return String(v).trim().charAt(0);
+}
+
+/** TB_DRIVER_DETAIL 전 행 조회 — 프로필 모달 GET·저장 분기·진위 검증에 공통 사용 */
+async function selectDriverDetailFullRow(connection, custId) {
     const param = String(custId ?? '').trim();
     if (!param) return null;
-    const sql = `SELECT LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO, LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT,
-                    QUAL_CERT_NO, QUAL_CERT_VERIFY_STATUS,
-                    BIRTH_YMD, SEX
-             FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1`;
-    const [rows] = await connection.execute(sql, [param]);
-    return rows[0] || null;
+    try {
+        const [dr] = await connection.execute(`SELECT * FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1`, [
+            param
+        ]);
+        return dr[0] || null;
+    } catch (e) {
+        if (e.code === 'ER_NO_SUCH_TABLE') return null;
+        throw e;
+    }
+}
+
+/** 진위 검증 생략 비교용 — TB_DRIVER_DETAIL 기존 행(면허·자격 컬럼) */
+async function fetchDriverDetailLicenseRow(connection, custId) {
+    return selectDriverDetailFullRow(connection, custId);
 }
 
 /** 프로필 저장 시 자격번호·생년 분기 — LICENSE_TYPE 유무와 무관하게 조회 */
 async function fetchDriverDetailQualBirthRow(connection, custId) {
-    const param = String(custId ?? '').trim();
-    if (!param) return null;
-    const sql = `SELECT QUAL_CERT_NO, IFNULL(QUAL_CERT_VERIFY_STATUS, 'UNVERIFIED') AS QUAL_CERT_VERIFY_STATUS,
-                BIRTH_YMD, SEX
-         FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1`;
-    const [rows] = await connection.execute(sql, [param]);
-    return rows[0] || null;
+    return selectDriverDetailFullRow(connection, custId);
 }
 
-/** GET profile-setup용 — TB_DRIVER_DETAIL 프로필·면허·등급 컬럼 일괄 조회 */
+/** GET profile-setup용 — 내부적으로 전 컬럼 SELECT */
 async function selectDriverDetailForProfileSetup(connection, custId) {
-    const param = String(custId ?? '').trim();
-    if (!param) return null;
-    const fullSql = `SELECT ZIPCODE, ADDRESS, DETAIL_ADDRESS, ADDR_TYPE, ADDR_NAME,
-                            BIRTH_YMD, SEX, COALESCE(SELF_INTRO, '') AS SELF_INTRO,
-                            LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO,
-                            LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT, QUAL_CERT_NO,
-                            IFNULL(QUAL_CERT_VERIFY_STATUS, 'UNVERIFIED') AS QUAL_CERT_VERIFY_STATUS,
-                            QUAL_CERT_VERIFY_DT,
-                            FEE_POLICY
-                     FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1`;
-    const [dr] = await connection.execute(fullSql, [param]);
-    return dr[0] || null;
+    return selectDriverDetailFullRow(connection, custId);
 }
 
 /** TB_DRIVER_DETAIL / TB_MOM_MEMBER 행에서 회원등급 원문 추출 (mysql2·ENUM·버퍼 대응) */
@@ -444,6 +467,103 @@ async function executeDriverDetailProfileUpsert(connection, ddMap, keysUpper, va
                     `;
     const vals = cols.map((k) => valueByKey[k]);
     await connection.execute(sql, vals);
+}
+
+/** TB_DRIVER_DETAIL 순수 INSERT (행 없을 때만 사용) */
+async function executeDriverDetailProfileInsertOnly(connection, ddMap, keysUpper, valueByKey) {
+    const cols = keysUpper.filter((k) => ddHas(ddMap, k));
+    if (!cols.length || !cols.includes('CUST_ID')) {
+        throw new Error('TB_DRIVER_DETAIL에 CUST_ID(또는 동일 PK) 컬럼이 없습니다.');
+    }
+    const insertSqlCols = cols.map((k) => ddCol(ddMap, k)).join(', ');
+    const ph = cols.map(() => '?').join(', ');
+    const sql = `INSERT INTO TB_DRIVER_DETAIL (${insertSqlCols}) VALUES (${ph})`;
+    const vals = cols.map((k) => valueByKey[k]);
+    await connection.execute(sql, vals);
+}
+
+function driverDetailBirthColUpper(ddMap) {
+    if (ddHas(ddMap, 'BIRTH_YMD')) return 'BIRTH_YMD';
+    if (ddHas(ddMap, 'YMD')) return 'YMD';
+    return 'BIRTH_YMD';
+}
+
+/**
+ * TB_DRIVER_DETAIL — 변경된 컬럼만 UPDATE. 변경 없으면 쿼리 생략.
+ * @returns {Promise<boolean>} 실행 여부
+ */
+async function updateDriverDetailProfileIfChanged(connection, ddMap, custIdPk, existing, nextUpper, hasLicenseCols) {
+    const sets = [];
+    const vals = [];
+    const eqStr = (n, o) => normDetailStrCmp(n) === normDetailStrCmp(o);
+    const eqAddrType = (n, o) =>
+        normDetailStrCmp(n).toUpperCase() === normDetailStrCmp(o).toUpperCase();
+    const eqDate = (n, o) =>
+        (formatDateYmd(n) || '').slice(0, 10) === (formatDateYmd(o) || '').slice(0, 10);
+    const eqVerifyDt = (n, o) => {
+        const tn = n instanceof Date ? n.getTime() : n != null ? new Date(n).getTime() : NaN;
+        const to = o instanceof Date ? o.getTime() : o != null ? new Date(o).getTime() : NaN;
+        if (Number.isNaN(tn) && Number.isNaN(to)) return true;
+        if (Number.isNaN(tn) || Number.isNaN(to)) return false;
+        return tn === to;
+    };
+
+    const push = (upperKey, newVal, eq = eqStr) => {
+        if (!ddHas(ddMap, upperKey)) return;
+        const oldVal = detailCol(existing, upperKey);
+        if (eq(newVal, oldVal)) return;
+        sets.push(`${ddCol(ddMap, upperKey)} = ?`);
+        vals.push(newVal);
+    };
+
+    push('ZIPCODE', nextUpper.ZIPCODE, eqStr);
+    push('ADDRESS', nextUpper.ADDRESS, eqStr);
+    push('DETAIL_ADDRESS', nextUpper.DETAIL_ADDRESS, eqStr);
+    push('ADDR_TYPE', nextUpper.ADDR_TYPE, eqAddrType);
+    push('ADDR_NAME', nextUpper.ADDR_NAME, eqStr);
+
+    const birthK = driverDetailBirthColUpper(ddMap);
+    if (ddHas(ddMap, birthK)) {
+        const oldB = birthYmdFromDriverDetailRow(existing);
+        const newB = normDetailStrCmp(nextUpper.BIRTH_YMD);
+        if (normDetailStrCmp(oldB) !== newB) {
+            sets.push(`${ddCol(ddMap, birthK)} = ?`);
+            vals.push(newB || null);
+        }
+    }
+
+    push('SEX', nextUpper.SEX, eqStr);
+    push('SELF_INTRO', nextUpper.SELF_INTRO, eqStr);
+    push('FEE_POLICY', nextUpper.FEE_POLICY, eqStr);
+
+    if (hasLicenseCols) {
+        push('LICENSE_TYPE', nextUpper.LICENSE_TYPE, eqStr);
+        push('LICENSE_NO', nextUpper.LICENSE_NO, eqStr);
+        push('LICENSE_SERIAL_NO', nextUpper.LICENSE_SERIAL_NO, eqStr);
+        push('LICENSE_ISSUE_DT', nextUpper.LICENSE_ISSUE_DT, eqDate);
+        push('LICENSE_EXPIRY_DT', nextUpper.LICENSE_EXPIRY_DT, eqDate);
+        push('QUAL_CERT_NO', nextUpper.QUAL_CERT_NO, eqStr);
+        push('QUAL_CERT_VERIFY_STATUS', nextUpper.QUAL_CERT_VERIFY_STATUS, eqStr);
+        if (ddHas(ddMap, 'QUAL_CERT_VERIFY_DT')) {
+            const oldDt = detailCol(existing, 'QUAL_CERT_VERIFY_DT');
+            const newDt = nextUpper.QUAL_CERT_VERIFY_DT;
+            if (newDt == null && oldDt != null) {
+                /* 예전 UPSERT와 동일: 새 값이 NULL이면 기존 검증일시 유지 */
+            } else if (!eqVerifyDt(newDt, oldDt)) {
+                sets.push(`${ddCol(ddMap, 'QUAL_CERT_VERIFY_DT')} = ?`);
+                vals.push(newDt);
+            }
+        }
+    }
+
+    if (!sets.length) return false;
+    if (ddHas(ddMap, 'MOD_DT')) {
+        sets.push(`${ddCol(ddMap, 'MOD_DT')} = NOW()`);
+    }
+    const custCol = ddCol(ddMap, 'CUST_ID');
+    vals.push(custIdPk);
+    await connection.execute(`UPDATE TB_DRIVER_DETAIL SET ${sets.join(', ')} WHERE ${custCol} = ?`, vals);
+    return true;
 }
 
 function formatCommonCodeFnumForLabel(v) {
@@ -909,7 +1029,14 @@ app.post('/api/driver/profile', async (req, res) => {
         res.status(500).json({ error: '프로필 저장 중 오류가 발생했습니다.' });
     }
 });
- 
+
+/** mysql2 행 값 → JSON 응답용 문자열(Buffer·null 안전, 주소·명칭 필드용) */
+function rowUtf8Text(v) {
+    if (v == null || v === '') return '';
+    if (typeof Buffer !== 'undefined' && Buffer.isBuffer(v)) return v.toString('utf8').trim();
+    return String(v).trim();
+}
+
 // API: 기사 프로필 조회 (폼 채우기)
 app.get('/api/driver/profile-setup', async (req, res) => {
     let connection;
@@ -1031,23 +1158,28 @@ app.get('/api/driver/profile-setup', async (req, res) => {
         return res.json({
             exists: true,
             ...baseExtras,
-            licenseType: detail.LICENSE_TYPE || '',
-            licenseNo: detail.LICENSE_NO || '',
-            licenseSerialNo: detail.LICENSE_SERIAL_NO || '',
-            licenseIssueDt: formatDateYmd(detail.LICENSE_ISSUE_DT),
-            licenseExpiryDt: formatDateYmd(detail.LICENSE_EXPIRY_DT),
-            qualCertNo: detail.QUAL_CERT_NO || '',
-            bioText: detail.SELF_INTRO || '',
-            qualCertVerifyStatus: detail.QUAL_CERT_VERIFY_STATUS || 'UNVERIFIED',
-            qualCertVerifyDt: detail.QUAL_CERT_VERIFY_DT
-                ? new Date(detail.QUAL_CERT_VERIFY_DT).toISOString()
-                : null,
+            licenseType: rowUtf8Text(detailCol(detail, 'LICENSE_TYPE')),
+            licenseNo: rowUtf8Text(detailCol(detail, 'LICENSE_NO')),
+            licenseSerialNo: rowUtf8Text(detailCol(detail, 'LICENSE_SERIAL_NO')),
+            licenseIssueDt: formatDateYmd(detailCol(detail, 'LICENSE_ISSUE_DT')),
+            licenseExpiryDt: formatDateYmd(detailCol(detail, 'LICENSE_EXPIRY_DT')),
+            qualCertNo: rowUtf8Text(detailCol(detail, 'QUAL_CERT_NO')),
+            bioText: rowUtf8Text(detailCol(detail, 'SELF_INTRO')),
+            qualCertVerifyStatus:
+                normDetailStrCmp(detailCol(detail, 'QUAL_CERT_VERIFY_STATUS')) || 'UNVERIFIED',
+            qualCertVerifyDt: (() => {
+                const qvd = detailCol(detail, 'QUAL_CERT_VERIFY_DT');
+                return qvd ? new Date(qvd).toISOString() : null;
+            })(),
             feePolicy: feePolicyResolved,
-            addrType: detail.ADDR_TYPE || 'HOME',
-            addrName: detail.ADDR_NAME || '',
-            zipcode: detail.ZIPCODE || '',
-            address: detail.ADDRESS || '',
-            detailAddress: detail.DETAIL_ADDRESS || ''
+            addrType: (() => {
+                const t = rowUtf8Text(detailCol(detail, 'ADDR_TYPE')).toUpperCase();
+                return t === 'HOME' || t === 'OFFICE' || t === 'OTHER' ? t : 'HOME';
+            })(),
+            addrName: rowUtf8Text(detailCol(detail, 'ADDR_NAME')),
+            zipcode: rowUtf8Text(detailCol(detail, 'ZIPCODE')),
+            address: rowUtf8Text(detailCol(detail, 'ADDRESS')),
+            detailAddress: rowUtf8Text(detailCol(detail, 'DETAIL_ADDRESS'))
         });
     } catch (error) {
         console.error('GET driver profile-setup error:', error);
@@ -2415,10 +2547,9 @@ app.post('/api/driver/profile-setup', async (req, res) => {
         const hasQualVerifyDtCol = ddHas(ddMap, 'QUAL_CERT_VERIFY_DT');
 
         const hasLicenseCols = await tableColumnExists(connection, 'TB_DRIVER_DETAIL', 'LICENSE_TYPE');
-        const licenseRowForVerify = hasLicenseCols
-            ? await fetchDriverDetailLicenseRow(connection, custId)
-            : null;
-        const qualBirthRow = await fetchDriverDetailQualBirthRow(connection, custId);
+        const detailRowPreTx = await selectDriverDetailFullRow(connection, custId);
+        const licenseRowForVerify = hasLicenseCols ? detailRowPreTx : null;
+        const qualBirthRow = detailRowPreTx;
         const existingDriverRow = licenseRowForVerify || qualBirthRow;
 
         const qualUnchanged =
@@ -2462,20 +2593,8 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                         '저장된 기사 정보가 없고 회원 주민등록번호도 확인할 수 없습니다. 회원 정보에서 주민등록번호를 등록한 뒤 다시 시도해 주세요.',
                 });
             }
-            birthYmdYyMmDd = String(
-                birthSource.BIRTH_YMD != null
-                    ? birthSource.BIRTH_YMD
-                    : birthSource.birth_ymd != null
-                      ? birthSource.birth_ymd
-                      : ''
-            )
-                .trim()
-                .slice(0, 6);
-            sexDigit = String(
-                birthSource.SEX != null ? birthSource.SEX : birthSource.sex != null ? birthSource.sex : ''
-            )
-                .trim()
-                .charAt(0);
+            birthYmdYyMmDd = birthYmdFromDriverDetailRow(birthSource);
+            sexDigit = sexFromDriverDetailRow(birthSource);
             if (!/^\d{6}$/.test(birthYmdYyMmDd) || !sexDigit) {
                 connection.release();
                 connection = undefined;
@@ -2535,87 +2654,90 @@ app.post('/api/driver/profile-setup', async (req, res) => {
 
             const detailAddrNameDb = addrT === 'OTHER' ? addrNm : null;
 
-            if (!hasLicenseCols) {
-                await connection.execute(
-                    `
-                    INSERT INTO TB_DRIVER_DETAIL (
-                        CUST_ID, ZIPCODE, ADDRESS, DETAIL_ADDRESS, ADDR_TYPE, ADDR_NAME,
-                        BIRTH_YMD, SEX, SELF_INTRO, FEE_POLICY
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE
-                        ZIPCODE = VALUES(ZIPCODE),
-                        ADDRESS = VALUES(ADDRESS),
-                        DETAIL_ADDRESS = VALUES(DETAIL_ADDRESS),
-                        ADDR_TYPE = VALUES(ADDR_TYPE),
-                        ADDR_NAME = VALUES(ADDR_NAME),
-                        BIRTH_YMD = VALUES(BIRTH_YMD),
-                        SEX = VALUES(SEX),
-                        SELF_INTRO = VALUES(SELF_INTRO),
-                        FEE_POLICY = VALUES(FEE_POLICY),
-                        MOD_DT = NOW()
-                    `,
-                    [
-                        ddPkVal,
-                        zipTrim || null,
-                        addrRoad || null,
-                        detailTrim || null,
-                        addrT,
-                        detailAddrNameDb,
-                        birthYmdYyMmDd || null,
-                        sexDigit,
-                        bioText ?? '',
-                        feePolicyTrim
-                    ]
-                );
+            const [lockRows] = await connection.execute(
+                `SELECT * FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1 FOR UPDATE`,
+                [ddPkVal]
+            );
+            const existingDetail = lockRows[0] || null;
+
+            const birthKIns = driverDetailBirthColUpper(ddMap);
+            const licenseKeysIns = [
+                'LICENSE_TYPE',
+                'LICENSE_NO',
+                'LICENSE_SERIAL_NO',
+                'LICENSE_ISSUE_DT',
+                'LICENSE_EXPIRY_DT',
+                'QUAL_CERT_NO',
+                'QUAL_CERT_VERIFY_STATUS',
+                'QUAL_CERT_VERIFY_DT'
+            ];
+            const insertKeysBase = [
+                'CUST_ID',
+                'ZIPCODE',
+                'ADDRESS',
+                'DETAIL_ADDRESS',
+                'ADDR_TYPE',
+                'ADDR_NAME'
+            ];
+            if (ddHas(ddMap, birthKIns)) insertKeysBase.push(birthKIns);
+            insertKeysBase.push('SEX', 'SELF_INTRO', 'FEE_POLICY');
+            const insertKeys = (hasLicenseCols ? insertKeysBase.concat(licenseKeysIns) : insertKeysBase).filter(
+                (k) => ddHas(ddMap, k)
+            );
+
+            const fullValIns = {
+                CUST_ID: ddPkVal,
+                ZIPCODE: zipTrim || null,
+                ADDRESS: addrRoad || null,
+                DETAIL_ADDRESS: detailTrim || null,
+                ADDR_TYPE: addrT,
+                ADDR_NAME: detailAddrNameDb,
+                SEX: sexDigit,
+                SELF_INTRO: bioText ?? '',
+                FEE_POLICY: feePolicyTrim,
+                LICENSE_TYPE: licenseType,
+                LICENSE_NO: licenseNo,
+                LICENSE_SERIAL_NO: licenseSerialNo || null,
+                LICENSE_ISSUE_DT: licenseIssueDt,
+                LICENSE_EXPIRY_DT: licenseExpiryDt,
+                QUAL_CERT_NO: qualCertNoTrim,
+                QUAL_CERT_VERIFY_STATUS: qualCertVerifyStatus,
+                QUAL_CERT_VERIFY_DT: qualCertVerifyDt
+            };
+            if (ddHas(ddMap, birthKIns)) fullValIns[birthKIns] = birthYmdYyMmDd || null;
+
+            const valueByKeyIns = {};
+            for (const k of insertKeys) valueByKeyIns[k] = fullValIns[k];
+
+            if (!existingDetail) {
+                await executeDriverDetailProfileInsertOnly(connection, ddMap, insertKeys, valueByKeyIns);
             } else {
-                await connection.execute(
-                    `
-                    INSERT INTO TB_DRIVER_DETAIL (
-                        CUST_ID, ZIPCODE, ADDRESS, DETAIL_ADDRESS, ADDR_TYPE, ADDR_NAME,
-                        BIRTH_YMD, SEX, SELF_INTRO, FEE_POLICY,
-                        LICENSE_TYPE, LICENSE_NO, LICENSE_SERIAL_NO, LICENSE_ISSUE_DT, LICENSE_EXPIRY_DT,
-                        QUAL_CERT_NO, QUAL_CERT_VERIFY_STATUS, QUAL_CERT_VERIFY_DT
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE
-                        ZIPCODE = VALUES(ZIPCODE),
-                        ADDRESS = VALUES(ADDRESS),
-                        DETAIL_ADDRESS = VALUES(DETAIL_ADDRESS),
-                        ADDR_TYPE = VALUES(ADDR_TYPE),
-                        ADDR_NAME = VALUES(ADDR_NAME),
-                        BIRTH_YMD = VALUES(BIRTH_YMD),
-                        SEX = VALUES(SEX),
-                        SELF_INTRO = VALUES(SELF_INTRO),
-                        FEE_POLICY = VALUES(FEE_POLICY),
-                        LICENSE_TYPE = VALUES(LICENSE_TYPE),
-                        LICENSE_NO = VALUES(LICENSE_NO),
-                        LICENSE_SERIAL_NO = VALUES(LICENSE_SERIAL_NO),
-                        LICENSE_ISSUE_DT = VALUES(LICENSE_ISSUE_DT),
-                        LICENSE_EXPIRY_DT = VALUES(LICENSE_EXPIRY_DT),
-                        QUAL_CERT_NO = VALUES(QUAL_CERT_NO),
-                        QUAL_CERT_VERIFY_STATUS = VALUES(QUAL_CERT_VERIFY_STATUS),
-                        QUAL_CERT_VERIFY_DT = COALESCE(VALUES(QUAL_CERT_VERIFY_DT), QUAL_CERT_VERIFY_DT),
-                        MOD_DT = NOW()
-                    `,
-                    [
-                        ddPkVal,
-                        zipTrim || null,
-                        addrRoad || null,
-                        detailTrim || null,
-                        addrT,
-                        detailAddrNameDb,
-                        birthYmdYyMmDd || null,
-                        sexDigit,
-                        bioText ?? '',
-                        feePolicyTrim,
-                        licenseType,
-                        licenseNo,
-                        licenseSerialNo || null,
-                        licenseIssueDt,
-                        licenseExpiryDt,
-                        qualCertNoTrim,
-                        qualCertVerifyStatus,
-                        qualCertVerifyDt
-                    ]
+                const nextUpper = {
+                    ZIPCODE: zipTrim || null,
+                    ADDRESS: addrRoad || null,
+                    DETAIL_ADDRESS: detailTrim || null,
+                    ADDR_TYPE: addrT,
+                    ADDR_NAME: detailAddrNameDb,
+                    BIRTH_YMD: birthYmdYyMmDd || '',
+                    SEX: sexDigit,
+                    SELF_INTRO: bioText ?? '',
+                    FEE_POLICY: feePolicyTrim,
+                    LICENSE_TYPE: licenseType,
+                    LICENSE_NO: licenseNo,
+                    LICENSE_SERIAL_NO: licenseSerialNo || null,
+                    LICENSE_ISSUE_DT: licenseIssueDt,
+                    LICENSE_EXPIRY_DT: licenseExpiryDt,
+                    QUAL_CERT_NO: qualCertNoTrim,
+                    QUAL_CERT_VERIFY_STATUS: qualCertVerifyStatus,
+                    QUAL_CERT_VERIFY_DT: qualCertVerifyDt
+                };
+                await updateDriverDetailProfileIfChanged(
+                    connection,
+                    ddMap,
+                    ddPkVal,
+                    existingDetail,
+                    nextUpper,
+                    hasLicenseCols
                 );
             }
 
