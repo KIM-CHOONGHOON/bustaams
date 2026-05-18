@@ -163,8 +163,10 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
   const modalRef = React.useRef(null);
 
   React.useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
-    dispatch({ type: 'SET_INITIAL_DATES', today });
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    const tomorrow = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+    dispatch({ type: 'SET_INITIAL_DATES', today: tomorrow });
     
     // Fetch Bus Types for Fuel Efficiency (CD_FNUM)
     const fetchBusTypes = async () => {
@@ -407,6 +409,12 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
     return `${date} ${formatTimeAmPm(time)}`;
   };
 
+  const getTomorrowStr = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+  };
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
@@ -416,6 +424,26 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
         const cancelCnt = currentUser?.cancelManage?.cancelTravelerAllCnt || 0;
         if (cancelCnt >= 3) {
           alert(`누적 취소 건수가 ${cancelCnt}건으로 서비스 이용이 제한되었습니다.\n(3건 이상 취소 시 신규 예약 등록이 불가합니다.)`);
+          setIsSubmitting(false);
+          return;
+        }
+
+        // [추가] 출발/도착 일시 과거 여부 및 순서 검증
+        const now = new Date();
+        const startDateTime = new Date(`${formData.departureDate}T${formData.departureTime}:00`);
+        const endDateTime = new Date(`${formData.arrivalDate}T${formData.arrivalTime}:00`);
+
+        const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const startMidnight = new Date(startDateTime.getFullYear(), startDateTime.getMonth(), startDateTime.getDate());
+
+        if (startMidnight <= todayMidnight) {
+          alert('출발 날짜는 내일 이후로만 설정할 수 있습니다.');
+          setIsSubmitting(false);
+          return;
+        }
+        
+        if (endDateTime <= startDateTime) {
+          alert('도착 일시는 출발 일시보다 늦은 시간이어야 합니다.');
           setIsSubmitting(false);
           return;
         }
@@ -558,7 +586,7 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
                    <div>
                       <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">출발 일시</label>
                       <div className="flex gap-3">
-                         <input type="date" name="departureDate" value={formData.departureDate} onChange={handleChange} className="flex-1 bg-white border border-slate-200 rounded-2xl p-4 text-xl font-black text-slate-700 shadow-sm focus:ring-4 focus:ring-primary/5 transition-all" />
+                         <input type="date" name="departureDate" min={getTomorrowStr()} value={formData.departureDate} onChange={handleChange} className="flex-1 bg-white border border-slate-200 rounded-2xl p-4 text-xl font-black text-slate-700 shadow-sm focus:ring-4 focus:ring-primary/5 transition-all" />
                          <div className="relative w-32">
                             <input type="time" name="departureTime" value={formData.departureTime} onChange={handleChange} className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-xl font-black text-slate-700 shadow-sm focus:ring-4 focus:ring-primary/5 transition-all" />
                             <p className="absolute -bottom-6 left-1 text-[10px] font-bold text-primary">{formatTimeAmPm(formData.departureTime)}</p>
@@ -568,7 +596,7 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
                    <div>
                       <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">도착 일시</label>
                       <div className="flex gap-3">
-                         <input type="date" name="arrivalDate" value={formData.arrivalDate} onChange={handleChange} className="flex-1 bg-white border border-slate-200 rounded-2xl p-4 text-xl font-black text-slate-700 shadow-sm focus:ring-4 focus:ring-primary/5 transition-all" />
+                         <input type="date" name="arrivalDate" min={formData.departureDate || getTomorrowStr()} value={formData.arrivalDate} onChange={handleChange} className="flex-1 bg-white border border-slate-200 rounded-2xl p-4 text-xl font-black text-slate-700 shadow-sm focus:ring-4 focus:ring-primary/5 transition-all" />
                          <div className="relative w-32">
                             <input type="time" name="arrivalTime" value={formData.arrivalTime} onChange={handleChange} className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-xl font-black text-slate-700 shadow-sm focus:ring-4 focus:ring-primary/5 transition-all" />
                             <p className="absolute -bottom-6 left-1 text-[10px] font-bold text-primary">{formatTimeAmPm(formData.arrivalTime)}</p>
