@@ -392,13 +392,35 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
     getBusTotal(formData.miniBusQty, formData.miniBusPrice) +
     getBusTotal(formData.largeVanQty, formData.largeVanPrice);
 
+  const formatTimeAmPm = (timeStr) => {
+    if (!timeStr) return '';
+    const [h, m] = timeStr.split(':');
+    let hours = parseInt(h);
+    const ampm = hours >= 12 ? '오후' : '오전';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    return `${ampm} ${String(hours).padStart(2, '0')}:${m}`;
+  };
+
+  const formatFullDateTime = (date, time) => {
+    if (!date || !time) return '';
+    return `${date} ${formatTimeAmPm(time)}`;
+  };
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
         let currentUser = userProp || JSON.parse(localStorage.getItem('user'));
         
+        // [페널티 체크] 취소 건수가 3건 이상인 경우 등록 불가 (설계서 정책 준수)
+        const cancelCnt = currentUser?.cancelManage?.cancelTravelerAllCnt || 0;
+        if (cancelCnt >= 3) {
+          alert(`누적 취소 건수가 ${cancelCnt}건으로 서비스 이용이 제한되었습니다.\n(3건 이상 취소 시 신규 예약 등록이 불가합니다.)`);
+          setIsSubmitting(false);
+          return;
+        }
+
         // Prepare journey point sequence for database storage
-        // Sequence: Departure -> Waypoints -> Arrival -> ReturnWaypoints -> FinalArrival
         const mainJourney = [
           { ...formData.departure, type: 'START_NODE' },
           ...formData.waypoints.map(wp => ({ ...wp, type: 'START_WAY' })),
@@ -410,9 +432,8 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
           { ...formData.finalArrival, type: 'END_NODE' }
         ];
 
-        // [중복 제거] 주소가 비어있거나, 이전 지점과 공백 제외 주소가 완전히 동일한 경우 필터링
         const cleanedPoints = [...mainJourney, ...returnJourney].filter((p, i, arr) => {
-          const currentAddr = p.address?.replace(/\s/g, ''); // 공백 제거 후 비교
+          const currentAddr = p.address?.replace(/\s/g, ''); 
           if (!currentAddr) return false;
           if (i > 0) {
             const prevAddr = arr[i-1].address?.replace(/\s/g, '');
@@ -423,9 +444,7 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
 
         const allPoints = cleanedPoints;
 
-        // Format for backend with sequential VIA_ORD
         const enrichedWaypoints = allPoints.map((p, i) => {
-            // 강제 타입 지정: 첫 번째는 무조건 START_NODE, 나머지는 원래 타입 유지하되 START_NODE가 또 나오면 START_WAY로 교정
             let type = p.type;
             if (i === 0) type = 'START_NODE';
             else if (type === 'START_NODE') type = 'START_WAY';
@@ -440,14 +459,14 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
         });
 
         const payload = {
-            custId: currentUser.custId,   // [수정] 10자리 숫자 식별자 전달
-            userId: currentUser.userId,   // 로그인 아이디(이메일) 전달
+            custId: currentUser.custId,   
+            userId: currentUser.userId,   
             tripTitle: formData.title,
             startAddr: enrichedWaypoints[0].address,
             endAddr: enrichedWaypoints[enrichedWaypoints.length - 1].address,
             startDt: `${formData.departureDate} ${formData.departureTime}:00`,
             endDt: `${formData.arrivalDate} ${formData.arrivalTime}:00`,
-            passengerCnt: 0, // 승차인원 항목 삭제에 따른 기본값 처리
+            passengerCnt: 0, 
             totalAmount: totalAmount,
             waypoints: enrichedWaypoints,
             vehicles: [
@@ -460,18 +479,18 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
             ].filter(v => v.qty > 0)
         };
 
-        // [디버깅] 전송 전 사용자에게 데이터 확인 받기
+        // [수정] 전송 전 확인 메시지에 오전/오후 명시
         const confirmMsg = `[데이터 전송 확인]\n\n` +
-                           `1. 총 금액: ${totalAmount}원\n` +
-                           `2. 경로 순서:\n${enrichedWaypoints.map(w => `${w.ord}. [${w.type}] ${w.address}`).join('\n')}\n\n` +
+                           `1. 출발 일시: ${formatFullDateTime(formData.departureDate, formData.departureTime)}\n` +
+                           `2. 도착 일시: ${formatFullDateTime(formData.arrivalDate, formData.arrivalTime)}\n` +
+                           `3. 총 금액: ${totalAmount.toLocaleString()}원\n` +
+                           `4. 경로 순서:\n${enrichedWaypoints.map(w => `${w.ord}. [${w.type}] ${w.address}`).join('\n')}\n\n` +
                            `위 데이터로 등록하시겠습니까?`;
         
         if (!window.confirm(confirmMsg)) {
             setIsSubmitting(false);
             return;
         }
-
-        console.log('[DEBUG] Reservation Payload:', JSON.stringify(payload, null, 2));
 
         const response = await fetch('http://localhost:8080/api/auction/request', {
             method: 'POST',
@@ -540,14 +559,20 @@ const CreateBusRequest = ({ user: userProp, onBack, onSuccess }) => {
                       <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">출발 일시</label>
                       <div className="flex gap-3">
                          <input type="date" name="departureDate" value={formData.departureDate} onChange={handleChange} className="flex-1 bg-white border border-slate-200 rounded-2xl p-4 text-xl font-black text-slate-700 shadow-sm focus:ring-4 focus:ring-primary/5 transition-all" />
-                         <input type="time" name="departureTime" value={formData.departureTime} onChange={handleChange} className="w-32 bg-white border border-slate-200 rounded-2xl p-4 text-xl font-black text-slate-700 shadow-sm focus:ring-4 focus:ring-primary/5 transition-all" />
+                         <div className="relative w-32">
+                            <input type="time" name="departureTime" value={formData.departureTime} onChange={handleChange} className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-xl font-black text-slate-700 shadow-sm focus:ring-4 focus:ring-primary/5 transition-all" />
+                            <p className="absolute -bottom-6 left-1 text-[10px] font-bold text-primary">{formatTimeAmPm(formData.departureTime)}</p>
+                         </div>
                       </div>
                    </div>
                    <div>
                       <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">도착 일시</label>
                       <div className="flex gap-3">
                          <input type="date" name="arrivalDate" value={formData.arrivalDate} onChange={handleChange} className="flex-1 bg-white border border-slate-200 rounded-2xl p-4 text-xl font-black text-slate-700 shadow-sm focus:ring-4 focus:ring-primary/5 transition-all" />
-                         <input type="time" name="arrivalTime" value={formData.arrivalTime} onChange={handleChange} className="w-32 bg-white border border-slate-200 rounded-2xl p-4 text-xl font-black text-slate-700 shadow-sm focus:ring-4 focus:ring-primary/5 transition-all" />
+                         <div className="relative w-32">
+                            <input type="time" name="arrivalTime" value={formData.arrivalTime} onChange={handleChange} className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-xl font-black text-slate-700 shadow-sm focus:ring-4 focus:ring-primary/5 transition-all" />
+                            <p className="absolute -bottom-6 left-1 text-[10px] font-bold text-primary">{formatTimeAmPm(formData.arrivalTime)}</p>
+                         </div>
                       </div>
                    </div>
                 </div>

@@ -20,8 +20,8 @@ const TripHistoryModal = ({ user, onClose }) => {
 
   const fetchHistory = async () => {
     try {
-      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-      const response = await fetch(`${apiBase}/api/auction/total-history/${user.custId}`);
+      setLoading(true);
+      const response = await fetch(`http://localhost:8080/api/auction/total-history/${user.custId}`);
       if (response.ok) {
         const data = await response.json();
         setHistory(data);

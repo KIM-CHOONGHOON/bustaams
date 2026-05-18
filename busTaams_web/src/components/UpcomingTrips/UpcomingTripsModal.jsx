@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
+const API_RAW = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
+const API_BASE = String(API_RAW).trim().replace(/\/$/, '') || 'http://127.0.0.1:8080';
 
 const HERO_BUS_IMG =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuAFNbD2MhViKTB-huVKuX48jKzT1qP7BqSalR2IWalnBw4H0fbVtAY_yegJlN4INjY6yz79hoGjDXycigGvBZs-Z53ktwl9Rnmr5n7pEhG5SMYTKgay8WKXy4h_hLUga197DAbU0eWCKBRfeCIX-KI7AHw0xG3OGK_djbBCYIq_NNgds6JQ-5Ez4IfHGFqOZ9ZqrZtRhiaxEX2wCef2dRPdHwmDnwL_g6XqvVQJhwA9ZlgKD-NLe3AtbpWPwa2Ju2VWdx_VMAQPVVY';
@@ -60,6 +61,7 @@ const UpcomingTripsModal = ({ open, onClose, driverId, onTravelerQuoteDetail }) 
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(null);
+  const [emptyMessage, setEmptyMessage] = useState('등록된 운행 예정 일정이 없습니다.');
 
   const fetchUpcomingTrips = useCallback(async () => {
     if (!sessionDriverId) return;
@@ -83,6 +85,9 @@ const UpcomingTripsModal = ({ open, onClose, driverId, onTravelerQuoteDetail }) 
       }
       const d = await r.json();
       setItems(Array.isArray(d.items) ? d.items : []);
+      setEmptyMessage(
+        typeof d.emptyMessage === 'string' ? d.emptyMessage : '등록된 운행 예정 일정이 없습니다.'
+      );
     } catch (e) {
       setLoadError(e.message || '네트워크 오류');
       setItems([]);
@@ -149,10 +154,9 @@ const UpcomingTripsModal = ({ open, onClose, driverId, onTravelerQuoteDetail }) 
         </button>
 
         <div className="p-8 pt-14 lg:p-12 lg:pt-16 max-w-7xl w-full mx-auto">
-          <section className="mb-12">
-            <div className="max-w-xl">
-              <span className="text-secondary font-bold tracking-widest uppercase text-xs">운행 요약</span>
-              <h3 id="upcoming-trips-title" className="text-5xl font-headline font-extrabold text-on-surface mt-2 leading-tight">
+          <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between mb-10">
+            <div className="flex-1 min-w-0 max-w-2xl">
+              <h3 id="upcoming-trips-title" className="text-5xl font-headline font-extrabold text-on-surface leading-tight">
                 운행 예정 목록
               </h3>
               <p className="text-on-surface-variant mt-4 text-lg">
@@ -163,25 +167,38 @@ const UpcomingTripsModal = ({ open, onClose, driverId, onTravelerQuoteDetail }) 
                     : `이번 주 ${total}건의 운행이 확정되었습니다. 안전 운행을 위해 세부 사항을 확인해주세요.`}
               </p>
             </div>
-          </section>
-
-          <div className="flex gap-8 mb-10 border-b-0">
-            <button type="button" className="text-xl font-headline font-bold text-primary border-b-4 border-primary pb-2">
-              전체 일정
-            </button>
-            <button
-              type="button"
-              className="text-xl font-headline font-medium text-outline hover:text-on-surface-variant pb-2 transition-colors"
-            >
-              완료된 운행
-            </button>
+            <div className="w-full shrink-0 lg:w-auto lg:max-w-sm">
+              <div className="bg-primary text-white p-8 rounded-[2rem] shadow-xl relative overflow-hidden">
+                <div className="relative z-10">
+                  <h6 className="text-primary-fixed font-bold tracking-widest uppercase text-xs mb-4">주간 요약</h6>
+                  <p className="text-3xl font-headline font-extrabold mb-8">
+                    예상 주간 수익
+                    <br />
+                    ₩{weeklySum.toLocaleString('ko-KR')}
+                  </p>
+                  <div className="space-y-4">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-primary-fixed/80">총 운행 거리</span>
+                      <span className="font-bold">1,240 km</span>
+                    </div>
+                    <div className="w-full bg-primary-container h-2 rounded-full overflow-hidden">
+                      <div className="bg-[#85d5c9] h-full w-[75%]" />
+                    </div>
+                    <div className="flex justify-between text-xs text-primary-fixed/60">
+                      <span>목표 달성률</span>
+                      <span>75%</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-primary-container rounded-full opacity-20" />
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-12 gap-8">
-            <div className="col-span-12 lg:col-span-8">
+          <div>
               {!loading && !hero && (
                 <p className="text-center text-on-surface-variant py-16 mb-8 rounded-[2rem] bg-surface-container-low border border-outline-variant/30">
-                  등록된 운행 예정 일정이 없습니다.
+                  {emptyMessage}
                 </p>
               )}
 
@@ -239,7 +256,16 @@ const UpcomingTripsModal = ({ open, onClose, driverId, onTravelerQuoteDetail }) 
                       <div className="flex gap-4 mt-8">
                         <button
                           type="button"
-                          onClick={() => hero.reqId && onTravelerQuoteDetail?.(hero.reqId)}
+                          onClick={() =>
+                            hero.reqId &&
+                            onTravelerQuoteDetail?.({
+                              reqId: String(hero.reqId),
+                              reqBusSeq:
+                                Number.isFinite(Number(hero.reqBusSeq)) && Number(hero.reqBusSeq) >= 0
+                                  ? Number(hero.reqBusSeq)
+                                  : 1,
+                            })
+                          }
                           className="flex-1 kinetic-gradient text-white py-4 rounded-full font-bold shadow-md hover:shadow-xl transition-all"
                         >
                           운행 상세 확인
@@ -291,7 +317,16 @@ const UpcomingTripsModal = ({ open, onClose, driverId, onTravelerQuoteDetail }) 
                             </div>
                             <button
                               type="button"
-                              onClick={() => it.reqId && onTravelerQuoteDetail?.(it.reqId)}
+                              onClick={() =>
+                                it.reqId &&
+                                onTravelerQuoteDetail?.({
+                                  reqId: String(it.reqId),
+                                  reqBusSeq:
+                                    Number.isFinite(Number(it.reqBusSeq)) && Number(it.reqBusSeq) >= 0
+                                      ? Number(it.reqBusSeq)
+                                      : 1,
+                                })
+                              }
                               className="text-primary font-bold text-sm flex items-center gap-1 group"
                             >
                               상세보기
@@ -322,7 +357,16 @@ const UpcomingTripsModal = ({ open, onClose, driverId, onTravelerQuoteDetail }) 
                             </div>
                             <button
                               type="button"
-                              onClick={() => it.reqId && onTravelerQuoteDetail?.(it.reqId)}
+                              onClick={() =>
+                                it.reqId &&
+                                onTravelerQuoteDetail?.({
+                                  reqId: String(it.reqId),
+                                  reqBusSeq:
+                                    Number.isFinite(Number(it.reqBusSeq)) && Number(it.reqBusSeq) >= 0
+                                      ? Number(it.reqBusSeq)
+                                      : 1,
+                                })
+                              }
                               className="text-primary font-bold text-sm flex items-center gap-1 group"
                             >
                               상세보기
@@ -337,47 +381,6 @@ const UpcomingTripsModal = ({ open, onClose, driverId, onTravelerQuoteDetail }) 
                   );
                 })}
               </div>
-            </div>
-
-            <div className="col-span-12 lg:col-span-4 space-y-8">
-              <div className="bg-primary text-white p-8 rounded-[2rem] shadow-xl relative overflow-hidden">
-                <div className="relative z-10">
-                  <h6 className="text-primary-fixed font-bold tracking-widest uppercase text-xs mb-4">주간 요약</h6>
-                  <p className="text-3xl font-headline font-extrabold mb-8">
-                    예상 주간 수익
-                    <br />
-                    ₩{weeklySum.toLocaleString('ko-KR')}
-                  </p>
-                  <div className="space-y-4">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-primary-fixed/80">총 운행 거리</span>
-                      <span className="font-bold">1,240 km</span>
-                    </div>
-                    <div className="w-full bg-primary-container h-2 rounded-full overflow-hidden">
-                      <div className="bg-[#85d5c9] h-full w-[75%]" />
-                    </div>
-                    <div className="flex justify-between text-xs text-primary-fixed/60">
-                      <span>목표 달성률</span>
-                      <span>75%</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-primary-container rounded-full opacity-20" />
-              </div>
-
-              <div className="px-6 py-4 flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-outline font-medium">
-                <a className="hover:text-primary" href="#">
-                  개인정보 처리방침
-                </a>
-                <a className="hover:text-primary" href="#">
-                  이용 약관
-                </a>
-                <a className="hover:text-primary" href="#">
-                  쿠키 설정
-                </a>
-                <span>© 2024 busTaams</span>
-              </div>
-            </div>
           </div>
         </div>
       </div>

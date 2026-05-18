@@ -1,9 +1,6 @@
 import React, { useState, useRef } from 'react';
 
 function DriverProfileModal({ isOpen, onClose, user }) {
-  // API 서버 기본 주소 (환경 변수가 설정되어 있지 않으면 로컬 주소 사용)
-  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-
   const [formData, setFormData] = useState({
     licenseNo: '',
     bioDesc: '',
@@ -48,7 +45,7 @@ function DriverProfileModal({ isOpen, onClose, user }) {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(`${apiBase}/api/driver/profile`, {
+      const response = await fetch('http://localhost:8080/api/driver/profile', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

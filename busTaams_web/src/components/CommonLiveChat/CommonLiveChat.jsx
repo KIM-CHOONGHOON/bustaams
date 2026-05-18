@@ -35,11 +35,18 @@ function dateKey(iso) {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 
-function formatListTime(iso) {
+/** YYYY-MM-DD (HH:MM) — 24시간 표기 */
+function formatYmdHm(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const p = (n) => String(n).padStart(2, '0');
+  const y = d.getFullYear();
+  const mo = p(d.getMonth() + 1);
+  const day = p(d.getDate());
+  const h = p(d.getHours());
+  const mi = p(d.getMinutes());
+  return `${y}-${mo}-${day} (${h}:${mi})`;
 }
 
 function parseImageUrls(msgBody) {
@@ -54,14 +61,11 @@ function parseImageUrls(msgBody) {
 }
 
 /**
- * 여행자 실시간 채팅 — 기사와 동일 TB_CHAT_LOG 스레드
- * REST: /api/live-chat-traveler
+ * CommonLiveChat — 버스기사 「여행자와 대화」 모달 (screenId: CommonLiveChat)
+ * REST: /api/CommonLiveChat
  */
-const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqId, initialResId }) => {
-  const travelerSession =
-    (travelerId != null && String(travelerId).trim()) ||
-    (travelerUuid != null && String(travelerUuid).trim()) ||
-    '';
+const CommonLiveChat = ({ open, onClose, driverId, initialReqId, initialResId }) => {
+  const driverSession = (driverId != null && String(driverId).trim()) || '';
   const [partners, setPartners] = useState([]);
   const [reqId, setReqId] = useState('');
   const [resId, setResId] = useState('');
@@ -72,16 +76,17 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [error, setError] = useState(null);
   const [sending, setSending] = useState(false);
+  const [roomMeta, setRoomMeta] = useState({ chatTitle: null, chatCoverFileId: null });
   const scrollRef = useRef(null);
   const lastHistSeqRef = useRef(0);
 
   const fetchPartners = useCallback(async () => {
-    if (!travelerSession) return;
+    if (!driverSession) return;
     setLoadingPartners(true);
     setError(null);
     try {
       const r = await fetch(
-        `${API_BASE}/api/live-chat-traveler/chat-partners?travelerId=${encodeURIComponent(travelerSession)}`
+        `${API_BASE}/api/CommonLiveChat/chat-partners?driverId=${encodeURIComponent(driverSession)}`
       );
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
@@ -112,7 +117,7 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
     } finally {
       setLoadingPartners(false);
     }
-  }, [travelerSession, initialReqId, initialResId]);
+  }, [driverSession, initialReqId, initialResId]);
 
   useEffect(() => {
     if (!reqId || !partners.length) {
@@ -126,7 +131,7 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
   const fetchMessages = useCallback(
     async (opts = {}) => {
       const incremental = opts.incremental === true;
-      if (!travelerSession || !reqId || !resId) {
+      if (!driverSession || !reqId || !resId) {
         setMessages([]);
         return;
       }
@@ -137,7 +142,7 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
       setError(null);
       try {
         const after = incremental ? lastHistSeqRef.current : 0;
-        let url = `${API_BASE}/api/live-chat-traveler/messages?travelerId=${encodeURIComponent(travelerSession)}&reqId=${encodeURIComponent(reqId)}&resId=${encodeURIComponent(resId)}`;
+        let url = `${API_BASE}/api/CommonLiveChat/messages?driverId=${encodeURIComponent(driverSession)}&reqId=${encodeURIComponent(reqId)}&resId=${encodeURIComponent(resId)}`;
         if (after > 0) url += `&afterHistSeq=${encodeURIComponent(String(after))}`;
         const r = await fetch(url);
         const data = await r.json().catch(() => ({}));
@@ -145,6 +150,12 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
           if (!incremental) setMessages([]);
           setError(data.error || `메시지 조회 오류 (${r.status})`);
           return;
+        }
+        if (data.chatTitle != null || data.chatCoverFileId != null) {
+          setRoomMeta({
+            chatTitle: data.chatTitle != null ? String(data.chatTitle) : null,
+            chatCoverFileId: data.chatCoverFileId != null ? String(data.chatCoverFileId) : null,
+          });
         }
         if (data.chatSeq != null) setChatSeq(Number(data.chatSeq));
         const items = Array.isArray(data.items) ? data.items : [];
@@ -172,7 +183,7 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
         if (!incremental) setLoadingMessages(false);
       }
     },
-    [travelerSession, reqId, resId]
+    [driverSession, reqId, resId]
   );
 
   useEffect(() => {
@@ -184,50 +195,85 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
   }, [open]);
 
   useEffect(() => {
-    if (!open || !travelerSession) return;
+    if (!open || !driverSession) return;
     fetchPartners();
-  }, [open, travelerSession, fetchPartners]);
+  }, [open, driverSession, fetchPartners]);
 
   useEffect(() => {
     if (!reqId) {
       setMessages([]);
       lastHistSeqRef.current = 0;
       setChatSeq(null);
+      setRoomMeta({ chatTitle: null, chatCoverFileId: null });
       return;
     }
     setMessages([]);
     lastHistSeqRef.current = 0;
     setChatSeq(null);
+    setRoomMeta({ chatTitle: null, chatCoverFileId: null });
   }, [reqId]);
 
   useEffect(() => {
-    if (!open || !reqId || !resId) return;
-    fetchMessages({ incremental: false });
-  }, [open, reqId, resId, fetchMessages]);
+    if (!open || !reqId || !resId || !driverSession) return;
+    let cancelled = false;
+    setError(null);
+    (async () => {
+      try {
+        const r = await fetch(`${API_BASE}/api/CommonLiveChat/ensure-room`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ driverId: driverSession, reqId, resId }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          if (!cancelled) setError(data.error || `대화방 준비 오류 (${r.status})`);
+          return;
+        }
+        if (!cancelled && data.CommonLiveChat) {
+          setRoomMeta({
+            chatTitle: data.CommonLiveChat.chatTitle != null ? String(data.CommonLiveChat.chatTitle) : null,
+            chatCoverFileId:
+              data.CommonLiveChat.chatCoverFileId != null ? String(data.CommonLiveChat.chatCoverFileId) : null,
+          });
+        }
+        if (!cancelled) await fetchMessages({ incremental: false });
+      } catch (e) {
+        if (!cancelled) setError(e.message || '네트워크 오류');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, reqId, resId, driverSession, fetchMessages]);
 
   useEffect(() => {
-    if (!open || !travelerSession || !reqId || !resId) return;
+    if (!open || !driverSession || !reqId || !resId) return;
     const id = window.setInterval(() => {
       fetchMessages({ incremental: true });
     }, 5000);
     return () => window.clearInterval(id);
-  }, [open, travelerSession, reqId, resId, fetchMessages]);
+  }, [open, driverSession, reqId, resId, fetchMessages]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
+  const selectedPartner = useMemo(() => {
+    if (!reqId || !resId) return null;
+    return partners.find((p) => p.reqId === reqId && p.resId === resId) || null;
+  }, [partners, reqId, resId]);
+
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || !travelerSession || !reqId || !resId || sending) return;
+    if (!text || !driverSession || !reqId || !resId || sending) return;
     setSending(true);
     setError(null);
     try {
-      const r = await fetch(`${API_BASE}/api/live-chat-traveler/messages`, {
+      const r = await fetch(`${API_BASE}/api/CommonLiveChat/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ travelerId: travelerSession, reqId, resId, msgBody: text }),
+        body: JSON.stringify({ driverId: driverSession, reqId, resId, msgBody: text }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
@@ -235,6 +281,12 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
         return;
       }
       if (data.chatSeq != null) setChatSeq(Number(data.chatSeq));
+      if (data.chatTitle != null || data.chatCoverFileId != null) {
+        setRoomMeta({
+          chatTitle: data.chatTitle != null ? String(data.chatTitle) : null,
+          chatCoverFileId: data.chatCoverFileId != null ? String(data.chatCoverFileId) : null,
+        });
+      }
       if (data.histSeq != null) {
         lastHistSeqRef.current = Math.max(lastHistSeqRef.current, Number(data.histSeq) || 0);
       }
@@ -283,8 +335,8 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
         <div className="flex flex-1 min-h-0 pt-12">
           <aside className="w-[min(100%,320px)] shrink-0 bg-surface-container-low flex flex-col border-r border-outline-variant/10">
             <div className="p-6 pb-3">
-              <h2 className="text-xl font-extrabold font-headline tracking-tighter text-on-surface">진행 중 견적</h2>
-              <p className="text-[11px] text-outline mt-1">기사와 연결된 요청만 표시됩니다.</p>
+              <h2 className="text-xl font-extrabold font-headline tracking-tighter text-on-surface">대화 상대</h2>
+              <p className="text-[11px] text-outline mt-1">TB_BUS_RESERVATION · BIDDING/CONFIRM. 선택 시 대화방이 준비됩니다.</p>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-6 max-h-[26.5rem]">
               {loadingPartners && (
@@ -294,12 +346,13 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
                 </div>
               )}
               {!loadingPartners && partners.length === 0 && (
-                <p className="text-xs text-outline text-center py-8 px-2">채팅 가능한 견적이 없습니다</p>
+                <p className="text-xs text-outline text-center py-8 px-2">대화 가능한 예약이 없습니다</p>
               )}
               {!loadingPartners &&
                 partners.map((p) => {
-                  const title =
-                    (p.tripTitle || `${p.startAddr || ''} ↔ ${p.endAddr || ''}`).trim() || '견적';
+                  const lineTitle = `${p.tripTitle || '제목 없음'} (${p.travelerName || '여행자'})`;
+                  const lineStart = `${p.startAddr || ''}. ${formatYmdHm(p.startDt)}`.trim();
+                  const lineEnd = `${p.endAddr || ''}. ${formatYmdHm(p.endDt)}`.trim();
                   const active = p.reqId === reqId && p.resId === resId;
                   return (
                     <button
@@ -309,29 +362,26 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
                         setReqId(p.reqId);
                         setResId(p.resId);
                       }}
-                      className={`w-full text-left p-4 mb-2 rounded-2xl flex gap-4 cursor-pointer transition-all duration-300 ${
+                      className={`w-full text-left p-4 mb-2 rounded-2xl flex gap-3 cursor-pointer transition-all duration-300 ${
                         active
                           ? 'bg-surface-container-lowest shadow-[0_8px_24px_-8px_rgba(0,104,95,0.12)]'
                           : 'hover:bg-white/50'
                       }`}
                     >
                       <div className="relative flex-shrink-0">
-                        <div className="w-14 h-14 rounded-xl bg-primary-container/20 flex items-center justify-center text-primary">
-                          <span className="material-symbols-outlined">directions_bus</span>
+                        <div className="w-12 h-12 rounded-xl bg-primary-container/20 flex items-center justify-center text-primary text-lg" aria-hidden>
+                          💬
                         </div>
                         {active && (
                           <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-primary rounded-full border-2 border-surface-container-lowest" />
                         )}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-baseline mb-1 gap-2">
-                          <span className="font-bold text-sm truncate">{title}</span>
-                          <span className="text-[10px] text-outline font-semibold shrink-0 tabular-nums">
-                            {formatListTime(p.startDt)}
-                          </span>
-                        </div>
-                        <p className="text-xs text-on-surface-variant font-medium truncate">
-                          {p.driverName} · {p.dataStat}
+                      <div className="flex-1 min-w-0 space-y-0.5">
+                        <div className="font-bold text-xs leading-snug text-on-surface line-clamp-2">{lineTitle}</div>
+                        <div className="text-[10px] text-on-surface-variant leading-snug break-words">{lineStart}</div>
+                        <div className="text-[10px] text-on-surface-variant leading-snug break-words">{lineEnd}</div>
+                        <p className="text-[10px] text-outline font-medium pt-0.5">
+                          {p.travelerName} / {p.driverName} · {p.dataStat}
                         </p>
                       </div>
                     </button>
@@ -346,6 +396,26 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
                 {error}
               </div>
             )}
+            {reqId && resId && (
+              <div className="shrink-0 flex items-center gap-3 px-6 py-3 border-b border-outline-variant/10 bg-surface-container-lowest/50">
+                <div
+                  className="w-12 h-12 rounded-xl bg-primary-container/15 flex items-center justify-center text-2xl shrink-0"
+                  aria-hidden
+                >
+                  {roomMeta.chatCoverFileId ? '🖼️' : '💬'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-bold text-on-surface truncate">
+                    {(roomMeta.chatTitle || selectedPartner?.tripTitle || '대화').trim()}
+                  </h3>
+                  <p className="text-[10px] text-outline truncate">
+                    {selectedPartner
+                      ? `${selectedPartner.travelerName} · ${selectedPartner.driverName}`
+                      : ''}
+                  </p>
+                </div>
+              </div>
+            )}
             <div
               ref={scrollRef}
               className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar pb-36"
@@ -353,7 +423,7 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
               {(!reqId || !resId) && partners.length > 0 && (
                 <div className="flex flex-col items-center justify-center min-h-[200px] text-outline text-sm text-center px-4">
                   <span className="material-symbols-outlined text-4xl mb-3 opacity-40">chat</span>
-                  왼쪽 목록에서 견적을 선택하면 버스기사와 채팅할 수 있습니다.
+                  왼쪽 목록에서 견적을 선택하면 여행자와 채팅할 수 있습니다.
                 </div>
               )}
 
@@ -441,9 +511,9 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
                     );
                   }
 
-                  const isMine = m.senderRole === 'TRAVELER';
+                  const isDriver = m.senderRole === 'DRIVER';
 
-                  if (isMine) {
+                  if (isDriver) {
                     return (
                       <div key={node.key} className="flex flex-row-reverse gap-4 items-end ml-auto max-w-[80%]">
                         <div className="flex flex-col gap-2 items-end">
@@ -491,7 +561,7 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
                       handleSend();
                     }
                   }}
-                  disabled={!reqId || !resId || sending || partners.length === 0 || !travelerSession}
+                  disabled={!reqId || !resId || sending || partners.length === 0}
                 />
                 <div className="flex items-center gap-4">
                   <button type="button" className="text-outline hover:text-teal-600">
@@ -501,7 +571,7 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
                   </button>
                   <button
                     type="button"
-                    disabled={!reqId || !resId || sending || partners.length === 0 || !travelerSession}
+                    disabled={!reqId || !resId || sending || partners.length === 0}
                     onClick={handleSend}
                     className="bg-gradient-to-tr from-primary to-primary-container w-10 h-10 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-105 transition-transform disabled:opacity-50 disabled:hover:scale-100"
                   >
@@ -519,4 +589,4 @@ const LiveChatTraveler = ({ open, onClose, travelerId, travelerUuid, initialReqI
   );
 };
 
-export default LiveChatTraveler;
+export default CommonLiveChat;

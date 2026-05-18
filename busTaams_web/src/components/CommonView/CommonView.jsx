@@ -1,10 +1,24 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 
-/** Same-origin `/api` + Vite proxy; trim trailing slash from env */
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
+/** DriverProfileSetup 등과 동일 — 비우면 Vite 프록시용 상대 `/api` + 로컬 기본 호스트 */
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080')
+    .trim()
+    .replace(/\/$/, '');
 
 const COMMON_VIEW_ROOT_ID = 'common-view-root';
 const COMMON_VIEW_MODAL_ID = 'common-view-modal';
+
+/** 표시·다운로드 파일명 — DB에 이미 동일 확장자가 붙어 있으면 중복 부착 안 함 */
+function joinOrgFileDisplayName(orgFileNm, fileExt) {
+    const nm = String(orgFileNm ?? '').trim() || 'file';
+    const rawExt = String(fileExt ?? '').replace(/^\./, '').trim();
+    if (!rawExt) return nm;
+    const ext = rawExt.toLowerCase();
+    const suffix = `.${ext}`;
+    if (nm.toLowerCase().endsWith(suffix)) return nm;
+    return `${nm}.${ext}`;
+}
 
 /** 문서 카테고리 코드 → 한국어 표시 */
 const COMMON_VIEW_CATEGORY_LABEL = {
@@ -36,10 +50,10 @@ async function fetchCommonViewDocument() {
     return res.json();
 }
 
-/** 기사 서류 메타 조회 — doc mode (`userId` = TB_USER; `fileId` = TB_FILE_MASTER.FILE_ID) */
-async function fetchCommonViewBusDocMeta(ownerId, fileId, metaPath) {
+/** 기사 서류 메타 조회 — doc mode (`custId` 필수 · `fileId` = 저장소 식별자) */
+async function fetchCommonViewBusDocMeta(ownerCustId, fileId, metaPath) {
     const base = (metaPath || '/api/common-view/bus-document/meta');
-    const path = `${base}?userId=${encodeURIComponent(ownerId)}&fileId=${encodeURIComponent(fileId)}`;
+    const path = `${base}?custId=${encodeURIComponent(ownerCustId)}&fileId=${encodeURIComponent(fileId)}`;
     const url = API_BASE ? `${API_BASE}${path}` : path;
     const res = await fetch(url, { headers: { Accept: 'application/json' } });
     if (!res.ok) {
@@ -53,7 +67,7 @@ async function fetchCommonViewBusDocMeta(ownerId, fileId, metaPath) {
  * 문서 뷰어 모달 (CommonView).
  *
  * — 일반 모드 (props: `close`): 샘플 계약서 문서를 표시합니다.
- * — 문서 모드 (props: `close` + `fileId` = TB_FILE_MASTER.FILE_ID + `userId` 권장 또는 `userUuid` 레거시 + `docTitle?`):
+ * — 문서 모드 (props: `close` + `fileId` + `custId` 필수 + `docTitle?`):
  *     기사 본인 서류 파일의 실제 내용을 뷰어에 표시하고,
  *     출력·다운로드 기능을 제공합니다.
  *
@@ -62,12 +76,14 @@ async function fetchCommonViewBusDocMeta(ownerId, fileId, metaPath) {
  *   streamPath   — 파일 스트리밍 경로  (기본: /api/driver/bus-documents/file)
  *   downloadPath — 다운로드 경로       (기본: /api/common-view/bus-document/download)
  *
- * @param {{ close: () => void, fileId?: string, userId?: string, docTitle?: string, metaPath?: string, streamPath?: string, downloadPath?: string }} props
+ * @param {{ close: () => void, fileId?: string, custId?: string, userId?: string, docTitle?: string, metaPath?: string, streamPath?: string, downloadPath?: string }} props
  */
-function CommonView({ close, fileId, userId, docTitle, metaPath, streamPath, downloadPath }) {
+function CommonView({ close, fileId, custId, userId: userIdLegacy, docTitle, metaPath, streamPath, downloadPath }) {
     const docFileId = (fileId && String(fileId).trim()) || '';
-    const ownerId = (userId && String(userId).trim()) || '';
-    const isDocMode = !!(docFileId && ownerId);
+    const ownerCustId = (custId && String(custId).trim())
+        || (userIdLegacy && String(userIdLegacy).trim())
+        || '';
+    const isDocMode = !!(docFileId && ownerCustId);
 
     const META_PATH   = metaPath   || '/api/common-view/bus-document/meta';
     const STREAM_PATH = streamPath || '/api/driver/bus-documents/file';
@@ -96,7 +112,7 @@ function CommonView({ close, fileId, userId, docTitle, metaPath, streamPath, dow
         setMetaLoading(true);
         (async () => {
             try {
-                const data = await fetchCommonViewBusDocMeta(ownerId, docFileId, META_PATH);
+                const data = await fetchCommonViewBusDocMeta(ownerCustId, docFileId, META_PATH);
                 if (!cancelled) setDocMeta(data);
             } catch (e) {
                 if (!cancelled) setMetaError(e.message);
@@ -105,7 +121,7 @@ function CommonView({ close, fileId, userId, docTitle, metaPath, streamPath, dow
             }
         })();
         return () => { cancelled = true; };
-    }, [isDocMode, ownerId, docFileId, META_PATH]);
+    }, [isDocMode, ownerCustId, docFileId, META_PATH]);
 
     /* general mode: 샘플 문서 메타 조회 */
     useEffect(() => {
@@ -124,10 +140,10 @@ function CommonView({ close, fileId, userId, docTitle, metaPath, streamPath, dow
 
     /* ── URL 헬퍼 ── */
     const streamUrl = isDocMode
-        ? `${API_BASE || ''}${STREAM_PATH}?userId=${encodeURIComponent(ownerId)}&fileId=${encodeURIComponent(docFileId)}`
+        ? `${API_BASE}${STREAM_PATH}?custId=${encodeURIComponent(ownerCustId)}&fileId=${encodeURIComponent(docFileId)}`
         : null;
     const downloadUrl = isDocMode
-        ? `${API_BASE || ''}${DL_PATH}?userId=${encodeURIComponent(ownerId)}&fileId=${encodeURIComponent(docFileId)}`
+        ? `${API_BASE}${DL_PATH}?custId=${encodeURIComponent(ownerCustId)}&fileId=${encodeURIComponent(docFileId)}`
         : null;
 
     const ext = (docMeta?.fileExt || '').toLowerCase();
@@ -151,7 +167,7 @@ function CommonView({ close, fileId, userId, docTitle, metaPath, streamPath, dow
         }
         const a = document.createElement('a');
         a.href = downloadUrl;
-        if (docMeta) a.download = `${docMeta.orgFileNm}.${docMeta.fileExt}`;
+        if (docMeta) a.download = joinOrgFileDisplayName(docMeta.orgFileNm, docMeta.fileExt);
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -167,15 +183,16 @@ function CommonView({ close, fileId, userId, docTitle, metaPath, streamPath, dow
         : '';
     const displayTitle = docTitle || categoryLabel || '문서 뷰어';
 
-    return (
-        <div
-            id={COMMON_VIEW_ROOT_ID}
-            data-common-view-id="commonViewDocumentViewer"
-            className="fixed inset-0 z-[200] flex min-h-0 items-center justify-center overflow-y-auto bg-gray-900/50 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-200"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="common-view-title"
-        >
+    return createPortal(
+        (
+            <div
+                id={COMMON_VIEW_ROOT_ID}
+                data-common-view-id="commonViewDocumentViewer"
+                className="fixed inset-0 z-[200] flex min-h-0 items-center justify-center overflow-y-auto bg-gray-900/50 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-200"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="common-view-title"
+            >
             <button type="button" className="absolute inset-0 cursor-default" aria-label="Close overlay" onClick={close} />
             <div
                 id={COMMON_VIEW_MODAL_ID}
@@ -267,7 +284,7 @@ function CommonView({ close, fileId, userId, docTitle, metaPath, streamPath, dow
                                         <li className="flex flex-col">
                                             <span className="text-[10px] text-slate-400 uppercase tracking-widest mb-1">파일명</span>
                                             <span className="text-sm font-semibold text-on-surface break-all">
-                                                {docMeta.orgFileNm}.{docMeta.fileExt}
+                                                {joinOrgFileDisplayName(docMeta.orgFileNm, docMeta.fileExt)}
                                             </span>
                                         </li>
                                         <li className="flex flex-col">
@@ -366,7 +383,7 @@ function CommonView({ close, fileId, userId, docTitle, metaPath, streamPath, dow
                                         {docMeta && (
                                             <div className="mt-4 flex flex-wrap gap-3">
                                                 <div className="bg-surface-container-high px-4 py-2 rounded-full text-sm text-on-surface-variant font-medium">
-                                                    {docMeta.orgFileNm}.{docMeta.fileExt}
+                                                    {joinOrgFileDisplayName(docMeta.orgFileNm, docMeta.fileExt)}
                                                 </div>
                                                 <div className="bg-surface-container-high px-4 py-2 rounded-full text-sm text-on-surface-variant font-medium">
                                                     {(docMeta.fileExt || '').toUpperCase()}
@@ -612,7 +629,9 @@ function CommonView({ close, fileId, userId, docTitle, metaPath, streamPath, dow
                     </div>
                 </div>
             </div>
-        </div>
+            </div>
+        ),
+        document.body
     );
 }
 

@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import './Login.css';
+import FindAccountModal from './FindAccountModal';
 
-const Login = ({ onToggle, onLoginSuccess }) => {
+const Login = ({ onToggle, onLoginSuccess, onSwitchToSignup }) => {
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showFindAccountModal, setShowFindAccountModal] = useState(false);
 
   const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080';
 
@@ -34,9 +36,6 @@ const Login = ({ onToggle, onLoginSuccess }) => {
 
       // Success
       if (onLoginSuccess) {
-        if (data.token) {
-          localStorage.setItem('token', data.token);
-        }
         onLoginSuccess(data.user);
       }
     } catch (err) {
@@ -119,7 +118,7 @@ const Login = ({ onToggle, onLoginSuccess }) => {
                     className="absolute -top-2.5 left-4 px-1 bg-surface-bright text-[10px] font-bold text-outline uppercase tracking-wider group-focus-within:text-primary transition-colors" 
                     htmlFor="user_id"
                   >
-                    아이디
+                    ID / 이메일
                   </label>
                   <input 
                     className="w-full h-12 px-5 bg-surface-container-high border-none rounded-xl focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-highest transition-all text-on-surface placeholder-transparent" 
@@ -152,7 +151,7 @@ const Login = ({ onToggle, onLoginSuccess }) => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-start">
                 <label className="flex items-center gap-3 cursor-pointer group">
                   <div className="relative flex items-center">
                     <input className="peer appearance-none w-5 h-5 rounded border-2 border-outline-variant checked:bg-primary checked:border-primary transition-all" type="checkbox"/>
@@ -165,7 +164,6 @@ const Login = ({ onToggle, onLoginSuccess }) => {
                   </div>
                   <span className="text-sm font-medium text-on-surface-variant group-hover:text-on-surface">로그인 상태 유지</span>
                 </label>
-                <a className="text-xs font-semibold text-secondary hover:text-secondary-container transition-colors" href="#">비밀번호 찾기</a>
               </div>
 
               <button 
@@ -185,44 +183,29 @@ const Login = ({ onToggle, onLoginSuccess }) => {
               <a 
                 className="text-xs font-medium text-outline hover:text-primary transition-colors cursor-pointer" 
                 onClick={() => {
-                  onToggle(); // Close login
-                  // The parent (App.jsx) needs to open SignUpModal. 
-                  // In our current App.jsx, Header manages these, but Login.jsx doesn't have direct access to setShowSignUpModal.
-                  // However, the Login.html design was converted to Login.jsx which has onToggle.
-                  // In App.jsx, Login.jsx is rendered as LoginModal.
+                  if (typeof onSwitchToSignup === 'function') {
+                    onSwitchToSignup(); // App.jsx의 전환 로직 호출
+                  } else {
+                    onToggle(); // 폴백: 모달만 닫기
+                  }
                 }}
               >
                 회원가입
               </a>
               <div className="w-px h-3 bg-outline-variant"></div>
-              <a className="text-xs font-medium text-outline hover:text-primary transition-colors" href="#">ID/비밀번호 찾기</a>
+              <a 
+                className="text-xs font-medium text-outline hover:text-primary transition-colors cursor-pointer" 
+                onClick={() => setShowFindAccountModal(true)}
+              >
+                ID/비밀번호 찾기
+              </a>
             </div>
 
-            {/* Social Login */}
-            <div className="mt-12">
-              <div className="relative flex items-center justify-center mb-6">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-outline-variant/30"></div>
-                </div>
-                <span className="relative px-4 bg-surface-bright text-[10px] font-bold text-outline uppercase tracking-[0.2em]">간편 로그인</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <button 
-                  onClick={() => handleSNSLogin('카카오')}
-                  className="w-full h-12 bg-[#FEE500] text-[#191919] rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity text-sm"
-                >
-                  <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>chat_bubble</span>
-                  <span>Kakao</span>
-                </button>
-                <button 
-                  onClick={() => handleSNSLogin('네이버')}
-                  className="w-full h-12 bg-[#03C75A] text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity text-sm"
-                >
-                  <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-                  <span>Naver</span>
-                </button>
-              </div>
-            </div>
+            {/* Find Account Modal */}
+            {showFindAccountModal && (
+              <FindAccountModal onClose={() => setShowFindAccountModal(false)} />
+            )}
+
 
             {/* Copyright Footer */}
             <div className="mt-12 text-center">

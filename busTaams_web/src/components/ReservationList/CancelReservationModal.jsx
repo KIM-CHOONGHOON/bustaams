@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 const CancelReservationModal = ({ reqData, onClose, onRefresh }) => {
-  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
   const [loading, setLoading] = useState(false);
   const [reasonCode, setReasonCode] = useState('CHANGE_OF_MIND');
   const [reasonText, setReasonText] = useState('');
@@ -66,7 +65,7 @@ const CancelReservationModal = ({ reqData, onClose, onRefresh }) => {
         fileName: selectedFile ? selectedFile.name : null
       };
 
-      const response = await fetch(`${apiBase}/api/auction/complex-cancel`, {
+      const response = await fetch('http://localhost:8080/api/auction/complex-cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -93,7 +92,7 @@ const CancelReservationModal = ({ reqData, onClose, onRefresh }) => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${apiBase}/api/auction/cancel-bus`, {
+      const response = await fetch('http://localhost:8080/api/auction/cancel-bus', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

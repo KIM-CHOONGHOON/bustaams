@@ -3,6 +3,7 @@ import QuotationList from '../QuotationList/QuotationList';
 import QuotationDetail from '../QuotationDetail/QuotationDetail';
 import CancelTripReasonModal from './CancelTripReasonModal';
 import BusReRegistrationModal from './BusReRegistrationModal';
+import AdjustBusPriceModal from './AdjustBusPriceModal';
 
 const ReservationList = ({ user, onBack }) => {
   console.log('[DEBUG] ReservationList Rendered, user:', user);
@@ -15,6 +16,8 @@ const ReservationList = ({ user, onBack }) => {
   const [cancelTripData, setCancelTripData] = useState(null);
   const [showBusReRegModal, setShowBusReRegModal] = useState(false);
   const [reRegReqId, setReRegReqId] = useState(null);
+  const [showAdjustPriceModal, setShowAdjustPriceModal] = useState(false);
+  const [adjustPriceBusData, setAdjustPriceBusData] = useState(null);
 
 
   const fetchReservations = () => {
@@ -29,18 +32,26 @@ const ReservationList = ({ user, onBack }) => {
 
     if (currentUser && currentUser.custId) {
       setLoading(true);
-      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-      fetch(`${apiBase}/api/auction/history/${currentUser.custId}`)
-        .then(res => res.json())
+      console.log('[DEBUG] Fetching from:', `/api/auction/history/${currentUser.custId}`);
+      fetch(`/api/auction/history/${currentUser.custId}`)
+        .then(res => {
+          console.log('[DEBUG] Response received, status:', res.status);
+          return res.json();
+        })
         .then(data => {
-          console.log('[DEBUG] History API result:', data);
+          console.log('[DEBUG] Data parsed successfully:', data);
           if (Array.isArray(data)) {
+            // [추가] 데이터 상세 로깅
+            data.forEach(item => {
+              console.log(`[DEBUG] REQ_ID: ${item.REQ_ID}, DATA_STAT: ${item.DATA_STAT}, RES_STAT: ${item.RES_STAT}, DRIVER_NM: ${item.DRIVER_NM}`);
+            });
             setReservations(data);
           }
           setLoading(false);
+          console.log('[DEBUG] loading set to false');
         })
         .catch(err => {
-          console.error('Error fetching reservations:', err);
+          console.error('[DEBUG] Fetch Error occurred:', err);
           setLoading(false);
         });
     } else {
@@ -51,19 +62,19 @@ const ReservationList = ({ user, onBack }) => {
 
   useEffect(() => {
     fetchReservations();
-  }, [user]);
+  }, [user?.custId]);
 
   const handleCancelTrip = (trip) => {
     setCancelTripData(trip);
     setShowCancelReasonModal(true);
   };
 
-  const handleBusChange = async (bus) => {
-    if (!window.confirm(`선택하신 ${getVehicleLabel(bus.BUS_TYPE_CD)} 차량을 예약 목록에서 취소(삭제)하시겠습니까?`)) return;
+  // [신규] 버스 취소 (영구 삭제)
+  const handleBusDelete = async (bus) => {
+    if (!window.confirm(`선택하신 ${getVehicleLabel(bus.BUS_TYPE_CD)} 차량 요청을 영구적으로 취소(삭제)하시겠습니까?`)) return;
 
     try {
-      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-      const response = await fetch(`${apiBase}/api/auction/bus-change`, {
+      const response = await fetch('/api/auction/bus-change', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -73,7 +84,33 @@ const ReservationList = ({ user, onBack }) => {
         }),
       });
 
-      const result = await response.json();
+      if (response.ok) {
+        alert('버스가 성공적으로 취소되었습니다.');
+        fetchReservations(); // 목록 갱신
+      } else {
+        const result = await response.json();
+        alert(result.error || '버스 취소 중 오류가 발생했습니다.');
+      }
+    } catch (error) {
+      console.error('Bus Delete Error:', error);
+      alert('서버와 통신 중 오류가 발생했습니다.');
+    }
+  };
+
+  // [유지] 버스 변경 (취소 후 재등록 모달 오픈)
+  const handleBusChange = async (bus) => {
+    if (!window.confirm(`선택하신 ${getVehicleLabel(bus.BUS_TYPE_CD)} 차량을 다른 차종으로 변경하시겠습니까?\n(기존 요청은 취소되고 새 차량 등록 화면이 열립니다.)`)) return;
+
+    try {
+      const response = await fetch('/api/auction/bus-change', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          reqId: bus.REQ_ID,
+          reqBusSeq: bus.REQ_BUS_SEQ,
+          custId: user?.custId 
+        }),
+      });
 
       if (response.ok) {
         alert('이전 버스가 취소되었습니다. 새로운 버스를 선택해주세요.');
@@ -82,6 +119,7 @@ const ReservationList = ({ user, onBack }) => {
         setReRegReqId(bus.REQ_ID);
         setShowBusReRegModal(true);
       } else {
+        const result = await response.json();
         alert(result.error || '버스 변경 처리 중 오류가 발생했습니다.');
       }
     } catch (error) {
@@ -93,8 +131,7 @@ const ReservationList = ({ user, onBack }) => {
   const handleBusCancel = async (bus) => {
     if (window.confirm(`선택하신 ${getVehicleLabel(bus.BUS_TYPE_CD)}의 기사를 변경하시겠습니까?\n(기사 변경은 여정당 최대 1회만 가능합니다.)`)) {
       try {
-        const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-        const response = await fetch(`${apiBase}/api/auction/bus-cancel`, {
+        const response = await fetch('/api/auction/bus-cancel', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -117,6 +154,11 @@ const ReservationList = ({ user, onBack }) => {
       }
     }
   };
+  
+  const handleOpenAdjustPrice = (bus) => {
+    setAdjustPriceBusData(bus);
+    setShowAdjustPriceModal(true);
+  };
 
   const handleOpenQuotations = (reqId) => {
     setSelectedReqId(reqId);
@@ -132,6 +174,41 @@ const ReservationList = ({ user, onBack }) => {
     setSelectedBidId(bidId);
   };
 
+  const handleConfirmTrip = async (trip) => {
+    // trip 객체에 담긴 정보를 바탕으로 확정 처리
+    // 응찰한 기사가 있는 경우 DRIVER_ID가 포함되어 있어야 함
+    if (!trip.DRIVER_ID) {
+      alert('응찰한 기사 정보가 없습니다. 견적 목록에서 기사를 먼저 선택해 주세요.');
+      return;
+    }
+
+    if (!window.confirm(`${trip.DRIVER_NM || '기사'}님의 청약을 승인하시겠습니까?\n승인 시 예약이 확정됩니다.`)) return;
+
+    try {
+      const response = await fetch('/api/auction/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reqId: trip.REQ_ID,
+          driverId: trip.DRIVER_ID,
+          bidSeq: trip.BID_SEQ || 1 // 기본값 1
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert('청약 승인이 완료되었습니다. 예약이 확정되었습니다.');
+        fetchReservations(); // 목록 갱신
+      } else {
+        alert(result.error || '처리 중 오류가 발생했습니다.');
+      }
+    } catch (error) {
+      console.error('Confirm Trip Error:', error);
+      alert('서버와 통신 중 오류가 발생했습니다.');
+    }
+  };
+
   const trimAddress = (addr) => {
     if (!addr || typeof addr !== 'string') return '';
     const parts = addr.trim().split(/\s+/);
@@ -143,7 +220,18 @@ const ReservationList = ({ user, onBack }) => {
     try {
       const d = new Date(dateStr);
       const days = ['일', '월', '화', '수', '목', '금', '토'];
-      return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]}) · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} 출발`;
+      const year = d.getFullYear();
+      const month = d.getMonth() + 1;
+      const date = d.getDate();
+      const day = days[d.getDay()];
+      
+      let hours = d.getHours();
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? '오후' : '오전';
+      hours = hours % 12;
+      hours = hours ? hours : 12; // 0시는 12시로 표시
+      
+      return `${year}년 ${month}월 ${date}일 (${day}) · ${ampm} ${String(hours).padStart(2, '0')}:${minutes} 출발`;
     } catch (e) {
       return dateStr;
     }
@@ -209,9 +297,10 @@ const ReservationList = ({ user, onBack }) => {
           ) : (
             <div className="grid grid-cols-1 gap-8">
               {Object.values(reservations.reduce((acc, curr) => {
-                // [추가] 시간이 지난 여정은 목록에서 제외
                 const now = new Date();
                 const startDt = new Date(curr.START_DT);
+                
+                // [수정] 오늘 이후의 일정만 표시 (지난 건 제외)
                 if (startDt < now) {
                   return acc;
                 }
@@ -247,7 +336,9 @@ const ReservationList = ({ user, onBack }) => {
                             <div className="flex items-center gap-2">
                                <span className={`w-1.5 h-1.5 rounded-full ${trip.DATA_STAT === 'CONFIRM' ? 'bg-primary' : 'bg-amber-400 animate-pulse'}`}></span>
                                <span className={`${trip.DATA_STAT === 'CONFIRM' ? 'text-primary' : 'text-amber-500'} text-[9px] font-black uppercase tracking-[0.3em]`}>
-                                  {trip.DATA_STAT === 'CONFIRM' ? '확정된 여정' : '견적 입찰 진행 중'}
+                                  {trip.DATA_STAT === 'AUCTION' ? '청약요청중' : 
+                                   trip.DATA_STAT === 'BIDDING' ? '청약승인대기중' : 
+                                   trip.DATA_STAT === 'CONFIRM' ? '확정된 여정' : '진행중'}
                                </span>
                             </div>
                          </div>
@@ -270,13 +361,18 @@ const ReservationList = ({ user, onBack }) => {
                             <h4 className="text-[10px] font-black text-on-surface-variant uppercase tracking-[0.2em]">요청 차량 ({trip.buses.length}대)</h4>
                          </div>
                          <div className="flex items-center gap-3">
-                            <button 
-                              onClick={() => handleOpenQuotations(trip.REQ_ID)}
-                              className="px-5 py-2.5 bg-primary text-white text-[10px] font-black rounded-full hover:shadow-lg hover:shadow-primary/30 transition-all active:scale-95 flex items-center gap-2 uppercase tracking-widest"
-                            >
-                               <span className="material-symbols-outlined text-sm">verified</span>
-                               예약확정
-                            </button>
+                             {trip.DATA_STAT === 'BIDDING' && (
+                               <button
+                                 onClick={() => {
+                                   setSelectedReqId(trip.REQ_ID);
+                                   setShowQuotationList(true);
+                                 }}
+                                 className="px-6 py-2.5 bg-[#004d40] text-white text-[11px] font-black rounded-full hover:bg-[#003d33] transition-all shadow-md flex items-center gap-2"
+                               >
+                                  <span className="material-symbols-outlined text-sm">verified</span>
+                                  청약승인처리
+                               </button>
+                             )}
                             <button 
                               onClick={() => handleCancelTrip(trip)}
                               className="px-5 py-2.5 text-[10px] font-black text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all flex items-center gap-2 uppercase tracking-widest border border-slate-100 hover:border-red-100"
@@ -295,22 +391,67 @@ const ReservationList = ({ user, onBack }) => {
                                   <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-300 group-hover/bus:bg-primary group-hover/bus:text-white transition-all transform group-hover/bus:rotate-3">
                                      <span className="material-symbols-outlined text-xl">commute</span>
                                   </div>
-                                  <div>
+                                  <div className="flex flex-col">
                                      <p className="text-sm font-black text-on-surface tracking-tight mb-0.5">{vehicleLabel}</p>
                                      <p className="text-[10px] text-outline font-bold">금액: <span className="text-primary">{Number(bus.FINAL_CONFIRM_AMT || bus.UNIT_REQ_AMT || 0).toLocaleString()}원</span></p>
                                   </div>
                                </div>
+
+                               {bus.RES_STAT && (
+                                 <div className="flex-1 flex justify-center items-center">
+                                   <div 
+                                     className={`flex items-center gap-3 bg-white px-5 py-2.5 rounded-2xl border-2 border-primary/10 shadow-sm transition-all group/driver max-w-fit relative z-10 cursor-default`}
+                                   >
+                                     <div className="relative">
+                                       <div className="w-9 h-9 rounded-xl overflow-hidden border border-slate-100 shadow-inner bg-slate-50 flex items-center justify-center">
+                                         {bus.PROFILE_PHOTO_ID ? (
+                                           <img 
+                                             src={`/api/user/profile-image?fileId=${bus.PROFILE_PHOTO_ID}`} 
+                                             alt="driver"
+                                             className="w-full h-full object-cover group-hover/driver:scale-110 transition-transform duration-300"
+                                           />
+                                         ) : (
+                                           <span className="material-symbols-outlined text-sm text-slate-300">person</span>
+                                         )}
+                                       </div>
+                                       <div className="absolute -bottom-1 -right-1 w-4.5 h-4.5 bg-primary rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                                         <span className="material-symbols-outlined text-[10px] text-white font-bold">check</span>
+                                       </div>
+                                     </div>
+                                     <div className="flex flex-col">
+                                       <div className="flex items-center gap-1 leading-none mb-1">
+                                         <span className="text-[10px] text-primary font-black uppercase tracking-tight">담당 기사님</span>
+                                       </div>
+                                       <p className="text-sm text-on-surface font-black leading-none">{bus.DRIVER_NM || '확인 중'}</p>
+                                     </div>
+                                   </div>
+                                 </div>
+                               )}
                                <div className="flex items-center gap-2 shrink-0 ml-4">
                                   <button 
-                                    onClick={() => handleBusChange(bus)}
-                                    className="px-5 py-2.5 bg-slate-100 text-slate-600 text-[11px] font-black rounded-full hover:bg-slate-200 transition-all shadow-sm border border-slate-200 whitespace-nowrap" 
+                                    onClick={() => handleBusDelete(bus)}
+                                    className="px-4 py-2 bg-white text-slate-500 text-[10px] font-black rounded-full hover:bg-slate-50 transition-all border border-slate-200" 
                                   >
                                      버스취소
                                   </button>
+                                  <button 
+                                    onClick={() => handleBusChange(bus)}
+                                    className="px-4 py-2 bg-slate-100 text-slate-600 text-[10px] font-black rounded-full hover:bg-slate-200 transition-all border border-slate-200" 
+                                  >
+                                     버스변경
+                                  </button>
+                                  {bus.BUS_STAT === 'AUCTION' && !bus.RES_STAT && (
+                                    <button 
+                                      onClick={() => handleOpenAdjustPrice(bus)}
+                                      className="px-4 py-2 bg-primary/5 text-primary text-[10px] font-black rounded-full hover:bg-primary/10 transition-all border border-primary/10" 
+                                    >
+                                       가격변경
+                                    </button>
+                                  )}
                                   {bus.RES_STAT && (
                                     <button 
                                       onClick={() => handleBusCancel(bus)}
-                                      className="px-5 py-2.5 bg-red-50 text-red-400 text-[11px] font-black rounded-full hover:bg-red-500 hover:text-white transition-all shadow-sm border border-red-100 whitespace-nowrap" 
+                                      className="px-4 py-2 bg-red-50 text-red-400 text-[10px] font-black rounded-full hover:bg-red-500 hover:text-white transition-all border border-red-100" 
                                     >
                                        기사변경
                                     </button>
@@ -376,6 +517,17 @@ const ReservationList = ({ user, onBack }) => {
           onClose={() => setShowBusReRegModal(false)}
           onSuccess={() => {
             setShowBusReRegModal(false);
+            fetchReservations();
+          }}
+        />
+      )}
+
+      {showAdjustPriceModal && adjustPriceBusData && (
+        <AdjustBusPriceModal
+          bus={adjustPriceBusData}
+          onClose={() => setShowAdjustPriceModal(false)}
+          onSuccess={() => {
+            setShowAdjustPriceModal(false);
             fetchReservations();
           }}
         />

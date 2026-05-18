@@ -9,12 +9,13 @@ const ReservationCompletedList = ({ user, onBack }) => {
   const fetchConfirmedReservations = () => {
     if (user && user.custId) {
       setLoading(true);
-      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-      fetch(`${apiBase}/api/auction/confirmed/${user.custId}`)
+      fetch(`http://localhost:8080/api/auction/confirmed/${user.custId}`)
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) {
-            setReservations(data);
+            const now = new Date();
+            const futureOnly = data.filter(trip => new Date(trip.START_DT) >= now);
+            setReservations(futureOnly);
           }
           setLoading(false);
         })

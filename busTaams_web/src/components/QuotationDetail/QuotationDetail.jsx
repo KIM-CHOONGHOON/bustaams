@@ -6,8 +6,7 @@ const QuotationDetail = ({ bidId, onBack }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // API 통신을 위한 기본 주소 (환경 변수가 설정되어 있지 않으면 로컬 주소 사용)
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+    const API_BASE = 'http://localhost:8080';
 
     const handleConfirmBooking = async () => {
         if (!window.confirm('이 견적으로 예약을 확정하시겠습니까?')) return;

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
 const CancelTripReasonModal = ({ tripData, currentCustId, onClose, onSuccess }) => {
-  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
   const [reasonCodes, setReasonCodes] = useState([]);
   const [reasonCode, setReasonCode] = useState('');
   const [reasonText, setReasonText] = useState('');
@@ -13,7 +12,7 @@ const CancelTripReasonModal = ({ tripData, currentCustId, onClose, onSuccess }) 
     document.body.style.overflow = 'hidden';
     
     // 공통 코드 서버에서 불러오기
-    fetch(`${apiBase}/api/common/codes/TRAVELER_CANCEL_REASON`)
+    fetch('/api/common/codes/TRAVELER_CANCEL_REASON')
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -77,7 +76,7 @@ const CancelTripReasonModal = ({ tripData, currentCustId, onClose, onSuccess }) 
       };
 
       console.info('[STEP 4] Fetching Server...', payload);
-      const response = await fetch(`${apiBase}/api/auction/complex-cancel`, {
+      const response = await fetch('/api/auction/complex-cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

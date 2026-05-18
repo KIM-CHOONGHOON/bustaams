@@ -58,7 +58,6 @@ const BusCard = ({ title, img, type, qty, price, desc, color, adjustQty, handleC
 );
 
 const BusReRegistrationModal = ({ reqId, user, onClose, onSuccess }) => {
-  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
   const [qtys, setQtys] = React.useState({
     premiumQty: 0,
     standardQty: 0,
@@ -111,7 +110,7 @@ const BusReRegistrationModal = ({ reqId, user, onClose, onSuccess }) => {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch(`${apiBase}/api/auction/re-register-bus`, {
+      const response = await fetch('/api/auction/re-register-bus', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reqId, vehicles, custId: user?.custId })
