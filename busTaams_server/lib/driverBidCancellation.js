@@ -7,6 +7,9 @@ const { allocateSequentialFileIds } = require('./allocateFileIds');
 const { orgFileNmAndExt } = require('./bt_common_utils');
 
 /** 누적 허용: 10회까지(11회째부터 거절). 스냅샷·클램프에 동일 적용. */
+/** const MAX_DRIVER_BID_CANCEL_ACCUM = 10;
+
+/** 누적 허용: 10회까지(11회째부터 거절). 스냅샷·클램프에 동일 적용. */
 const MAX_DRIVER_BID_CANCEL_ACCUM = 10;
 
 const DRIVER_CANCEL_FILE_CATEGORY = 'DRIVER_CANCEL_REPORT';
@@ -21,18 +24,6 @@ function addDays(dt, days) {
     const x = new Date(dt.getTime());
     x.setDate(x.getDate() + days);
     return new Date(x.getFullYear(), x.getMonth(), x.getDate(), 0, 1, 1, 0);
-}
-
-/**
- * 기사 청약 취소 누적 건수(nextCnt)에 따른 거래 제한 종료일.
- * - 1~9회: 시작일 기준 +7일 (기존과 동일)
- * - 10회(상한 도달): 종료일 **9999-12-31** (YYYYMMDD **99991231** 대응). 자동 만료로 해제되지 않으며 **관리자가 TB_USER_CANCEL_MANAGE 등을 조정**해야 거래 가능.
- */
-function tradeRestrictEndDtForDriverBidAccum(nextCnt, startRestrict) {
-    if (nextCnt >= MAX_DRIVER_BID_CANCEL_ACCUM) {
-        return new Date(9999, 11, 31, 23, 59, 59, 0);
-    }
-    return addDays(startRestrict, 7);
 }
 
 /** TB_USER.USER_TYPE → TB_USER_CANCEL_MANAGE.USER_TYPE (설계: TB_USER와 동일 ENUM 권장) */
@@ -198,9 +189,9 @@ async function executeDriverBidCancellation(connection, bucket, p) {
         return {ok: false, status: 409, code: 'AUCTION_REQ_MISMATCH', message: MSGS.AUCTION_REQ_MISMATCH};
     }
 
-    /* TB_USER_CANCEL_MANAGE — 누적 + 거래제한 (시작: 취소 등록일 당일 0:01:01; 종료: 1~9회 +7일, 10회 9999-12-31) */
+    /* TB_USER_CANCEL_MANAGE — 누적 + 거래제한 (취소 등록일 당일 0:01:01 시작, 종료는 항상 +7일) */
     const startRestrict = cancelRegistrationDay000101();
-    const restrictEnd = tradeRestrictEndDtForDriverBidAccum(nextCnt, startRestrict);
+    const restrictEnd = addDays(startRestrict, 7);
 
     if (!manageRow) {
         const [ins] = await connection.execute(
