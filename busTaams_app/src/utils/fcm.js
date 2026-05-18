@@ -8,6 +8,12 @@ import { upsertDeviceToken, upsertDriverDeviceToken } from '../api';
 const VAPID_KEY = 'YOUR_VAPID_PUBLIC_KEY_HERE';
 
 export const requestFirebaseToken = async () => {
+  // 알림 API가 지원되지 않는 브라우저 또는 환경에서의 예외 방어
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+    console.log('이 브라우저/환경에서는 알림 서비스를 지원하지 않습니다.');
+    return null;
+  }
+
   try {
     const permission = await Notification.requestPermission();
     if (permission === 'granted') {

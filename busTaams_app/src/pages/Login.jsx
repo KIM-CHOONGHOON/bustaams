@@ -19,19 +19,22 @@ const Login = () => {
             localStorage.setItem('accessToken', response.token);
             localStorage.setItem('user', JSON.stringify(response.user));
             
-            // FCM 토큰 등록 시도
-            requestFirebaseToken();
+            // FCM 토큰 등록 시도 (실패하더라도 로그인 흐름에 영향이 없도록 안전하게 감싸줍니다)
+            try {
+                requestFirebaseToken();
+            } catch (fcmError) {
+                console.error('FCM 토큰 등록 프로세스 시작 오류:', fcmError);
+            }
 
-            notify.success('로그인 성공', '오늘도 탁월한 선택을 환영합니다.');
+            // 로그인 성공 알림창이 닫힌 뒤에 안전하게 페이지 이동이 되도록 await 처리합니다.
+            await notify.success('로그인 성공', '오늘도 탁월한 선택을 환영합니다.');
 
-            setTimeout(() => {
-                const userType = response.user.userType;
-                if (userType === 'DRIVER') {
-                    navigate('/driver-dashboard');
-                } else {
-                    navigate('/customer-dashboard');
-                }
-            }, 500);
+            const userType = response.user.userType;
+            if (userType === 'DRIVER') {
+                navigate('/driver-dashboard');
+            } else {
+                navigate('/customer-dashboard');
+            }
         }
     } catch (error) {
         notify.error('로그인 실패', error.message || '인증 정보가 일치하지 않습니다.');
