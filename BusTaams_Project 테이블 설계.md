@@ -429,6 +429,7 @@
 - **데이터 생성**: 회원가입 완료 시 `CUST_ID`별로 초기 레코드를 생성함 (모든 카운트 0, `TRADE_RESTRICT_YN = 'N'`).
 - **카운트 증가**: '나의 예약목록'에서 여정 전체 취소(`complex-cancel`) 시 `CANCEL_CNT` 및 `CANCEL_TRAVELER_ALL_CNT`를 각각 1씩 증가시킴.
 - **거래 제한**: 로그인 시 이 테이블을 조회하여 `TRADE_RESTRICT_YN`이 'Y'인 경우 로그인을 차단함.
+- **기사 청약 취소(`CANCEL_BUS_DRIVER_CNT`)**: 누적은 최대 **10**까지 허용. 거래 제한 구간 설정 시 **1~9회**는 통상 **7일**, **10회(마지막 취소 반영 시)** 는 `TRADE_RESTRICT_END_DT`를 **`9999-12-31`**(99991231)로 두어 사실상 영구 제한으로 두고, **`TRADE_RESTRICT_YN` 해제 등 관리자 처리** 후에만 재거래 가능하도록 한다. (구현: `driverBidCancellation.js` 의 `tradeRestrictEndDtForDriverBidAccum`.)
 
 ## TB_USER_DEVICE_TOKEN
 
@@ -481,4 +482,4 @@
 - **제한 내용**: 새로운 거래 행위 불가 및 UI 버튼 비활성화.
 - **관련 테이블**: `TB_USER_CANCEL_MANAGE`
     - 여행자: `CANCEL_TRAVELER_ALL_CNT` 기록 및 날짜 체크.
-    - 버스기사: `CANCEL_BUS_DRIVER_CNT` 기록 및 날짜 체크.
+    - 버스기사: `CANCEL_BUS_DRIVER_CNT` 기록 및 날짜 체크. 청약 취소 **10회 누적 시** 종료일 **`9999-12-31`** 등록·관리자 해제 전까지 거래 불가(위 `TB_USER_CANCEL_MANAGE` 정책 참고).

@@ -151,11 +151,7 @@ async function applyMomMemberAfterBid(connection, custId) {
     let detailRows;
     try {
         const [dRows] = await connection.execute(
-            `SELECT d.FEE_POLICY AS feePolicy
-             FROM TB_DRIVER_DETAIL d
-             INNER JOIN TB_USER u ON u.USER_ID = d.USER_ID
-             WHERE u.CUST_ID = ?
-             LIMIT 1`,
+            `SELECT FEE_POLICY AS feePolicy FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1`,
             [cust]
         );
         detailRows = dRows;
@@ -182,11 +178,11 @@ async function applyMomMemberAfterBid(connection, custId) {
         feePolicy = 'DRIVER';
         try {
             await connection.execute(
-                `UPDATE TB_DRIVER_DETAIL SET FEE_POLICY = 'DRIVER', MOD_DT = NOW(), MOD_ID = ? WHERE USER_ID = ?`,
-                [modId, userId]
+                `UPDATE TB_DRIVER_DETAIL SET FEE_POLICY = 'DRIVER', MOD_DT = NOW(), MOD_ID = ? WHERE CUST_ID = ?`,
+                [modId, cust]
             );
         } catch (e) {
-            if (!isNoSuchTable(e) && e.code !== 'ER_BAD_FIELD_ERROR' && e.errno !== 1054) throw e;
+            if (!isNoSuchTable(e)) throw e;
         }
     }
 

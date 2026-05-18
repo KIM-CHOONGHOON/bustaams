@@ -1,10 +1,24 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 
-/** Same-origin `/api` + Vite proxy; trim trailing slash from env */
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
+/** DriverProfileSetup 등과 동일 — 비우면 Vite 프록시용 상대 `/api` + 로컬 기본 호스트 */
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080')
+    .trim()
+    .replace(/\/$/, '');
 
 const COMMON_VIEW_ROOT_ID = 'common-view-root';
 const COMMON_VIEW_MODAL_ID = 'common-view-modal';
+
+/** 표시·다운로드 파일명 — DB에 이미 동일 확장자가 붙어 있으면 중복 부착 안 함 */
+function joinOrgFileDisplayName(orgFileNm, fileExt) {
+    const nm = String(orgFileNm ?? '').trim() || 'file';
+    const rawExt = String(fileExt ?? '').replace(/^\./, '').trim();
+    if (!rawExt) return nm;
+    const ext = rawExt.toLowerCase();
+    const suffix = `.${ext}`;
+    if (nm.toLowerCase().endsWith(suffix)) return nm;
+    return `${nm}.${ext}`;
+}
 
 /** 문서 카테고리 코드 → 한국어 표시 */
 const COMMON_VIEW_CATEGORY_LABEL = {
@@ -126,10 +140,10 @@ function CommonView({ close, fileId, custId, userId: userIdLegacy, docTitle, met
 
     /* ── URL 헬퍼 ── */
     const streamUrl = isDocMode
-        ? `${API_BASE || ''}${STREAM_PATH}?custId=${encodeURIComponent(ownerCustId)}&fileId=${encodeURIComponent(docFileId)}`
+        ? `${API_BASE}${STREAM_PATH}?custId=${encodeURIComponent(ownerCustId)}&fileId=${encodeURIComponent(docFileId)}`
         : null;
     const downloadUrl = isDocMode
-        ? `${API_BASE || ''}${DL_PATH}?custId=${encodeURIComponent(ownerCustId)}&fileId=${encodeURIComponent(docFileId)}`
+        ? `${API_BASE}${DL_PATH}?custId=${encodeURIComponent(ownerCustId)}&fileId=${encodeURIComponent(docFileId)}`
         : null;
 
     const ext = (docMeta?.fileExt || '').toLowerCase();
@@ -153,7 +167,7 @@ function CommonView({ close, fileId, custId, userId: userIdLegacy, docTitle, met
         }
         const a = document.createElement('a');
         a.href = downloadUrl;
-        if (docMeta) a.download = `${docMeta.orgFileNm}.${docMeta.fileExt}`;
+        if (docMeta) a.download = joinOrgFileDisplayName(docMeta.orgFileNm, docMeta.fileExt);
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -169,15 +183,16 @@ function CommonView({ close, fileId, custId, userId: userIdLegacy, docTitle, met
         : '';
     const displayTitle = docTitle || categoryLabel || '문서 뷰어';
 
-    return (
-        <div
-            id={COMMON_VIEW_ROOT_ID}
-            data-common-view-id="commonViewDocumentViewer"
-            className="fixed inset-0 z-[200] flex min-h-0 items-center justify-center overflow-y-auto bg-gray-900/50 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-200"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="common-view-title"
-        >
+    return createPortal(
+        (
+            <div
+                id={COMMON_VIEW_ROOT_ID}
+                data-common-view-id="commonViewDocumentViewer"
+                className="fixed inset-0 z-[200] flex min-h-0 items-center justify-center overflow-y-auto bg-gray-900/50 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-200"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="common-view-title"
+            >
             <button type="button" className="absolute inset-0 cursor-default" aria-label="Close overlay" onClick={close} />
             <div
                 id={COMMON_VIEW_MODAL_ID}
@@ -269,7 +284,7 @@ function CommonView({ close, fileId, custId, userId: userIdLegacy, docTitle, met
                                         <li className="flex flex-col">
                                             <span className="text-[10px] text-slate-400 uppercase tracking-widest mb-1">파일명</span>
                                             <span className="text-sm font-semibold text-on-surface break-all">
-                                                {docMeta.orgFileNm}.{docMeta.fileExt}
+                                                {joinOrgFileDisplayName(docMeta.orgFileNm, docMeta.fileExt)}
                                             </span>
                                         </li>
                                         <li className="flex flex-col">
@@ -368,7 +383,7 @@ function CommonView({ close, fileId, custId, userId: userIdLegacy, docTitle, met
                                         {docMeta && (
                                             <div className="mt-4 flex flex-wrap gap-3">
                                                 <div className="bg-surface-container-high px-4 py-2 rounded-full text-sm text-on-surface-variant font-medium">
-                                                    {docMeta.orgFileNm}.{docMeta.fileExt}
+                                                    {joinOrgFileDisplayName(docMeta.orgFileNm, docMeta.fileExt)}
                                                 </div>
                                                 <div className="bg-surface-container-high px-4 py-2 rounded-full text-sm text-on-surface-variant font-medium">
                                                     {(docMeta.fileExt || '').toUpperCase()}
@@ -614,7 +629,9 @@ function CommonView({ close, fileId, custId, userId: userIdLegacy, docTitle, met
                     </div>
                 </div>
             </div>
-        </div>
+            </div>
+        ),
+        document.body
     );
 }
 

@@ -1,0 +1,31 @@
+{
+  "hosting": {
+    "site": "project-d481af23-2c56-483d-956-web",
+    "public": "dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/api/**",
+        "run": {
+          "serviceId": "bustams-server",
+          "region": "asia-northeast3"
+        }
+      },
+      {
+        "source": "/uploads/**",
+        "run": {
+          "serviceId": "bustams-server",
+          "region": "asia-northeast3"
+        }
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

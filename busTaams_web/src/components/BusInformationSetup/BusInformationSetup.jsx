@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import CommonView from '../CommonView/CommonView';
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
+const API_BASE =
+    (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '') || 'http://127.0.0.1:8080';
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const ALLOWED_DOC_TYPES   = [...ALLOWED_IMAGE_TYPES, 'application/pdf'];
@@ -68,7 +69,63 @@ function fileLabelFromMeta(orgFileNm, fileExt) {
         .replace(/^\./, '')
         .toLowerCase()
         .trim();
-    return ext ? `${nm}.${ext}` : nm;
+    if (!ext) return nm;
+    const suffix = `.${ext}`;
+    if (nm.toLowerCase().endsWith(suffix)) return nm;
+    return `${nm}.${ext}`;
+}
+
+/** 로컬 파일에서 미리보기용 확장자 힌트 (PDF/이미지 구분) */
+function fileExtFromUpload(file) {
+    if (!file) return '';
+    const nm = file.name || '';
+    const i = nm.lastIndexOf('.');
+    if (i > 0) return nm.slice(i + 1).toLowerCase().replace(/[^\w]/g, '');
+    const t = file.type || '';
+    if (t === 'application/pdf') return 'pdf';
+    if (t === 'image/jpeg') return 'jpeg';
+    if (t === 'image/png') return 'png';
+    if (t === 'image/webp') return 'webp';
+    if (t === 'image/gif') return 'gif';
+    return '';
+}
+
+function docSlotExt(slot) {
+    const fe = String(slot?.fileExt || '')
+        .replace(/^\./, '')
+        .toLowerCase()
+        .trim();
+    if (fe) return fe;
+    const lb = slot?.label || '';
+    const idx = lb.lastIndexOf('.');
+    return idx > 0 ? lb.slice(idx + 1).toLowerCase() : '';
+}
+
+/** 원격 서류·차량 사진 스트림 미리보기 */
+function RemoteBusFileThumb({ url, isPdf, variant }) {
+    const [fail, setFail] = useState(false);
+    if (isPdf) {
+        return (
+            <iframe
+                title="문서 미리보기"
+                src={url}
+                className="w-full h-24 rounded border border-surface-container-low bg-white pointer-events-none"
+            />
+        );
+    }
+    if (fail) {
+        return (
+            <span className="text-[10px] text-outline text-center px-1 leading-tight block">
+                미리보기 실패
+                <span className="block font-normal opacity-80 mt-0.5">「파일보기」 또는 네트워크 확인</span>
+            </span>
+        );
+    }
+    const imgCls =
+        variant === 'photo'
+            ? 'w-full h-full object-cover'
+            : 'max-h-16 w-full object-contain mx-auto rounded';
+    return <img src={url} alt="" className={imgCls} onError={() => setFail(true)} />;
 }
 
 /** 주행거리 상한 (km) */
@@ -219,6 +276,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
                                   mode: 'remote',
                                   fileId: bus.bizRegFile.fileId,
                                   label: fileLabelFromMeta(bus.bizRegFile.orgFileNm, bus.bizRegFile.fileExt),
+                                  fileExt: bus.bizRegFile.fileExt,
                               }
                             : null,
                         trans: bus.transLicFile?.fileId
@@ -226,6 +284,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
                                   mode: 'remote',
                                   fileId: bus.transLicFile.fileId,
                                   label: fileLabelFromMeta(bus.transLicFile.orgFileNm, bus.transLicFile.fileExt),
+                                  fileExt: bus.transLicFile.fileExt,
                               }
                             : null,
                         ins: bus.insCertFile?.fileId
@@ -233,6 +292,7 @@ const BusInformationSetup = ({ close, currentUser }) => {
                                   mode: 'remote',
                                   fileId: bus.insCertFile.fileId,
                                   label: fileLabelFromMeta(bus.insCertFile.orgFileNm, bus.insCertFile.fileExt),
+                                  fileExt: bus.insCertFile.fileExt,
                               }
                             : null,
                     });
@@ -308,7 +368,10 @@ const BusInformationSetup = ({ close, currentUser }) => {
         setDocSlots((prev) => {
             const cur = prev[key];
             if (cur?.mode === 'local' && cur.previewUrl) URL.revokeObjectURL(cur.previewUrl);
-            return { ...prev, [key]: { mode: 'local', file, previewUrl, label: file.name } };
+            return {
+                ...prev,
+                [key]: { mode: 'local', file, previewUrl, label: file.name, fileExt: fileExtFromUpload(file) },
+            };
         });
     };
 
@@ -508,25 +571,17 @@ const BusInformationSetup = ({ close, currentUser }) => {
     const docPreview = (slot) => {
         if (!slot) return null;
         if (slot.mode === 'remote') {
-            const ext = (slot.label || '').includes('.')
-                ? slot.label.slice(slot.label.lastIndexOf('.') + 1).toLowerCase()
-                : '';
+            const ext = docSlotExt(slot);
             const isPdf = ext === 'pdf';
+            const url = fileUrl(slot.fileId);
             return (
-                <div className="flex flex-col items-center justify-center gap-1 min-h-[72px] px-1">
+                <div className="flex flex-col items-center justify-center gap-1 min-h-[72px] px-1 w-full">
                     <span className="material-symbols-outlined text-3xl text-primary shrink-0" aria-hidden>
                         {isPdf ? 'picture_as_pdf' : 'description'}
                     </span>
-                    {!isPdf && (
-                        <img
-                            src={fileUrl(slot.fileId)}
-                            alt=""
-                            className="max-h-16 w-full object-contain mx-auto rounded"
-                            onError={(e) => {
-                                e.target.style.display = 'none';
-                            }}
-                        />
-                    )}
+                    <div className="w-full">
+                        <RemoteBusFileThumb url={url} isPdf={isPdf} variant="doc" />
+                    </div>
                     <span className="text-[10px] font-bold text-on-surface text-center break-all leading-tight">{slot.label}</span>
                 </div>
             );
@@ -546,14 +601,9 @@ const BusInformationSetup = ({ close, currentUser }) => {
         if (!slot) return null;
         if (slot.mode === 'remote') {
             return (
-                <img
-                    src={fileUrl(slot.fileId)}
-                    alt=""
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                        e.target.style.display = 'none';
-                    }}
-                />
+                <div className="w-full h-full min-h-[48px] flex items-center justify-center bg-surface-container-low/30">
+                    <RemoteBusFileThumb url={fileUrl(slot.fileId)} isPdf={false} variant="photo" />
+                </div>
             );
         }
         return <img src={slot.previewUrl} alt="" className="w-full h-full object-cover" />;

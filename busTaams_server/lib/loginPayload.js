@@ -67,12 +67,11 @@ function getCurrentYyyyMm() {
 }
 
 /**
- * TB_USER_CANCEL_MANAGE: SERVER 환경.md CUST_ID 조인·BUSTAAMS 컬럼명 혼용 대응
+ * TB_USER_CANCEL_MANAGE — CUST_ID 기준
  */
 async function fetchCancelManageForUser(pool, user) {
     const custRaw = user.CUST_ID != null && String(user.CUST_ID).trim() !== '' ? String(user.CUST_ID).trim() : '';
     const cust = custRaw ? custRaw.padStart(10, '0') : '';
-    const loginId = user.USER_ID != null && String(user.USER_ID).trim() !== '' ? String(user.USER_ID).trim() : '';
     const cols = `CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, CANCEL_TRAVELER_ALL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT, TRADE_RESTRICT_YN, TRADE_RESTRICT_START_DT, TRADE_RESTRICT_END_DT`;
 
     const tryQ = async (sql, args) => {
@@ -88,11 +87,6 @@ async function fetchCancelManageForUser(pool, user) {
             );
             if (row) return row;
         } catch (e) {
-            // CUST_ID 컬럼이 없는 구형 스키마 대응 (필요 시)
-            if (e.code === 'ER_BAD_FIELD_ERROR' || e.errno === 1054) {
-                // 운영 환경이 CUST_ID 체계이므로 여기서는 더 이상 USER_ID로 시도하지 않고 종료
-                return null;
-            }
             if (e.code === 'ER_NO_SUCH_TABLE') return null;
             throw e;
         }
@@ -115,7 +109,7 @@ async function fetchSubscriptionForDriver(pool, custId) {
         );
         return rows[0] || null;
     } catch (e) {
-        if (e.code === 'ER_NO_SUCH_TABLE' || e.code === 'ER_BAD_FIELD_ERROR' || e.errno === 1054) return null;
+        if (e.code === 'ER_NO_SUCH_TABLE') return null;
         throw e;
     }
 }

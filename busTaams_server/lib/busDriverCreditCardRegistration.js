@@ -1,4 +1,5 @@
 const { encrypt, plainOrLegacyDecrypt } = require('../crypto');
+const { custIdMatchCandidates } = require('./bustaamsIds');
 
 function digitsOnly(s) {
     return String(s || '').replace(/\D/g, '');
@@ -79,7 +80,7 @@ async function custIdHasDuplicatePan(conn, custId, panNormalized) {
  * TB_PAYMENT_CARD 행 추가 (PAN 은 CARD_NO_ENC 로만 저장)
  * @param {import('mysql2/promise').Pool} pool
  * @param {object} p
- * @param {string} p.rawDriverId - CUST_ID 또는 USER_ID
+ * @param {string} p.rawDriverId - TB_USER.CUST_ID(숫자·0패딩 변형)
  * @param {string} p.panDigits - 숫자만 카드번호
  * @param {string} p.expMonth - MM
  * @param {string} p.expYearYY - YY
@@ -129,9 +130,11 @@ async function registerBusDriverPaymentCard(pool, p) {
         conn = await pool.getConnection();
         await conn.beginTransaction();
 
+        const custCands = custIdMatchCandidates(raw);
+        const custPh = custCands.map(() => '?').join(', ');
         const [userRows] = await conn.execute(
-            `SELECT CUST_ID, USER_ID FROM TB_USER WHERE CUST_ID = ? OR USER_ID = ? LIMIT 1`,
-            [raw, raw]
+            `SELECT CUST_ID, USER_ID FROM TB_USER WHERE TRIM(CUST_ID) IN (${custPh}) LIMIT 1`,
+            custCands
         );
         const user = userRows[0];
         if (!user) {

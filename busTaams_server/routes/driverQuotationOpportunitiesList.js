@@ -5,11 +5,8 @@
  *
  * TB_AUCTION_REQ.DATA_STAT IN ('AUCTION','BIDDING'), DATE(START_DT) > CURDATE()
  * + 기사별 재응찰 제외 · 동일 출발일 CONFIRM 제외
- * 기사 식별: VARCHAR (`TB_USER.USER_ID` = `TB_BUS_RESERVATION.DRIVER_ID`). UUID_TO_BIN·USER_UUID 없음.
+ * 기사 식별: TB_BUS_RESERVATION.DRIVER_ID = TB_USER.CUST_ID.
  */
-function isSchemaMismatchError(e) {
-    return e && (e.errno === 1054 || e.code === 'ER_BAD_FIELD_ERROR');
-}
 
 function archBlocks(driverId) {
     if (!driverId) return { sql: '', params: [] };
@@ -67,39 +64,9 @@ async function runArchList(connection, driverId, extraCols) {
     return rows;
 }
 
-async function fetchRows(connection, driverUuid) {
-    const extraFull = `, ANY_VALUE(r.REQ_COMMENT) AS comment, ANY_VALUE(r.ROUND_TRIP_YN) AS roundTripYn`;
-    try {
-        return await runLegacyList(connection, driverUuid, extraFull);
-    } catch (e) {
-        if (!isSchemaMismatchError(e)) throw e;
-        try {
-            let rows = await runLegacyList(connection, driverUuid, '');
-            return rows.map((row) => ({ ...row, comment: null, roundTripYn: 'N' }));
-        } catch (e2) {
-            if (!isSchemaMismatchError(e2)) throw e2;
-            const driverId = (await resolveDriverReservationId(connection, driverUuid)) || String(driverUuid).trim();
-            try {
-                return await runArchList(connection, driverId, extraFull);
-            } catch (e3) {
-                if (!isSchemaMismatchError(e3)) throw e3;
-                let rows = await runArchList(connection, driverId, '');
-                return rows.map((row) => ({ ...row, comment: null, roundTripYn: 'N' }));
-            }
-        }
-    }
-}
-
-/** 쿼리 `driverId=` 만 넘긴 경우 — TB_BUS_RESERVATION.DRIVER_ID 문자열로 직접 조회 (UUID_TO_BIN 생략) */
 async function fetchRowsByDriverId(connection, driverId) {
     const extraFull = `, ANY_VALUE(r.REQ_COMMENT) AS comment, ANY_VALUE(r.ROUND_TRIP_YN) AS roundTripYn`;
-    try {
-        return await runArchList(connection, driverId, extraFull);
-    } catch (e) {
-        if (!isSchemaMismatchError(e)) throw e;
-        let rows = await runArchList(connection, driverId, '');
-        return rows.map((row) => ({ ...row, comment: null, roundTripYn: 'N' }));
-    }
+    return runArchList(connection, driverId, extraFull);
 }
 
 const DEMO_ITEMS = [

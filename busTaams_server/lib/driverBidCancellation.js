@@ -1,22 +1,37 @@
 /**
- * 버스기사 청약 취소 — 모달 오픈 시점 CANCEL_BUS_DRIVER_CNT 스냅샷과 DB 동기화 후 TB_BUS_RESERVATION·취소 관리·이력·파일
- * (`BusTaams_Project 테이블 설계.md` 정본. TB_AUCTION_REQ / TB_AUCTION_REQ_BUS 는 갱신하지 않음.)
+ * 버스기사 청약 취소 — TB_BUS_RESERVATION·TB_AUCTION_REQ(_BUS)·취소 관리·이력·파일
+ * — TB_AUCTION_REQ_BUS 해당 슬롯 `BUS_CANCEL`, 마스터 TB_AUCTION_REQ `AUCTION` 복구.
  */
 
 const { allocateSequentialFileIds } = require('./allocateFileIds');
+const { orgFileNmAndExt } = require('./bt_common_utils');
+
+/** 누적 허용: 10회까지(11회째부터 거절). 스냅샷·클램프에 동일 적용. */
+/** const MAX_DRIVER_BID_CANCEL_ACCUM = 10;
+
+/** 누적 허용: 10회까지(11회째부터 거절). 스냅샷·클램프에 동일 적용. */
+const MAX_DRIVER_BID_CANCEL_ACCUM = 10;
 
 const DRIVER_CANCEL_FILE_CATEGORY = 'DRIVER_CANCEL_REPORT';
 const GCS_BUCKET_FIXED = 'bustaams-secure-data';
 
-function tomorrow000101(d = new Date()) {
-    const x = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 1, 1, 0);
-    return x;
+/** 거래 제한 시작: 취소 등록일 당일 00:01:01 */
+function cancelRegistrationDay000101(d = new Date()) {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 1, 1, 0);
 }
 
 function addDays(dt, days) {
     const x = new Date(dt.getTime());
     x.setDate(x.getDate() + days);
     return new Date(x.getFullYear(), x.getMonth(), x.getDate(), 0, 1, 1, 0);
+}
+
+/** TB_USER.USER_TYPE → TB_USER_CANCEL_MANAGE.USER_TYPE (설계: TB_USER와 동일 ENUM 권장) */
+function normalizeManageUserType(raw) {
+    const s = raw != null ? String(raw).trim().toUpperCase() : '';
+    const allowed = new Set(['TRAVELER', 'DRIVER', 'PARTNER', 'ADMIN']);
+    if (allowed.has(s)) return s;
+    return 'DRIVER';
 }
 
 const MSGS = {
@@ -26,6 +41,12 @@ const MSGS = {
         '청약 취소 가능 건수 초과되었습니다.\n버스탐스 운영부에 문의후 재거래 하세요.',
     SNAPSHOT_STALE:
         '청약 취소 건수 정보가 변경되었습니다. 모달을 닫았다가 다시 열어 주세요.',
+    AUCTION_REQ_BUS_MISMATCH:
+        '요청 차량(TB_AUCTION_REQ_BUS) 정보를 갱신할 수 없습니다.\n해당 REQ_ID·REQ_BUS_SEQ 행을 확인하세요.',
+    AUCTION_REQ_MISMATCH:
+        '견적 요청(TB_AUCTION_REQ) 마스터를 갱신할 수 없습니다.\nREQ_ID 를 확인하세요.',
+    USER_NOT_FOUND:
+        '회원(TB_USER) 정보를 찾을 수 없습니다. 로그인 상태를 확인해 주세요.',
 };
 
 /**
@@ -59,17 +80,27 @@ async function executeDriverBidCancellation(connection, bucket, p) {
     } = p;
 
     const snap = Number(cancelBusDriverCntSnapshot);
-    if (!Number.isFinite(snap) || snap < 0 || snap > 2 || !Number.isInteger(snap)) {
+    if (!Number.isFinite(snap) || snap < 0 || snap > MAX_DRIVER_BID_CANCEL_ACCUM || !Number.isInteger(snap)) {
         return {
             ok: false,
             status: 400,
             code: 'BAD_CANCEL_SNAPSHOT',
-            message: '청약 취소 누적 건수(cancelBusDriverCntSnapshot)가 올바르지 않습니다.',
+            message: `청약 취소 누적 건수(cancelBusDriverCntSnapshot)는 0~${MAX_DRIVER_BID_CANCEL_ACCUM} 정수여야 합니다.`,
         };
     }
 
     const gcsBucketNm = bucket.name || GCS_BUCKET_FIXED;
     const modId = driverCustId;
+
+    const [userTypeRows] = await connection.execute(
+        `SELECT USER_TYPE FROM TB_USER WHERE TRIM(CUST_ID) = TRIM(?) LIMIT 1`,
+        [driverCustId]
+    );
+    if (!userTypeRows.length) {
+        return { ok: false, status: 409, code: 'USER_NOT_FOUND', message: MSGS.USER_NOT_FOUND };
+    }
+    const userTypeRaw = userTypeRows[0]?.USER_TYPE ?? userTypeRows[0]?.user_type;
+    const manageUserType = normalizeManageUserType(userTypeRaw);
 
     /* 모달 스냅샷과 TB_USER_CANCEL_MANAGE 현재값 일치 (FOR UPDATE) — 증가분은 prevDb 기준 +1 */
     const [manageRows] = await connection.execute(
@@ -84,19 +115,25 @@ async function executeDriverBidCancellation(connection, bucket, p) {
     const prevDbRaw = manageRow != null ? manageRow.cancelBusDriverCnt : 0;
     const prevDb =
         manageRow != null
-            ? Math.max(0, Math.min(2, Number.isFinite(Number(prevDbRaw)) ? Math.trunc(Number(prevDbRaw)) : 0))
+            ? Math.max(
+                  0,
+                  Math.min(
+                      MAX_DRIVER_BID_CANCEL_ACCUM,
+                      Number.isFinite(Number(prevDbRaw)) ? Math.trunc(Number(prevDbRaw)) : 0
+                  )
+              )
             : 0;
 
     if (snap !== prevDb) {
         return {ok: false, status: 409, code: 'CANCEL_SNAPSHOT_STALE', message: MSGS.SNAPSHOT_STALE};
     }
-    if (snap >= 2) {
+    if (snap >= MAX_DRIVER_BID_CANCEL_ACCUM) {
         return {ok: false, status: 409, code: 'MAX_DRIVER_BID_CANCELS', message: MSGS.MAX_CANCELS};
     }
 
     /** 실제 반영 값은 DB(prevDb) 기준 +1만 허용 — 스냅샷은 검증용이라 snap≠prevDb 이면 위에서 차단됨 */
     const nextCnt = prevDb + 1;
-    if (nextCnt > 2) {
+    if (nextCnt > MAX_DRIVER_BID_CANCEL_ACCUM) {
         return {ok: false, status: 409, code: 'MAX_DRIVER_BID_CANCELS', message: MSGS.MAX_CANCELS};
     }
 
@@ -128,20 +165,42 @@ async function executeDriverBidCancellation(connection, bucket, p) {
         return {ok: false, status: 409, code: 'NOT_BIDDING_OR_CONFIRM', message: MSGS.NOT_BIDDING_OR_CONFIRM};
     }
 
-    /* 3. TB_USER_CANCEL_MANAGE — 누적 + 거래제한 (항상 prevDb+1, 이중 누적·레이스 방지: WHERE 조건) */
-    const startRestrict = tomorrow000101();
-    const weekEnd = addDays(startRestrict, 7);
-    const twoWeekEnd = addDays(startRestrict, 14);
-    const restrictEnd = nextCnt >= 2 ? twoWeekEnd : weekEnd;
+    const [busUp] = await connection.execute(
+        `UPDATE TB_AUCTION_REQ_BUS
+            SET DATA_STAT = 'BUS_CANCEL',
+                MOD_DT = NOW(),
+                MOD_ID = ?
+          WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?`,
+        [modId, reqId, reqBusSeq]
+    );
+    if (busUp.affectedRows !== 1) {
+        return {ok: false, status: 409, code: 'AUCTION_REQ_BUS_MISMATCH', message: MSGS.AUCTION_REQ_BUS_MISMATCH};
+    }
+
+    const [reqUp] = await connection.execute(
+        `UPDATE TB_AUCTION_REQ
+            SET DATA_STAT = 'AUCTION',
+                MOD_DT = NOW(),
+                MOD_ID = ?
+          WHERE REQ_ID = ?`,
+        [modId, reqId]
+    );
+    if (reqUp.affectedRows !== 1) {
+        return {ok: false, status: 409, code: 'AUCTION_REQ_MISMATCH', message: MSGS.AUCTION_REQ_MISMATCH};
+    }
+
+    /* TB_USER_CANCEL_MANAGE — 누적 + 거래제한 (취소 등록일 당일 0:01:01 시작, 종료는 항상 +7일) */
+    const startRestrict = cancelRegistrationDay000101();
+    const restrictEnd = addDays(startRestrict, 7);
 
     if (!manageRow) {
         const [ins] = await connection.execute(
             `INSERT INTO TB_USER_CANCEL_MANAGE (
-                CUST_ID, CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, CANCEL_TRAVELER_ALL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT,
+                CUST_ID, USER_TYPE, CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, CANCEL_TRAVELER_ALL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT,
                 TRADE_RESTRICT_YN, TRADE_RESTRICT_START_DT, TRADE_RESTRICT_END_DT,
                 REG_DT, REG_ID, MOD_DT, MOD_ID
-            ) VALUES (?, 0, ?, 0, 0, 'Y', ?, ?, NOW(), ?, NOW(), ?)`,
-            [driverCustId, nextCnt, startRestrict, restrictEnd, modId, modId]
+            ) VALUES (?, ?, 0, ?, 0, 0, 'Y', ?, ?, NOW(), ?, NOW(), ?)`,
+            [driverCustId, manageUserType, nextCnt, startRestrict, restrictEnd, modId, modId]
         );
         if (ins.affectedRows !== 1) {
             return {ok: false, status: 409, code: 'CANCEL_SNAPSHOT_STALE', message: MSGS.SNAPSHOT_STALE};
@@ -149,7 +208,8 @@ async function executeDriverBidCancellation(connection, bucket, p) {
     } else {
         const [upd] = await connection.execute(
             `UPDATE TB_USER_CANCEL_MANAGE
-                SET CANCEL_BUS_DRIVER_CNT = COALESCE(CANCEL_BUS_DRIVER_CNT, 0) + 1,
+                SET USER_TYPE = ?,
+                    CANCEL_BUS_DRIVER_CNT = COALESCE(CANCEL_BUS_DRIVER_CNT, 0) + 1,
                     TRADE_RESTRICT_YN = 'Y',
                     TRADE_RESTRICT_START_DT = ?,
                     TRADE_RESTRICT_END_DT = ?,
@@ -157,7 +217,7 @@ async function executeDriverBidCancellation(connection, bucket, p) {
                     MOD_ID = ?
               WHERE CUST_ID = ?
                 AND COALESCE(CANCEL_BUS_DRIVER_CNT, 0) = ?`,
-            [startRestrict, restrictEnd, modId, driverCustId, prevDb]
+            [manageUserType, startRestrict, restrictEnd, modId, driverCustId, prevDb]
         );
         if (upd.affectedRows !== 1) {
             return {ok: false, status: 409, code: 'CANCEL_SNAPSHOT_STALE', message: MSGS.SNAPSHOT_STALE};
@@ -173,16 +233,20 @@ async function executeDriverBidCancellation(connection, bucket, p) {
         const gcsPath = `${DRIVER_CANCEL_FILE_CATEGORY}/${driverCustId}/${fileId}`;
         const objKey = `${gcsPath}/${fileId}`;
         const hint = f.originalname || 'file';
-        const leaf = hint.replace(/\\/g, '/').split('/').pop() || 'file';
-        const dot = leaf.lastIndexOf('.');
-        let orgBase = leaf;
-        let ext = 'bin';
-        if (dot > 0) {
-            orgBase = leaf.slice(0, dot);
-            ext = leaf.slice(dot + 1).toLowerCase() || 'bin';
-        }
-        ext = String(ext).replace(/[^\w]/g, '').slice(0, 5) || 'bin';
-        const orgNm = orgBase.replace(/[^a-zA-Z0-9._-가-힣]/g, '_').replace(/\.+$/, '') || 'file';
+        const mime = f.mimetype || 'application/octet-stream';
+        let extFromMime = '';
+        if (mime.includes('pdf')) extFromMime = 'pdf';
+        else if (mime.includes('jpeg') || mime.includes('jpg')) extFromMime = 'jpeg';
+        else if (mime.includes('png')) extFromMime = 'png';
+        else if (mime.includes('webp')) extFromMime = 'webp';
+        else if (mime.includes('gif')) extFromMime = 'gif';
+
+        const { orgFileNm, fileExt } = orgFileNmAndExt(hint, {
+            buffer: f.buffer,
+            ext: extFromMime,
+            mime,
+            orgName: hint,
+        });
 
         const gcsFile = bucket.file(objKey);
         await gcsFile.save(f.buffer, {
@@ -199,8 +263,8 @@ async function executeDriverBidCancellation(connection, bucket, p) {
                 DRIVER_CANCEL_FILE_CATEGORY,
                 gcsBucketNm,
                 gcsPath,
-                orgNm,
-                ext,
+                orgFileNm,
+                fileExt,
                 f.buffer.length,
                 modId,
                 modId,
@@ -258,4 +322,5 @@ module.exports = {
     DRIVER_CANCEL_FILE_CATEGORY,
     GCS_BUCKET_FIXED,
     MSGS,
+    MAX_DRIVER_BID_CANCEL_ACCUM,
 };
