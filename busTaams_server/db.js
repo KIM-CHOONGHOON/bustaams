@@ -6,9 +6,7 @@ const parsedPort = parseInt(rawPort, 10);
 const dbPort = Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 3306;
 const dbHost = (process.env.DB_HOST || '127.0.0.1').split('#')[0].trim();
 
-const pool = mysql.createPool({
-    host: dbHost,
-    port: dbPort,
+const poolConfig = {
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'bustaams',
@@ -16,7 +14,18 @@ const pool = mysql.createPool({
     connectionLimit: 10,
     queueLimit: 0,
     timezone: '+09:00'
-});
+};
+
+if (dbHost.startsWith('/cloudsql/')) {
+    // 구글 클라우드 SQL 유닉스 소켓 연결 방식
+    poolConfig.socketPath = dbHost;
+} else {
+    // 로컬 및 일반 IP 연결 방식
+    poolConfig.host = dbHost;
+    poolConfig.port = dbPort;
+}
+
+const pool = mysql.createPool(poolConfig);
 
 if (process.env.DB_LOG_CONN !== '0') {
     const dbName = process.env.DB_NAME || 'bustaams';
