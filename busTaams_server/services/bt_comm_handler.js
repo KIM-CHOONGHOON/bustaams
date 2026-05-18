@@ -1,6 +1,6 @@
 const https = require('https');
 const querystring = require('querystring');
-const pool = require('../db');
+const { pool } = require('../db');
 
 /**
  * BusTaams 통신 처리 서비스

@@ -2,7 +2,7 @@ require('./loadEnv');
 const express = require('express');
 console.log('📦 server.js 로딩 중...');
 const cors = require('cors');
-const pool = require('./db');
+const { pool } = require('./db');
 const path = require('path');
 const admin = require('firebase-admin');
 const { Storage } = require('@google-cloud/storage');
@@ -133,11 +133,28 @@ const bucket = storage.bucket(bucketName);
 const smsVerifiedPhoneStore = new Map();
 const SMS_VERIFIED_TTL_MS = 15 * 60 * 1000;
 
+// 📱 App 전용 라우터 설정 (Rewrite 미들웨어 전단계에서 낚아채어 앱용 JWT 인증 및 서비스를 먼저 처리)
+const appAuthRouter = require('./routes/appAuth');
+const appCustomerRouter = require('./routes/appCustomer');
+const appDriverRouter = require('./routes/appDriver');
+
+app.use('/api/app/auth', appAuthRouter);
+app.use('/app/auth', appAuthRouter);
+
+app.use('/api/app/customer', appCustomerRouter);
+app.use('/app/customer', appCustomerRouter);
+
+app.use('/api/app/driver', appDriverRouter);
+app.use('/app/driver', appDriverRouter);
+
 // 🔄 클라이언트 호환성을 위해 /app/... 요청을 내부적으로 /api/... 로 투명하게 Rewrite해 주는 미들웨어 추가!
 app.use((req, res, next) => {
+    const originalUrl = req.url;
     if (req.url.startsWith('/app/')) {
-        const originalUrl = req.url;
         req.url = req.url.replace(/^\/app\//, '/api/');
+        console.log(`🔄 [API Rewrite] ${originalUrl} -> ${req.url}`);
+    } else if (req.url.startsWith('/api/app/')) {
+        req.url = req.url.replace(/^\/api\/app\//, '/api/');
         console.log(`🔄 [API Rewrite] ${originalUrl} -> ${req.url}`);
     }
     next();
@@ -152,6 +169,14 @@ app.use('/api/users', authRouter); // 기존 /api/users/login 호환용
 const auctionTripRouter = createAuctionTripRouter(pool, admin, bucket, bucketName);
 app.use('/api/auction', auctionTripRouter);
 app.use('/api/traveler-quote-request-details', auctionTripRouter);
+
+// 5. 알림(Notification) 및 기사용(App Driver) 라우터 설정 (누락분 마운트)
+const createNotificationRouter = require('./routes/notification');
+const notificationRouter = createNotificationRouter(pool, app);
+app.use('/api/notifications', notificationRouter); // Rewrite된 경로 대응
+
+// appDriverRouter는 위에서 마운트되었으므로 기존 호환성을 위해 레퍼런스 유지
+app.use('/api/driver', appDriverRouter); // Rewrite된 경로 대응
 /**
  * 회원가입(`POST /api/auth/register`)·기사정보(`POST /api/driver/profile-setup`) 공통.
  * Admin 미설정: 검증 생략(로컬 개발). 설정됨: Firebase `idToken` 또는 SMS 서버 인증 완료 번호.
