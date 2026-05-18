@@ -133,6 +133,16 @@ const bucket = storage.bucket(bucketName);
 const smsVerifiedPhoneStore = new Map();
 const SMS_VERIFIED_TTL_MS = 15 * 60 * 1000;
 
+// 🔄 클라이언트 호환성을 위해 /app/... 요청을 내부적으로 /api/... 로 투명하게 Rewrite해 주는 미들웨어 추가!
+app.use((req, res, next) => {
+    if (req.url.startsWith('/app/')) {
+        const originalUrl = req.url;
+        req.url = req.url.replace(/^\/app\//, '/api/');
+        console.log(`🔄 [API Rewrite] ${originalUrl} -> ${req.url}`);
+    }
+    next();
+});
+
 // 3. Auth Router 설정
 const authRouter = createAuthRouter(pool, admin, smsVerifiedPhoneStore, bucket, bucketName);
 app.use('/api/auth', authRouter);

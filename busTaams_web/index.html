@@ -11,6 +11,18 @@
           return val;
         };
       })();
+
+      // 이전 개발 테스트 포트 충돌로 인한 서비스 워커 강제 초기화 코드
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for (var registration of registrations) {
+            registration.unregister();
+            console.log('[Antigravity Clean] 이전 프로젝트 서비스 워커 해제 성공:', registration);
+          }
+        });
+      }
+
+
     </script>
     <script id="inistdpay_js" type="text/javascript" src="https://stdpay.inicis.com/stdjs/INIStdPay.js" charset="UTF-8"></script>
     <meta charset="UTF-8" />
@@ -25,7 +37,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
     <!-- Kakao Postcode & Maps SDK (with Services for Geocoder) -->
     <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
-    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=78198f828a1cc26c9df6891eb2909f19&libraries=services"></script>
   </head>
   <body class="bg-surface text-gray-900 overflow-x-hidden font-body">
     <div id="root"></div>

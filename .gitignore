@@ -23,6 +23,8 @@
 busTaams_web/dist/
 busTaams_web/dist-ssr/
 busTaams_admin/dist/
+busTaams_app/dist/
+busTaams_app/.firebase/
 
 # ── 에디터 / OS 임시 파일 ───────────────────────────────────
 .DS_Store
@@ -40,6 +42,13 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+
+# ── 업로드된 파일 (사용자 데이터) ────────────────────────────
+**/uploads/
+
+# ── 데이터베이스 파일 ────────────────────────────────────────
+*.db
+*.sqlite
 
 # ── Visual Studio / Windows 잡파일 (구 busTaams_web/.gitignore 통합) ──
 *.suo
