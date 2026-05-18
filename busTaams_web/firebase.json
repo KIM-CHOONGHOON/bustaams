@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "site": "project-d481af23-2c56-483d-956",
+    "site": "project-d481af23-2c56-483d-956-web",
     "public": "dist",
     "ignore": [
       "firebase.json",
