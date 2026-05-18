@@ -1,31 +1,28 @@
-/**
- * busTaams API Server
- * 2026-05-06 Merged: Clean Modular Routing + Live Chat & New Business Features
- */
 require('./loadEnv');
 const express = require('express');
-const fs = require('fs');
+console.log('📦 server.js 로딩 중...');
 const cors = require('cors');
+const pool = require('./db');
 const path = require('path');
 const admin = require('firebase-admin');
-const { pool, getNextId } = require('./db');
 const { Storage } = require('@google-cloud/storage');
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt');
 const { encrypt, decrypt } = require('./crypto');
 
 /**
  * 가변 길이 0-패딩 숫자 ID 생성기
+ * @param {number|string} currentMax 순자값 또는 문자열
+ * @param {number} length 패딩 길이 (기본 10)
+ * @returns {string} 패딩된 다음 ID
  */
 function generateNextNumericId(currentMax, length = 10) {
     const nextVal = (parseInt(currentMax || 0, 10)) + 1;
     return String(nextVal).padStart(length, '0');
 }
-
 const {
     runDriverVerificationsForProfileSetup,
     isQualCertUnchanged,
 } = require('./driverVerification');
-
 const { canonicalFileMasterFileId, fileIdMatchCandidates, custIdMatchCandidates } = require('./lib/bustaamsIds');
 const { parseDataUrlPayload, orgFileNmAndExt, joinOrgFileDisplayName } = require('./lib/bt_common_utils');
 const {
@@ -35,7 +32,7 @@ const {
     isCanonicalDriverFeePolicyDtlCd,
     sqlFeePolicyCntJoinOnP,
 } = require('./lib/feePolicyDtl');
-
+const fs = require('fs');
 const createCommonLiveChatRouter = require('./routes/commonLiveChat');
 const createLiveChatTravelerRouter = require('./routes/liveChatTraveler');
 const createUserDeviceTokenRouter = require('./routes/userDeviceToken');
@@ -57,127 +54,122 @@ const { buildBillingSubscriptionPayload } = require('./lib/billingSubscriptionPa
 const { applyMomMemberAfterBid } = require('./lib/driverBidMomMember');
 
 const app = express();
-app.set('trust proxy', true);
-
-const PORT = process.env.PORT || 8080;
-const JWT_SECRET_KEY = process.env.JWT_SECRET || 'bustaams-dev-secret-key-2026';
-
-// --- 1. 환경 설정 및 초기화 ---
 
 // Global Request Logger
 app.use((req, res, next) => {
+    console.log(`[REQ] ${req.method} ${req.url}`);
+    next();
+});
+
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+require('./routes/busDriverCreditCardRegistrationRoute')(app, pool);
+/** 기사님 응찰 목록 — `app.get('/api/DriversListOfBids', DriversListOfBids)` (multer 등보다 먼저 등록) */
+require('./routes/driversListOfBids')(app, pool);
+require('./routes/cancellationOfBid')(app, pool);
+app.use('/api/CommonLiveChat', createCommonLiveChatRouter(pool));
+app.use('/api/live-chat-traveler', createLiveChatTravelerRouter(pool));
+app.use('/api/user/device-token', createUserDeviceTokenRouter(pool));
+
+const PORT = process.env.PORT || 8080;
+
+// [DEBUG] 서버 생존 확인용 테스트 라우트
+app.get('/api/debug-test', (req, res) => {
+    console.log('📢 [DEBUG] 서버가 살아있습니다! 요청 수신 성공!');
+    res.json({ message: 'Server is ALIVE!', port: PORT, time: new Date().toLocaleString() });
+});
+
+// Global request logger - Enhanced for better visibility
+app.use((req, res, next) => {
     const start = Date.now();
     const { method, url, body, query } = req;
+    
+    // 요청 시점 로그
     console.log(`\n🚀 [REQ] ${method} ${url}`);
     if (query && Object.keys(query).length) console.log(`   🔍 Query:`, JSON.stringify(query));
     if (body && Object.keys(body).length) {
         const safeBody = { ...body };
-        if (safeBody.password) safeBody.password = '********';
+        if (safeBody.password) safeBody.password = '********'; // 비밀번호는 마스킹
         console.log(`   📦 Body:`, JSON.stringify(safeBody));
     }
+
+    // 응답 완료 시점 로그
+    res.on('finish', () => {
+        const duration = Date.now() - start;
+        const statusColor = res.statusCode >= 400 ? '❌' : '✅';
+        console.log(`${statusColor} [RES] ${method} ${url} - ${res.statusCode} (${duration}ms)`);
+    });
+    
     next();
 });
 
-app.use(cors({ origin: '*', credentials: true }));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-// Firebase Admin SDK 초기화
+// 1. Firebase Admin SDK Initialization
 if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH && fs.existsSync(path.resolve(__dirname, process.env.FIREBASE_SERVICE_ACCOUNT_PATH))) {
     try {
         const serviceAccount = require(path.resolve(__dirname, process.env.FIREBASE_SERVICE_ACCOUNT_PATH));
-        if (!admin.apps.length) {
-            admin.initializeApp({
-                credential: admin.credential.cert(serviceAccount)
-            });
-        }
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount)
+        });
         console.log('✅ Firebase Admin SDK initialized successfully.');
     } catch (e) {
         console.error('❌ Failed to load Firebase Service Account Key:', e.message);
+        try { admin.initializeApp(); } catch(err) {} 
     }
 } else {
-    console.warn('⚠️ FIREBASE_SERVICE_ACCOUNT_PATH is not set or file does not exist.');
+    console.warn('⚠️ FIREBASE_SERVICE_ACCOUNT_PATH is not set or file does not exist in .env. Real SMS verification will be bypassed in development mode.');
+    // To prevent total crashes, try initialize with default credentials
+    try { admin.initializeApp(); } catch(e) {}
 }
 
-// Google Cloud Storage 설정
+// 2. Google Cloud Storage Initialization
+// Uses GOOGLE_APPLICATION_CREDENTIALS from environment variables automatically if present
 const storage = new Storage(); 
 const bucketName = process.env.GCS_BUCKET_NAME || 'bustaams-secure-data';
 const bucket = storage.bucket(bucketName);
-
-// 업로드 디렉토리 설정
-const profileUploadDir = path.join(__dirname, 'uploads', 'profiles');
-try {
-    if (!fs.existsSync(profileUploadDir)){
-        fs.mkdirSync(profileUploadDir, { recursive: true });
-    }
-} catch (e) {
-    console.warn('⚠️ Could not create profile upload directory, falling back to temp.');
-}
-
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use(express.static(path.join(__dirname, 'public')));
 
 /** `verify-sms` 성공 번호 보관 (회원가입/프로필설정 공유) */
 const smsVerifiedPhoneStore = new Map();
 const SMS_VERIFIED_TTL_MS = 15 * 60 * 1000;
 
-// --- 2. 라우터 등록 ---
-console.log('>>> Registering routers...');
-
-// Helper for safe registration
-function safeUse(path, modulePath) {
-    try {
-        app.use(path, require(modulePath));
-    } catch (err) {
-        console.error(`❌ Failed to register ${path}:`, err.message);
-    }
-}
-
-// [V2/App Focus]
-safeUse('/api/app/auth', './routes/appAuth');
-safeUse('/api/app/customer', './routes/appCustomer');
-safeUse('/api/app/auction', './routes/appAuction');
-safeUse('/api/app/driver', './routes/appDriver');
-safeUse('/api/app/chat', './routes/appChat');
-
-// [V1/Shared]
-safeUse('/api/customer', './routes/customer');
-safeUse('/api/bid', './routes/bid');
-safeUse('/api/common', './routes/common');
-
-// Auth Router 설정
+// 3. Auth Router 설정
 const authRouter = createAuthRouter(pool, admin, smsVerifiedPhoneStore, bucket, bucketName);
 app.use('/api/auth', authRouter);
-app.use('/api/users', authRouter); // 기존 호환용
+app.use('/api/users', authRouter); // 기존 /api/users/login 호환용
 
-// Auction/Trip Router 설정
+// 4. Auction/Trip Router 설정
 const auctionTripRouter = createAuctionTripRouter(pool, admin, bucket, bucketName);
 app.use('/api/auction', auctionTripRouter);
 app.use('/api/traveler-quote-request-details', auctionTripRouter);
-
-// [New Features - Function Export Style]
-try {
-    require('./routes/liveChatBusDriver')(pool, app);
-    require('./routes/liveChatTraveler')(pool, app);
-    require('./routes/userDeviceToken')(pool, app);
-    require('./routes/travelerMyQuotationList')(pool, app);
-    require('./routes/driverQuotationOpportunitiesList')(pool, app);
-    require('./routes/busOperationCompletionList')(pool, app);
-    require('./routes/busOperationCompletionDetails')(pool, app);
-    require('./routes/auctionList')(pool, app);
-    require('./routes/payment')(pool, app);
-    require('./routes/notification')(pool, app);
-    console.log('✅ Function routers registered.');
-} catch (err) {
-    console.error('❌ Function Router Error:', err.message);
+/**
+ * 회원가입(`POST /api/auth/register`)·기사정보(`POST /api/driver/profile-setup`) 공통.
+ * Admin 미설정: 검증 생략(로컬 개발). 설정됨: Firebase `idToken` 또는 SMS 서버 인증 완료 번호.
+ */
+async function verifyFirebasePhoneIdTokenIfRequired(idToken, options = {}) {
+    if (!firebaseAdminConfigured()) {
+        return { ok: true };
+    }
+    const { smsVerifiedPhone } = options;
+    if (idToken && typeof idToken === 'string') {
+        try {
+            await admin.auth().verifyIdToken(idToken);
+            return { ok: true };
+        } catch (e) {
+            console.error('Firebase ID token verification failed:', e.message);
+            return { ok: false, error: '휴대전화 인증이 유효하지 않습니다. 다시 인증해 주세요.' };
+        }
+    }
+    if (smsVerifiedPhone && smsVerifiedPhoneStore.has(smsVerifiedPhone)) {
+        const entry = smsVerifiedPhoneStore.get(smsVerifiedPhone);
+        if (entry && Date.now() <= entry.expiresAt) {
+            return { ok: true };
+        }
+        smsVerifiedPhoneStore.delete(smsVerifiedPhone);
+    }
+    return { ok: false, error: '휴대전화 인증을 완료해 주세요.' };
 }
 
-// [DEBUG] 서버 생존 확인용 테스트 라우트
-app.get('/api/debug-test', (req, res) => {
-    res.json({ message: 'Server is ALIVE!', port: PORT, time: new Date().toLocaleString() });
-});
-
-app.get('/api/health', (req, res) => res.json({ status: 'ok', serverTime: new Date() }));
 
 
 
@@ -4994,3 +4986,4 @@ app.listen(PORT, () => {
         if (connection) connection.release();
     }
 })();
+

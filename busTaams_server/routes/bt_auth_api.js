@@ -1,5 +1,5 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt');
 console.log('\n---------------------------------------------------------');
 console.log('✅ [LOADED] bt_auth_api.js (WITHDRAW PW CHECK ENABLED)');
 console.log('---------------------------------------------------------\n');

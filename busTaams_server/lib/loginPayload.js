@@ -7,8 +7,6 @@ const DEFAULT_CANCEL = {
     cancelTravelerAllCnt: 0,
     cancelTravelerPartialBusCnt: 0,
     tradeRestrictYn: 'N',
-    restrictStat: 'N',
-    restrictEndDt: null,
 };
 
 /**
@@ -47,8 +45,8 @@ function mapCancelRow(row) {
             ? Number(row.CANCEL_TRAVELER_PARTIAL_BUS_CNT) : 0,
         tradeRestrictYn: isRestricted ? 'Y' : 'N', // 최종 판정
         dbTradeRestrictYn: row.TRADE_RESTRICT_YN || 'N', // DB 원본 값
-        tradeRestrictStartDt: row.TRADE_RESTRICT_START_DT || null,
-        tradeRestrictEndDt: row.TRADE_RESTRICT_END_DT || null,
+        tradeRestrictStartDt: row.TRADE_RESTRICT_START_DT,
+        tradeRestrictEndDt: row.TRADE_RESTRICT_END_DT,
     };
 }
 
@@ -118,6 +116,7 @@ async function fetchSubscriptionForDriver(pool, custId) {
 
 /**
  * 로그인 응답 `user` DTO — JSON 키는 `BusTaams 테이블.md` `TB_USER` 컬럼 id를 camelCase(`CUST_ID`→`custId`)로 맞춤.
+ * (중복 필드 `userName`/`phoneNo`/`tbUserId`는 사용하지 않음; 클라이언트 `normalizeUserSession`이 구 세션·호환용으로 정리.)
  * @param {object} params
  * @param {object} params.user — TB_USER 행
  * @param {object|null} params.cancelRow — TB_USER_CANCEL_MANAGE 또는 null(기본 0)
@@ -156,9 +155,7 @@ function buildPostLoginUserDto({ user, cancelRow, subscriptionRow }, opts = {}) 
         email: user.email || user.EMAIL || '',
         snsType: user.SNS_TYPE || 'NONE',
         profileFileId: canonicalFileMasterFileId(user.PROFILE_FILE_ID),
-        profileImgPath: user.PROFILE_IMG_PATH || (user.USER_IMAGE && !user.USER_IMAGE.startsWith('http') && !user.USER_IMAGE.startsWith('/')) 
-            ? `/api/common/display-image?path=${encodeURIComponent(user.USER_IMAGE)}` 
-            : (user.PROFILE_IMG_PATH || user.USER_IMAGE || null),
+        profileImgPath: user.PROFILE_IMG_PATH || null,
         smsAuthYn: user.SMS_AUTH_YN || 'N',
         userStat: user.USER_STAT || 'ACTIVE',
         joinDt: user.JOIN_DT || null,
