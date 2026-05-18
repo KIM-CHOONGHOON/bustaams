@@ -63,7 +63,7 @@ const SignupPage = ({ onBack }) => {
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
   const validatePassword = (v) =>
-    /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/.test(v);
+    /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[\W_]).{8,}$/.test(v);
 
   const validateResidentNo = (rrn) => {
     const cleaned = rrn.replace(/-/g, '');

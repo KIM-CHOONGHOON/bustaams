@@ -862,20 +862,6 @@ app.post('/api/driver/profile', async (req, res) => {
                 return res.status(400).json({ error: 'TB_USER 에서 기사를 찾을 수 없습니다.' });
             }
 
-            const legCands = custIdMatchCandidates(String(userId).trim());
-            const legPh = legCands.map(() => '?').join(', ');
-            const [uLeg] = await connection.execute(
-                `SELECT CUST_ID FROM TB_USER WHERE TRIM(CUST_ID) IN (${legPh}) LIMIT 1`,
-                legCands
-            );
-            const u0 = uLeg[0];
-            const ddValLeg = String(u0?.CUST_ID ?? '').trim();
-            if (!ddValLeg) {
-                await connection.rollback();
-                connection.release();
-                return res.status(400).json({ error: 'TB_USER 에서 기사를 찾을 수 없습니다.' });
-            }
-
             const query = `
                 INSERT INTO TB_DRIVER_DETAIL (
                     CUST_ID, LICENSE_NO, CERT_PHOTO_URL, ACCIDENT_FREE_DOC,
