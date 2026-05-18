@@ -4183,10 +4183,11 @@ app.put('/api/traveler-quote-request-details/bid', async (req, res) => {
                     RES_ID, REQ_ID, REQ_BUS_SEQ, TRAVELER_ID, DRIVER_ID, BUS_ID,
                     DRIVER_BIDDING_PRICE, RES_FEE_TOTAL_AMT, RES_FEE_REFUND_AMT, RES_FEE_ATTRIBUTION_AMT,
                     DATA_STAT, REG_DT, REG_ID, MOD_DT, MOD_ID
-                 ) VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, ?, 'BIDDING', NOW(), ?, NOW(), ?)`,
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'BIDDING', NOW(), ?, NOW(), ?)`,
                 [
                     newResId,
                     reqId,
+                    busSeqNum,
                     auction.travelerId,
                     custId,
                     busIdFromSpec,
