@@ -165,6 +165,16 @@ router.post('/register', async (req, res) => {
         // userType 대문자 정규화 (DRIVER, TRAVELER 등)
         const finalUserType = (userType || 'TRAVELER').toUpperCase();
 
+        // [추가] 유저 타입을 데이터베이스 저장용 그룹 타입으로 매핑 (한글 주석)
+        let mappedUserType = 'TRAVELER';
+        if (finalUserType === 'CONSUMER' || finalUserType === 'TRAVELER' || finalUserType === 'CUSTOMER') {
+            mappedUserType = 'TRAVELER';
+        } else if (finalUserType === 'SALES' || finalUserType === 'SALESPERSON' || finalUserType === 'PARTNER') {
+            mappedUserType = 'PARTNER';
+        } else if (finalUserType === 'DRIVER') {
+            mappedUserType = 'DRIVER';
+        }
+
         // [추가] 기사 주민번호 유효성 및 중복 체크 (DRIVER 타입인 경우)
         if (finalUserType === 'DRIVER') {
             if (!residentNo) {
@@ -207,11 +217,12 @@ router.post('/register', async (req, res) => {
             }
         }
 
-        // [추가] 추천인 코드 검증 (입력된 경우 PARTNER 타입의 USER_ID인지 확인)
-        if (recomCode) {
+        // [추가] 추천인 코드 검증 (입력된 경우 존재하는 유효한 유저 ID인지 확인 - 타입 제한 제거 및 예외 처리 강화)
+        const cleanRecomCode = recomCode ? String(recomCode).trim() : '';
+        if (cleanRecomCode && cleanRecomCode !== 'null' && cleanRecomCode !== 'undefined') {
             const [partnerRows] = await connection.execute(
-                'SELECT 1 FROM TB_USER WHERE USER_TYPE = "PARTNER" AND USER_ID = ?',
-                [recomCode]
+                'SELECT 1 FROM TB_USER WHERE USER_ID = ?',
+                [cleanRecomCode]
             );
             if (partnerRows.length === 0) {
                 await connection.rollback();
@@ -219,14 +230,31 @@ router.post('/register', async (req, res) => {
             }
         }
 
-        // 아이디 및 연락처 중복 체크
-        const [existing] = await connection.execute(
-            'SELECT 1 FROM TB_USER WHERE USER_ID = ? OR HP_NO = ?', 
-            [userId, phoneNo]
+        // [수정] 아이디 및 유저 타입별 휴대폰 번호 분리 중복 체크
+        const [existingId] = await connection.execute(
+            'SELECT 1 FROM TB_USER WHERE USER_ID = ?',
+            [userId]
         );
-        if (existing.length > 0) {
+        if (existingId.length > 0) {
             await connection.rollback();
-            return res.status(400).json({ error: '이미 존재하는 아이디 혹은 휴대폰 번호입니다.' });
+            return res.status(400).json({ error: '이미 존재하는 아이디입니다.' });
+        }
+
+        // 해당 유저 타입(mappedUserType) 내에서 휴대폰 번호 스캔 및 복호화 비교
+        const [allPhones] = await connection.execute(
+            'SELECT HP_NO FROM TB_USER WHERE USER_TYPE = ?',
+            [mappedUserType]
+        );
+        const isPhoneDuplicate = allPhones.some((row) => {
+            try {
+                return decrypt(row.HP_NO) === phoneNo;
+            } catch (e) {
+                return false;
+            }
+        });
+        if (isPhoneDuplicate) {
+            await connection.rollback();
+            return res.status(400).json({ error: '이미 해당 역할(유저 타입)로 등록된 휴대폰 번호입니다.' });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -594,18 +622,33 @@ router.post('/send-code', async (req, res) => {
         phoneNo = phoneNo.replace(/[^0-9]/g, '');
         const verificationType = type || 'signup';
 
-        // 기가입 여부 확인 로직 분기 (유형별 중복 체크)
+        // [수정] 기가입 여부 확인 로직 분기 (유형별 복호화 중복 체크)
         if (verificationType === 'signup') {
-            const [existing] = await pool.execute(
-                'SELECT 1 FROM TB_USER WHERE HP_NO = ? AND USER_TYPE = ?', 
-                [phoneNo, userType || 'TRAVELER']
+            const targetUserType = userType || 'TRAVELER';
+            const [existingUsers] = await pool.execute(
+                'SELECT HP_NO FROM TB_USER WHERE USER_TYPE = ?', 
+                [targetUserType]
             );
-            if (existing.length > 0) {
+            const isDuplicate = existingUsers.some(row => {
+                try {
+                    return decrypt(row.HP_NO) === phoneNo;
+                } catch (e) {
+                    return false;
+                }
+            });
+            if (isDuplicate) {
                 return res.status(400).json({ success: false, error: '해당 유형으로 이미 가입된 휴대폰 번호입니다.' });
             }
         } else if (verificationType === 'find-account') {
-            const [existing] = await pool.execute('SELECT 1 FROM TB_USER WHERE HP_NO = ?', [phoneNo]);
-            if (existing.length === 0) {
+            const [allUsers] = await pool.execute('SELECT HP_NO FROM TB_USER');
+            const isExist = allUsers.some(row => {
+                try {
+                    return decrypt(row.HP_NO) === phoneNo;
+                } catch (e) {
+                    return false;
+                }
+            });
+            if (!isExist) {
                 return res.status(400).json({ success: false, error: '가입되지 않은 휴대폰 번호입니다.' });
             }
         }

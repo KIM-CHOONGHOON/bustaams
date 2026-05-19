@@ -54,16 +54,32 @@ function createAuthRouter(pool, admin, smsVerifiedPhoneStore, bucket, bucketName
         }
     });
 
-    // [GET] 전화번호 중복 체크
+    // [GET] 전화번호 중복 체크 (유저 타입별 중복 허용 및 레거시 복호화 대응)
     router.get('/check-phone', async (req, res) => {
         let connection;
         try {
-            const { phoneNo } = req.query;
+            const { phoneNo, userType } = req.query;
             if (!phoneNo) return res.status(400).json({ error: 'phoneNo가 필요합니다.' });
             connection = await pool.getConnection();
             
-            // 보안상 전체 스캔 후 복호화 비교 (기존 로직 유지)
-            const [rows] = await connection.execute('SELECT HP_NO FROM TB_USER');
+            // 유저 타입 정규화 및 매핑
+            let targetUserType = null;
+            if (userType) {
+                const ut = String(userType).toUpperCase().trim();
+                if (ut === 'CONSUMER' || ut === 'TRAVELER' || ut === 'CUSTOMER') targetUserType = 'TRAVELER';
+                else if (ut === 'DRIVER') targetUserType = 'DRIVER';
+                else if (ut === 'SALES' || ut === 'SALESPERSON' || ut === 'PARTNER') targetUserType = 'PARTNER';
+            }
+
+            let rows;
+            if (targetUserType) {
+                // 지정된 유저 타입 그룹 내에서만 휴대폰 번호 조회
+                [rows] = await connection.execute('SELECT HP_NO FROM TB_USER WHERE USER_TYPE = ?', [targetUserType]);
+            } else {
+                // 하위 호환성을 위해 유저 타입이 지정되지 않은 경우 전체 사용자 조회
+                [rows] = await connection.execute('SELECT HP_NO FROM TB_USER');
+            }
+
             const isDuplicate = rows.some((row) => {
                 try {
                     return decrypt(row.HP_NO) === phoneNo;

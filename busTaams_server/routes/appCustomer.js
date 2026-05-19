@@ -354,9 +354,8 @@ router.post('/profile/upload-image', authenticateToken, memoryUpload.single('pro
             console.log('GCS makePublic failed:', e.message);
         }
 
-        // DB 저장 (사용자 요구사항에 따라 프로필 이미지는 상대 경로 'profiles/...'로 저장)
-        // signatures 등 다른 카테고리는 전체 URL을 저장할 수 있으나, 프로필은 상대 경로 유지
-        const dbSavePath = gcsPath;
+        // DB 저장 (전체 GCS URL로 저장하도록 수정: https://storage.googleapis.com/{bucketName}/{gcsPath})
+        const dbSavePath = `https://storage.googleapis.com/${bucketName}/${gcsPath}`;
 
         await pool.execute(
             `INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_ID, MOD_ID) 

@@ -487,10 +487,11 @@ function SignUpModal({ close }) {
     }
   };
 
-  // 전화번호 인증 완료 후 중복 검사
+  // 전화번호 인증 완료 후 중복 검사 (유저 타입별 중복 허용)
   const checkPhoneDuplicate = async (phoneNo) => {
     try {
-      const res = await fetch(`${API_BASE}/api/auth/check-phone?phoneNo=${encodeURIComponent(phoneNo)}`);
+      const userType = userRole === 'customer' ? 'CONSUMER' : 'DRIVER';
+      const res = await fetch(`${API_BASE}/api/auth/check-phone?phoneNo=${encodeURIComponent(phoneNo)}&userType=${userType}`);
       const data = await res.json();
       if (res.status === 409) {
         setPhoneError(data.message);
