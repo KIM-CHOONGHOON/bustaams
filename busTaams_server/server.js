@@ -36,6 +36,8 @@ const fs = require('fs');
 const createCommonLiveChatRouter = require('./routes/commonLiveChat');
 const createLiveChatTravelerRouter = require('./routes/liveChatTraveler');
 const createUserDeviceTokenRouter = require('./routes/userDeviceToken');
+// [공통] 이미지 및 코드 관련 처리를 위한 공통 라우터 임포트
+const commonRouter = require('./routes/common');
 const { 
     buildPostLoginUserDto, 
     fetchCancelManageForUser, 
@@ -72,6 +74,8 @@ require('./routes/cancellationOfBid')(app, pool);
 app.use('/api/CommonLiveChat', createCommonLiveChatRouter(pool));
 app.use('/api/live-chat-traveler', createLiveChatTravelerRouter(pool));
 app.use('/api/user/device-token', createUserDeviceTokenRouter(pool));
+// [공통] 이미지 표시 및 공통 코드 API 라우터 마운트
+app.use('/api/common', commonRouter);
 
 const PORT = process.env.PORT || 8080;
 
