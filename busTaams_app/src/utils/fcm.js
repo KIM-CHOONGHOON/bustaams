@@ -5,7 +5,7 @@ import { upsertDeviceToken, upsertDriverDeviceToken } from '../api';
 
 // VAPID Key (Firebase Console > Project Settings > Cloud Messaging > Web Push certificates에서 확인 가능)
 // TODO: 실제 VAPID Key로 교체해야 합니다.
-const VAPID_KEY = 'YOUR_VAPID_PUBLIC_KEY_HERE';
+const VAPID_KEY = 'BJMZ5eRl1n_L9vN8JPg1bFKeyDjlifCHuFGj07ogYFYJuH-7Jtn8WtVaaxB-WwaaZex4fLE8sOpE5ThCqpxVcLQ';
 
 export const requestFirebaseToken = async () => {
   // 알림 API가 지원되지 않는 브라우저 또는 환경에서의 예외 방어
