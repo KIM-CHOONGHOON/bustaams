@@ -82,7 +82,15 @@ const Login = ({ onLoginSuccess, onGoSignup }) => {
             )}
           </button>
 
-
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              onClick={onGoSignup}
+              className="text-sm font-bold text-primary hover:text-emerald-800 transition-colors"
+            >
+              신규 관리자 등록
+            </button>
+          </div>
         </form>
 
         <div className="mt-10 text-center">
