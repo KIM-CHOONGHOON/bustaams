@@ -1,0 +1,58 @@
+[
+  {
+    "Field": "TERMS_HIST_ID",
+    "Type": "bigint",
+    "Null": "NO",
+    "Key": "PRI",
+    "Default": null,
+    "Extra": "auto_increment"
+  },
+  {
+    "Field": "USER_UUID",
+    "Type": "binary(16)",
+    "Null": "NO",
+    "Key": "MUL",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "TERMS_TYPE",
+    "Type": "enum('SERVICE','PRIVACY','MARKETING','PARTNER_CONTRACT')",
+    "Null": "NO",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "TERMS_VER",
+    "Type": "varchar(10)",
+    "Null": "NO",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "AGREE_YN",
+    "Type": "enum('Y','N')",
+    "Null": "YES",
+    "Key": "",
+    "Default": "Y",
+    "Extra": ""
+  },
+  {
+    "Field": "SIGN_FILE_UUID",
+    "Type": "binary(16)",
+    "Null": "YES",
+    "Key": "MUL",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "AGREE_DT",
+    "Type": "datetime",
+    "Null": "YES",
+    "Key": "",
+    "Default": "CURRENT_TIMESTAMP",
+    "Extra": "DEFAULT_GENERATED"
+  }
+]
