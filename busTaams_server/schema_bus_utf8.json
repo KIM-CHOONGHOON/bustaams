@@ -1,0 +1,130 @@
+[
+  {
+    "Field": "BUS_UUID",
+    "Type": "binary(16)",
+    "Null": "NO",
+    "Key": "PRI",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "USER_UUID",
+    "Type": "binary(16)",
+    "Null": "NO",
+    "Key": "MUL",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "BUS_NO",
+    "Type": "varchar(20)",
+    "Null": "NO",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "BUS_MODEL",
+    "Type": "varchar(50)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "MANUFACTURE_YEAR",
+    "Type": "year",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "BUS_SIZE",
+    "Type": "enum('LARGE','MEDIUM','SMALL')",
+    "Null": "NO",
+    "Key": "",
+    "Default": "LARGE",
+    "Extra": ""
+  },
+  {
+    "Field": "BUS_GRADE",
+    "Type": "enum('GENERAL','DELUXE','PREMIUM','VIP_MINI')",
+    "Null": "NO",
+    "Key": "",
+    "Default": "GENERAL",
+    "Extra": ""
+  },
+  {
+    "Field": "TOTAL_SEATS",
+    "Type": "int",
+    "Null": "NO",
+    "Key": "",
+    "Default": "45",
+    "Extra": ""
+  },
+  {
+    "Field": "HAS_REFRIGERATOR",
+    "Type": "enum('Y','N')",
+    "Null": "YES",
+    "Key": "",
+    "Default": "N",
+    "Extra": ""
+  },
+  {
+    "Field": "HAS_WIFI",
+    "Type": "enum('Y','N')",
+    "Null": "YES",
+    "Key": "",
+    "Default": "N",
+    "Extra": ""
+  },
+  {
+    "Field": "HAS_USB_PORT",
+    "Type": "enum('Y','N')",
+    "Null": "YES",
+    "Key": "",
+    "Default": "N",
+    "Extra": ""
+  },
+  {
+    "Field": "HAS_MONITOR",
+    "Type": "enum('Y','N')",
+    "Null": "YES",
+    "Key": "",
+    "Default": "N",
+    "Extra": ""
+  },
+  {
+    "Field": "REG_DT",
+    "Type": "datetime",
+    "Null": "YES",
+    "Key": "",
+    "Default": "CURRENT_TIMESTAMP",
+    "Extra": "DEFAULT_GENERATED"
+  },
+  {
+    "Field": "REG_ID",
+    "Type": "varchar(30)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "MOD_DT",
+    "Type": "datetime",
+    "Null": "YES",
+    "Key": "",
+    "Default": "CURRENT_TIMESTAMP",
+    "Extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"
+  },
+  {
+    "Field": "MOD_ID",
+    "Type": "varchar(30)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  }
+]
