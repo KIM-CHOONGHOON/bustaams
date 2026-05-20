@@ -174,7 +174,7 @@ const RequestBus = () => {
 
     // 동적으로 카카오맵 SDK 로드 (한글 주석)
     useEffect(() => {
-        const kakaoApiKey = import.meta.env.VITE_KAKAO_API_KEY;
+        const kakaoApiKey = import.meta.env.VITE_KAKAO_API_KEY || 'fdbe7b320906be89ddd194a26a1c6487';
         if (!kakaoApiKey) {
             console.warn('VITE_KAKAO_API_KEY가 설정되지 않았습니다. 장소 검색 시 로컬 Mock 데이터로 검색합니다.');
             setKakaoError(true);
