@@ -1474,6 +1474,11 @@ router.post('/upsert-device-token', authenticateToken, async (req, res) => {
         // 2. Upsert 실행 (CUST_ID, CLIENT_KIND가 PK이므로 중복 시 UPDATE)
         await pool.execute(`
             INSERT INTO TB_USER_DEVICE_TOKEN (CUST_ID, FCM_TOKEN, CLIENT_KIND, REG_ID, MOD_ID)
+            VALUES (?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE 
+                FCM_TOKEN = VALUES(FCM_TOKEN),
+                MOD_DT = CURRENT_TIMESTAMP,
+                MOD_ID = VALUES(MOD_ID)
         `, [custId, fcmToken, clientKind, userId, userId]);
 
         res.json({ success: true, message: '기사용 기기 토큰이 성공적으로 등록되었습니다.' });
