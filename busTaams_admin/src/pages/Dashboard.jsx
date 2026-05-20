@@ -1,12 +1,34 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { TrendingUp, Users, CheckCircle, Clock } from 'lucide-react';
 
 const Dashboard = () => {
+  const [stats, setStats] = useState({
+    todayRequests: 0,
+    activeBids: 0,
+    confirmedReservations: 0,
+    pendingDrivers: 0
+  });
+
+  useEffect(() => {
+    const fetchKPIs = async () => {
+      try {
+        const response = await fetch('/api/admin/dashboard/kpi');
+        if (response.ok) {
+          const data = await response.json();
+          setStats(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch KPIs:', error);
+      }
+    };
+    fetchKPIs();
+  }, []);
+
   const kpiCards = [
-    { title: '오늘의 견적 요청', value: '142', subtext: '+12% (어제 대비)', icon: <Clock className="text-blue-500" size={24} />, bg: 'bg-blue-50' },
-    { title: '진행 중인 입찰', value: '45', subtext: '현재 실시간', icon: <TrendingUp className="text-amber-500" size={24} />, bg: 'bg-amber-50' },
-    { title: '확정된 예약', value: '89', subtext: '+5% (어제 대비)', icon: <CheckCircle className="text-emerald-500" size={24} />, bg: 'bg-emerald-50' },
-    { title: '신규 승인 대기', value: '24', subtext: '기사 4명 / 일반 20명', icon: <Users className="text-purple-500" size={24} />, bg: 'bg-purple-50' },
+    { title: '오늘의 견적 요청', value: stats.todayRequests.toString(), subtext: '오늘 등록된 요청 건수', icon: <Clock className="text-blue-500" size={24} />, bg: 'bg-blue-50' },
+    { title: '진행 중인 입찰', value: stats.activeBids.toString(), subtext: '현재 입찰 참여 중인 버스', icon: <TrendingUp className="text-amber-500" size={24} />, bg: 'bg-amber-50' },
+    { title: '확정된 예약', value: stats.confirmedReservations.toString(), subtext: '결제/배차 확정 건수', icon: <CheckCircle className="text-emerald-500" size={24} />, bg: 'bg-emerald-50' },
+    { title: '신규 승인 대기', value: stats.pendingDrivers.toString(), subtext: '승인이 필요한 기사님', icon: <Users className="text-purple-500" size={24} />, bg: 'bg-purple-50' },
   ];
 
   return (

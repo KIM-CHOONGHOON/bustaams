@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool, getNextId, getBucket, bucketName } = require('../db');
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt');
 const { randomUUID } = require('crypto');
 const jwt = require('jsonwebtoken');
 const { decrypt, encrypt } = require('../crypto');

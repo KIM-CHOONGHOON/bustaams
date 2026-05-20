@@ -170,6 +170,10 @@ const auctionTripRouter = createAuctionTripRouter(pool, admin, bucket, bucketNam
 app.use('/api/auction', auctionTripRouter);
 app.use('/api/traveler-quote-request-details', auctionTripRouter);
 
+// 4-1. Admin Router 설정
+const adminRouter = require('./routes/appAdmin')(pool);
+app.use('/api/admin', adminRouter);
+
 // 5. 알림(Notification) 및 기사용(App Driver) 라우터 설정 (누락분 마운트)
 const createNotificationRouter = require('./routes/notification');
 const notificationRouter = createNotificationRouter(pool, app);

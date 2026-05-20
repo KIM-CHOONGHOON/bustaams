@@ -13,7 +13,7 @@ export default defineConfig({
     port: 5174, // 관리자는 5174 포트 사용
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:8080',
         changeOrigin: true
       }
     }

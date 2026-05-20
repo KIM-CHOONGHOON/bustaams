@@ -4,6 +4,7 @@ const AdminSignup = ({ onBack }) => {
   const [formData, setFormData] = useState({
     adminId: '',
     password: '',
+    confirmPassword: '', // 비밀번호 확인 필드 추가
     adminNm: '',
     deptNm: '',
     hpNo: '',
@@ -20,17 +21,44 @@ const AdminSignup = ({ onBack }) => {
     e.preventDefault();
     
     // 필수값 검증
-    if (!formData.adminId || !formData.password || !formData.adminNm) {
-      return alert('아이디, 비밀번호, 이름은 필수 입력 항목입니다.');
+    if (!formData.adminId || !formData.password || !formData.confirmPassword || !formData.adminNm) {
+      return alert('아이디, 비밀번호, 비밀번호 확인, 이름은 필수 입력 항목입니다.');
+    }
+
+    // 비밀번호 일치 확인
+    if (formData.password !== formData.confirmPassword) {
+      return alert('입력하신 비밀번호와 비밀번호 확인이 서로 일치하지 않습니다.');
     }
 
     setLoading(true);
-    // TODO: 백엔드 회원가입 API 연동 (POST /api/admin/signup)
-    setTimeout(() => {
+    try {
+      const response = await fetch('/api/admin/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminId: formData.adminId,
+          password: formData.password,
+          adminNm: formData.adminNm,
+          deptNm: formData.deptNm,
+          hpNo: formData.hpNo,
+          email: formData.email,
+          role: 'SUPER' // 가입 화면을 통해 직접 가입하는 계정은 기본 SUPER 권한 부여
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        alert('관리자 가입 신청이 성공적으로 완료되었습니다. 로그인해 주세요.');
+        onBack(); // 가입 후 로그인 화면으로 이동
+      } else {
+        alert(data.error || '가입에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('Signup error:', error);
+      alert('서버와 통신하는 중 오류가 발생했습니다.');
+    } finally {
       setLoading(false);
-      alert('관리자 가입 신청이 완료되었습니다.\n(실제 기능은 백엔드 API 연동 후 작동합니다.)');
-      onBack(); // 가입 후 로그인 화면으로 이동
-    }, 1000);
+    }
   };
 
   return (
@@ -67,6 +95,16 @@ const AdminSignup = ({ onBack }) => {
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-medium" 
                   placeholder="비밀번호를 입력하세요" 
                   value={formData.password} onChange={handleChange}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-2 ml-1">비밀번호 확인 (CONFIRM PASSWORD)</label>
+                <input 
+                  type="password" name="confirmPassword"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-medium" 
+                  placeholder="비밀번호를 한번 더 입력하세요" 
+                  value={formData.confirmPassword} onChange={handleChange}
                 />
               </div>
 

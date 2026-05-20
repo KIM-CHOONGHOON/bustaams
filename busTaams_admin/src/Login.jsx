@@ -10,10 +10,25 @@ const Login = ({ onLoginSuccess, onGoSignup }) => {
     if (!adminId || !password) return alert('아이디와 비밀번호를 입력해주세요.');
 
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const response = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminId, password })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        localStorage.setItem('adminUser', JSON.stringify(data.admin));
+        onLoginSuccess();
+      } else {
+        alert(data.error || '로그인에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      alert('서버와 통신하는 중 오류가 발생했습니다.');
+    } finally {
       setLoading(false);
-      onLoginSuccess();
-    }, 1000);
+    }
   };
 
   return (
@@ -66,19 +81,8 @@ const Login = ({ onLoginSuccess, onGoSignup }) => {
               '관리자 로그인'
             )}
           </button>
-          
-          <div className="mt-6 text-center">
-            <p className="text-sm text-slate-500 font-medium">
-              아직 관리자 계정이 없으신가요? 
-              <button 
-                type="button" 
-                onClick={onGoSignup}
-                className="ml-2 text-primary font-bold hover:underline"
-              >
-                관리자 가입하기
-              </button>
-            </p>
-          </div>
+
+
         </form>
 
         <div className="mt-10 text-center">

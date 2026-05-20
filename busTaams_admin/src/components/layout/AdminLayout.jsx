@@ -2,28 +2,42 @@ import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import Dashboard from '../../pages/Dashboard';
+import UsersManagement from '../../pages/UsersManagement';
+import ReservationsManagement from '../../pages/ReservationsManagement';
+import MembersManagement from '../../pages/MembersManagement';
+import TripsManagement from '../../pages/TripsManagement';
+import MyCustomersManagement from '../../pages/MyCustomersManagement';
+import MyPerformanceManagement from '../../pages/MyPerformanceManagement';
+import SalesPerformanceManagement from '../../pages/SalesPerformanceManagement';
 
 const AdminLayout = ({ onLogout }) => {
-  const [currentMenu, setCurrentMenu] = useState('dashboard');
+  // 로그인된 정보에 기초해 초기 메뉴 설정
+  const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
+  const role = adminUser.role || 'SALES';
+
+  // 영업사원(SALES)이면 '나의 고객관리'로, 그 외엔 '대시보드'를 기본 진입점으로 설정
+  const [currentMenu, setCurrentMenu] = useState(
+    role === 'SALES' ? 'my-customers' : 'dashboard'
+  );
 
   const renderContent = () => {
     switch (currentMenu) {
       case 'dashboard':
         return <Dashboard />;
       case 'users':
-        return (
-          <div className="p-8 max-w-7xl mx-auto">
-            <h1 className="text-2xl font-black text-slate-800">회원 관리</h1>
-            <p className="mt-2 text-slate-500">일반 고객 및 기사님 목록을 관리하는 화면이 위치할 곳입니다.</p>
-          </div>
-        );
+        return <UsersManagement />;
       case 'reservations':
-        return (
-          <div className="p-8 max-w-7xl mx-auto">
-            <h1 className="text-2xl font-black text-slate-800">예약 및 입찰 관리</h1>
-            <p className="mt-2 text-slate-500">전체 견적 요청과 입찰 현황을 모니터링하는 화면이 위치할 곳입니다.</p>
-          </div>
-        );
+        return <ReservationsManagement />;
+      case 'members':
+        return <MembersManagement />;
+      case 'trips':
+        return <TripsManagement />;
+      case 'my-customers':
+        return <MyCustomersManagement />;
+      case 'my-performance':
+        return <MyPerformanceManagement />;
+      case 'sales-performance':
+        return <SalesPerformanceManagement />;
       case 'settings':
         return (
           <div className="p-8 max-w-7xl mx-auto">
@@ -32,7 +46,7 @@ const AdminLayout = ({ onLogout }) => {
           </div>
         );
       default:
-        return <Dashboard />;
+        return role === 'SALES' ? <MyCustomersManagement /> : <Dashboard />;
     }
   };
 
@@ -48,4 +62,5 @@ const AdminLayout = ({ onLogout }) => {
     </div>
   );
 };
+
 export default AdminLayout;

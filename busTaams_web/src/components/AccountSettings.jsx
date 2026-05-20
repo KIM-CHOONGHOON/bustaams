@@ -469,30 +469,7 @@ const AccountSettings = ({ user, onBack, onLogout, onUpdateUser }) => {
                 </div>
               ) : null}
 
-              <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
-                <h3 className="font-headline text-xl font-bold mb-8 flex items-center gap-3 text-teal-900">
-                  <span className="material-symbols-outlined">link</span>
-                  SNS 계정 연동
-                </h3>
-                <div className="space-y-4">
-                  {[
-                    { name: '카카오톡', color: 'bg-[#FEE500]', initial: 'K', status: '연동되지 않음', action: '연동하기' },
-                    { name: '네이버', color: 'bg-[#03C75A]', initial: 'N', status: '연동 완료 (minsu***)', action: '연동 해제' },
-                    { name: '구글', color: 'bg-white', initial: 'G', status: '연동되지 않음', action: '연동하기' }
-                  ].map((sns) => (
-                    <div key={sns.name} className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 ${sns.color} rounded-full flex items-center justify-center font-black text-sm shadow-sm`}>{sns.initial}</div>
-                        <div>
-                          <div className="font-bold text-slate-800 text-sm">{sns.name}</div>
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{sns.status}</div>
-                        </div>
-                      </div>
-                      <button className="text-[11px] font-black text-teal-800 hover:text-orange-600 transition-colors uppercase tracking-widest">{sns.action}</button>
-                    </div>
-                  ))}
-                </div>
-              </div>
+
 
             </section>
           </div>
