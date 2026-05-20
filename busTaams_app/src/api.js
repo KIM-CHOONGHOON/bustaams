@@ -10,13 +10,16 @@ export const getImageUrl = (path, imageVersion = Date.now()) => {
     if (!path) return '';
     if (path.startsWith('http')) return `${path}${path.includes('?') ? '&' : '?'}t=${imageVersion}`;
     
+    // 호스트(VITE_API_BASE_URL)를 결합하여 모바일 앱 환경에서도 올바른 이미지 도메인을 찾아갈 수 있도록 수정
+    const baseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+    
     // 이미 API_BASE_URL(/api)로 시작하는 경우 중복 방지
     if (path.startsWith(API_BASE_URL)) {
-        return `${path}${path.includes('?') ? '&' : '?'}t=${imageVersion}`;
+        return `${baseUrl}${path}${path.includes('?') ? '&' : '?'}t=${imageVersion}`;
     }
     
     const cleanPath = path.startsWith('/') ? path : `/${path}`;
-    return `${API_BASE_URL}${cleanPath}${path.includes('?') ? '&' : '?'}t=${imageVersion}`;
+    return `${baseUrl}${API_BASE_URL}${cleanPath}${path.includes('?') ? '&' : '?'}t=${imageVersion}`;
 };
 
 // 공통 fetch 래퍼

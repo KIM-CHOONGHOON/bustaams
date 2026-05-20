@@ -31,7 +31,7 @@ const FindAccountModal = ({ onClose }) => {
     setFoundId('');
 
     try {
-      const response = await fetch(`${API_BASE}/api/auth/find-id`, {
+      const response = await fetch(`${API_BASE}/api/app/auth/find-id-simple`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userName: idName, phoneNo: idPhone }),
@@ -55,7 +55,7 @@ const FindAccountModal = ({ onClose }) => {
     setMessage({ text: '', type: '' });
 
     try {
-      const response = await fetch(`${API_BASE}/api/auth/verify-for-password`, {
+      const response = await fetch(`${API_BASE}/api/app/auth/verify-for-password-simple`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: pwId, email: pwEmail, phoneNo: pwPhone }),
@@ -83,7 +83,7 @@ const FindAccountModal = ({ onClose }) => {
 
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/api/auth/reset-password`, {
+      const response = await fetch(`${API_BASE}/api/app/auth/reset-password-simple`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ custId: verifiedCustId, newPassword }),

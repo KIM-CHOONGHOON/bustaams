@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { notify } from '../utils/toast';
 import BottomNavCustomer from '../components/BottomNavCustomer';
+import Avatar from '../components/Avatar';
 
 /**
  * 고객용 상세 청약 확인 페이지
@@ -206,27 +207,12 @@ const EstimateListCustomer = () => {
                         <h1 className="text-xl font-bold text-teal-900 tracking-tight">청약 상세 화면</h1>
                     </div>
                     <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => navigate('/profile-customer')}>
-                            {profileImage ? (
-                                <img 
-                                    alt="Profile" 
-                                    src={profileImage.startsWith('http') ? 
-                                        `${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
-                                        `${import.meta.env.VITE_API_BASE_URL || ''}${profileImage.startsWith('/') ? '' : '/'}${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
-                                    className="w-full h-full object-cover" 
-                                    onError={(e) => {
-                                        e.target.onerror = null;
-                                        e.target.style.display = 'none';
-                                        if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                                    }}
-                                />
-                            ) : (
-                                <span className="material-symbols-outlined text-slate-500 text-2xl">account_circle</span>
-                            )}
-                            {profileImage && (
-                                <span className="material-symbols-outlined text-slate-500 text-2xl hidden items-center justify-center w-full h-full">account_circle</span>
-                            )}
-                        </div>
+                        <Avatar
+                            profileImage={profileImage}
+                            imageVersion={imageVersion}
+                            className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors"
+                            onClick={() => navigate('/profile-customer')}
+                        />
                     </div>
                 </div>
             </header>

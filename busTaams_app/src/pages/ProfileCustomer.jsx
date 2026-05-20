@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getCustomerProfile, updateCustomerProfile, changePassword, uploadProfileImage, sendAuthCode, verifyAuthCode } from '../api';
 import { notify } from '../utils/toast';
 import BottomNavCustomer from '../components/BottomNavCustomer';
+import Avatar from '../components/Avatar';
 
 const ProfileCustomer = () => {
     const navigate = useNavigate();
@@ -210,21 +211,12 @@ const ProfileCustomer = () => {
                 {/* Profile Header Section */}
                 <section className="flex flex-col items-start gap-6 pt-4">
                     <div className="relative group">
-                        <div className="w-24 h-24 rounded-full overflow-hidden shadow-xl ring-4 ring-surface-container-low bg-slate-100">
-                            {userData.profileImage ? (
-                                <img 
-                                    alt="User Profile" 
-                                    className="w-full h-full object-cover" 
-                                    src={userData.profileImage.startsWith('http') ? 
-                                        `${userData.profileImage}${userData.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
-                                        `${(import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')}${userData.profileImage}${userData.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
-                                />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center text-slate-400">
-                                    <span className="material-symbols-outlined text-4xl">person</span>
-                                </div>
-                            )}
-                        </div>
+                        <Avatar
+                            profileImage={userData.profileImage}
+                            imageVersion={imageVersion}
+                            className="w-24 h-24 rounded-full overflow-hidden shadow-xl ring-4 ring-surface-container-low bg-slate-100 flex items-center justify-center cursor-pointer"
+                            onClick={() => setShowPhotoBottomSheet(true)}
+                        />
                         <button 
                             onClick={() => setShowPhotoBottomSheet(true)}
                             className="absolute bottom-0 right-0 bg-primary p-2 rounded-full text-white shadow-lg active:scale-90 transition-transform"

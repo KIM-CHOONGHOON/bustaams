@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import api, { getImageUrl } from '../api';
 import { notify } from '../utils/toast';
 import BottomNavCustomer from '../components/BottomNavCustomer';
+import Avatar from '../components/Avatar';
 
 const ApprovalListCustomer = () => {
     const navigate = useNavigate();
@@ -295,23 +296,12 @@ const ApprovalListCustomer = () => {
                             <h1 className="text-xl font-bold text-teal-900 tracking-tight">승인 상세 화면</h1>
                         </div>
                         <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border-2 border-white shadow-sm transition-transform hover:scale-110 active:scale-95 cursor-pointer" onClick={() => navigate('/profile-customer')}>
-                                {customerProfile?.profileImage ? (
-                                    <img
-                                        src={getImageUrl(customerProfile.profileImage, imageVersion)}
-                                        alt="Profile"
-                                        className="w-full h-full object-cover"
-                                        onError={(e) => {
-                                            e.target.onerror = null;
-                                            e.target.style.display = 'none';
-                                            if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                                        }}
-                                    />
-                                ) : (
-                                    <span className="material-symbols-outlined text-slate-400">account_circle</span>
-                                )}
-                                <span className="material-symbols-outlined text-slate-400 hidden items-center justify-center w-full h-full">account_circle</span>
-                            </div>
+                            <Avatar
+                                profileImage={customerProfile?.profileImage}
+                                imageVersion={imageVersion}
+                                className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border-2 border-white shadow-sm transition-transform hover:scale-110 active:scale-95 cursor-pointer"
+                                onClick={() => navigate('/profile-customer')}
+                            />
                         </div>
                     </div>
                 </header>
@@ -338,23 +328,12 @@ const ApprovalListCustomer = () => {
                         <h1 className="text-xl font-bold text-teal-900 tracking-tight">승인 상세 화면</h1>
                     </div>
                     <div className="flex items-center gap-4">
-                        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 overflow-hidden border-2 border-white shadow-sm transition-transform hover:scale-110 active:scale-95 cursor-pointer" onClick={() => navigate('/profile-customer')}>
-                            {customerProfile?.profileImage ? (
-                                <img
-                                    src={getImageUrl(customerProfile.profileImage, imageVersion)}
-                                    alt="Profile"
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                        e.target.onerror = null;
-                                        e.target.style.display = 'none';
-                                        if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                                    }}
-                                />
-                            ) : (
-                                <span className="material-symbols-outlined text-slate-400">account_circle</span>
-                            )}
-                            <span className="material-symbols-outlined text-slate-400 hidden items-center justify-center w-full h-full">account_circle</span>
-                        </div>
+                        <Avatar
+                            profileImage={customerProfile?.profileImage}
+                            imageVersion={imageVersion}
+                            className="flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 overflow-hidden border-2 border-white shadow-sm transition-transform hover:scale-110 active:scale-95 cursor-pointer"
+                            onClick={() => navigate('/profile-customer')}
+                        />
                     </div>
                 </div>
             </header>

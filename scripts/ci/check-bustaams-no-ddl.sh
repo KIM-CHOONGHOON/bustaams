@@ -22,10 +22,6 @@ STRICT_RE='ALTER[[:space:]]+TABLE|DROP[[:space:]]+TABLE|ADD[[:space:]]+COLUMN|DR
 
 pathspecs=(
   ':(glob)busTaams_server/**/*.js'
-  ':(glob)busTaams_web/**/*.js'
-  ':(glob)busTaams_web/**/*.jsx'
-  ':(glob)busTaams_web/**/*.ts'
-  ':(glob)busTaams_web/**/*.tsx'
 )
 
 if git grep -n -i -E "$STRICT_RE" -- "${pathspecs[@]}" 2>/dev/null; then

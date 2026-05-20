@@ -4,6 +4,7 @@ console.log('📦 server.js 로딩 중...');
 const cors = require('cors');
 const { pool } = require('./db');
 const path = require('path');
+const fs = require('fs');
 const admin = require('firebase-admin');
 const { Storage } = require('@google-cloud/storage');
 const bcrypt = require('bcrypt');
@@ -32,10 +33,6 @@ const {
     isCanonicalDriverFeePolicyDtlCd,
     sqlFeePolicyCntJoinOnP,
 } = require('./lib/feePolicyDtl');
-const fs = require('fs');
-const createCommonLiveChatRouter = require('./routes/commonLiveChat');
-const createLiveChatTravelerRouter = require('./routes/liveChatTraveler');
-const createUserDeviceTokenRouter = require('./routes/userDeviceToken');
 // [공통] 이미지 및 코드 관련 처리를 위한 공통 라우터 임포트
 const commonRouter = require('./routes/common');
 const { 
@@ -43,8 +40,7 @@ const {
     fetchCancelManageForUser, 
     fetchSubscriptionForDriver 
 } = require('./lib/loginPayload');
-const createAuthRouter = require('./routes/bt_auth_api');
-const createAuctionTripRouter = require('./routes/bt_auction_trip_api');
+
 
 const {
     canAccessDriverCancelProofFile,
@@ -66,14 +62,6 @@ app.use((req, res, next) => {
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-require('./routes/busDriverCreditCardRegistrationRoute')(app, pool);
-/** 기사님 응찰 목록 — `app.get('/api/DriversListOfBids', DriversListOfBids)` (multer 등보다 먼저 등록) */
-require('./routes/driversListOfBids')(app, pool);
-require('./routes/cancellationOfBid')(app, pool);
-app.use('/api/CommonLiveChat', createCommonLiveChatRouter(pool));
-app.use('/api/live-chat-traveler', createLiveChatTravelerRouter(pool));
-app.use('/api/user/device-token', createUserDeviceTokenRouter(pool));
 // [공통] 이미지 표시 및 공통 코드 API 라우터 마운트
 app.use('/api/common', commonRouter);
 
@@ -164,15 +152,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// 3. Auth Router 설정
-const authRouter = createAuthRouter(pool, admin, smsVerifiedPhoneStore, bucket, bucketName);
-app.use('/api/auth', authRouter);
-app.use('/api/users', authRouter); // 기존 /api/users/login 호환용
 
-// 4. Auction/Trip Router 설정
-const auctionTripRouter = createAuctionTripRouter(pool, admin, bucket, bucketName);
-app.use('/api/auction', auctionTripRouter);
-app.use('/api/traveler-quote-request-details', auctionTripRouter);
 
 // 5. 알림(Notification) 및 기사용(App Driver) 라우터 설정 (누락분 마운트)
 const createNotificationRouter = require('./routes/notification');
@@ -813,7 +793,6 @@ app.put('/api/user/profile', async (req, res) => {
                 const photoBuffer = Buffer.from(photoData, 'base64');
                 const photoMimeMatch = photoBase64.match(/^data:image\/([^;]+);base64,/);
                 const rawMimeSub = photoMimeMatch?.[1] || 'png';
-                const bucketName = process.env.GCS_BUCKET_NAME || 'bustaams-secure-data';
                 const parsedLike = {
                     buffer: photoBuffer,
                     ext: rawMimeSub,
@@ -822,18 +801,27 @@ app.put('/api/user/profile', async (req, res) => {
                 };
                 const { orgFileNm, fileExt } = orgFileNmAndExt(photoName, parsedLike);
                 const photoFileName = `${nextFileId}.${fileExt}`;
-                const photoGcsPathForDB = `https://storage.googleapis.com/${bucketName}/profiles/${photoFileName}`;
-                const photoActualGcsPath = `profiles/${photoFileName}`;
-
-                const photoGcsFile = bucket.file(photoActualGcsPath);
-                await photoGcsFile.save(photoBuffer, { metadata: { contentType: `image/${rawMimeSub}` }, resumable: false });
+                
+                const relativeFolder = 'uploads/profiles';
+                const absoluteFolder = path.join(__dirname, relativeFolder);
+                
+                // 폴더 생성
+                if (!fs.existsSync(absoluteFolder)) {
+                    fs.mkdirSync(absoluteFolder, { recursive: true });
+                }
+                
+                const relativeFilePath = `${relativeFolder}/${photoFileName}`;
+                const absoluteFilePath = path.join(absoluteFolder, photoFileName);
+                
+                // 로컬 파일 쓰기
+                fs.writeFileSync(absoluteFilePath, photoBuffer);
 
                 await connection.execute(`
                     INSERT INTO TB_FILE_MASTER (
                         FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, 
                         ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT, REG_ID, MOD_DT, MOD_ID
-                    ) VALUES (?, 'PROFILE', ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)
-                `, [nextFileId, bucketName, photoGcsPathForDB, orgFileNm, fileExt, photoBuffer.length, custId, custId]);
+                    ) VALUES (?, 'PROFILE', 'LOCAL', ?, ?, ?, ?, NOW(), ?, NOW(), ?)
+                `, [nextFileId, relativeFilePath, orgFileNm, fileExt, photoBuffer.length, custId, custId]);
             }
 
             // 2. 동적 쿼리 생성

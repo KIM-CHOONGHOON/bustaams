@@ -4,6 +4,7 @@ import api, { getNotifications, logout, getImageUrl } from '../api';
 import Swal from 'sweetalert2';
 import { notify } from '../utils/toast';
 import BottomNavCustomer from '../components/BottomNavCustomer';
+import Avatar from '../components/Avatar';
 
 const CustomerDashboard = () => {
     const navigate = useNavigate();
@@ -11,6 +12,7 @@ const CustomerDashboard = () => {
     const [userName, setUserName] = useState('사용자');
     const [profileImage, setProfileImage] = useState(null);
     const [imageVersion, setImageVersion] = useState(Date.now());
+
     const [restriction, setRestriction] = useState(null);
     const [unreadCount, setUnreadCount] = useState(0);
 
@@ -133,25 +135,11 @@ const CustomerDashboard = () => {
                             </span>
                         )}
                     </button>
-                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => navigate('/profile-customer')}>
-                        {profileImage ? (
-                            <img 
-                                alt="Profile" 
-                                src={getImageUrl(profileImage, imageVersion)} 
-                                className="w-full h-full object-cover" 
-                                onError={(e) => {
-                                    e.target.onerror = null;
-                                    e.target.style.display = 'none';
-                                    if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                                }}
-                            />
-                        ) : (
-                            <span className="material-symbols-outlined text-slate-500 text-2xl">account_circle</span>
-                        )}
-                        {profileImage && (
-                            <span className="material-symbols-outlined text-slate-500 text-2xl hidden items-center justify-center w-full h-full">account_circle</span>
-                        )}
-                    </div>
+                    <Avatar 
+                        profileImage={profileImage} 
+                        imageVersion={imageVersion} 
+                        onClick={() => navigate('/profile-customer')} 
+                    />
                     <button 
                         onClick={handleLogout}
                         className="p-2 rounded-full hover:bg-red-50 transition-colors group"

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import BottomNavCustomer from '../components/BottomNavCustomer';
+import Avatar from '../components/Avatar';
 
 const ReviewPendingListCustomer = () => {
     const navigate = useNavigate();
@@ -75,32 +76,12 @@ const ReviewPendingListCustomer = () => {
                     </div>
                     
                     <div className="flex items-center gap-3">
-                        <div 
-                            className="w-11 h-11 rounded-2xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden"
+                        <Avatar 
+                            profileImage={profileImage}
+                            imageVersion={imageVersion}
+                            className="w-11 h-11 rounded-2xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden flex items-center justify-center"
                             onClick={() => navigate('/profile-customer')}
-                        >
-                            <div className="w-full h-full rounded-[14px] overflow-hidden bg-slate-50 flex items-center justify-center relative group">
-                                {profileImage ? (
-                                    <img 
-                                        alt="Customer Profile" 
-                                        src={profileImage.startsWith('http') ? 
-                                            `${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
-                                            `${import.meta.env.VITE_API_BASE_URL || ''}${profileImage.startsWith('/') ? '' : '/'}${profileImage}${profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
-                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
-                                        onError={(e) => {
-                                            e.target.onerror = null;
-                                            e.target.style.display = 'none';
-                                            if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                                        }}
-                                    />
-                                ) : (
-                                    <span className="material-symbols-outlined text-teal-600 text-2xl">account_circle</span>
-                                )}
-                                {profileImage && (
-                                    <span className="material-symbols-outlined text-teal-600 text-2xl hidden items-center justify-center w-full h-full">account_circle</span>
-                                )}
-                            </div>
-                        </div>
+                        />
                     </div>
                 </div>
             </header>
