@@ -26,7 +26,8 @@ const EXCLUDE_SERVER_LIST = [
   'debug_stats.log',
   '.git',
   '.gcloudignore',
-  'Dockerfile'
+  'Dockerfile',
+  'uploads'
 ];
 
 const conn = new Client();
@@ -143,42 +144,9 @@ const remoteCommands = [
   `cd ${REMOTE_SERVER_DIR} && pm2 start server.js --name bustaams-backend`,
   `pm2 save`,
   
-  // 3. Nginx 설정 구성 (리버스 프록시 및 정적 배포본 서빙)
-  // 80번 포트로 기본 접속 시 프론트 서빙, /api 호출 시 8080 백엔드 포워딩
-  `cat << 'EOF' > /etc/nginx/sites-available/default
-server {
-    listen 80;
-    server_name bustaams.cafe24.com 1.234.65.153;
-
-    # React 빌드 정적 파일 경로
-    root ${REMOTE_APP_DIR};
-    index index.html;
-
-    # React Router (SPA) 브라우저 새로고침 지원
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    # API 리버스 프록시 설정 (백엔드 포트 8080)
-    location /api {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        
-        # CORS 및 실시간 버퍼링 관련 헤더 설정
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-}
-EOF`,
-  
-  // 4. Nginx 구문 검사 및 웹 서버 재기동
-  'nginx -t',
-  'systemctl restart nginx',
-  'echo "✔ Nginx 리로드 및 PM2 구동이 성공적으로 완료되었습니다!"'
+  // 3. Nginx 설정 덮어쓰기를 제거하고, 단순히 Nginx 리로드만 수행 (SSL 설정 보존)
+  'systemctl reload nginx',
+  'echo "✔ PM2 구동 및 Nginx 리로드가 성공적으로 완료되었습니다!"'
 ];
 
 function runRemoteCommands() {

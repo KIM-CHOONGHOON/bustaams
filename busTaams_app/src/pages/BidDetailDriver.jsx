@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import BottomNavDriver from '../components/BottomNavDriver';
+import { request } from '../api';
 
 const BidDetailDriver = () => {
     const navigate = useNavigate();
@@ -12,19 +13,13 @@ const BidDetailDriver = () => {
     useEffect(() => {
         const fetchBidDetail = async () => {
             try {
-                const token = localStorage.getItem('token');
+                const token = localStorage.getItem('accessToken');
                 if (!token) {
                     navigate('/login');
                     return;
                 }
 
-                const response = await fetch(`/api/app-driver/mission-detail/${id}`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                const result = await response.json();
+                const result = await request(`/app/driver/mission-detail/${id}`);
                 if (result.success) {
                     setBidData(result.data);
                 } else {
@@ -32,7 +27,7 @@ const BidDetailDriver = () => {
                 }
             } catch (err) {
                 console.error('Fetch bid detail error:', err);
-                setError('서버 통신 오류가 발생했습니다.');
+                setError(err.message || '서버 통신 오류가 발생했습니다.');
             } finally {
                 setLoading(false);
             }

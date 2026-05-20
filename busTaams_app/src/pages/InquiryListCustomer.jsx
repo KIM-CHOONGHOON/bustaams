@@ -83,16 +83,26 @@ const InquiryListCustomer = () => {
                                 <p class="text-xs font-bold text-slate-400">담당자가 답변을 준비 중입니다.</p>
                             </div>
                             `}
+                            
+                            <div class="pt-2">
+                                <button id="modal-close-btn" class="w-full py-5 rounded-2xl font-black bg-teal-700 hover:bg-teal-800 text-white transition-all text-[15px] shadow-lg shadow-teal-900/15 active:scale-[0.98] outline-none border-none">
+                                    확인
+                                </button>
+                            </div>
                         </div>
                     `,
-                    showConfirmButton: true,
-                    confirmButtonText: '확인',
-                    confirmButtonColor: '#004e47',
+                    showConfirmButton: false,
                     customClass: {
-                        popup: 'rounded-[2.5rem] p-8 border-none shadow-2xl',
-                        confirmButton: 'w-full py-4 rounded-2xl font-bold bg-teal-700 text-white mt-4'
+                        popup: 'rounded-[2.5rem] p-8 border-none shadow-2xl'
                     },
-                    buttonsStyling: false
+                    didOpen: () => {
+                        const btn = document.getElementById('modal-close-btn');
+                        if (btn) {
+                            btn.addEventListener('click', () => {
+                                Swal.close();
+                            });
+                        }
+                    }
                 });
             }
         } catch (err) {

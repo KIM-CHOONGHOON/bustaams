@@ -146,53 +146,33 @@ const ReservationListCustomer = () => {
                                             {res.title || '나의 여행 일정'}
                                         </h3>
                                         
-                                        {/* 운행 노선 (출발지 -> 목적지 -> 도착지) 강조 */}
-                                        <div className="bg-slate-50/80 rounded-[2.5rem] p-8 md:p-10 flex items-center justify-center gap-2 border border-slate-100 shadow-inner">
+                                        {/* 운행 노선 (출발지, 경유지, 도착지) 세로 배치 */}
+                                        <div className="bg-slate-50/80 rounded-[2.5rem] p-8 md:p-10 flex flex-col gap-4 border border-slate-100 shadow-inner text-left">
                                             {/* 출발지 */}
-                                            <div className="text-center flex-1 min-w-0">
-                                                <p className="text-slate-400 text-[8px] md:text-[9px] font-black uppercase tracking-[0.2em] mb-2">출발지</p>
-                                                <p className="text-slate-900 font-black text-lg md:text-2xl tracking-tighter italic truncate" title={res.routeDetail?.start || res.startAddr}>
-                                                    {res.routeDetail?.start?.split(/[\s,]+/).filter(Boolean).slice(0, 5).join(' ') || res.startAddr?.split(/[\s,]+/).filter(Boolean).slice(0, 5).join(' ') || '출발지'}
+                                            <div className="flex items-center gap-4">
+                                                <span className="w-16 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] shrink-0">출발지</span>
+                                                <p className="text-slate-900 font-black text-base md:text-lg tracking-tight italic" title={res.routeDetail?.start || res.startAddr}>
+                                                    {res.routeDetail?.start || res.startAddr || '출발지'}
                                                 </p>
                                             </div>
                                             
-                                            <div className="flex items-center opacity-100 px-3">
-                                                <div className="w-10 h-10 bg-teal-50 rounded-full flex items-center justify-center shadow-sm border border-teal-100 group-hover:bg-teal-600 transition-all duration-300">
-                                                    <span className="material-symbols-outlined text-teal-600 group-hover:text-white text-2xl md:text-3xl font-black">chevron_right</span>
-                                                </div>
-                                            </div>
-
-                                            {/* 목적지/경유지 (있을 경우만 강조 표시, 없으면 도착지로 대체하여 2단계 구성) */}
-                                            {res.routeDetail?.via ? (
-                                                <>
-                                                    <div className="text-center flex-1 min-w-0 px-2 py-3 bg-white rounded-2xl shadow-sm border border-slate-50">
-                                                        <p className="text-teal-600 text-[8px] md:text-[9px] font-black uppercase tracking-[0.2em] mb-2">경유지</p>
-                                                        <p className="text-teal-900 font-black text-lg md:text-2xl tracking-tighter italic truncate" title={res.routeDetail.via}>
-                                                            {res.routeDetail.via.split(/[\s,]+/).filter(Boolean).slice(0, 5).join(' ')}
-                                                        </p>
-                                                    </div>
-
-                                                    <div className="flex items-center opacity-100 px-3">
-                                                        <div className="w-10 h-10 bg-teal-50 rounded-full flex items-center justify-center shadow-sm border border-teal-100 group-hover:bg-teal-600 transition-all duration-300">
-                                                            <span className="material-symbols-outlined text-teal-600 group-hover:text-white text-2xl md:text-3xl font-black">chevron_right</span>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="text-center flex-1 min-w-0">
-                                                        <p className="text-slate-400 text-[8px] md:text-[9px] font-black uppercase tracking-[0.2em] mb-2">도착지</p>
-                                                        <p className="text-slate-900 font-black text-lg md:text-2xl tracking-tighter italic truncate" title={res.routeDetail.end || res.endAddr}>
-                                                            {res.routeDetail.end?.split(/[\s,]+/).filter(Boolean).slice(0, 5).join(' ') || res.endAddr?.split(/[\s,]+/).filter(Boolean).slice(0, 5).join(' ') || '도착지'}
-                                                        </p>
-                                                    </div>
-                                                </>
-                                            ) : (
-                                                <div className="text-center flex-1 min-w-0 px-2 py-3 bg-white rounded-2xl shadow-sm border border-slate-50">
-                                                    <p className="text-teal-600 text-[8px] md:text-[9px] font-black uppercase tracking-[0.2em] mb-2">도착지</p>
-                                                    <p className="text-teal-900 font-black text-lg md:text-2xl tracking-tighter italic truncate" title={res.routeDetail?.end || res.endAddr}>
-                                                        {res.routeDetail?.end?.split(/[\s,]+/).filter(Boolean).slice(0, 5).join(' ') || res.endAddr?.split(/[\s,]+/).filter(Boolean).slice(0, 5).join(' ') || '도착지'}
+                                            {/* 경유지 */}
+                                            {res.routeDetail?.via && (
+                                                <div className="flex items-center gap-4 border-t border-slate-200/50 pt-3">
+                                                    <span className="w-16 text-teal-600 text-[10px] font-black uppercase tracking-[0.2em] shrink-0">경유지</span>
+                                                    <p className="text-teal-900 font-black text-base md:text-lg tracking-tight italic" title={res.routeDetail.via}>
+                                                        {res.routeDetail.via}
                                                     </p>
                                                 </div>
                                             )}
+                                            
+                                            {/* 도착지 */}
+                                            <div className="flex items-center gap-4 border-t border-slate-200/50 pt-3">
+                                                <span className="w-16 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] shrink-0">도착지</span>
+                                                <p className="text-slate-900 font-black text-base md:text-lg tracking-tight italic" title={res.routeDetail?.end || res.endAddr}>
+                                                    {res.routeDetail?.end || res.endAddr || '도착지'}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -206,10 +186,10 @@ const ReservationListCustomer = () => {
                                                 </div>
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                     {res.buses.map((bus, busIdx) => (
-                                                        <div key={busIdx} className="bg-white rounded-[2.5rem] p-6 border border-slate-100 shadow-sm flex items-center justify-between group/bus hover:border-teal-200 transition-all">
-                                                            <div className="flex items-center gap-5">
+                                                        <div key={busIdx} className="bg-white rounded-[2.5rem] p-6 border border-slate-100 shadow-sm flex items-start justify-between group/bus hover:border-teal-200 transition-all">
+                                                            <div className="flex items-start gap-5">
                                                                 {/* 기사 프로필 이미지 */}
-                                                                <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-white shadow-md">
+                                                                <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-white shadow-md shrink-0">
                                                                     {bus.driverImage ? (
                                                                         <img 
                                                                             src={bus.driverImage.startsWith('http') ? bus.driverImage : `${import.meta.env.VITE_API_BASE_URL || ''}${bus.driverImage}`} 
@@ -222,22 +202,20 @@ const ReservationListCustomer = () => {
                                                                         </div>
                                                                     )}
                                                                 </div>
-                                                                {/* 기사 및 차량 정보 텍스트 */}
-                                                                <div>
-                                                                    <p className="text-slate-900 font-black text-lg tracking-tight italic">{bus.driverNm || bus.driverName} 기사님</p>
-                                                                    <div className="flex items-center gap-2 mt-1">
-                                                                        <span className="bg-teal-50 text-teal-700 text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest">{bus.vehicleNo}</span>
-                                                                        <span className="text-slate-400 text-[10px] font-bold">{bus.modelNm}</span>
-                                                                    </div>
+                                                                {/* 기사 및 차량 정보 텍스트 (세로 4줄 정렬) */}
+                                                                <div className="space-y-1">
+                                                                    <p className="text-slate-900 font-black text-base tracking-tight italic">{bus.driverNm || bus.driverName} 기사님</p>
+                                                                    <p className="text-teal-700 text-xs font-bold tracking-widest">{bus.vehicleNo}</p>
+                                                                    <p className="text-slate-500 text-xs font-bold">{bus.modelNm}</p>
+                                                                    {bus.driverPhone && (
+                                                                        <p className="text-slate-600 font-bold text-xs tracking-tight">
+                                                                            {bus.driverPhone.replace(/[^0-9]/g, "").replace(/^(\d{2,3})(\d{3,4})(\d{4})$/, `$1-$2-$3`)}
+                                                                        </p>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                             {/* 전화 걸기 버튼 */}
-                                                            <div className="flex items-center gap-3">
-                                                                {bus.driverPhone && (
-                                                                    <span className="text-teal-700 font-bold text-sm tracking-tight bg-teal-50/50 px-3 py-1.5 rounded-full border border-teal-100">
-                                                                        {bus.driverPhone.replace(/[^0-9]/g, "").replace(/^(\d{2,3})(\d{3,4})(\d{4})$/, `$1-$2-$3`)}
-                                                                    </span>
-                                                                )}
+                                                            <div className="flex items-center self-center shrink-0">
                                                                 <button 
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
@@ -256,72 +234,60 @@ const ReservationListCustomer = () => {
 
                                         <div className="flex-1 flex flex-col justify-between py-2">
                                             <div className="space-y-10">
-                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-                                                    <div className="space-y-3">
-                                                        <p className="text-slate-300 text-[10px] font-black uppercase tracking-[0.3em]">출발 날짜</p>
+                                                <div className="flex flex-col gap-6">
+                                                    <div className="flex items-center gap-6 border-b border-slate-50 pb-3">
+                                                        <span className="w-24 text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] shrink-0">출발 날짜</span>
                                                         <div className="flex items-center gap-3">
-                                                            <span className="material-symbols-outlined text-teal-600 text-2xl">calendar_today</span>
-                                                            <p className="text-slate-900 font-black tracking-tight text-xl md:text-2xl italic">{res.date}</p>
+                                                            <span className="material-symbols-outlined text-teal-600 text-xl">calendar_today</span>
+                                                            <p className="text-slate-900 font-black tracking-tight text-base md:text-lg italic">{res.date}</p>
                                                         </div>
                                                     </div>
-                                                    <div className="space-y-3">
-                                                        <p className="text-slate-300 text-[10px] font-black uppercase tracking-[0.3em]">차량 정보</p>
+                                                    <div className="flex items-center gap-6 border-b border-slate-50 pb-3">
+                                                        <span className="w-24 text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] shrink-0">차량 정보</span>
                                                         <div className="flex items-center gap-3">
-                                                            <span className="material-symbols-outlined text-teal-600 text-2xl">minor_crash</span>
-                                                            <p className="text-slate-900 font-black tracking-tight text-xl md:text-2xl italic">{res.busType || '대형버스 (45인승)'}</p>
+                                                            <span className="material-symbols-outlined text-teal-600 text-xl">minor_crash</span>
+                                                            <p className="text-slate-900 font-black tracking-tight text-base md:text-lg italic">{res.busType || '대형버스 (45인승)'}</p>
                                                         </div>
                                                     </div>
-                                                    <div className="space-y-3">
-                                                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em]">총 버스 대수</p>
+                                                    <div className="flex items-center gap-6 border-b border-slate-50 pb-3">
+                                                        <span className="w-24 text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] shrink-0">총 버스 대수</span>
                                                         <div className="flex items-center gap-3">
-                                                            <span className="material-symbols-outlined text-teal-600 text-2xl">directions_bus</span>
-                                                            <p className="text-slate-900 font-black text-xl md:text-2xl italic">{res.busCount}대</p>
+                                                            <span className="material-symbols-outlined text-teal-600 text-xl">directions_bus</span>
+                                                            <p className="text-slate-900 font-black text-base md:text-lg italic">{res.busCount}대</p>
                                                         </div>
                                                     </div>
-                                                    <div className="space-y-3">
-                                                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em]">상태</p>
-                                                        <span className={`${res.statusCode === 'DONE' ? 'text-slate-400' : 'text-teal-600'} font-black text-sm uppercase tracking-widest flex items-center gap-2 mt-2`}>
+                                                    <div className="flex items-center gap-6 border-b border-slate-50 pb-3">
+                                                        <span className="w-24 text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] shrink-0">상태</span>
+                                                        <span className={`${res.statusCode === 'DONE' ? 'text-slate-400' : 'text-teal-600'} font-black text-sm uppercase tracking-widest flex items-center gap-2`}>
                                                             <span className="material-symbols-outlined text-xl" style={{fontVariationSettings: "'FILL' 1"}}>{res.statusCode === 'DONE' ? 'history' : 'verified_user'}</span>
                                                             {getBusStatusDisplay(res.statusCode).label}
                                                         </span>
                                                     </div>
                                                 </div>
 
-                                                <div className="p-10 bg-slate-50/50 rounded-[2.5rem] border border-slate-100/50 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                                                    <div className="flex items-center gap-6">
-                                                        <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-100">
-                                                            <span className="material-symbols-outlined text-teal-600 text-3xl">payments</span>
+                                                <div className="p-10 bg-slate-50/50 rounded-[2.5rem] border border-slate-100/50 flex flex-col items-center justify-center text-center gap-8">
+                                                    <div className="flex flex-col items-center gap-3">
+                                                        <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-100">
+                                                            <span className="material-symbols-outlined text-teal-600 text-2xl">payments</span>
                                                         </div>
                                                         <div>
                                                             <p className="text-slate-400 text-[9px] font-black uppercase tracking-widest mb-1">총 결제 금액</p>
-                                                            <p className="text-slate-900 font-black text-2xl md:text-3xl italic">
+                                                            <p className="text-slate-900 font-black text-xl md:text-2xl italic">
                                                                 {res.totalOfferPrice ? `${Number(res.totalOfferPrice).toLocaleString()}원` : '금액 정보 없음'}
                                                             </p>
                                                         </div>
                                                     </div>
                                                     
-                                                    <div className="flex gap-4">
-                                                        <button 
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                navigate(`/reservation-detail/${res.firstResId}`);
-                                                            }}
-                                                            className="bg-slate-900 text-white px-8 py-5 rounded-full font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:bg-teal-600 hover:scale-105 transition-all italic"
-                                                        >
-                                                            상세 내역
-                                                        </button>
-                                                        {res.statusCode !== 'DONE' && (
-                                                            <button 
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    // 영수증 로직
-                                                                }}
-                                                                className="bg-white text-slate-900 border border-slate-200 px-8 py-5 rounded-full font-black text-[10px] uppercase tracking-[0.2em] hover:bg-slate-50 transition-all italic"
-                                                            >
-                                                                영수증
-                                                            </button>
-                                                        )}
-                                                    </div>
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            navigate(`/reservation-detail/${res.firstResId}`);
+                                                        }}
+                                                        className="w-full max-w-[280px] bg-gradient-to-r from-teal-700 to-teal-900 hover:from-teal-600 hover:to-teal-800 text-white py-4.5 rounded-full font-black text-xs uppercase tracking-[0.2em] shadow-lg shadow-teal-700/20 hover:scale-[1.03] active:scale-97 transition-all duration-300 italic flex items-center justify-center gap-2"
+                                                    >
+                                                        <span className="material-symbols-outlined text-base">visibility</span>
+                                                        상세 내역 보기
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>

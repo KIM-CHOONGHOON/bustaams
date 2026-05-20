@@ -53,8 +53,8 @@ const SubmitReviewCustomer = () => {
 
         setSubmitting(true);
         try {
-            const response = await api.post('/submit-review', {
-                resUuid: id,
+            const response = await api.post('/app/customer/submit-review', {
+                resId: id,
                 rating,
                 comment
             });

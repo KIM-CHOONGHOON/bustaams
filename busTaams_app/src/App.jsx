@@ -1,4 +1,5 @@
 
+// busTaams App Entry (V2.0.2 - Force Cache Refresh)
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
@@ -69,6 +70,46 @@ const Placeholder = ({ title }) => (
 import NotificationList from './pages/NotificationList';
 import NotificationToast from './components/NotificationToast';
 
+// 렌더링 오류를 잡아 화면에 친절하게 에러를 보여주는 안전 컴포넌트
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-6 bg-rose-50 text-rose-800 min-h-screen flex flex-col items-center justify-center font-body text-center">
+          <span className="material-symbols-outlined text-6xl text-rose-500 mb-4 font-black">error</span>
+          <h1 className="text-2xl font-black mb-2">화면을 불러오는 중 오류가 발생했습니다.</h1>
+          <p className="text-sm font-bold text-slate-500 mb-6">오류 내용이 아래에 표시됩니다. 스크린샷과 함께 개발자에게 전달해주세요.</p>
+          <pre className="p-6 bg-rose-100/50 rounded-[2rem] text-xs max-w-xl overflow-auto text-left font-mono border border-rose-200/50 shadow-inner">
+            {this.state.error?.toString()}
+            {"\n\n"}
+            {this.state.error?.stack}
+          </pre>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-8 px-10 py-4 bg-rose-500 text-white rounded-full font-black text-sm shadow-lg hover:scale-105 active:scale-95 transition-all"
+          >
+            페이지 새로고침
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function App() {
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -91,8 +132,8 @@ function App() {
         <Route path="/customer-dashboard" element={<CustomerDashboard />} />
         <Route path="/request-bus" element={<RequestBus />} />
         <Route path="/edit-request/:id" element={<RequestBus />} />
-        <Route path="/reservation-detail/:id" element={<ReservationDetail />} />
-        <Route path="/trip-detail/:id" element={<ReservationDetail />} />
+        <Route path="/reservation-detail/:id" element={<ErrorBoundary><ReservationDetail /></ErrorBoundary>} />
+        <Route path="/trip-detail/:id" element={<ErrorBoundary><ReservationDetail /></ErrorBoundary>} />
         <Route path="/order-detail/:id" element={<OrderDetailCustomer />} />
         <Route path="/order-history" element={<OrderHistoryCustomer />} />
         <Route path="/review-pending-list" element={<ReviewPendingList />} />

@@ -56,7 +56,7 @@ const CancellationCustomer = () => {
                     formData.append('file', file);
                 }
 
-                const token = localStorage.getItem('token');
+                const token = localStorage.getItem('accessToken');
                 const response = await axios.post('/api/app/customer/cancel-request', formData, {
                     headers: {
                         'Authorization': `Bearer ${token}`,

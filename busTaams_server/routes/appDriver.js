@@ -1340,16 +1340,18 @@ router.post('/membership/terminate', authenticateToken, async (req, res) => {
         if (uRows.length === 0) return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
         const custId = uRows[0].CUST_ID;
 
-        // 요금제 해지 처리 (기본 요금제로 변경하거나 특정 상태값 업데이트)
-        // 여기서는 기본 요금제인 'DRIVER_GENNERAL'로 강제 변경하는 것으로 구현
+        // 요금제 해지 처리 (FEE_POLICY = 'DRIVER')
         const [result] = await pool.execute(
             'UPDATE TB_DRIVER_DETAIL SET FEE_POLICY = ?, MOD_ID = ?, MOD_DT = NOW() WHERE CUST_ID = ?',
-            ['DRIVER_GENNERAL', custId, custId]
+            ['DRIVER', custId, custId]
         );
 
         if (result.affectedRows === 0) {
-            // 상세 정보가 없는 경우 (이미 일반이거나 정보가 없음)
-            return res.json({ success: true, message: '현재 일반 요금제 상태입니다.' });
+            // 상세 정보가 없는 경우 신규 생성
+            await pool.execute(
+                'INSERT INTO TB_DRIVER_DETAIL (CUST_ID, FEE_POLICY, REG_ID, MOD_ID) VALUES (?, ?, ?, ?)',
+                [custId, 'DRIVER', custId, custId]
+            );
         }
 
         res.json({ success: true, message: '멤버십 해지가 완료되었습니다. 다음 결제일부터는 요금이 청구되지 않습니다.' });
