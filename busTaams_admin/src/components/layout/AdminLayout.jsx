@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import BatchDashBoardModal from './BatchDashBoardModal';
 import Dashboard from '../../pages/Dashboard';
 import UsersManagement from '../../pages/UsersManagement';
 import ReservationsManagement from '../../pages/ReservationsManagement';
@@ -19,6 +20,9 @@ const AdminLayout = ({ onLogout }) => {
   const [currentMenu, setCurrentMenu] = useState(
     role === 'SALES' ? 'my-customers' : 'dashboard'
   );
+
+  // BATCH JOB 모니터링 모달 열림/닫힘 상태
+  const [showBatchModal, setShowBatchModal] = useState(false);
 
   const renderContent = () => {
     switch (currentMenu) {
@@ -52,13 +56,21 @@ const AdminLayout = ({ onLogout }) => {
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans overflow-hidden">
-      <Sidebar currentMenu={currentMenu} setCurrentMenu={setCurrentMenu} />
+      <Sidebar 
+        currentMenu={currentMenu} 
+        setCurrentMenu={setCurrentMenu} 
+        onBatchClick={() => setShowBatchModal(true)}
+      />
       <div className="flex-1 flex flex-col min-w-0">
         <Header onLogout={onLogout} />
         <main className="flex-1 overflow-y-auto">
           {renderContent()}
         </main>
       </div>
+      <BatchDashBoardModal 
+        isOpen={showBatchModal} 
+        onClose={() => setShowBatchModal(false)} 
+      />
     </div>
   );
 };
