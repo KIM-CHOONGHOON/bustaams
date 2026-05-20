@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import DaumPostcodeEmbed from 'react-daum-postcode';
 import api from '../api';
 import Swal from 'sweetalert2';
 import { notify } from '../utils/toast';
@@ -164,9 +163,137 @@ const RequestBus = () => {
         });
     };
 
-    // Postcode Modal state
+    // 장소 검색 모달 관련 상태
     const [postcodeOpen, setPostcodeOpen] = useState(false);
     const [postcodeTarget, setPostcodeTarget] = useState(null);
+    const [searchKeyword, setSearchKeyword] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [isKakaoLoaded, setIsKakaoLoaded] = useState(false);
+    const [kakaoError, setKakaoError] = useState(false);
+
+    // 동적으로 카카오맵 SDK 로드 (한글 주석)
+    useEffect(() => {
+        const kakaoApiKey = import.meta.env.VITE_KAKAO_API_KEY;
+        if (!kakaoApiKey) {
+            console.warn('VITE_KAKAO_API_KEY가 설정되지 않았습니다. 장소 검색 시 로컬 Mock 데이터로 검색합니다.');
+            setKakaoError(true);
+            return;
+        }
+
+        if (window.kakao && window.kakao.maps) {
+            setIsKakaoLoaded(true);
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${kakaoApiKey}&libraries=services&autoload=false`;
+        script.async = true;
+        document.head.appendChild(script);
+
+        script.onload = () => {
+            if (window.kakao && window.kakao.maps) {
+                window.kakao.maps.load(() => {
+                    setIsKakaoLoaded(true);
+                    console.log('Kakao Maps SDK 로드 성공');
+                });
+            } else {
+                setKakaoError(true);
+            }
+        };
+
+        script.onerror = () => {
+            console.error('Kakao Maps SDK 로드 실패');
+            setKakaoError(true);
+        };
+    }, []);
+
+    // 키워드로 장소 검색 실행 함수 (한글 주석)
+    const handlePlaceSearch = (e) => {
+        if (e) e.preventDefault();
+        if (!searchKeyword.trim()) {
+            notify.warn('알림', '검색어를 입력해주세요.');
+            return;
+        }
+
+        setIsSearching(true);
+
+        const MOCK_PLACES = [
+            { place_name: '서울역', road_address_name: '서울 중구 한강대로 405', address_name: '서울 중구 봉래동2가 122' },
+            { place_name: '부산역', road_address_name: '부산 동구 중앙대로 206', address_name: '부산 동구 초량동 1187-1' },
+            { place_name: '대전역', road_address_name: '대전 동구 중앙로 215', address_name: '대전 동구 정동 1' },
+            { place_name: '광주송정역', road_address_name: '광주 광산구 상무대로 201-1', address_name: '광주 광산구 송정동 1003' },
+            { place_name: '인천국제공항', road_address_name: '인천 중구 공항로 272', address_name: '인천 중구 운서동 2851' },
+            { place_name: '김포국제공항', road_address_name: '서울 강서구 하늘길 112', address_name: '서울 강서구 공항동 137-3' },
+            { place_name: '롯데월드', road_address_name: '서울 송파구 올림픽로 240', address_name: '서울 송파구 잠실동 40-1' },
+            { place_name: '에버랜드', road_address_name: '경기 용인시 처인구 포곡읍 에버랜드로 199', address_name: '경기 용인시 처인구 포곡읍 전대리 310' },
+            { place_name: '경복궁', road_address_name: '서울 종로구 사직로 161', address_name: '서울 종로구 세종로 1-1' },
+            { place_name: '제주국제공항', road_address_name: '제주 제주시 공항로 2', address_name: '제주 제주시 용담이동 2002' },
+            { place_name: '해운대해수욕장', road_address_name: '부산 해운대구 우동', address_name: '부산 해운대구 우동 1414' },
+            { place_name: '강릉역', road_address_name: '강원 강릉시 용지로 176', address_name: '강원 강릉시 교동 118' },
+            { place_name: '여수엑스포역', road_address_name: '전남 여수시 망양로 2', address_name: '전남 여수시 덕충동 2005' },
+            { place_name: '경주보문단지', road_address_name: '경북 경주시 보문로 424-33', address_name: '경북 경주시 신평동 375-1' },
+        ];
+
+        if (isKakaoLoaded && window.kakao && window.kakao.maps && window.kakao.maps.services) {
+            const ps = new window.kakao.maps.services.Places();
+            ps.keywordSearch(searchKeyword, (data, status) => {
+                setIsSearching(false);
+                if (status === window.kakao.maps.services.Status.OK) {
+                    setSearchResults(data);
+                } else if (status === window.kakao.maps.services.Status.ZERO_RESULT) {
+                    setSearchResults([]);
+                    notify.info('알림', '검색 결과가 없습니다.');
+                } else {
+                    setSearchResults([]);
+                    notify.error('오류', '검색 중 오류가 발생했습니다.');
+                }
+            });
+        } else {
+            // 목(Mock) 데이터 검색 모드 (사용자 경험을 위해 500ms 지연)
+            setTimeout(() => {
+                const filtered = MOCK_PLACES.filter(place => 
+                    place.place_name.includes(searchKeyword) || 
+                    place.road_address_name.includes(searchKeyword) || 
+                    place.address_name.includes(searchKeyword)
+                );
+                setSearchResults(filtered);
+                setIsSearching(false);
+                if (filtered.length === 0) {
+                    notify.info('알림', '검색 결과가 없습니다. (테스트용 키워드: 서울역, 에버랜드, 롯데월드 등)');
+                }
+            }, 500);
+        }
+    };
+
+    // 장소 선택 핸들러 (한글 주석)
+    const handlePlaceSelect = (place) => {
+        const addressDetail = place.road_address_name || place.address_name;
+        const formattedAddress = `${place.place_name} (${addressDetail})`;
+
+        if (postcodeTarget === 'dep') {
+            setDepAddress(formattedAddress);
+            if (!endAddress) setEndAddress(formattedAddress);
+        } else if (postcodeTarget === 'arr') {
+            setArrAddress(formattedAddress);
+        } else if (postcodeTarget === 'end') {
+            setEndAddress(formattedAddress);
+        } else if (postcodeTarget.startsWith('stop-')) {
+            const idx = parseInt(postcodeTarget.split('-')[1]);
+            const newStops = [...stops];
+            newStops[idx] = formattedAddress;
+            setStops(newStops);
+        } else if (postcodeTarget.startsWith('returnStop-')) {
+            const idx = parseInt(postcodeTarget.split('-')[1]);
+            const newRetStops = [...returnStops];
+            newRetStops[idx] = formattedAddress;
+            setReturnStops(newRetStops);
+        }
+
+        setPostcodeOpen(false);
+        setSearchKeyword('');
+        setSearchResults([]);
+    };
 
     const addStop = () => {
         if (stops.length < 3) setStops([...stops, '']);
@@ -202,29 +329,6 @@ const RequestBus = () => {
     const grandTotal = selectedBuses.reduce((acc, bus, idx) => {
         return acc + (quoteAmounts[idx] || 0);
     }, 0);
-
-    const handlePostcodeComplete = (data) => {
-        const fullAddress = data.address;
-        if (postcodeTarget === 'dep') {
-            setDepAddress(fullAddress);
-            if (!endAddress) setEndAddress(fullAddress);
-        } else if (postcodeTarget === 'arr') {
-            setArrAddress(fullAddress);
-        } else if (postcodeTarget === 'end') {
-            setEndAddress(fullAddress);
-        } else if (postcodeTarget.startsWith('stop-')) {
-            const idx = parseInt(postcodeTarget.split('-')[1]);
-            const newStops = [...stops];
-            newStops[idx] = fullAddress;
-            setStops(newStops);
-        } else if (postcodeTarget.startsWith('returnStop-')) {
-            const idx = parseInt(postcodeTarget.split('-')[1]);
-            const newRetStops = [...returnStops];
-            newRetStops[idx] = fullAddress;
-            setReturnStops(newRetStops);
-        }
-        setPostcodeOpen(false);
-    };
 
     const handleRequestSubmit = async (e) => {
         e.preventDefault();
@@ -360,18 +464,78 @@ const RequestBus = () => {
             {/* Postcode Modal */}
             {postcodeOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl overflow-hidden w-full max-w-lg relative shadow-2xl animate-fade-in">
-                        <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-slate-50">
-                            <h3 className="font-bold text-teal-900">주소 검색</h3>
-                            <button onClick={() => setPostcodeOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 transition-colors">
-                                <span className="material-symbols-outlined text-sm">close</span>
+                    <div className="bg-white rounded-[2rem] overflow-hidden w-full max-w-lg relative shadow-2xl animate-fade-in flex flex-col border border-slate-100 h-[600px]">
+                        {/* 모달 헤더 (한글 주석) */}
+                        <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-slate-50">
+                            <div>
+                                <h3 className="font-headline font-black text-xl text-teal-900">장소 검색</h3>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                                    {isKakaoLoaded && !kakaoError ? 'Kakao Maps API 연동 중' : '로컬 테스트 (Mock) 모드'}
+                                </p>
+                            </div>
+                            <button onClick={() => { setPostcodeOpen(false); setSearchKeyword(''); setSearchResults([]); }} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 transition-all active:scale-95">
+                                <span className="material-symbols-outlined text-xl">close</span>
                             </button>
                         </div>
-                        <div className="h-[450px]">
-                            <DaumPostcodeEmbed
-                                onComplete={handlePostcodeComplete}
-                                style={{ height: '100%', width: '100%' }}
-                            />
+
+                        {/* 검색창 영역 (한글 주석) */}
+                        <form onSubmit={handlePlaceSearch} className="p-6 border-b border-slate-100 flex gap-2">
+                            <div className="relative flex-1">
+                                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">search</span>
+                                <input 
+                                    type="text" 
+                                    className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-teal-600/20 focus:border-teal-600 transition-all font-bold text-teal-900 outline-none"
+                                    placeholder="장소명, 건물명, 지하철역 등 입력"
+                                    value={searchKeyword}
+                                    onChange={(e) => setSearchKeyword(e.target.value)}
+                                />
+                            </div>
+                            <button type="submit" className="px-6 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-xl transition-colors active:scale-95">
+                                검색
+                            </button>
+                        </form>
+
+                        {/* 결과 목록 리스트 (한글 주석) */}
+                        <div className="flex-1 overflow-y-auto p-6 space-y-3 bg-slate-50/50">
+                            {isSearching ? (
+                                <div className="flex flex-col items-center justify-center py-20 space-y-3">
+                                    <div className="w-10 h-10 border-4 border-teal-600/20 border-t-teal-700 rounded-full animate-spin"></div>
+                                    <span className="text-sm font-semibold text-slate-500">장소를 찾는 중입니다...</span>
+                                </div>
+                            ) : searchResults.length > 0 ? (
+                                searchResults.map((place, idx) => (
+                                    <div 
+                                        key={idx} 
+                                        onClick={() => handlePlaceSelect(place)}
+                                        className="p-5 bg-white border border-slate-100 rounded-2xl hover:border-teal-600/30 hover:shadow-md cursor-pointer transition-all duration-300 text-left group"
+                                    >
+                                        <h4 className="font-headline font-bold text-teal-950 group-hover:text-teal-700 transition-colors">{place.place_name}</h4>
+                                        {place.road_address_name && (
+                                            <p className="text-xs font-semibold text-slate-500 mt-2 flex items-center gap-1">
+                                                <span className="px-1.5 py-0.5 rounded bg-slate-100 text-[10px] text-slate-600 font-bold">도로명</span>
+                                                {place.road_address_name}
+                                            </p>
+                                        )}
+                                        {place.address_name && (
+                                            <p className="text-xs font-semibold text-slate-400 mt-1 flex items-center gap-1">
+                                                <span className="px-1.5 py-0.5 rounded bg-slate-100 text-[10px] text-slate-400 font-bold">지번</span>
+                                                {place.address_name}
+                                            </p>
+                                        )}
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-20 text-slate-400 space-y-2">
+                                    <span className="material-symbols-outlined text-4xl">location_off</span>
+                                    <p className="text-sm font-bold">검색 결과가 없습니다.</p>
+                                    <p className="text-xs opacity-70">원하시는 장소명을 입력하신 후 검색해 보세요!</p>
+                                    {!isKakaoLoaded && (
+                                        <p className="text-[10px] text-teal-600 font-semibold mt-4 bg-teal-50 px-3 py-1 rounded-full">
+                                            💡 테스트용 추천 검색어: 서울역, 에버랜드, 롯데월드
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
