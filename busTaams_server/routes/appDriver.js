@@ -1424,10 +1424,10 @@ router.get('/membership-card-info', authenticateToken, async (req, res) => {
         let nextPaymentDate = null;
         let nextPaymentAmount = 0;
 
-        // 유료 멤버십인 경우에만 다음 결제 정보 생성 (예: 다음 달 10일 결제 가정)
+        // 유료 멤버십인 경우에만 다음 결제 정보 생성 (다음 달 1일 결제)
         if (currentPolicy !== 'DRIVER_GENERAL' && currentPolicy !== 'DRIVER_GENNERAL') {
             const now = new Date();
-            const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 10);
+            const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
             nextPaymentDate = `${nextMonth.getMonth() + 1}월 ${nextMonth.getDate()}일`;
             nextPaymentAmount = policyPrices[currentPolicy] || 0;
         }
