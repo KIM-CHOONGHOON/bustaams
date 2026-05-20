@@ -1,7 +1,7 @@
 import React from 'react';
-import { LayoutDashboard, Users, Bus, Settings, Compass, HeartHandshake, TrendingUp, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Users, Bus, Settings, Compass, HeartHandshake, TrendingUp, BarChart3, Newspaper } from 'lucide-react';
 
-const Sidebar = ({ currentMenu, setCurrentMenu }) => {
+const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
   // 로컬스토리지에서 로그인된 관리자 정보 획득
   const adminUserStr = localStorage.getItem('adminUser');
   const adminUser = adminUserStr ? JSON.parse(adminUserStr) : null;
@@ -17,12 +17,13 @@ const Sidebar = ({ currentMenu, setCurrentMenu }) => {
     { id: 'my-customers', label: '나의 고객관리', icon: <HeartHandshake size={20} /> },
     { id: 'my-performance', label: '나의 실적관리', icon: <TrendingUp size={20} /> },
     { id: 'sales-performance', label: '영업사원 실적', icon: <BarChart3 size={20} /> },
+    { id: 'BatchDashBoard', label: 'BATCH JOB 모니터링', icon: <Newspaper size={20} />, isModal: true },
     { id: 'settings', label: '시스템 설정', icon: <Settings size={20} /> },
   ];
 
   // 권한별 메뉴 필터링 로직
-  // 1. SUPER: 모든 메뉴 (9개 전체 노출)
-  // 2. MANAGER: 시스템 설정 빼고 전부 노출 (8개 노출)
+  // 1. SUPER: 모든 메뉴
+  // 2. MANAGER: 시스템 설정 빼고 전부 노출
   // 3. SALES: '나의 고객관리', '나의 실적관리' 두 개만 노출
   const getFilteredMenuItems = () => {
     if (role === 'SUPER') {
@@ -50,18 +51,25 @@ const Sidebar = ({ currentMenu, setCurrentMenu }) => {
 
   return (
     <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col min-h-screen shrink-0">
-      <div className="h-20 flex items-center px-6 border-b border-slate-800">
-        <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center mr-3">
-          <span className="text-white font-black text-lg leading-none">B</span>
-        </div>
-        <span className="text-xl font-black text-white tracking-wide">BusTaams</span>
+      <div className="flex flex-col items-start px-6 py-4 border-b border-slate-800 gap-2">
+        <img 
+          src="/admin/assets/BUSTAAM_FULL_LOGO.png" 
+          alt="버스탐스 로고" 
+          className="w-36 h-28 object-contain rounded-lg"
+        />
       </div>
 
       <nav className="flex-1 px-4 py-6 space-y-2">
         {menuItems.map((item) => (
           <button
             key={item.id}
-            onClick={() => setCurrentMenu(item.id)}
+            onClick={() => {
+              if (item.isModal) {
+                onBatchClick();
+              } else {
+                setCurrentMenu(item.id);
+              }
+            }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
               currentMenu === item.id 
                 ? 'bg-emerald-500/10 text-emerald-400 font-bold' 
