@@ -376,16 +376,37 @@ const BUS_DOC_FILE_CATEGORY = {
 };
 const BUS_PHOTO_FILE_CATEGORY = 'VEHICLE_PHOTO';
 
+/** 웹 버스 정보 등록·수정 모달 — TB_FILE_MASTER 고정 버킷명(공백 없음) */
+const BUS_FILE_MASTER_BUCKET_NM = 'bustaams-secure-data';
+/** 동일 — GCS_PATH 에 저장하는 공개 URL 접두사 */
+const BUS_FILE_MASTER_GCS_PUBLIC_BASE = 'https://storage.googleapis.com/bustaams-secure-data';
+
+/**
+ * 버스 모달 TB_FILE_MASTER.ORG_FILE_NM — 업로드 파일명 전체(확장자 포함), URL 앞뒤 공백 제거에 맞춰 값만 trim
+ */
+function busModalOrgFileNmWithExtension(fileNameHint, fileExt) {
+    const ext = String(fileExt ?? '').replace(/^\./, '').trim().toLowerCase();
+    let leaf = String(fileNameHint ?? 'file').trim().replace(/\\/g, '/').split('/').pop() || 'file';
+    leaf = leaf.replace(/[^a-zA-Z0-9._-가-힣]/g, '_').replace(/\.+$/, '');
+    if (!leaf) leaf = 'file';
+    if (!ext) return leaf;
+    const suf = `.${ext}`;
+    if (leaf.toLowerCase().endsWith(suf)) return leaf;
+    return `${leaf}${suf}`;
+}
+
 /** GCS 업로드 + `TB_FILE_MASTER` 행 추가 (`BusTaams_Project 테이블 설계.md` 범위) */
 async function insertBusFileMaster(connection, {
-    fileId, category, gcsPath, buffer, orgFileNm, fileExt, fileSize, contentType
+    fileId, category, gcsPath, buffer, orgFileNmFull, fileExt, fileSize, contentType
 }) {
-    const gcsFile = bucket.file(gcsPath);
+    const objectKey = String(gcsPath ?? '').trim().replace(/^\/+/, '').replace(/\s+/g, '');
+    const gcsFile = bucket.file(objectKey);
     await gcsFile.save(buffer, { metadata: { contentType: contentType || 'application/octet-stream' }, resumable: false });
+    const gcsPathForDb = `${BUS_FILE_MASTER_GCS_PUBLIC_BASE}/${objectKey}`.trim();
     await connection.execute(
         `INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT)
          VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
-        [fileId, category, bucketName, gcsPath, orgFileNm, fileExt, fileSize]
+        [fileId, category, BUS_FILE_MASTER_BUCKET_NM, gcsPathForDb, String(orgFileNmFull ?? 'file').trim(), fileExt, fileSize]
     );
 }
 
@@ -2793,8 +2814,10 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                     }
 
                     const seqPadded = String(nextSeq).padStart(20, '0');
-                    const { orgFileNm, fileExt } = orgFileNmAndExt(hintNm || undefined, parsed);
+                    const { fileExt } = orgFileNmAndExt(hintNm || undefined, parsed);
+                    const orgFileNmFull = busModalOrgFileNmWithExtension(hintNm || 'qualification', fileExt);
                     const gcsRelPath = `QUALIFICATION/${seqPadded}.${fileExt}`;
+                    const gcsPathForDb = `${BUS_FILE_MASTER_GCS_PUBLIC_BASE}/${gcsRelPath}`.trim();
 
                     const qualBuckets = bucketForName(DRIVER_QUAL_GCS_BUCKET);
                     const gcsFile = qualBuckets.file(gcsRelPath);
@@ -2816,8 +2839,8 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                                 QUALIFICATION_DOC_TYPE,
                                 nextSeq,
                                 DRIVER_QUAL_GCS_BUCKET,
-                                gcsRelPath,
-                                orgFileNm,
+                                gcsPathForDb,
+                                orgFileNmFull,
                                 fileExt,
                                 parsed.buffer.length
                             ]
@@ -2835,8 +2858,8 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                                 QUALIFICATION_DOC_TYPE,
                                 nextSeq,
                                 DRIVER_QUAL_GCS_BUCKET,
-                                gcsRelPath,
-                                orgFileNm,
+                                gcsPathForDb,
+                                orgFileNmFull,
                                 fileExt
                             ]
                         );
@@ -3336,7 +3359,11 @@ app.get('/api/driver/qual-cert/file', async (req, res) => {
         const doc = await fetchQualCertDocRow(connection, custId, fileId);
         if (!doc) return res.status(404).json({ error: '파일을 찾을 수 없습니다.' });
         const { GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, ORG_FILE_EXT } = doc;
-        const gcsFile = bucketForName(GCS_BUCKET_NM).file(GCS_PATH);
+        let pathRaw = GCS_PATH;
+        if (Buffer.isBuffer(pathRaw)) pathRaw = pathRaw.toString('utf8');
+        const objectKey = normalizeGcsObjectPath(pathRaw);
+        if (!objectKey) return res.status(404).json({ error: '유효하지 않은 저장 경로입니다.' });
+        const gcsFile = bucketForName(GCS_BUCKET_NM).file(objectKey);
         const [exists] = await gcsFile.exists();
         if (!exists) return res.status(404).json({ error: '스토리지에 파일이 없습니다.' });
         const extRaw = ((ORG_FILE_EXT || '').startsWith('.') ? (ORG_FILE_EXT || '').slice(1) : (ORG_FILE_EXT || '')).toLowerCase();
@@ -3376,7 +3403,11 @@ app.get('/api/driver/qual-cert/download', async (req, res) => {
         const doc = await fetchQualCertDocRow(connection, custId, fileId);
         if (!doc) return res.status(404).json({ error: '파일을 찾을 수 없습니다.' });
         const { GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, ORG_FILE_EXT } = doc;
-        const gcsFile = bucketForName(GCS_BUCKET_NM).file(GCS_PATH);
+        let pathRaw = GCS_PATH;
+        if (Buffer.isBuffer(pathRaw)) pathRaw = pathRaw.toString('utf8');
+        const objectKey = normalizeGcsObjectPath(pathRaw);
+        if (!objectKey) return res.status(404).json({ error: '유효하지 않은 저장 경로입니다.' });
+        const gcsFile = bucketForName(GCS_BUCKET_NM).file(objectKey);
         const [exists] = await gcsFile.exists();
         if (!exists) return res.status(404).json({ error: '스토리지에 파일이 없습니다.' });
         const safeNm = joinOrgFileDisplayName(ORG_FILE_NM || 'qual_cert', (ORG_FILE_EXT || '').replace(/^\./, '') || 'file');
@@ -3571,7 +3602,11 @@ app.get('/api/driver/bus-documents/file', async (req, res) => {
         );
         if (rows.length === 0) return res.status(404).json({ error: '파일을 찾을 수 없습니다.' });
         const { GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT } = rows[0];
-        const gcsFile = bucketForName(GCS_BUCKET_NM).file(GCS_PATH);
+        let pathRaw = GCS_PATH;
+        if (Buffer.isBuffer(pathRaw)) pathRaw = pathRaw.toString('utf8');
+        const objectKey = normalizeGcsObjectPath(pathRaw);
+        if (!objectKey) return res.status(404).json({ error: '유효하지 않은 저장 경로입니다.' });
+        const gcsFile = bucketForName(GCS_BUCKET_NM).file(objectKey);
         const [exists] = await gcsFile.exists();
         if (!exists) return res.status(404).json({ error: '스토리지에 파일이 없습니다.' });
 
@@ -3851,15 +3886,16 @@ app.post('/api/driver/bus', async (req, res) => {
 
                 const fid = generateNextNumericId(currentMaxFileId, 20);
                 currentMaxFileId = fid;
-                const { orgFileNm, fileExt } = orgFileNmAndExt(d.name, parsed);
+                const { fileExt } = orgFileNmAndExt(d.name, parsed);
                 const gcsPath = `${d.cat}/${custId}/${fid}.${fileExt}`;
+                const orgFileNmFull = busModalOrgFileNmWithExtension(d.name || 'doc', fileExt);
 
                 await insertBusFileMaster(connection, {
                     fileId: fid,
                     category: d.cat,
                     gcsPath,
                     buffer: parsed.buffer,
-                    orgFileNm,
+                    orgFileNmFull,
                     fileExt,
                     fileSize: parsed.buffer.length,
                     contentType: parsed.mime,
@@ -3883,15 +3919,16 @@ app.post('/api/driver/bus', async (req, res) => {
 
                     const fid = generateNextNumericId(currentMaxFileId, 20);
                     currentMaxFileId = fid;
-                    const { orgFileNm, fileExt } = orgFileNmAndExt(nm, parsed);
+                    const { fileExt } = orgFileNmAndExt(nm, parsed);
                     const gcsPath = `${BUS_PHOTO_FILE_CATEGORY}/${custId}/${fid}.${fileExt}`;
+                    const orgFileNmFull = busModalOrgFileNmWithExtension(nm, fileExt);
 
                     await insertBusFileMaster(connection, {
                         fileId: fid,
                         category: BUS_PHOTO_FILE_CATEGORY,
                         gcsPath,
                         buffer: parsed.buffer,
-                        orgFileNm,
+                        orgFileNmFull,
                         fileExt,
                         fileSize: parsed.buffer.length,
                         contentType: parsed.mime,
@@ -4017,14 +4054,15 @@ app.patch('/api/driver/bus/documents', async (req, res) => {
                 if (!parsed) continue;
                 const fid = generateNextNumericId(currentMaxFileId, 20);
                 currentMaxFileId = fid;
-                const { orgFileNm, fileExt } = orgFileNmAndExt(d.name, parsed);
+                const { fileExt } = orgFileNmAndExt(d.name, parsed);
                 const gcsPath = `${d.cat}/${custId}/${fid}.${fileExt}`;
+                const orgFileNmFull = busModalOrgFileNmWithExtension(d.name || 'doc', fileExt);
                 await insertBusFileMaster(connection, {
                     fileId: fid,
                     category: d.cat,
                     gcsPath,
                     buffer: parsed.buffer,
-                    orgFileNm,
+                    orgFileNmFull,
                     fileExt,
                     fileSize: parsed.buffer.length,
                     contentType: parsed.mime,
@@ -4073,14 +4111,15 @@ app.patch('/api/driver/bus/photos', async (req, res) => {
                 if (!parsed) continue;
                 const fid = generateNextNumericId(currentMaxFileId, 20);
                 currentMaxFileId = fid;
-                const { orgFileNm, fileExt } = orgFileNmAndExt(ph.fileName || 'photo', parsed);
+                const { fileExt } = orgFileNmAndExt(ph.fileName || 'photo', parsed);
                 const gcsPath = `${BUS_PHOTO_FILE_CATEGORY}/${custId}/${fid}.${fileExt}`;
+                const orgFileNmFull = busModalOrgFileNmWithExtension(ph.fileName || 'photo', fileExt);
                 await insertBusFileMaster(connection, {
                     fileId: fid,
                     category: BUS_PHOTO_FILE_CATEGORY,
                     gcsPath,
                     buffer: parsed.buffer,
-                    orgFileNm,
+                    orgFileNmFull,
                     fileExt,
                     fileSize: parsed.buffer.length,
                     contentType: parsed.mime,
