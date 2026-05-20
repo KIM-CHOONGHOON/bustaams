@@ -6,6 +6,7 @@ const { encrypt, decrypt } = require('../crypto');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
+const { registerBusDriverPaymentCard } = require('../lib/busDriverCreditCardRegistration');
 
 const JWT_SECRET_KEY = process.env.JWT_SECRET || 'bustaams-dev-secret-key-2026';
 
@@ -1450,6 +1451,67 @@ router.get('/membership-card-info', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error('[App Membership Card Info] Error:', error);
         res.status(500).json({ success: false, error: '정보 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+/**
+ * [App] 기사 결제 카드 등록 API
+ */
+router.post('/save-card-info', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const { cardNickname, cardNumber, expiryDate, birthDate, cardPwFront } = req.body;
+
+        if (!cardNumber || !expiryDate) {
+            return res.status(400).json({ success: false, error: '카드 번호와 유효기간은 필수 항목입니다.' });
+        }
+
+        // 1. 로그인된 기사 사용자의 CUST_ID 및 기본 사용자명 등 조회
+        const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        if (uRows.length === 0) {
+            return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
+        }
+        const custId = uRows[0].CUST_ID;
+
+        // 2. 유효기간 파싱 (MM/YY -> expMonth, expYearYY)
+        let expMonth = '';
+        let expYearYY = '';
+        if (expiryDate.includes('/')) {
+            const parts = expiryDate.split('/');
+            expMonth = parts[0].trim();
+            expYearYY = parts[1].trim();
+        } else if (expiryDate.length === 4) {
+            expMonth = expiryDate.slice(0, 2);
+            expYearYY = expiryDate.slice(2);
+        } else {
+            return res.status(400).json({ success: false, error: '유효기간 포맷(MM/YY)이 올바르지 않습니다.' });
+        }
+
+        // 3. 카드 등록 모듈 호출 (registerBusDriverPaymentCard)
+        // 새로 등록하는 카드이므로 setAsDefault: true로 지정하여 기본결제 카드로 설정
+        const result = await registerBusDriverPaymentCard(pool, {
+            rawDriverId: custId,
+            panDigits: cardNumber,
+            expMonth,
+            expYearYY,
+            cardNickname: cardNickname || '기사결제카드',
+            setAsDefault: true
+        });
+
+        console.log(`[App Save Card Info] Card registered successfully. CUST_ID: ${custId}, CardSeq: ${result.cardSeq}`);
+
+        res.json({
+            success: true,
+            message: '카드 정보가 성공적으로 저장되었습니다.',
+            data: result
+        });
+
+    } catch (error) {
+        console.error('[App Save Card Info] Error:', error);
+        res.status(error.statusCode || 500).json({
+            success: false,
+            error: error.message || '카드 저장 중 오류가 발생했습니다.'
+        });
     }
 });
 
