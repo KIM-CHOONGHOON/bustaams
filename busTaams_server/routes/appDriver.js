@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const admin = require('firebase-admin');
 const { pool, getNextId, uploadToLocal } = require('../db');
-const { encrypt, decrypt } = require('../crypto');
+const { encrypt, decrypt, plainOrLegacyDecrypt } = require('../crypto');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
@@ -1388,10 +1388,27 @@ router.get('/membership-card-info', authenticateToken, async (req, res) => {
         const custId = user.CUST_ID;
         const userImage = user.GCS_PATH ? `/api/common/display-image?path=${encodeURIComponent(user.GCS_PATH)}` : user.USER_IMAGE;
 
-        const [cards] = await pool.execute(
+        const [rawCards] = await pool.execute(
             'SELECT CARD_SEQ, CARD_NICKNAME, CARD_NO_ENC, EXP_MONTH, EXP_YEAR, IS_PRIMARY FROM TB_PAYMENT_CARD WHERE CUST_ID = ? ORDER BY IS_PRIMARY DESC, CARD_SEQ ASC',
             [custId]
         );
+
+        const cards = rawCards.map(card => {
+            let lastFour = '';
+            if (card.CARD_NO_ENC) {
+                try {
+                    const decrypted = plainOrLegacyDecrypt(card.CARD_NO_ENC);
+                    const digits = String(decrypted || '').replace(/\D/g, '');
+                    lastFour = digits.length >= 4 ? digits.slice(-4) : digits;
+                } catch (err) {
+                    console.error('[App Card Decrypt] Error:', err);
+                }
+            }
+            return {
+                ...card,
+                CARD_NO_ENC: lastFour
+            };
+        });
 
         // 2. 월별 멤버십 이용 및 결제 내역 조회 (최근 12개월)
         const [history] = await pool.execute(
