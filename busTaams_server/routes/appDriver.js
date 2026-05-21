@@ -1763,6 +1763,159 @@ router.post('/cancel-mission/:id', authenticateToken, memoryUpload.single('reaso
     }
 });
 
+const axios = require('axios');
+const crypto = require('crypto');
+
+function sha256(data) {
+    return crypto.createHash('sha256').update(data).digest('hex');
+}
+
+function getTimestamp() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const h = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    const s = String(now.getSeconds()).padStart(2, '0');
+    return `${y}${m}${d}${h}${min}${s}`;
+}
+
+/**
+ * 이니시스 빌링 서명 및 파라미터 생성 API
+ */
+router.get('/inicis-bill-signature', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        if (uRows.length === 0) {
+            return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
+        }
+        const custId = uRows[0].CUST_ID;
+
+        const mid = process.env.INICIS_BILL_MID || 'INIBillTst';
+        const signKey = process.env.INICIS_BILL_SIGN_KEY || 'SU5JTElURV9UUklQTEVERVNfS0VZU1RS';
+        
+        const timestamp = getTimestamp();
+        const oid = `BILL_${custId}_${timestamp}`;
+        const price = '0'; // 빌링키 등록 시 가격은 0원
+
+        // signature = SHA256(oid + price + timestamp)
+        const signature = sha256(oid + price + timestamp);
+        
+        // mKey = SHA256(signKey)
+        const mKey = sha256(signKey);
+
+        res.json({
+            success: true,
+            data: {
+                mid,
+                oid,
+                price,
+                timestamp,
+                signature,
+                mKey,
+                custId
+            }
+        });
+    } catch (err) {
+        console.error('[Inicis Bill Signature] Error:', err);
+        res.status(500).json({ success: false, error: '이니시스 서명 생성 중 오류가 발생했습니다.' });
+    }
+});
+
+/**
+ * 이니시스 빌링 완료 리턴 수신 API (POST)
+ */
+router.post('/inicis-bill-return', async (req, res) => {
+    try {
+        const { authUrl, authToken, mid, merchantData } = req.body;
+        console.log('[Inicis Bill Return] Params Received:', { authUrl, authToken, mid, merchantData });
+
+        if (!authToken) {
+            return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=' + encodeURIComponent('인증 토큰이 없습니다.'));
+        }
+
+        // merchantData 파싱 (형식: "custId:cardNickname")
+        const mData = String(merchantData || '');
+        const sepIndex = mData.indexOf(':');
+        let custId = '';
+        let cardNickname = '기사결제카드';
+
+        if (sepIndex !== -1) {
+            custId = mData.substring(0, sepIndex).trim();
+            cardNickname = mData.substring(sepIndex + 1).trim() || '기사결제카드';
+        } else {
+            custId = mData.trim();
+        }
+
+        if (!custId) {
+            return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=' + encodeURIComponent('사용자 식별 정보(CUST_ID)가 누락되었습니다.'));
+        }
+
+        // 2. 이니시스 승인 API 통신 (HTTP POST)
+        const requestTimestamp = getTimestamp();
+        const signKey = process.env.INICIS_BILL_SIGN_KEY || 'SU5JTElURV9UUklQTEVERVNfS0VZU1RS';
+        
+        // signature = SHA256(authToken + timestamp)
+        const approveSignature = sha256(authToken + requestTimestamp);
+
+        const params = new URLSearchParams();
+        params.append('mid', mid || 'INIBillTst');
+        params.append('authToken', authToken);
+        params.append('signature', approveSignature);
+        params.append('timestamp', requestTimestamp);
+        params.append('charset', 'UTF-8');
+        params.append('format', 'JSON');
+
+        // authUrl 이 있으면 사용하고, 없으면 기본 API URL 사용
+        const approvalUrl = authUrl || 'https://iniapi.inicis.com/api/v1/auth';
+        console.log('[Inicis Bill Return] Approving at URL:', approvalUrl);
+
+        const response = await axios.post(approvalUrl, params, {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        });
+
+        const resultMap = response.data;
+        console.log('[Inicis Bill Return] Approval Response:', resultMap);
+
+        const resultCode = String(resultMap.resultCode || '');
+        const resultMsg = String(resultMap.resultMsg || '인증 실패');
+
+        if (resultCode === '0000') {
+            const billKey = resultMap.CARD_BillKey;
+            const cardNum = resultMap.cardNum || resultMap.CARD_Num || '';
+            const cardName = resultMap.cardName || resultMap.CARD_Name || '신용카드';
+
+            if (!billKey) {
+                return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=' + encodeURIComponent('발급된 빌링키가 존재하지 않습니다.'));
+            }
+
+            // 3. 카드 등록 모듈 호출 (registerBusDriverPaymentCard)
+            // 빌링키가 있으므로 빌링모드로 자동 동작
+            const registerResult = await registerBusDriverPaymentCard(pool, {
+                rawDriverId: custId,
+                billKey,
+                panDigits: cardNum,
+                cardNickname,
+                originalCardName: cardName,
+                setAsDefault: true
+            });
+
+            console.log('[Inicis Bill Return] Card registered successfully:', registerResult);
+            return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=success');
+        } else {
+            console.error('[Inicis Bill Return] Approval Failed:', resultMsg);
+            return res.redirect(`https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=${encodeURIComponent(resultMsg)}`);
+        }
+    } catch (err) {
+        console.error('[Inicis Bill Return] Critical Error:', err);
+        return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=' + encodeURIComponent(err.message || '알 수 없는 서버 에러'));
+    }
+});
+
 module.exports = router;
 
 

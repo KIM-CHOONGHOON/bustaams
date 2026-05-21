@@ -6,14 +6,9 @@ import BottomNavDriver from '../components/BottomNavDriver';
 
 const CardRegisterDriver = () => {
     const navigate = useNavigate();
-    const [formData, setFormData] = useState({
-        cardNickname: '',
-        cardNumber: '',
-        expiryDate: '',
-        birthDate: '',
-        cardPwFront: ''
-    });
+    const [cardNickname, setCardNickname] = useState('');
     const [loading, setLoading] = useState(false);
+    const [payParams, setPayParams] = useState(null);
     const [userImage, setUserImage] = useState(null);
     const [imageVersion] = useState(Date.now());
 
@@ -32,53 +27,44 @@ const CardRegisterDriver = () => {
         fetchProfile();
     }, []);
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        
-        // 카드번호 자동 하이픈 및 숫자 제한 로직 (예시)
-        if (name === 'cardNumber') {
-            const val = value.replace(/[^0-9]/g, '').slice(0, 16);
-            setFormData({ ...formData, [name]: val.replace(/(\d{4})(?=\d)/g, '$1-') });
-            return;
+    // payParams 가 설정되면 결제창 실행
+    useEffect(() => {
+        if (payParams) {
+            // setTimeout을 주어 React가 DOM에 input들을 완전히 반영한 후에 이니시스 SDK를 실행하도록 합니다.
+            const timer = setTimeout(() => {
+                try {
+                    // 이니시스 SDK 표준결제창 호출
+                    window.INIStdPay.pay('SendPayForm');
+                } catch (e) {
+                    console.error('Failed to launch Inicis Pay:', e);
+                    Swal.fire('오류', '결제창을 실행하는 중 오류가 발생했습니다. 라이브러리 로드 상태를 확인해주세요.', 'error');
+                    setPayParams(null);
+                    setLoading(false);
+                }
+            }, 100);
+            return () => clearTimeout(timer);
         }
+    }, [payParams]);
 
-        if (name === 'expiryDate') {
-            const val = value.replace(/[^0-9]/g, '').slice(0, 4);
-            if (val.length >= 2) {
-                setFormData({ ...formData, [name]: val.slice(0, 2) + '/' + val.slice(2) });
-            } else {
-                setFormData({ ...formData, [name]: val });
-            }
-            return;
-        }
-
-        setFormData({ ...formData, [name]: value });
-    };
-
-    const handleSubmit = async (e) => {
+    const handleStartInicis = async (e) => {
         e.preventDefault();
-        
-        // 간단한 유효성 검사
-        if (!formData.cardNumber || formData.cardNumber.length < 15) {
-            return Swal.fire('알림', '올바른 카드 번호를 입력해주세요.', 'warning');
+        if (!cardNickname.trim()) {
+            return Swal.fire('알림', '카드 식별을 위해 카드 별칭을 입력해주세요.', 'warning');
         }
 
         setLoading(true);
         try {
-            const response = await api.post('/app/driver/save-card-info', formData);
+            // 백엔드로부터 빌링 서명 및 파라미터 획득
+            const response = await api.get('/app/driver/inicis-bill-signature');
             if (response.success) {
-                await Swal.fire({
-                    title: '성공',
-                    text: '카드 정보가 안전하게 저장되었습니다.',
-                    icon: 'success',
-                    confirmButtonColor: '#006a6a'
-                });
-                navigate('/membership-card-mgmt');
+                setPayParams(response.data);
+            } else {
+                Swal.fire('오류', response.error || '서명 생성에 실패했습니다.', 'error');
+                setLoading(false);
             }
-        } catch (error) {
-            console.error('Save card error:', error);
-            Swal.fire('오류', '카드 저장 중 오류가 발생했습니다.', 'error');
-        } finally {
+        } catch (err) {
+            console.error('Signature fetch error:', err);
+            Swal.fire('오류', '서버와 통신하는 중 오류가 발생했습니다.', 'error');
             setLoading(false);
         }
     };
@@ -133,91 +119,69 @@ const CardRegisterDriver = () => {
                         결제 카드 등록
                     </h2>
                     <p className="text-on-surface-variant text-sm leading-relaxed">
-                        매월 멤버십 이용료가 자동으로 결제될 카드를 등록합니다. <br/>입력하신 정보는 안전하게 보호됩니다.
+                        매월 멤버십 이용료가 자동으로 결제될 카드를 등록합니다. <br/>
+                        인증 완료 시 해당 카드의 빌링키가 발급되며, 카드 정보는 KG이니시스를 통해 안전하게 처리됩니다.
                     </p>
                 </header>
 
-                <form onSubmit={handleSubmit} className="space-y-8">
-                    {/* Card Nickname */}
+                {/* 이니시스 빌링 폼 (항상 렌더링하여 DOM 요소를 보장하되 value는 안전하게 대입) */}
+                <form id="SendPayForm" style={{ display: 'none' }}>
+                    <input type="hidden" name="version" value="1.0" />
+                    <input type="hidden" name="gopaymethod" value="BILL" />
+                    <input type="hidden" name="mid" value={payParams?.mid || ''} />
+                    <input type="hidden" name="oid" value={payParams?.oid || ''} />
+                    <input type="hidden" name="price" value={payParams?.price || '0'} />
+                    <input type="hidden" name="timestamp" value={payParams?.timestamp || ''} />
+                    <input type="hidden" name="signature" value={payParams?.signature || ''} />
+                    <input type="hidden" name="mKey" value={payParams?.mKey || ''} />
+                    <input type="hidden" name="currency" value="WON" />
+                    <input type="hidden" name="buyername" value="기사회원" />
+                    <input type="hidden" name="buyertel" value="01000000000" />
+                    <input type="hidden" name="buyeremail" value="driver@bustaams.com" />
+                    <input type="hidden" name="returnUrl" value="https://bustaams.cafe24.com/api/app/driver/inicis-bill-return" />
+                    <input type="hidden" name="merchantData" value={payParams ? `${payParams.custId}:${cardNickname}` : ''} />
+                    <input type="hidden" name="acceptmethod" value="BILLPRType(CARD):work_setup:no_receipt" />
+                </form>
+
+                <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 border border-slate-100 dark:border-slate-700 shadow-xl space-y-6">
+                    {/* Visual Card Mockup */}
+                    <div className="relative h-48 w-full rounded-2xl bg-gradient-to-tr from-teal-800 to-emerald-600 text-white p-6 shadow-lg flex flex-col justify-between overflow-hidden">
+                        <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
+                        <div className="flex justify-between items-start">
+                            <span className="material-symbols-outlined text-3xl opacity-80">wifi_tethering</span>
+                            <span className="font-headline font-bold text-lg tracking-wider italic">TAAMS CARD</span>
+                        </div>
+                        <div className="space-y-4">
+                            <div className="text-xl tracking-[0.25em] font-mono opacity-60">•••• •••• •••• ••••</div>
+                            <div className="flex justify-between items-end">
+                                <div className="space-y-1">
+                                    <span className="text-[9px] uppercase tracking-wider opacity-60">Card Nickname</span>
+                                    <div className="text-sm font-bold truncate max-w-[200px] h-5">
+                                        {cardNickname || '별칭을 입력해주세요'}
+                                    </div>
+                                </div>
+                                <span className="material-symbols-outlined text-4xl opacity-80">credit_card</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Nickname Input */}
                     <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-primary uppercase tracking-widest px-1">카드 별칭 (예: 법인카드, 개인현대)</label>
+                        <label className="text-[10px] font-bold text-primary dark:text-teal-400 uppercase tracking-widest px-1">카드 별칭 (예: 개인 현대카드, 회사 국민카드)</label>
                         <input 
                             type="text"
-                            name="cardNickname"
-                            value={formData.cardNickname}
-                            onChange={handleChange}
-                            placeholder="카드를 구분할 이름을 입력하세요"
-                            className="w-full bg-white rounded-3xl p-5 border border-slate-100 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-bold shadow-sm"
+                            value={cardNickname}
+                            onChange={(e) => setCardNickname(e.target.value)}
+                            placeholder="카드를 식별할 별칭을 입력하세요"
+                            className="w-full bg-slate-50 dark:bg-slate-900 rounded-3xl p-5 border border-slate-100 dark:border-slate-800 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-bold shadow-sm dark:text-white"
                             required
+                            disabled={loading}
                         />
                     </div>
 
-                    {/* Card Number */}
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-primary uppercase tracking-widest px-1">카드 번호</label>
-                        <div className="relative">
-                            <input 
-                                type="text"
-                                name="cardNumber"
-                                value={formData.cardNumber}
-                                onChange={handleChange}
-                                placeholder="0000-0000-0000-0000"
-                                className="w-full bg-white rounded-3xl p-5 border border-slate-100 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-bold tracking-[0.2em] shadow-sm"
-                                required
-                            />
-                            <span className="absolute right-5 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-300">credit_card</span>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        {/* Expiry */}
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-primary uppercase tracking-widest px-1">유효기간 (MM/YY)</label>
-                            <input 
-                                type="text"
-                                name="expiryDate"
-                                value={formData.expiryDate}
-                                onChange={handleChange}
-                                placeholder="MM/YY"
-                                className="w-full bg-white rounded-3xl p-5 border border-slate-100 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-bold shadow-sm"
-                                required
-                            />
-                        </div>
-                        {/* Password Front */}
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-primary uppercase tracking-widest px-1">비밀번호 앞 2자리</label>
-                            <input 
-                                type="password"
-                                name="cardPwFront"
-                                value={formData.cardPwFront}
-                                onChange={handleChange}
-                                placeholder="**"
-                                maxLength={2}
-                                className="w-full bg-white rounded-3xl p-5 border border-slate-100 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-bold shadow-sm"
-                                required
-                            />
-                        </div>
-                    </div>
-
-                    {/* Birth Date / Business ID */}
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-primary uppercase tracking-widest px-1">생년월일 6자리 (또는 사업자번호)</label>
-                        <input 
-                            type="text"
-                            name="birthDate"
-                            value={formData.birthDate}
-                            onChange={handleChange}
-                            placeholder="YYMMDD"
-                            maxLength={10}
-                            className="w-full bg-white rounded-3xl p-5 border border-slate-100 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-bold shadow-sm"
-                            required
-                        />
-                        <p className="text-[9px] text-on-surface-variant px-1">* 개인카드는 생년월일, 법인카드는 사업자등록번호를 입력해주세요.</p>
-                    </div>
-
-                    <div className="pt-6">
+                    <div className="pt-4">
                         <button 
-                            type="submit"
+                            onClick={handleStartInicis}
                             disabled={loading}
                             className="w-full bg-primary text-white py-5 rounded-full font-bold text-sm uppercase tracking-[0.2em] shadow-xl shadow-primary/30 active:scale-95 transition-all flex items-center justify-center gap-2"
                         >
@@ -225,18 +189,18 @@ const CardRegisterDriver = () => {
                                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                             ) : (
                                 <>
-                                    <span className="material-symbols-outlined text-lg">verified_user</span>
-                                    정보 저장 및 카드 등록
+                                    <span className="material-symbols-outlined text-lg">lock</span>
+                                    안전한 이니시스 카드 등록 시작
                                 </>
                             )}
                         </button>
                     </div>
-                </form>
+                </div>
 
                 <div className="bg-surface-container-low rounded-3xl p-6 border border-primary/5">
                     <p className="text-[10px] text-on-surface-variant leading-relaxed">
-                        • 등록된 카드는 다음 정기 결제일부터 자동으로 사용됩니다. <br/>
-                        • 카드 정보는 보안 표준을 준수하여 안전하게 관리됩니다.
+                        • 등록된 카드는 다음 멤버십 정기 결제일에 자동으로 사용됩니다. <br/>
+                        • 카드 정보는 이니시스 보안 결제창을 통해 암호화되며, 가맹점에는 카드 번호가 직접 저장되지 않고 안전한 빌링키 형태로만 보관됩니다.
                     </p>
                 </div>
             </main>
