@@ -120,8 +120,8 @@ const CustomerDashboard = () => {
             {/* TopAppBar */}
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl shadow-[0px_40px_60px_rgba(0,104,95,0.06)] h-16 flex items-center justify-between px-6">
                 <div className="flex items-center gap-3">
-                    <img src="/icon-512.png" alt="busTaams Logo" className="w-8 h-8 object-contain rounded-lg" />
-                    <h1 className="text-2xl font-black text-teal-800 italic font-headline tracking-tight text-[22px]">busTaams</h1>
+                    <img src="/assets/BUSTAAMS_IMAGE_LOGO.png" alt="BUSTAAMS Logo" className="w-8 h-8 object-contain rounded-lg" />
+                    <h1 className="text-2xl font-black text-teal-800 italic font-headline tracking-tight text-[22px]">BUSTAAMS</h1>
                 </div>
                 <div className="flex items-center gap-4">
                     <button 
@@ -154,7 +154,7 @@ const CustomerDashboard = () => {
                 <section className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                     <div className="space-y-2">
                         <p className="text-secondary font-semibold tracking-wider text-sm uppercase">반가워요!</p>
-                        <h2 className="text-4xl md:text-5xl font-extrabold text-on-surface tracking-tight leading-tight text-[36px]">
+                        <h2 className="text-3xl md:text-4xl font-extrabold text-on-surface tracking-tight leading-tight text-[28px]">
                             안녕하세요, <span className="text-primary">{userName || '사용자'}</span>님!<br/>
                             오늘의 새로운 여행을 시작해볼까요?
                         </h2>
@@ -232,19 +232,19 @@ const CustomerDashboard = () => {
                             <h4 className="font-bold text-on-surface text-[14px]">버스 요청 등록</h4>
                             <p className="text-[10px] text-on-surface-variant mt-1">새로운 일정 생성</p>
                         </div>
-                        <div onClick={() => navigate('/order-history')} className="cursor-pointer bg-white p-6 rounded-3xl shadow-sm hover:translate-y-[-4px] transition-all">
-                            <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mb-4 text-slate-600">
-                                <span className="material-symbols-outlined">history</span>
-                            </div>
-                            <h4 className="font-bold text-on-surface text-[14px]">과거 여행 이력</h4>
-                            <p className="text-[10px] text-on-surface-variant mt-1">지난 여행 확인</p>
-                        </div>
                         <div onClick={() => navigate('/reservation-list')} className="cursor-pointer bg-white p-6 rounded-3xl shadow-sm hover:translate-y-[-4px] transition-all">
                             <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4 text-indigo-600">
                                 <span className="material-symbols-outlined">event_note</span>
                             </div>
                             <h4 className="font-bold text-on-surface text-[14px]">예약 리스트</h4>
                             <p className="text-[10px] text-on-surface-variant mt-1">나의 예약 현황</p>
+                        </div>
+                        <div onClick={() => navigate('/order-history')} className="cursor-pointer bg-white p-6 rounded-3xl shadow-sm hover:translate-y-[-4px] transition-all">
+                            <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mb-4 text-slate-600">
+                                <span className="material-symbols-outlined">history</span>
+                            </div>
+                            <h4 className="font-bold text-on-surface text-[14px]">과거 여행 이력</h4>
+                            <p className="text-[10px] text-on-surface-variant mt-1">지난 여행 확인</p>
                         </div>
                         <div onClick={() => navigate('/review-pending-list')} className="cursor-pointer bg-white p-6 rounded-3xl shadow-sm hover:translate-y-[-4px] transition-all">
                             <div className="w-12 h-12 rounded-2xl bg-orange-100 flex items-center justify-center mb-4 text-orange-600">

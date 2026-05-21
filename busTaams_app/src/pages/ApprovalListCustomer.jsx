@@ -112,13 +112,7 @@ const ApprovalListCustomer = () => {
         // 무통장 입금 안내 노출
         await notify.info(
             '예약금 입금 안내',
-            `
-    은행명 : 국민은행\n
-    계좌번호 : 123456-01-123456\n
-    예금주 : (주)버스타암즈\n
-    입금금액 : ${totalResFee.toLocaleString()}원\n
-    ※ 입금 확인 후 예약이 승인됩니다.
-            `
+            `은행명 : IBK기업은행\n계좌번호 : 088-038608-04-011\n예금주 : (주)청솔테크\n입금금액 : ${totalResFee.toLocaleString()}원\n* 입금 확인 후 예약이 승인됩니다.`
         );
 
         try {

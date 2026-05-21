@@ -204,9 +204,17 @@ const DriverInfoRegistration = () => {
             return;
         }
 
+        if (!formData.licenseIssueDt) {
+            notify.error('입력 오류', '면허 발급일을 입력해주세요.');
+            return;
+        }
         const today = new Date().toISOString().split('T')[0];
         if (formData.licenseIssueDt && formData.licenseIssueDt > today) {
             notify.error('입력 오류', '면허 발급일은 오늘 이전 날짜여야 합니다.');
+            return;
+        }
+        if (!formData.qualAcquisitionDt) {
+            notify.error('입력 오류', '자격 취득일을 입력해주세요.');
             return;
         }
         if (!files.licenseImg && !previews.licenseImg) {

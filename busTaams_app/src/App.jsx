@@ -1,7 +1,7 @@
 
 // busTaams App Entry (V2.0.2 - Force Cache Refresh)
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import CustomerDashboard from './pages/CustomerDashboard';
@@ -110,6 +110,17 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// 페이지 이동 시 스크롤을 맨 위로 올려주는 컴포넌트
+const ScrollToTop = () => {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+};
+
 function App() {
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -120,6 +131,7 @@ function App() {
 
   return (
     <Router>
+      <ScrollToTop />
       <NotificationToast />
       <Routes>
         {/* 핵심 인증 라우트 */}

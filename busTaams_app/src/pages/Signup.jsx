@@ -433,7 +433,7 @@ const Signup = () => {
         <div className="bg-slate-50 font-body text-on-background min-h-screen flex flex-col items-center py-12 px-6">
             <header className="w-full max-w-md flex justify-between items-center mb-8">
                 <div className="flex items-center gap-3">
-                    <img src="/icon-512.png" alt="busTaams Logo" className="w-10 h-10 object-contain rounded-xl shadow-sm" />
+                    <img src="/assets/BUSTAAMS_IMAGE_LOGO.png" alt="busTaams Logo" className="w-10 h-10 object-contain rounded-xl shadow-sm" />
                     <div className="text-primary font-black tracking-tighter font-headline text-3xl">busTaams</div>
                 </div>
                 <button className="text-outline font-bold text-xs">고객지원</button>
@@ -472,32 +472,17 @@ const Signup = () => {
                         </div>
 
                         {userType === 'driver' && (
-                            <>
-                                {/* 주민등록번호 */}
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-on-surface ml-1">주민등록번호 (13자리)</label>
-                                    <input
-                                        value={residentNo}
-                                        onChange={e => setResidentNo(e.target.value.replace(/[^0-9]/g, '').slice(0, 13))}
-                                        type="password"
-                                        placeholder="숫자 13자리만 입력"
-                                        className="w-full bg-slate-100 rounded-xl py-3 px-3 outline-none focus:bg-slate-200 transition-all font-medium text-sm"
-                                    />
-                                    <p className="text-[10px] text-outline ml-1">* 기사 가입을 위해 주민등록번호 입력이 필수입니다. 암호화되어 안전하게 보관됩니다.</p>
-                                </div>
-
-                                {/* 추천인 코드 */}
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-on-surface ml-1">추천인 아이디 (선택)</label>
-                                    <input
-                                        value={recomCode}
-                                        onChange={e => setRecomCode(e.target.value)}
-                                        type="text"
-                                        placeholder="추천인 아이디 입력"
-                                        className="w-full bg-slate-100 rounded-xl py-3 px-3 outline-none focus:bg-slate-200 transition-all font-medium text-sm"
-                                    />
-                                </div>
-                            </>
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-on-surface ml-1">주민등록번호 (13자리)</label>
+                                <input
+                                    value={residentNo}
+                                    onChange={e => setResidentNo(e.target.value.replace(/[^0-9]/g, '').slice(0, 13))}
+                                    type="password"
+                                    placeholder="숫자 13자리만 입력"
+                                    className="w-full bg-slate-100 rounded-xl py-3 px-3 outline-none focus:bg-slate-200 transition-all font-medium text-sm"
+                                />
+                                <p className="text-[10px] text-outline ml-1">* 기사 가입을 위해 주민등록번호 입력이 필수입니다. 암호화되어 안전하게 보관됩니다.</p>
+                            </div>
                         )}
 
                         {/* 아이디 */}
@@ -612,6 +597,19 @@ const Signup = () => {
                                 <p className="text-xs text-green-600 font-bold ml-1">✔ 휴대폰 인증이 완료되었습니다.</p>
                             )}
                         </div>
+
+                        {userType === 'driver' && (
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-on-surface ml-1">추천인 아이디 (선택)</label>
+                                <input
+                                    value={recomCode}
+                                    onChange={e => setRecomCode(e.target.value)}
+                                    type="text"
+                                    placeholder="추천인 아이디 입력"
+                                    className="w-full bg-slate-100 rounded-xl py-3 px-3 outline-none focus:bg-slate-200 transition-all font-medium text-sm"
+                                />
+                            </div>
+                        )}
 
                         {/* 약관 동의 */}
                         <div className="space-y-4 pt-4">

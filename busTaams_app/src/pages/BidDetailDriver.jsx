@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import BottomNavDriver from '../components/BottomNavDriver';
 import { request } from '../api';
+import { notify } from '../utils/toast';
 
 const BidDetailDriver = () => {
     const navigate = useNavigate();
@@ -35,6 +36,40 @@ const BidDetailDriver = () => {
 
         if (id) fetchBidDetail();
     }, [id, navigate]);
+
+    // 입찰 취소 처리 함수
+    const handleCancelBid = async () => {
+        const confirmed = await notify.confirm(
+            '입찰을 취소하시겠습니까?',
+            '취소된 입찰은 되돌릴 수 없으며 다시 경매 입찰에 참여할 수 있게 됩니다.',
+            '입찰 취소',
+            '뒤로가기'
+        );
+
+        if (!confirmed) return;
+
+        try {
+            const token = localStorage.getItem('accessToken');
+            if (!token) {
+                navigate('/login');
+                return;
+            }
+
+            const result = await request(`/app/driver/cancel-bid/${id}`, {
+                method: 'POST'
+            });
+
+            if (result.success) {
+                await notify.success('입찰 취소 완료', '입찰이 성공적으로 취소되었습니다.');
+                navigate('/driver-dashboard');
+            } else {
+                await notify.error('입찰 취소 실패', result.error || '오류가 발생했습니다.');
+            }
+        } catch (err) {
+            console.error('Cancel bid error:', err);
+            await notify.error('입찰 취소 실패', err.message || '서버 통신 오류가 발생했습니다.');
+        }
+    };
 
     if (loading) {
         return (
@@ -127,7 +162,7 @@ const BidDetailDriver = () => {
                                         </div>
                                         <div className="text-left">
                                             <p className="text-[10px] font-black uppercase text-slate-300 mb-1 italic">고객 희망 예산</p>
-                                            <p className="font-black text-on-surface text-sm italic">₩{bidData.targetPrice?.toLocaleString()} (Target)</p>
+                                            <p className="font-black text-on-surface text-sm italic">₩{Number(bidData.targetPrice || 0).toLocaleString()} (Target)</p>
                                         </div>
                                     </div>
                                 </div>
@@ -146,8 +181,9 @@ const BidDetailDriver = () => {
                             <div className="relative text-left">
                                 <span className="absolute left-8 top-1/2 -translate-y-1/2 font-black text-slate-200 text-3xl italic">₩</span>
                                 <input 
-                                    className="w-full bg-slate-50 border-4 border-transparent group-focus-within:border-primary/20 rounded-3xl py-6 pl-16 pr-8 font-headline text-4xl font-black text-primary focus:outline-none transition-all italic tracking-tighter" 
-                                    defaultValue={bidData.price?.toLocaleString()} 
+                                    className="w-full bg-slate-50 border-4 border-transparent rounded-3xl py-6 pl-16 pr-8 font-headline text-4xl font-black text-primary focus:outline-none transition-all italic tracking-tighter" 
+                                    value={Number(bidData.price || 0).toLocaleString()} 
+                                    readOnly
                                     type="text" 
                                 />
                             </div>
@@ -160,41 +196,19 @@ const BidDetailDriver = () => {
                             <div className="space-y-2 text-left">
                                 <p className="text-[10px] font-black uppercase tracking-widest text-primary italic">AI 입찰 전략 분석</p>
                                 <p className="text-sm font-bold text-slate-500 italic leading-relaxed text-left">
-                                    현재 입찰가는 <span className="text-primary font-black">₩{(bidData.price * 0.95).toLocaleString()} ~ ₩{(bidData.price * 1.05).toLocaleString()}</span> 구간에서 경쟁력을 유지하고 있습니다.
+                                    현재 입찰가는 <span className="text-primary font-black">₩{Number(bidData.price * 0.95 || 0).toLocaleString()} ~ ₩{Number(bidData.price * 1.05 || 0).toLocaleString()}</span> 구간에서 경쟁력을 유지하고 있습니다.
                                 </p>
                             </div>
                         </div>
                     </div>
                 </section>
 
-                {/* Breakdown Grid */}
-                <section className="space-y-8 text-left">
-                    <h2 className="font-headline font-black text-2xl text-primary italic uppercase tracking-widest text-left">항목별 상세 비용 (예상)</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
-                        {[
-                            { label: '기본 운행비', value: bidData.breakdown?.base?.toLocaleString() },
-                            { label: '숙박/식사비', value: bidData.breakdown?.lodging?.toLocaleString() },
-                            { label: '통행/주차료', value: bidData.breakdown?.tolls?.toLocaleString() },
-                            { label: '유류비', value: bidData.breakdown?.fuel?.toLocaleString() }
-                        ].map((item, i) => (
-                            <div key={i} className="bg-white p-6 rounded-[2rem] border border-slate-50 group hover:border-primary/20 transition-all text-left">
-                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-300 mb-2 italic">{item.label}</p>
-                                <div className="flex items-baseline gap-2 text-left">
-                                    <span className="text-xs font-black text-slate-200 italic">₩</span>
-                                    <input className="bg-transparent border-none p-0 focus:ring-0 text-lg font-black text-primary w-full italic" defaultValue={item.value} type="text" />
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </section>
-
                 {/* Action Grid */}
-                <section className="flex flex-col md:flex-row gap-4 pt-6 text-left pb-12">
-                    <button className="flex-1 bg-primary text-white py-6 rounded-3xl font-black text-lg italic uppercase tracking-[0.1em] shadow-2xl shadow-primary/30 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4">
-                        <span className="material-symbols-outlined text-xl">edit_square</span>
-                        수정사항 적용
-                    </button>
-                    <button className="flex-1 bg-white text-slate-400 py-6 rounded-3xl font-black text-lg italic uppercase tracking-[0.1em] shadow-xl shadow-teal-900/5 hover:bg-red-50 hover:text-red-500 transition-all active:scale-95 flex items-center justify-center gap-4 border border-slate-50">
+                <section className="pt-6 text-left pb-12">
+                    <button 
+                        onClick={handleCancelBid}
+                        className="w-full bg-red-50 text-red-600 py-6 rounded-3xl font-black text-lg italic uppercase tracking-[0.1em] shadow-xl shadow-red-900/5 hover:bg-red-100 hover:text-red-700 transition-all active:scale-[0.98] flex items-center justify-center gap-4 border border-red-100"
+                    >
                         <span className="material-symbols-outlined text-xl">cancel</span>
                         입찰 취소
                     </button>

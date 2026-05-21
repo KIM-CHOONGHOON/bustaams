@@ -85,16 +85,17 @@ const DriverDashboard = () => {
         });
     };
 
+    // 빠른 메뉴 버튼 배열 순서 변경 (등록 관련 메뉴를 사용성 개선을 위해 맨 뒤로 이동)
     const quickMenus = [
-        { icon: 'badge', label: '기사 정보 등록', path: '/driver-certification' },
-        { icon: 'directions_bus', label: '버스 정보 등록', path: '/bus-certification' },
         { icon: 'format_list_bulleted', label: '청약 리스트', path: '/estimate-list-driver' },
-        { icon: 'calendar_month', label: '운행 예정 리스트', path: '/upcoming-trips-driver' },
         { icon: 'pending_actions', label: '승인 진행 리스트', path: '/approval-pending-driver' },
+        { icon: 'calendar_month', label: '운행 예정 리스트', path: '/upcoming-trips-driver' },
         { icon: 'task_alt', label: '운행 완료 리스트', path: '/completed-trips-driver' },
         { icon: 'chat', label: '실시간 채팅', path: '/chat-list-driver' },
         { icon: 'credit_card', label: '카드/회비 관리', path: '/membership-card-mgmt' },
         { icon: 'settings_suggest', label: '요금제 선택', path: '/pass-select-driver' },
+        { icon: 'badge', label: '기사 정보 등록', path: '/driver-certification' },
+        { icon: 'directions_bus', label: '버스 정보 등록', path: '/bus-certification' },
     ];
 
     return (
@@ -102,7 +103,7 @@ const DriverDashboard = () => {
             {/* TopAppBar */}
             <header className="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-xl shadow-teal-900/5 flex items-center justify-between px-6 h-16 w-full">
                 <div className="flex items-center gap-3">
-                    <img src="/icon-512.png" alt="busTaams Logo" className="w-8 h-8 object-contain rounded-lg" />
+                    <img src="/assets/BUSTAAMS_IMAGE_LOGO.png" alt="busTaams Logo" className="w-8 h-8 object-contain rounded-lg" />
                     <div className="w-10 h-10 rounded-full bg-surface-container-highest overflow-hidden border border-slate-100 flex items-center justify-center">
                         {userImage ? (
                             <img alt="Driver profile" className="w-full h-full object-cover" src={userImage} />
@@ -192,7 +193,7 @@ const DriverDashboard = () => {
                             ) : (
                                 <div className="md:col-span-2 bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2rem] p-12 flex flex-col items-center justify-center text-center space-y-4">
                                     <span className="material-symbols-outlined text-4xl text-slate-300">search_off</span>
-                                    <p className="text-slate-500 font-bold text-sm">현재 등록된 경매 기회가 없습니다.<br/><span className="text-xs font-medium opacity-60">기사님의 차량 정보와 일치하는 요청을 기다려주세요.</span></p>
+                                    <p className="text-slate-500 font-bold text-sm">현재 등록된 청약 기회가 없습니다.<br/><span className="text-xs font-medium opacity-60">기사님의 차량 정보와 일치하는 요청을 기다려주세요.</span></p>
                                 </div>
                             )}
                         </div>

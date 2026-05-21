@@ -1834,6 +1834,12 @@ router.post('/auction-req', authenticateToken, async (req, res) => {
 
         await connection.commit();
         console.log('[Auction Request] Success:', reqId);
+
+        // 🔔 여행 요청 완료 후 매칭되는 기사에게 알림 전송 (비동기 백그라운드 실행)
+        sendNotificationsToMatchingDrivers(reqId, tripTitle, safeBuses, 'CREATE').catch(err => {
+            console.error('[Notification Error] Failed to send notifications after create:', err);
+        });
+
         res.status(201).json({ success: true, message: '요청이 완료되었습니다.', reqId });
     } catch (error) {
         if (connection) await connection.rollback();
@@ -1988,6 +1994,12 @@ router.put('/auction-req/:id', authenticateToken, async (req, res) => {
         }
 
         await connection.commit();
+
+        // 🔔 여행 요청 수정 완료 후 매칭되는 기사에게 알림 전송 (비동기 백그라운드 실행)
+        sendNotificationsToMatchingDrivers(reqId, tripTitle, safeBuses, 'UPDATE').catch(err => {
+            console.error('[Notification Error] Failed to send notifications after update:', err);
+        });
+
         res.json({ success: true, message: '예약 정보가 수정되었습니다.' });
     } catch (error) {
         if (connection) await connection.rollback();
@@ -2824,6 +2836,72 @@ router.post('/payment-bank', authenticateToken, async (req, res) => {
         res.status(500).json({ success: false, error: error.message || '결제 상태 업데이트 중 오류가 발생했습니다.' });
     }
 });
+
+/**
+ * 🔔 매칭되는 차량종류를 보유한 활성 기사들에게 알림을 전송하는 헬퍼 함수
+ * @param {string} reqId 요청 ID (REQ_ID)
+ * @param {string} tripTitle 여정 제목
+ * @param {Array} buses 고객이 요청한 버스 목록 (busTypeCd 포함)
+ * @param {string} type 'CREATE' (등록) 또는 'UPDATE' (수정)
+ */
+async function sendNotificationsToMatchingDrivers(reqId, tripTitle, buses, type = 'CREATE') {
+    try {
+        if (!buses || buses.length === 0) return;
+
+        // 1. 요청된 버스의 차종(busTypeCd) 추출 및 중복 제거
+        const busTypes = [...new Set(buses.map(b => b.busTypeCd || b.name))].filter(Boolean);
+        if (busTypes.length === 0) return;
+
+        // 2. 기사 조회: USER_TYPE = 'DRIVER', USER_STAT = 'ACTIVE' 이면서 해당 차종 보유 기사
+        const query = `
+            SELECT DISTINCT u.CUST_ID 
+            FROM TB_USER u
+            JOIN TB_BUS_DRIVER_VEHICLE v ON u.CUST_ID = v.CUST_ID
+            WHERE u.USER_TYPE = 'DRIVER' 
+              AND u.USER_STAT = 'ACTIVE' 
+              AND v.SERVICE_CLASS IN (?)
+        `;
+
+        // mysql2의 IN (?) 바인딩 지원을 위해 query() 사용
+        const [drivers] = await pool.query(query, [busTypes]);
+        if (!drivers || drivers.length === 0) {
+            console.log(`[Notification] No matching active drivers for bus types: ${busTypes.join(', ')}`);
+            return;
+        }
+
+        const { sendNotification } = require('../services/notificationService');
+
+        // 3. 알림 문구 구성
+        let title = '';
+        let body = '';
+        if (type === 'CREATE') {
+            title = '[신규 청약 요청] 새로운 여행 요청이 등록되었습니다.';
+            body = `여정: ${tripTitle}\n새로운 여행 요청이 등록되었습니다. 청약(입찰)을 진행해 주세요.`;
+        } else {
+            title = '[청약 요청 수정] 여행 요청 정보가 수정되었습니다.';
+            body = `여정: ${tripTitle}\n여행 요청의 상세 내용이 수정되었습니다. 변경된 내용을 확인해 주세요.`;
+        }
+        const link = `/estimate-detail-driver/${reqId}`;
+
+        // 4. 기사별 비동기 병렬 전송
+        const sendPromises = drivers.map(driver => {
+            return sendNotification(pool, {
+                custId: driver.CUST_ID,
+                title,
+                body,
+                link,
+                type: 'SYSTEM'
+            }).catch(err => {
+                console.error(`[Notification] Failed to send notification to driver ${driver.CUST_ID}:`, err.message);
+            });
+        });
+
+        await Promise.all(sendPromises);
+        console.log(`[Notification] Successfully processed notifications for ${drivers.length} drivers.`);
+    } catch (err) {
+        console.error('[Notification] Error in sendNotificationsToMatchingDrivers:', err);
+    }
+}
 
 module.exports = router;
 

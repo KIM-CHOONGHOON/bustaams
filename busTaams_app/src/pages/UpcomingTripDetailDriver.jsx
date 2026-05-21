@@ -68,6 +68,28 @@ const UpcomingTripDetailDriver = () => {
     };
 
     const handleCancelTrip = async () => {
+        // [추가] 계약 취소 시 위약금 청구 경고 및 확인 팝업
+        const checkConfirm = await Swal.fire({
+            title: '계약 취소 경고',
+            text: '위약금 550,000원이 청구 됩니다. 그래도 취소 하시겠습니까?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: '네',
+            cancelButtonText: '아니오',
+            customClass: {
+                popup: 'rounded-[2.5rem] border-none shadow-2xl p-8',
+                title: 'font-black text-2xl text-[#1D3557] mb-2',
+                confirmButton: 'bg-[#ba1a1a] text-white px-8 py-4 rounded-full font-bold shadow-lg shadow-red-100 mx-2 active:scale-95 transition-all',
+                cancelButton: 'bg-gray-100 text-gray-500 px-8 py-4 rounded-full font-bold mx-2 active:scale-95 transition-all'
+            },
+            buttonsStyling: false
+        });
+
+        // '아니오'를 선택한 경우 취소 요청 중단
+        if (!checkConfirm.isConfirmed) {
+            return;
+        }
+
         const { value: formValues } = await Swal.fire({
             title: '계약 취소 요청',
             html: `

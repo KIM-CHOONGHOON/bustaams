@@ -214,6 +214,9 @@ export const deleteNotification = (seq) => request(`/app/notifications/${seq}`, 
     method: 'DELETE'
 });
 
+// [추가] 차량 번호 가입 여부 확인 API
+export const checkVehicle = (vehicleNo) => request(`/common/check-vehicle?vehicleNo=${encodeURIComponent(vehicleNo)}`);
+
 // api.get() / api.post() 형식 지원
 
 const api = {

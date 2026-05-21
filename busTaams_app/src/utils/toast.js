@@ -36,6 +36,11 @@ const Toast = Swal.mixin({
 
 // 2. Alert (중앙 모달)
 const modalAlert = (options) => {
+    let finalOptions = { ...options };
+    if (finalOptions.text && (finalOptions.text.includes('\n') || finalOptions.text.includes('\r') || finalOptions.text.includes('<br'))) {
+        finalOptions.html = finalOptions.text.replace(/\r?\n/g, '<br/>');
+        delete finalOptions.text;
+    }
     return Swal.fire({
         background: '#ffffff',
         color: '#191c1d',
@@ -45,12 +50,12 @@ const modalAlert = (options) => {
         customClass: {
             popup: 'rounded-3xl border-none shadow-2xl p-8',
             title: 'font-headline font-extrabold text-2xl tracking-tight text-on-surface',
-            htmlContainer: 'font-body text-on-surface-variant text-base mt-4',
+            htmlContainer: 'font-body text-on-surface-variant text-base mt-4 whitespace-pre-line',
             confirmButton: 'bg-primary text-white font-headline font-bold py-3 px-8 rounded-full shadow-md hover:shadow-lg transition-all mx-2',
             cancelButton: 'bg-surface-container-high text-on-surface-variant font-headline font-bold py-3 px-8 rounded-full hover:bg-surface-container-highest transition-all mx-2',
             actions: 'mt-8'
         },
-        ...options
+        ...finalOptions
     });
 };
 

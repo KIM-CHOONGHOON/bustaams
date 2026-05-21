@@ -354,6 +354,37 @@ const RequestBus = () => {
             return;
         }
 
+        // 오늘로부터 6개월 제한 체크
+        const limitDate = new Date();
+        limitDate.setMonth(limitDate.getMonth() + 6);
+
+        if (depDateTime) {
+            const depDate = new Date(depDateTime.replace(' ', 'T'));
+            if (depDate > limitDate) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '날짜 제한 초과',
+                    text: '출발일시는 오늘로부터 6개월을 넘을 수 없습니다.',
+                    confirmButtonText: '확인',
+                    confirmButtonColor: '#0f766e',
+                });
+                return;
+            }
+        }
+        if (arrDateTime) {
+            const arrDate = new Date(arrDateTime.replace(' ', 'T'));
+            if (arrDate > limitDate) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '날짜 제한 초과',
+                    text: '도착일시는 오늘로부터 6개월을 넘을 수 없습니다.',
+                    confirmButtonText: '확인',
+                    confirmButtonColor: '#0f766e',
+                });
+                return;
+            }
+        }
+
 
         try {
             const vias = [];
@@ -438,10 +469,13 @@ const RequestBus = () => {
                 cancelButtonText: '취소',
                 buttonsStyling: false,
                 customClass: {
-                    popup: 'rounded-[2.5rem] p-10 border-none shadow-2xl',
-                    confirmButton: 'bg-teal-700 text-white font-headline font-bold py-4 px-8 rounded-full shadow-lg hover:bg-teal-800 transition-all mx-2 flex-1',
-                    cancelButton: 'bg-slate-100 text-slate-500 font-headline font-bold py-4 px-8 rounded-full hover:bg-slate-200 transition-all mx-2 flex-1',
-                    actions: 'flex gap-2 w-full mt-10',
+                    // 모바일 화면을 위해 팝업 크기와 패딩 조절
+                    popup: 'rounded-[2rem] p-6 md:p-8 border-none shadow-2xl max-w-[90%] md:max-w-md',
+                    // 버튼의 패딩과 글씨 크기를 조절하고 둥근 모서리로 레이아웃 밸런스 개선
+                    confirmButton: 'bg-teal-700 text-white font-headline font-bold text-sm py-3 px-4 rounded-xl shadow-md hover:bg-teal-800 transition-all mx-1 flex-1 text-center justify-center items-center',
+                    cancelButton: 'bg-slate-100 text-slate-500 font-headline font-bold text-sm py-3 px-4 rounded-xl hover:bg-slate-200 transition-all mx-1 flex-1 text-center justify-center items-center',
+                    // 버튼 사이 간격 및 여백 조절
+                    actions: 'flex gap-2 w-full mt-6 justify-between',
                 },
                 preConfirm: () => {
                     const d = document.getElementById('swal-date').value;
@@ -450,6 +484,17 @@ const RequestBus = () => {
                         Swal.showValidationMessage('날짜와 시간을 모두 선택해주세요.');
                         return false;
                     }
+
+                    // 오늘로부터 6개월 제한 체크
+                    const selectedDateTime = new Date(`${d}T${t}`);
+                    const limitDate = new Date();
+                    limitDate.setMonth(limitDate.getMonth() + 6);
+
+                    if (selectedDateTime > limitDate) {
+                        Swal.showValidationMessage('출발/도착 일시는 오늘로부터 6개월 이내로만 설정할 수 있습니다.');
+                        return false;
+                    }
+
                     return `${d} ${t}`;
                 }
             }).then((res) => {

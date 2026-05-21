@@ -2,14 +2,76 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { notify } from '../utils/toast';
-import { login } from '../api';
+import { login, checkVehicle } from '../api';
 import { requestFirebaseToken } from '../utils/fcm';
+import Swal from 'sweetalert2';
 
 const Login = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({ userId: '', password: '' });
 
   const [showPassword, setShowPassword] = useState(false);
+
+  const handleCheckVehicle = async () => {
+    // [추가] 차량 번호 입력창 팝업 띄우기
+    const { value: vehicleNo } = await Swal.fire({
+      title: '차량 가입 여부 확인',
+      input: 'text',
+      inputLabel: '차량 번호를 입력해주세요.',
+      placeholder: '예: 서울70자1234',
+      showCancelButton: true,
+      confirmButtonText: '확인',
+      cancelButtonText: '취소',
+      customClass: {
+          popup: 'rounded-[2.5rem] border-none shadow-2xl p-8',
+          title: 'font-black text-2xl text-[#1D3557] mb-2',
+          confirmButton: 'bg-primary text-white px-8 py-4 rounded-full font-bold shadow-lg mx-2 active:scale-95 transition-all',
+          cancelButton: 'bg-gray-100 text-gray-500 px-8 py-4 rounded-full font-bold mx-2 active:scale-95 transition-all'
+      },
+      buttonsStyling: false,
+      inputValidator: (value) => {
+        if (!value) {
+          return '차량 번호를 입력해주세요!';
+        }
+      }
+    });
+
+    // 차량 번호가 입력되었으면 백엔드 조회 요청
+    if (vehicleNo) {
+      try {
+        const res = await checkVehicle(vehicleNo);
+        if (res.success) {
+          if (res.exists) {
+            await Swal.fire({
+              title: '확인 결과',
+              text: '이미가입된 차량 입니다.',
+              icon: 'info',
+              confirmButtonText: '확인',
+              customClass: {
+                  popup: 'rounded-[2.5rem]',
+                  confirmButton: 'bg-primary text-white px-8 py-4 rounded-full font-bold'
+              },
+              buttonsStyling: false
+            });
+          } else {
+            await Swal.fire({
+              title: '확인 결과',
+              text: '미가입된 차량 입니다.',
+              icon: 'success',
+              confirmButtonText: '확인',
+              customClass: {
+                  popup: 'rounded-[2.5rem]',
+                  confirmButton: 'bg-primary text-white px-8 py-4 rounded-full font-bold'
+              },
+              buttonsStyling: false
+            });
+          }
+        }
+      } catch (err) {
+        notify.error('오류 발생', err.message || '차량 조회 중 오류가 발생했습니다.');
+      }
+    }
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -45,8 +107,15 @@ const Login = () => {
     <div className="bg-background font-body text-on-background min-h-screen flex flex-col overflow-x-hidden">
       <header className="flex justify-between items-center w-full px-6 pt-8 pb-4 max-w-7xl mx-auto z-10">
         <div className="flex items-center gap-3">
-          <img src="/icon-512.png" alt="busTaams Logo" className="w-10 h-10 object-contain rounded-xl shadow-sm" />
-          <div className="text-teal-900 font-black tracking-tighter font-headline text-3xl">busTaams</div>
+          <img src="/assets/BUSTAAMS_IMAGE_LOGO.png" alt="busTaams Logo" className="w-14 h-14 object-contain rounded-xl shadow-sm" />
+          <div className="text-teal-900 font-black tracking-tighter font-headline text-3xl">BUSTAAMS</div>
+          <div 
+            onClick={() => navigate('/signup')} 
+            className="w-[40px] h-[40px] lg:w-[48px] lg:h-[48px] ml-2 flex-shrink-0 bg-white p-1 rounded-lg shadow-sm border border-outline/10 flex items-center justify-center cursor-pointer hover:scale-105 active:scale-95 transition-transform"
+            title="회원가입 바로가기 QR코드"
+          >
+            <img src="/assets/signup_qr.png" alt="Sign Up QR" className="w-full h-full object-contain" />
+          </div>
         </div>
         <div className="flex items-center gap-4">
         </div>
@@ -69,12 +138,15 @@ const Login = () => {
           </section>
 
           <section className="lg:col-span-5 w-full">
-            <div className="space-y-12">
-              <div className="rounded-2xl overflow-hidden shadow-md mb-8">
+            <div className="space-y-6">
+              <div>
+                <p className="text-xl lg:text-2xl font-black uppercase tracking-widest text-primary italic">전세버스 예약</p>
+              </div>
+              <div className="rounded-2xl overflow-hidden shadow-md">
                 <img src="/assets/login_banner.png" alt="Promotion Banner" className="w-full h-auto object-cover" />
               </div>
-              <div className="space-y-4">
-                <h1 className="font-headline font-extrabold text-4xl lg:text-5xl text-on-surface tracking-tighter text-[40px]">귀하의 방문을 환영합니다.</h1>
+              <div>
+                <h1 className="font-headline font-extrabold text-xl lg:text-2xl text-on-surface tracking-normal text-[22px]">귀하의  방문을  환영합니다.</h1>
               </div>
               <form onSubmit={handleLogin} className="space-y-6">
                 <div className="space-y-2">
@@ -141,15 +213,15 @@ const Login = () => {
 
       <footer className="w-full px-6 py-12 max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8 border-t border-transparent">
         <div className="flex flex-col md:flex-row items-center gap-8">
-          <div className="text-teal-900/40 font-black tracking-tighter font-headline text-xl">busTaams</div>
-          <nav className="flex gap-8">
-            <span className="text-xs font-bold text-outline uppercase tracking-widest hover:text-primary transition-colors cursor-pointer">개인정보 처리방침</span>
-            <span className="text-xs font-bold text-outline uppercase tracking-widest hover:text-primary transition-colors cursor-pointer">준법지원</span>
-            <span className="text-xs font-bold text-outline uppercase tracking-widest hover:text-primary transition-colors cursor-pointer">프레스룸</span>
-          </nav>
+          <div 
+            onClick={handleCheckVehicle} 
+            className="text-teal-900/40 font-black tracking-tighter font-headline text-xl cursor-pointer hover:text-teal-900/60 transition-colors"
+          >
+            busTaams
+          </div>
         </div>
         <div className="text-xs font-bold text-outline uppercase tracking-widest text-[10px]">
-          © 2024 키네틱 갤러리 시스템즈
+          © 2000 (주)청솔테크
         </div>
       </footer>
       <div className="fixed top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-secondary opacity-20"></div>

@@ -38,7 +38,8 @@ const commonRouter = require('./routes/common');
 const { 
     buildPostLoginUserDto, 
     fetchCancelManageForUser, 
-    fetchSubscriptionForDriver 
+    fetchSubscriptionForDriver,
+    getCurrentYyyyMm
 } = require('./lib/loginPayload');
 
 
@@ -2515,6 +2516,20 @@ app.post('/api/driver/profile-setup', async (req, res) => {
             return res.status(400).json({ error: '유효하지 않은 회원등급(FEE_POLICY)입니다.' });
         }
 
+        // 한글 주석: 면허 발급일 필수값 및 날짜 유효성 검증
+        if (!licenseIssueDt || !licenseIssueDt.trim()) {
+            return res.status(400).json({ error: '면허 발급일을 입력해 주세요.' });
+        }
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (licenseIssueDt > todayStr) {
+            return res.status(400).json({ error: '면허 발급일은 오늘 이전 날짜여야 합니다.' });
+        }
+
+        // 한글 주석: 버스운전자격증 번호 필수값 검증
+        if (!qualCertNoTrim) {
+            return res.status(400).json({ error: '버스운전자격증 번호를 입력해 주세요.' });
+        }
+
         const [uResolve] = await pool.execute(
             `SELECT CUST_ID, USER_ID, RESIDENT_NO_ENC FROM TB_USER WHERE USER_ID = ? LIMIT 1`,
             [loginUserId]
@@ -3065,8 +3080,34 @@ app.post('/api/payment/return', async (req, res) => {
                 `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'CONFIRM', MOD_DT = NOW() WHERE REQ_ID = ?`,
                 [reqId]
             );
+
+            // [추가] 기사의 월 사용건수(USE_CNT)를 1 증가시키고 잔여 건수(REMAINING_CNT)는 9999로 설정/유지
+            const yyyyMM = getCurrentYyyyMm();
+
+            // 기사의 요금제 정책(FEE_POLICY) 조회
+            const [detailRows] = await connection.execute(
+                `SELECT FEE_POLICY FROM TB_DRIVER_DETAIL WHERE CUST_ID = ?`,
+                [driverId]
+            );
+            let feePolicy = 'DRIVER'; // 기본 요금 정책
+            if (detailRows.length > 0 && detailRows[0].FEE_POLICY) {
+                feePolicy = detailRows[0].FEE_POLICY;
+            }
+
+            // 월별 청약 건수 테이블(TB_MOM_MEMBER) 업데이트 (없으면 1건 추가 및 잔여 9999건으로 인서트)
+            await connection.execute(
+                `INSERT INTO TB_MOM_MEMBER (
+                    CUST_ID, YYYYMM, FEE_POLICY, BASIC_CNT, USE_CNT, REMAINING_CNT, REG_DT, REG_ID, MOD_DT, MOD_ID
+                 ) VALUES (?, ?, ?, 9999, 1, 9999, NOW(), ?, NOW(), ?)
+                 ON DUPLICATE KEY UPDATE
+                    USE_CNT = USE_CNT + 1,
+                    REMAINING_CNT = 9999,
+                    MOD_DT = NOW(),
+                    MOD_ID = ?`,
+                [driverId, yyyyMM, feePolicy, driverId, driverId, driverId]
+            );
             
-            console.log(`[PAY_SUCCESS] Updated status for REQ_ID: ${reqId}, DRIVER_ID: ${driverId}`);
+            console.log(`[PAY_SUCCESS] Updated status for REQ_ID: ${reqId}, DRIVER_ID: ${driverId} (MomMember USE_CNT increased, REMAINING_CNT set to 9999)`);
         }
         
         await connection.commit();

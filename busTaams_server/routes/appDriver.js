@@ -105,11 +105,12 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
             countAuctions = countRows[0].cnt;
 
             // 최신 경매 리스트 (최대 3건, 오늘 이후 운행 시작)
+            // 기사 차량 등급에 매칭되는 개별 차량 금액(b.RES_BUS_AMT)을 입찰가로 노출하도록 변경 (한글 주석)
             const [listRows] = await pool.execute(
                 `SELECT 
                     r.REQ_ID as id, r.TRIP_TITLE as title, r.START_ADDR as startAddr, r.END_ADDR as endAddrMaster,
                     DATE_FORMAT(r.START_DT, '%Y-%m-%d %H:%i') as startDate,
-                    r.REQ_AMT as price,
+                    b.RES_BUS_AMT as price,
                     r.REG_DT as regDt,
                     (SELECT GROUP_CONCAT(VIA_ADDR ORDER BY VIA_SEQ ASC) FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'START_WAY') as startVia,
                     (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' LIMIT 1) as roundTrip,
@@ -194,7 +195,7 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
                 restriction = {
                     status: 'Y',
                     endDt: dateStr,
-                    message: `취소 패널티로 인해 ${dateStr}까지 신규 입찰이 제한됩니다.`
+                    message: `취소 패널티로 인해 ${dateStr}까지 신규 청약이 제한됩니다.`
                 };
             }
         }
@@ -241,12 +242,13 @@ router.get('/auctions', authenticateToken, async (req, res) => {
         if (busRows.length === 0) return res.json({ success: true, data: [] });
         const busType = busRows[0].SERVICE_CLASS;
 
+        // 기사 차량 등급에 매칭되는 개별 차량 금액(b.RES_BUS_AMT)을 입찰가로 노출하도록 변경 (한글 주석)
         const [listRows] = await pool.execute(
             `SELECT 
                 r.REQ_ID as id, r.TRIP_TITLE as title, r.START_ADDR as startAddr, r.END_ADDR as endAddrMaster,
                 DATE_FORMAT(r.START_DT, '%Y-%m-%d %H:%i') as startDate,
                 DATE_FORMAT(r.END_DT, '%Y-%m-%d %H:%i') as endDate,
-                r.REQ_AMT as price,
+                b.RES_BUS_AMT as price,
                 r.REG_DT as regDt,
                 (SELECT GROUP_CONCAT(VIA_ADDR ORDER BY VIA_SEQ ASC) FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'START_WAY') as startVia,
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' LIMIT 1) as roundTrip,
@@ -292,14 +294,30 @@ router.get('/auctions', authenticateToken, async (req, res) => {
 router.get('/auctions/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
+        const userId = req.user.userId;
 
-        // 1. 마스터 및 경유지 정보 조회
+        // 기사의 CUST_ID 및 등록 버스 등급 조회 (한글 주석)
+        const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        if (uRows.length === 0) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+        const custId = uRows[0].CUST_ID;
+
+        const [busRows] = await pool.execute(
+            'SELECT SERVICE_CLASS FROM TB_BUS_DRIVER_VEHICLE WHERE CUST_ID = ?',
+            [custId]
+        );
+        const busType = busRows.length > 0 ? busRows[0].SERVICE_CLASS : null;
+
+        // 1. 마스터 및 경유지 정보 조회 (기사 등록 차량 등급에 맞는 금액을 price로 조회) (한글 주석)
         const [masterRows] = await pool.execute(
             `SELECT 
                 r.REQ_ID as id, r.TRIP_TITLE as title, r.START_ADDR as startAddr, r.END_ADDR as endAddrMaster,
                 DATE_FORMAT(r.START_DT, '%Y-%m-%d %H:%i') as startDate,
                 DATE_FORMAT(r.END_DT, '%Y-%m-%d %H:%i') as endDate,
-                r.PASSENGER_CNT as passengers, r.REQ_AMT as price,
+                r.PASSENGER_CNT as passengers,
+                COALESCE(
+                    (SELECT b.RES_BUS_AMT FROM TB_AUCTION_REQ_BUS b WHERE b.REQ_ID = r.REQ_ID AND b.BUS_TYPE_CD = ? LIMIT 1),
+                    r.REQ_AMT
+                ) as price,
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'START_NODE' LIMIT 1) as startAddrVia,
                 (SELECT GROUP_CONCAT(VIA_ADDR ORDER BY VIA_SEQ ASC) FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'START_WAY') as startVia,
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' LIMIT 1) as roundTrip,
@@ -307,7 +325,7 @@ router.get('/auctions/:id', authenticateToken, async (req, res) => {
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'END_NODE' LIMIT 1) as endAddrVia
              FROM TB_AUCTION_REQ r
              WHERE r.REQ_ID = ?`,
-            [id]
+            [busType, id]
         );
         if (masterRows.length === 0) return res.status(404).json({ error: '요청 정보를 찾을 수 없습니다.' });
         const row = masterRows[0];
@@ -475,6 +493,14 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
             } catch (err) {
                 console.error(`[Profile Update] RRN Decrypt Error for user ${driver.USER_ID}:`, err);
             }
+        }
+
+        // 필수 필드 검증 (면허 발급일 및 자격 취득일)
+        if (!licenseIssueDt || !licenseIssueDt.trim()) {
+            throw new Error('면허 발급일을 입력해주세요.');
+        }
+        if (!qualAcquisitionDt || !qualAcquisitionDt.trim()) {
+            throw new Error('자격 취득일을 입력해주세요.');
         }
 
         // 날짜 유효성 검증 (과거여야 함)
@@ -853,7 +879,7 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
                 throw new Error('운영정책에 의해 서비스 이용이 무기한 제한되었습니다.');
             } else if (resData.RESTRICT_STAT === 'Y' && endDt && endDt > now) {
                 const dateStr = endDt.toISOString().split('T')[0];
-                throw new Error(`취소 패널티로 인해 ${dateStr}까지 신규 입찰이 제한됩니다.`);
+                throw new Error(`취소 패널티로 인해 ${dateStr}까지 신규 청약이 제한됩니다.`);
             }
         }
 
@@ -881,7 +907,7 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
 
         if (reqBusRows.length === 0) {
             console.log(`[BID_PROCESS] No available slot for reqId: ${reqId}, serviceClass: ${serviceClass}`);
-            throw new Error('해당 차종으로 입찰 가능한 슬롯이 없거나 이미 입찰이 완료되었습니다.');
+            throw new Error('해당 차종으로 청약 가능한 슬롯이 없거나 이미 청약이 완료되었습니다.');
         }
 
         const { REQ_BUS_SEQ: reqBusSeq, RES_BUS_AMT: busAmt, REG_ID: travelerId } = reqBusRows[0];
@@ -889,7 +915,7 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
 
         if (!reqBusSeq || reqBusSeq === 0) {
             console.error(`[BID_PROCESS] INVALID REQ_BUS_SEQ: ${reqBusSeq} for REQ_ID: ${reqId}`);
-            throw new Error('입찰 데이터 오류가 발생했습니다. (SEQ=0)');
+            throw new Error('청약 데이터 오류가 발생했습니다. (SEQ=0)');
         }
 
         // 3. TB_AUCTION_REQ_BUS 상태 업데이트 (BIDDING) - 원자적 상태 체크 추가
@@ -901,7 +927,7 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
 
         if (updateResult.affectedRows === 0) {
             console.log(`[BID_PROCESS] Slot already taken by another driver: REQ_BUS_SEQ=${reqBusSeq}`);
-            throw new Error('다른 기사가 이미 해당 슬롯에 입찰하였습니다. 다시 시도해주세요.');
+            throw new Error('다른 기사가 이미 해당 슬롯에 청약하였습니다. 다시 시도해주세요.');
         }
 
         // 4. TB_BUS_RESERVATION 등록
@@ -937,7 +963,7 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
         }
 
         await connection.commit();
-        res.json({ success: true, message: '입찰이 성공적으로 제출되었습니다.' });
+        res.json({ success: true, message: '청약이 성공적으로 제출되었습니다.' });
 
     } catch (err) {
         if (connection) await connection.rollback();
@@ -1758,6 +1784,64 @@ router.post('/cancel-mission/:id', authenticateToken, memoryUpload.single('reaso
         if (connection) await connection.rollback();
         console.error('[Driver Cancel Mission] Error:', error);
         res.status(500).json({ success: false, error: error.message || '취소 처리 중 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+/**
+ * [App] 기사 입찰 취소 (Bidding 취소)
+ * 1. 입찰 대기 상태(BIDDING)인 경우에만 취소 가능 (매칭된 후에는 cancel-mission 이용)
+ * 2. TB_BUS_RESERVATION의 상태를 DRIVER_CANCEL로 변경
+ * 3. TB_AUCTION_REQ_BUS의 슬롯 상태를 AUCTION으로 되돌려 다른 기사가 재입찰할 수 있도록 함
+ * 4. TB_AUCTION_REQ 마스터 상태 또한 AUCTION으로 롤백
+ */
+router.post('/cancel-bid/:id', authenticateToken, async (req, res) => {
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+        const resId = req.params.id; // TB_BUS_RESERVATION.RES_ID
+        const userId = req.user.userId;
+
+        // 1. 기사 정보 및 CUST_ID 조회
+        const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        if (uRows.length === 0) throw new Error('사용자를 찾을 수 없습니다.');
+        const custId = uRows[0].CUST_ID;
+
+        // 2. 예약(입찰) 정보 확인 (본인의 입찰 대기중인 건인지 확인)
+        const [resRows] = await connection.execute(
+            'SELECT REQ_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ? AND DRIVER_ID = ? AND DATA_STAT = \'BIDDING\'',
+            [resId, custId]
+        );
+        if (resRows.length === 0) {
+            throw new Error('취소 가능한 청약 내역이 아니거나 이미 확정되어 권한이 없습니다.');
+        }
+        const { REQ_ID: reqId, REQ_BUS_SEQ: reqBusSeq } = resRows[0];
+
+        // 3. TB_BUS_RESERVATION 상태 변경 (DRIVER_CANCEL)
+        await connection.execute(
+            'UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'DRIVER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE RES_ID = ?',
+            [custId, resId]
+        );
+
+        // 4. TB_AUCTION_REQ_BUS 슬롯을 다시 \'AUCTION\' 상태로 돌려놓음 (다른 기사가 입찰할 수 있도록)
+        await connection.execute(
+            'UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'AUCTION\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?',
+            [custId, reqId, reqBusSeq]
+        );
+
+        // 5. 마스터 TB_AUCTION_REQ 상태도 \'AUCTION\'으로 되돌려놓음 (슬롯 하나가 비었으므로)
+        await connection.execute(
+            'UPDATE TB_AUCTION_REQ SET DATA_STAT = \'AUCTION\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?',
+            [custId, reqId]
+        );
+
+        await connection.commit();
+        res.json({ success: true, message: '청약 취소가 완료되었습니다.' });
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('[Driver Cancel Bid] Error:', error);
+        res.status(500).json({ success: false, error: error.message || '청약 취소 중 오류가 발생했습니다.' });
     } finally {
         if (connection) connection.release();
     }

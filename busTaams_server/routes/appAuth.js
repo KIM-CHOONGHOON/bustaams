@@ -219,16 +219,33 @@ router.post('/register', async (req, res) => {
             }
         }
 
-        // [추가] 추천인 코드 검증 (입력된 경우 존재하는 유효한 유저 ID인지 확인 - 타입 제한 제거 및 예외 처리 강화)
+        // [수정] 추천인 코드 검증 (기사 가입 시에는 TB_ADMIN을, 타 가입 시에는 TB_USER를 조회)
         const cleanRecomCode = recomCode ? String(recomCode).trim() : '';
         if (cleanRecomCode && cleanRecomCode !== 'null' && cleanRecomCode !== 'undefined') {
-            const [partnerRows] = await connection.execute(
-                'SELECT 1 FROM TB_USER WHERE USER_ID = ?',
-                [cleanRecomCode]
-            );
-            if (partnerRows.length === 0) {
-                await connection.rollback();
-                return res.status(400).json({ error: '존재하지 않는 추천인 아이디입니다.' });
+            if (finalUserType === 'DRIVER') {
+                // 기사 가입 시 TB_ADMIN 테이블 조회 및 상태 확인
+                const [adminRows] = await connection.execute(
+                    'SELECT ADMIN_STAT FROM TB_ADMIN WHERE ADMIN_ID = ?',
+                    [cleanRecomCode]
+                );
+                if (adminRows.length === 0) {
+                    await connection.rollback();
+                    return res.status(400).json({ error: '존재하지 않는 추천인 아이디입니다.' });
+                }
+                if (adminRows[0].ADMIN_STAT !== 'ACTIVE') {
+                    await connection.rollback();
+                    return res.status(400).json({ error: '활성화되지 않았거나 유효하지 않은 추천인입니다.' });
+                }
+            } else {
+                // 기타 회원 가입 시 기존처럼 TB_USER 테이블 조회
+                const [partnerRows] = await connection.execute(
+                    'SELECT 1 FROM TB_USER WHERE USER_ID = ?',
+                    [cleanRecomCode]
+                );
+                if (partnerRows.length === 0) {
+                    await connection.rollback();
+                    return res.status(400).json({ error: '존재하지 않는 추천인 아이디입니다.' });
+                }
             }
         }
 

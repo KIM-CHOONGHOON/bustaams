@@ -54,8 +54,8 @@ const EstimateDetailDriver = () => {
             if (res.success) {
                 Swal.fire({
                     icon: 'success',
-                    title: '입찰 성공',
-                    text: '입찰이 정상적으로 제출되었습니다!',
+                    title: '성공',
+                    text: '청약이 정상적으로 제출되었습니다!',
                     confirmButtonColor: '#004e47'
                 }).then(() => {
                     navigate('/estimate-list-driver');
@@ -63,8 +63,8 @@ const EstimateDetailDriver = () => {
             } else {
                 Swal.fire({
                     icon: 'error',
-                    title: '입찰 실패',
-                    text: res.error || '입찰 제출 중 오류가 발생했습니다.',
+                    title: '청약 실패',
+                    text: res.error || '청약 제출 중 오류가 발생했습니다.',
                     confirmButtonColor: '#004e47'
                 });
             }
@@ -75,7 +75,7 @@ const EstimateDetailDriver = () => {
             
             Swal.fire({
                 icon: 'error',
-                title: '입찰 실패',
+                title: '청약 실패',
                 text: serverMessage,
                 confirmButtonColor: '#004e47'
             });
@@ -185,7 +185,7 @@ const EstimateDetailDriver = () => {
                             <form onSubmit={handleSubmit} className="space-y-12 text-left">
                                 <div className="space-y-4 text-left group">
                                     <div className="flex justify-between items-center px-2 text-left">
-                                        <label className="text-[11px] font-black uppercase tracking-[0.4em] text-slate-400 italic">확정 입찰 금액</label>
+                                        <label className="text-[11px] font-black uppercase tracking-[0.4em] text-slate-400 italic">확정 청약 금액</label>
                                         <span className="text-[10px] font-black text-secondary uppercase tracking-[0.3em]">KRW</span>
                                     </div>
                                     <div className="relative text-left">
@@ -197,7 +197,7 @@ const EstimateDetailDriver = () => {
                                         />
                                     </div>
                                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest px-4">
-                                        고객이 제시한 고정 금액으로 입찰이 진행됩니다.
+                                        고객이 제시한 고정 금액으로 청약이 진행됩니다.
                                     </p>
                                 </div>
 
