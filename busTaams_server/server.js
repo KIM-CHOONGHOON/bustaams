@@ -5158,6 +5158,96 @@ app.get('/api/common/codes/:grpCd', async (req, res) => {
     }
 });
 
+// ============================================================
+// 배치 관리 API
+// ============================================================
+
+// Next Batch ID API
+app.get('/api/admin/nextBatchId', async (req, res) => {
+    try {
+        const { cycle, businessType } = req.query;
+        if (!cycle || !businessType) return res.status(400).json({ error: 'Missing parameters' });
+
+        let seqNum = 1;
+        const prefix = `JOB_${cycle}_${businessType}_`;
+        try {
+            const [rows] = await pool.execute(
+                `SELECT MAX(BATCH_JOB_ID) as maxId FROM TB_BATCH_JOB_MST WHERE BATCH_JOB_ID LIKE CONCAT(?, '%')`,
+                [prefix]
+            );
+            if (rows && rows[0] && rows[0].maxId) {
+                const seqStr = rows[0].maxId.replace(prefix, '');
+                const maxSeq = parseInt(seqStr, 10);
+                if (!isNaN(maxSeq)) seqNum = maxSeq + 1;
+            }
+        } catch (dbErr) {}
+
+        res.json({ nextId: `${prefix}${String(seqNum).padStart(5, '0')}` });
+    } catch (error) {
+        console.error('nextBatchId error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// 배치 신규 등록 API
+app.post('/api/admin/newBatchRegistration', async (req, res) => {
+    let connection;
+    try {
+        const data = req.body;
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        await connection.execute(
+            `INSERT INTO TB_BATCH_JOB_MST (BATCH_JOB_ID, BATCH_JOB_NM, JOB_DESC, USE_YN, EXEC_FILE_PATH, EXEC_CYCLE, RETRY_POLICY, MAX_RETRY_CNT, REG_DT)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+            [data.jobId, data.jobName, data.description, data.useYn, data.execPath, data.execCycle, data.retryPolicy, data.maxRetry || 3]
+        );
+
+        await connection.execute(
+            `INSERT INTO TB_BATCH_SCHED (BATCH_JOB_ID, EXEC_TIME, EXEC_MONTH, EXEC_DAY, EXEC_DOW, CALC_RULE, HOLIDAY_RULE, USE_YN, REG_DT)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+            [data.jobId, data.execTime || '00:00:00', data.execMonth || '*', data.execDay || '*', data.execDow || '*', data.calcRule || 'T', data.holidayRule || 'RUN', data.useYn]
+        );
+
+        await connection.commit();
+        res.json({ success: true, message: 'Batch registered successfully' });
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('NewBatchRegistration error:', error.code, error.message);
+        if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ success: false, message: `이미 존재하는 배치작업 ID입니다: ${req.body.jobId}` });
+        res.status(500).json({ success: false, message: `서버 오류: ${error.message}` });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// 배치 목록 조회 API
+app.get('/api/admin/batch/list', async (req, res) => {
+    try {
+        const [rows] = await pool.execute(`
+            SELECT
+                m.BATCH_JOB_ID AS jobId,
+                m.BATCH_JOB_NM AS jobName,
+                m.EXEC_CYCLE   AS execCycle,
+                m.USE_YN       AS useYn,
+                s.EXEC_TIME    AS execTime,
+                s.CALC_RULE    AS calcRule,
+                s.HOLIDAY_RULE AS holidayRule,
+                s.EXEC_MONTH   AS execMonth,
+                s.EXEC_DAY     AS execDay,
+                s.EXEC_DOW     AS execDow
+            FROM TB_BATCH_JOB_MST m
+            LEFT JOIN TB_BATCH_SCHED s ON m.BATCH_JOB_ID = s.BATCH_JOB_ID
+            ORDER BY m.REG_DT DESC
+        `);
+        res.json(rows);
+    } catch (error) {
+        console.error('Batch list error:', error);
+        if (error.code === 'ER_NO_SUCH_TABLE') return res.json([]);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`🚀 busTaams REST API Server is running beautifully on http://localhost:${PORT}`);
 });

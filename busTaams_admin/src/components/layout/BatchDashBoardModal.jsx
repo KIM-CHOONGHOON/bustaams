@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { X, Play, RefreshCw, AlertCircle, FileText, CheckCircle, Clock, Database, CalendarClock, ListChecks, History, FileSearch, RotateCcw, Bell, Lock, ChevronLeft } from 'lucide-react';
+import BatchTaskList from './BatchTaskList';
+import NewBatchRegistration from './NewBatchRegistration';
 
 const BatchDashBoardModal = ({ isOpen, onClose }) => {
   // 현재 활성화된 뷰 상태: 'home' | 각 메뉴 ID
@@ -46,7 +48,7 @@ const BatchDashBoardModal = ({ isOpen, onClose }) => {
 
   // ─── 배치 기본 정보 관리 메뉴 정의 ─────────────────────────
   const basicMenuItems = [
-    { id: 'master', label: '배치 작업 마스터 관리', desc: 'TB_BATCH_JOB_MST 등록/수정/조회', icon: <Database size={24} />, color: 'bg-blue-500' },
+    { id: 'master', label: '배치 작업 목록', desc: 'TB_BATCH_JOB_MST 등록/수정/조회', icon: <Database size={24} />, color: 'bg-blue-500' },
     { id: 'schedule', label: '배치 스케줄 관리', desc: 'TB_BATCH_SCHED 등록/변경/조회', icon: <CalendarClock size={24} />, color: 'bg-indigo-500' },
   ];
 
@@ -62,6 +64,7 @@ const BatchDashBoardModal = ({ isOpen, onClose }) => {
 
   // ─── 서브 뷰 타이틀 매핑 ─────────────────────────
   const getViewTitle = () => {
+    if (activeView === 'register') return '배치 신규 등록';
     const all = [...basicMenuItems, ...execMenuItems];
     const found = all.find(m => m.id === activeView);
     return found ? found.label : 'BATCH JOB 모니터링';
@@ -69,6 +72,14 @@ const BatchDashBoardModal = ({ isOpen, onClose }) => {
 
   // ─── 서브 뷰 Placeholder 렌더링 ─────────────────────────
   const renderSubView = () => {
+    if (activeView === 'master') {
+      return <BatchTaskList onBack={() => setActiveView('home')} onRegister={() => setActiveView('register')} />;
+    }
+    
+    if (activeView === 'register') {
+      return <NewBatchRegistration onBack={() => setActiveView('master')} />;
+    }
+
     const all = [...basicMenuItems, ...execMenuItems];
     const found = all.find(m => m.id === activeView);
     if (!found) return null;
