@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { pool, getNextId, uploadToLocal } = require('../db');
+const { pool, getNextId, getBucket, bucketName } = require('../db');
 const { authenticateToken } = require('../middleware/auth');
 const { encrypt, decrypt } = require('../crypto');
 const bcrypt = require('bcryptjs');
@@ -335,18 +335,33 @@ router.post('/profile/upload-image', authenticateToken, memoryUpload.single('pro
         }
         const custId = uRows[0].CUST_ID;
 
-        // 로컬 업로드 처리
-        const uploadResult = await uploadToLocal(file, 'profiles');
-        if (!uploadResult) {
-            return res.status(500).json({ success: false, error: '이미지 업로드 처리에 실패했습니다.' });
-        }
-        const { fileId, url: dbSavePath, ext } = uploadResult;
+        // GCS 업로드 설정
+        const ext = path.extname(file.originalname).replace('.', '') || 'png';
+        const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20);
+        const gcsPath = `profiles/${fileId}.${ext}`;
+        const bucket = getBucket();
+        const gcsFile = bucket.file(gcsPath);
 
-        // DB 저장
+        // GCS에 파일 저장
+        await gcsFile.save(file.buffer, {
+            metadata: { contentType: file.mimetype }
+        });
+
+        // 공개 접근 권한 설정
+        try {
+            await gcsFile.makePublic();
+        } catch (e) {
+            console.log('GCS makePublic failed:', e.message);
+        }
+
+        // DB 저장 (사용자 요구사항에 따라 프로필 이미지는 상대 경로 'profiles/...'로 저장)
+        // signatures 등 다른 카테고리는 전체 URL을 저장할 수 있으나, 프로필은 상대 경로 유지
+        const dbSavePath = gcsPath;
+
         await pool.execute(
             `INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_ID, MOD_ID) 
-             VALUES (?, 'USER_PROFILE', 'LOCAL', ?, ?, ?, ?, ?, ?)`,
-            [fileId, dbSavePath, file.originalname, ext, file.size, custId, custId]
+             VALUES (?, 'USER_PROFILE', ?, ?, ?, ?, ?, ?, ?)`,
+            [fileId, bucketName, dbSavePath, file.originalname, ext, file.size, custId, custId]
         );
 
         await pool.execute(
@@ -2374,20 +2389,28 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
             return res.json({ success: true, message: '견적 요청 취소가 완료되었습니다.' });
         }
 
-        // 2. 증빙 서류 업로드 처리 (로컬 스토리지) - 페널티가 발생하는 경우에만 수행
+        // 2. 증빙 서류 업로드 처리 (GCS) - 페널티가 발생하는 경우에만 수행
         let gcsPath = null;
         if (req.file) {
-            const uploadResult = await uploadToLocal(req.file, 'cancels', connection);
-            gcsPath = uploadResult.url;
+            const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20, connection);
+            const fileName = `cancel_docs/${fileId}${path.extname(req.file.originalname)}`;
+            const file = getBucket().file(fileName);
+
+            await file.save(req.file.buffer, {
+                metadata: { contentType: req.file.mimetype }
+            });
+
+            gcsPath = `https://storage.googleapis.com/${bucketName}/${fileName}`;
 
             // TB_FILE_MASTER 등록
             const fileQuery = `
                 INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_ID, MOD_ID)
-                VALUES (?, 'CANCEL_DOC', 'LOCAL', ?, ?, ?, ?, ?, ?)
+                VALUES (?, 'CANCEL_DOC', ?, ?, ?, ?, ?, ?, ?)
             `;
             await connection.execute(fileQuery, [
-                uploadResult.fileId, gcsPath, uploadResult.originalName,
-                uploadResult.ext, uploadResult.fileSize, custId, custId
+                fileId, bucketName, gcsPath, req.file.originalname,
+                path.extname(req.file.originalname).replace('.', ''),
+                req.file.size, custId, custId
             ]);
         }
 

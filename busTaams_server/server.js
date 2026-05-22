@@ -4,7 +4,6 @@ console.log('📦 server.js 로딩 중...');
 const cors = require('cors');
 const { pool } = require('./db');
 const path = require('path');
-const fs = require('fs');
 const admin = require('firebase-admin');
 const { Storage } = require('@google-cloud/storage');
 const bcrypt = require('bcrypt');
@@ -33,14 +32,17 @@ const {
     isCanonicalDriverFeePolicyDtlCd,
     sqlFeePolicyCntJoinOnP,
 } = require('./lib/feePolicyDtl');
-// [공통] 이미지 및 코드 관련 처리를 위한 공통 라우터 임포트
-const commonRouter = require('./routes/common');
+const fs = require('fs');
+const createCommonLiveChatRouter = require('./routes/commonLiveChat');
+const createLiveChatTravelerRouter = require('./routes/liveChatTraveler');
+const createUserDeviceTokenRouter = require('./routes/userDeviceToken');
 const { 
     buildPostLoginUserDto, 
     fetchCancelManageForUser, 
     fetchSubscriptionForDriver 
 } = require('./lib/loginPayload');
-
+const createAuthRouter = require('./routes/bt_auth_api');
+const createAuctionTripRouter = require('./routes/bt_auction_trip_api');
 
 const {
     canAccessDriverCancelProofFile,
@@ -62,8 +64,18 @@ app.use((req, res, next) => {
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-// [공통] 이미지 표시 및 공통 코드 API 라우터 마운트
-app.use('/api/common', commonRouter);
+
+// 📂 Local Uploads 디렉토리 정적 파일 서빙 미들웨어 추가 (GCS 대체)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
+
+require('./routes/busDriverCreditCardRegistrationRoute')(app, pool);
+/** 기사님 응찰 목록 — `app.get('/api/DriversListOfBids', DriversListOfBids)` (multer 등보다 먼저 등록) */
+require('./routes/driversListOfBids')(app, pool);
+require('./routes/cancellationOfBid')(app, pool);
+app.use('/api/CommonLiveChat', createCommonLiveChatRouter(pool));
+app.use('/api/live-chat-traveler', createLiveChatTravelerRouter(pool));
+app.use('/api/user/device-token', createUserDeviceTokenRouter(pool));
 
 const PORT = process.env.PORT || 8080;
 
@@ -152,7 +164,23 @@ app.use((req, res, next) => {
     next();
 });
 
+// 3. Auth Router 설정
+const authRouter = createAuthRouter(pool, admin, smsVerifiedPhoneStore, bucket, bucketName);
+app.use('/api/auth', authRouter);
+app.use('/api/users', authRouter); // 기존 /api/users/login 호환용
 
+// 4. Auction/Trip Router 설정
+const auctionTripRouter = createAuctionTripRouter(pool, admin, bucket, bucketName);
+app.use('/api/auction', auctionTripRouter);
+app.use('/api/traveler-quote-request-details', auctionTripRouter);
+
+// 4-1. Admin Router 설정
+const adminRouter = require('./routes/appAdmin')(pool);
+app.use('/api/admin', adminRouter);
+
+// 4-2. Common Router 설정 (이미지 표시용 display-image API 포함)
+const commonRouter = require('./routes/common');
+app.use('/api/common', commonRouter);
 
 // 5. 알림(Notification) 및 기사용(App Driver) 라우터 설정 (누락분 마운트)
 const createNotificationRouter = require('./routes/notification');
@@ -356,16 +384,44 @@ const BUS_DOC_FILE_CATEGORY = {
 };
 const BUS_PHOTO_FILE_CATEGORY = 'VEHICLE_PHOTO';
 
+/** 웹 버스 정보 등록·수정 모달 — TB_FILE_MASTER 고정 버킷명(공백 없음) */
+const BUS_FILE_MASTER_BUCKET_NM = 'bustaams-secure-data';
+/** 동일 — GCS_PATH 에 저장하는 공개 URL 접두사 */
+const BUS_FILE_MASTER_GCS_PUBLIC_BASE = 'https://storage.googleapis.com/bustaams-secure-data';
+
+/**
+ * 버스 모달 TB_FILE_MASTER.ORG_FILE_NM — 업로드 파일명 전체(확장자 포함), URL 앞뒤 공백 제거에 맞춰 값만 trim
+ */
+function busModalOrgFileNmWithExtension(fileNameHint, fileExt) {
+    const ext = String(fileExt ?? '').replace(/^\./, '').trim().toLowerCase();
+    let leaf = String(fileNameHint ?? 'file').trim().replace(/\\/g, '/').split('/').pop() || 'file';
+    leaf = leaf.replace(/[^a-zA-Z0-9._-가-힣]/g, '_').replace(/\.+$/, '');
+    if (!leaf) leaf = 'file';
+    if (!ext) return leaf;
+    const suf = `.${ext}`;
+    if (leaf.toLowerCase().endsWith(suf)) return leaf;
+    return `${leaf}${suf}`;
+}
+
 /** GCS 업로드 + `TB_FILE_MASTER` 행 추가 (`BusTaams_Project 테이블 설계.md` 범위) */
 async function insertBusFileMaster(connection, {
-    fileId, category, gcsPath, buffer, orgFileNm, fileExt, fileSize, contentType
+    fileId, category, gcsPath, buffer, orgFileNmFull, fileExt, fileSize, contentType
 }) {
-    const gcsFile = bucket.file(gcsPath);
-    await gcsFile.save(buffer, { metadata: { contentType: contentType || 'application/octet-stream' }, resumable: false });
+    const objectKey = String(gcsPath ?? '').trim().replace(/^\/+/, '').replace(/\s+/g, '');
+    
+    // 📂 로컬 uploads 디렉토리에 저장
+    const localPath = path.join(__dirname, 'uploads', objectKey);
+    const localDir = path.dirname(localPath);
+    if (!fs.existsSync(localDir)) {
+        fs.mkdirSync(localDir, { recursive: true });
+    }
+    fs.writeFileSync(localPath, buffer);
+
+    const gcsPathForDb = `https://bustaams.cafe24.com/uploads/${objectKey}`.trim();
     await connection.execute(
         `INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
-        [fileId, category, bucketName, gcsPath, orgFileNm, fileExt, fileSize]
+         VALUES (?, ?, 'uploads', ?, ?, ?, ?, NOW())`,
+        [fileId, category, gcsPathForDb, String(orgFileNmFull ?? 'file').trim(), fileExt, fileSize]
     );
 }
 
@@ -793,6 +849,7 @@ app.put('/api/user/profile', async (req, res) => {
                 const photoBuffer = Buffer.from(photoData, 'base64');
                 const photoMimeMatch = photoBase64.match(/^data:image\/([^;]+);base64,/);
                 const rawMimeSub = photoMimeMatch?.[1] || 'png';
+                const bucketName = process.env.GCS_BUCKET_NAME || 'bustaams-secure-data';
                 const parsedLike = {
                     buffer: photoBuffer,
                     ext: rawMimeSub,
@@ -801,27 +858,24 @@ app.put('/api/user/profile', async (req, res) => {
                 };
                 const { orgFileNm, fileExt } = orgFileNmAndExt(photoName, parsedLike);
                 const photoFileName = `${nextFileId}.${fileExt}`;
-                
-                const relativeFolder = 'uploads/profiles';
-                const absoluteFolder = path.join(__dirname, relativeFolder);
-                
-                // 폴더 생성
-                if (!fs.existsSync(absoluteFolder)) {
-                    fs.mkdirSync(absoluteFolder, { recursive: true });
+                const photoActualPath = `profiles/${photoFileName}`;
+
+                // 📂 로컬 uploads 디렉토리에 저장
+                const localPath = path.join(__dirname, 'uploads', photoActualPath);
+                const localDir = path.dirname(localPath);
+                if (!fs.existsSync(localDir)) {
+                    fs.mkdirSync(localDir, { recursive: true });
                 }
-                
-                const relativeFilePath = `${relativeFolder}/${photoFileName}`;
-                const absoluteFilePath = path.join(absoluteFolder, photoFileName);
-                
-                // 로컬 파일 쓰기
-                fs.writeFileSync(absoluteFilePath, photoBuffer);
+                fs.writeFileSync(localPath, photoBuffer);
+
+                const photoGcsPathForDB = `https://bustaams.cafe24.com/uploads/${photoActualPath}`;
 
                 await connection.execute(`
                     INSERT INTO TB_FILE_MASTER (
                         FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, 
                         ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT, REG_ID, MOD_DT, MOD_ID
-                    ) VALUES (?, 'PROFILE', 'LOCAL', ?, ?, ?, ?, NOW(), ?, NOW(), ?)
-                `, [nextFileId, relativeFilePath, orgFileNm, fileExt, photoBuffer.length, custId, custId]);
+                    ) VALUES (?, 'PROFILE', 'uploads', ?, ?, ?, ?, NOW(), ?, NOW(), ?)
+                `, [nextFileId, photoGcsPathForDB, orgFileNm, fileExt, photoBuffer.length, custId, custId]);
             }
 
             // 2. 동적 쿼리 생성
@@ -929,24 +983,36 @@ app.post('/api/driver/profile', async (req, res) => {
         let profileImgUrl = '';
         let licenseImgUrl = '';
 
-        // 1. 프로필 이미지 업로드 (Base64 -> GCS)
+        // 1. 프로필 이미지 업로드 (Base64 -> 로컬 저장)
         if (profileImgBase64 && profileImgBase64.startsWith('data:image')) {
             const base64Data = profileImgBase64.replace(/^data:image\/\w+;base64,/, "");
             const buffer = Buffer.from(base64Data, 'base64');
-            const fileName = `profile/${userId}_${Date.now()}.png`;
-            const file = bucket.file(`certificates/${fileName}`);
-            await file.save(buffer, { metadata: { contentType: 'image/png' }, resumable: false });
-            profileImgUrl = `https://storage.googleapis.com/${bucketName}/certificates/${fileName}`;
+            const relPath = `certificates/profile/${userId}_${Date.now()}.png`;
+            
+            const localPath = path.join(__dirname, 'uploads', relPath);
+            const localDir = path.dirname(localPath);
+            if (!fs.existsSync(localDir)) {
+                fs.mkdirSync(localDir, { recursive: true });
+            }
+            fs.writeFileSync(localPath, buffer);
+            
+            profileImgUrl = `https://bustaams.cafe24.com/uploads/${relPath}`;
         }
 
-        // 2. 면허증 이미지 업로드 (Base64 -> GCS)
+        // 2. 면허증 이미지 업로드 (Base64 -> 로컬 저장)
         if (licenseImgBase64 && licenseImgBase64.startsWith('data:image')) {
             const base64Data = licenseImgBase64.replace(/^data:image\/\w+;base64,/, "");
             const buffer = Buffer.from(base64Data, 'base64');
-            const fileName = `bus_licenses/${userId}_${Date.now()}.png`;
-            const file = bucket.file(`certificates/${fileName}`);
-            await file.save(buffer, { metadata: { contentType: 'image/png' }, resumable: false });
-            licenseImgUrl = `https://storage.googleapis.com/${bucketName}/certificates/${fileName}`;
+            const relPath = `certificates/bus_licenses/${userId}_${Date.now()}.png`;
+            
+            const localPath = path.join(__dirname, 'uploads', relPath);
+            const localDir = path.dirname(localPath);
+            if (!fs.existsSync(localDir)) {
+                fs.mkdirSync(localDir, { recursive: true });
+            }
+            fs.writeFileSync(localPath, buffer);
+            
+            licenseImgUrl = `https://bustaams.cafe24.com/uploads/${relPath}`;
         }
 
         // 3. DB 작업 (Transaction)
@@ -967,8 +1033,8 @@ app.post('/api/driver/profile', async (req, res) => {
                         ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT, REG_ID
                     ) VALUES (?, 'PROFILE_IMG', ?, ?, ?, 'png', 0, NOW(), ?)
                 `;
-                const profileGcsPath = profileImgUrl.split(`${bucketName}/`)[1];
-                await connection.execute(fileQuery, [profileFileId, bucketName, profileGcsPath, 'profile', userId]); // ORG_FILE_NM 확장자 제외
+                const profileGcsPath = profileImgUrl.split('uploads/')[1];
+                await connection.execute(fileQuery, [profileFileId, 'uploads', profileGcsPath, 'profile', userId]); // ORG_FILE_NM 확장자 제외
             }
 
             if (licenseImgUrl) {
@@ -981,8 +1047,8 @@ app.post('/api/driver/profile', async (req, res) => {
                         ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT, REG_ID
                     ) VALUES (?, 'DRIVER_LICENSE', ?, ?, ?, 'png', 0, NOW(), ?)
                 `;
-                const licenseGcsPath = licenseImgUrl.split(`${bucketName}/`)[1];
-                await connection.execute(fileQuery, [licenseFileId, bucketName, licenseGcsPath, 'license', userId]);
+                const licenseGcsPath = licenseImgUrl.split('uploads/')[1];
+                await connection.execute(fileQuery, [licenseFileId, 'uploads', licenseGcsPath, 'license', userId]);
             }
 
             const legCands = custIdMatchCandidates(String(userId).trim());
@@ -1542,19 +1608,22 @@ app.post('/api/auction/complex-cancel', async (req, res) => {
 
                     const { orgFileNm, fileExt } = orgFileNmAndExt(fileName, parsed);
                     const gcsPath = `cancel_docs/${custId}/${fileId}_${orgFileNm}.${fileExt}`;
-                    const gcsFile = bucket.file(gcsPath);
+                    
+                    // 📂 로컬 uploads 디렉토리에 저장
+                    const localPath = path.join(__dirname, 'uploads', gcsPath);
+                    const localDir = path.dirname(localPath);
+                    if (!fs.existsSync(localDir)) {
+                        fs.mkdirSync(localDir, { recursive: true });
+                    }
+                    fs.writeFileSync(localPath, parsed.buffer);
 
-                    // GCS에 파일 저장
-                    await gcsFile.save(parsed.buffer, {
-                        metadata: { contentType: parsed.mime },
-                        resumable: false
-                    });
+                    const gcsPathForDb = `https://bustaams.cafe24.com/uploads/${gcsPath}`;
 
                     // TB_FILE_MASTER 기록
                     await connection.execute(`
                         INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT)
-                        VALUES (?, 'CANCEL_DOC', ?, ?, ?, ?, ?, NOW())
-                    `, [fileId, bucketName, gcsPath, orgFileNm, fileExt, parsed.buffer.length]);
+                        VALUES (?, 'CANCEL_DOC', 'uploads', ?, ?, ?, ?, NOW())
+                    `, [fileId, gcsPathForDb, orgFileNm, fileExt, parsed.buffer.length]);
                 }
         }
 
@@ -2781,15 +2850,19 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                     }
 
                     const seqPadded = String(nextSeq).padStart(20, '0');
-                    const { orgFileNm, fileExt } = orgFileNmAndExt(hintNm || undefined, parsed);
+                    const { fileExt } = orgFileNmAndExt(hintNm || undefined, parsed);
+                    const orgFileNmFull = busModalOrgFileNmWithExtension(hintNm || 'qualification', fileExt);
                     const gcsRelPath = `QUALIFICATION/${seqPadded}.${fileExt}`;
+                    
+                    // 📂 로컬 uploads 디렉토리에 저장
+                    const localPath = path.join(__dirname, 'uploads', gcsRelPath);
+                    const localDir = path.dirname(localPath);
+                    if (!fs.existsSync(localDir)) {
+                        fs.mkdirSync(localDir, { recursive: true });
+                    }
+                    fs.writeFileSync(localPath, parsed.buffer);
 
-                    const qualBuckets = bucketForName(DRIVER_QUAL_GCS_BUCKET);
-                    const gcsFile = qualBuckets.file(gcsRelPath);
-                    await gcsFile.save(parsed.buffer, {
-                        metadata: { contentType: parsed.mime || 'application/octet-stream' },
-                        resumable: false
-                    });
+                    const gcsPathForDb = `https://bustaams.cafe24.com/uploads/${gcsRelPath}`.trim();
 
                     if (hasDriverDocsFileSize) {
                         await connection.execute(
@@ -2797,15 +2870,14 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                         INSERT INTO TB_DRIVER_DOCS (
                             CUST_ID, DOC_TYPE, DOC_TYPE_SEQ, GCS_BUCKET_NM, GCS_PATH,
                             ORG_FILE_NM, ORG_FILE_EXT, FILE_SIZE, REG_DT
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                        ) VALUES (?, ?, ?, 'uploads', ?, ?, ?, ?, NOW())
                         `,
                             [
                                 custId,
                                 QUALIFICATION_DOC_TYPE,
                                 nextSeq,
-                                DRIVER_QUAL_GCS_BUCKET,
-                                gcsRelPath,
-                                orgFileNm,
+                                gcsPathForDb,
+                                orgFileNmFull,
                                 fileExt,
                                 parsed.buffer.length
                             ]
@@ -2816,15 +2888,14 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                         INSERT INTO TB_DRIVER_DOCS (
                             CUST_ID, DOC_TYPE, DOC_TYPE_SEQ, GCS_BUCKET_NM, GCS_PATH,
                             ORG_FILE_NM, ORG_FILE_EXT, REG_DT
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+                        ) VALUES (?, ?, ?, 'uploads', ?, ?, ?, NOW())
                         `,
                             [
                                 custId,
                                 QUALIFICATION_DOC_TYPE,
                                 nextSeq,
-                                DRIVER_QUAL_GCS_BUCKET,
-                                gcsRelPath,
-                                orgFileNm,
+                                gcsPathForDb,
+                                orgFileNmFull,
                                 fileExt
                             ]
                         );
@@ -3053,10 +3124,10 @@ app.post('/api/payment/return', async (req, res) => {
 
         if (reqId && driverId) {
             // 3. 상태 업데이트 로직
-            // 예약 내역 확정 상태로 변경
+            // 예약 내역 확정 상태로 변경 (상태가 'BIDDING'인 예약 건만 확정 처리)
             await connection.execute(
                 `UPDATE TB_BUS_RESERVATION SET DATA_STAT = 'CONFIRM', MOD_DT = NOW() 
-                 WHERE REQ_ID = ? AND DRIVER_ID = ? AND DATA_STAT NOT IN ('TRAVELER_CANCEL', 'BUS_CHANGE')`,
+                 WHERE REQ_ID = ? AND DRIVER_ID = ? AND DATA_STAT = 'BIDDING'`,
                 [reqId, driverId]
             );
 
@@ -3324,7 +3395,11 @@ app.get('/api/driver/qual-cert/file', async (req, res) => {
         const doc = await fetchQualCertDocRow(connection, custId, fileId);
         if (!doc) return res.status(404).json({ error: '파일을 찾을 수 없습니다.' });
         const { GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, ORG_FILE_EXT } = doc;
-        const gcsFile = bucketForName(GCS_BUCKET_NM).file(GCS_PATH);
+        let pathRaw = GCS_PATH;
+        if (Buffer.isBuffer(pathRaw)) pathRaw = pathRaw.toString('utf8');
+        const objectKey = normalizeGcsObjectPath(pathRaw);
+        if (!objectKey) return res.status(404).json({ error: '유효하지 않은 저장 경로입니다.' });
+        const gcsFile = bucketForName(GCS_BUCKET_NM).file(objectKey);
         const [exists] = await gcsFile.exists();
         if (!exists) return res.status(404).json({ error: '스토리지에 파일이 없습니다.' });
         const extRaw = ((ORG_FILE_EXT || '').startsWith('.') ? (ORG_FILE_EXT || '').slice(1) : (ORG_FILE_EXT || '')).toLowerCase();
@@ -3364,7 +3439,11 @@ app.get('/api/driver/qual-cert/download', async (req, res) => {
         const doc = await fetchQualCertDocRow(connection, custId, fileId);
         if (!doc) return res.status(404).json({ error: '파일을 찾을 수 없습니다.' });
         const { GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, ORG_FILE_EXT } = doc;
-        const gcsFile = bucketForName(GCS_BUCKET_NM).file(GCS_PATH);
+        let pathRaw = GCS_PATH;
+        if (Buffer.isBuffer(pathRaw)) pathRaw = pathRaw.toString('utf8');
+        const objectKey = normalizeGcsObjectPath(pathRaw);
+        if (!objectKey) return res.status(404).json({ error: '유효하지 않은 저장 경로입니다.' });
+        const gcsFile = bucketForName(GCS_BUCKET_NM).file(objectKey);
         const [exists] = await gcsFile.exists();
         if (!exists) return res.status(404).json({ error: '스토리지에 파일이 없습니다.' });
         const safeNm = joinOrgFileDisplayName(ORG_FILE_NM || 'qual_cert', (ORG_FILE_EXT || '').replace(/^\./, '') || 'file');
@@ -3559,7 +3638,11 @@ app.get('/api/driver/bus-documents/file', async (req, res) => {
         );
         if (rows.length === 0) return res.status(404).json({ error: '파일을 찾을 수 없습니다.' });
         const { GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT } = rows[0];
-        const gcsFile = bucketForName(GCS_BUCKET_NM).file(GCS_PATH);
+        let pathRaw = GCS_PATH;
+        if (Buffer.isBuffer(pathRaw)) pathRaw = pathRaw.toString('utf8');
+        const objectKey = normalizeGcsObjectPath(pathRaw);
+        if (!objectKey) return res.status(404).json({ error: '유효하지 않은 저장 경로입니다.' });
+        const gcsFile = bucketForName(GCS_BUCKET_NM).file(objectKey);
         const [exists] = await gcsFile.exists();
         if (!exists) return res.status(404).json({ error: '스토리지에 파일이 없습니다.' });
 
@@ -3839,15 +3922,16 @@ app.post('/api/driver/bus', async (req, res) => {
 
                 const fid = generateNextNumericId(currentMaxFileId, 20);
                 currentMaxFileId = fid;
-                const { orgFileNm, fileExt } = orgFileNmAndExt(d.name, parsed);
+                const { fileExt } = orgFileNmAndExt(d.name, parsed);
                 const gcsPath = `${d.cat}/${custId}/${fid}.${fileExt}`;
+                const orgFileNmFull = busModalOrgFileNmWithExtension(d.name || 'doc', fileExt);
 
                 await insertBusFileMaster(connection, {
                     fileId: fid,
                     category: d.cat,
                     gcsPath,
                     buffer: parsed.buffer,
-                    orgFileNm,
+                    orgFileNmFull,
                     fileExt,
                     fileSize: parsed.buffer.length,
                     contentType: parsed.mime,
@@ -3871,15 +3955,16 @@ app.post('/api/driver/bus', async (req, res) => {
 
                     const fid = generateNextNumericId(currentMaxFileId, 20);
                     currentMaxFileId = fid;
-                    const { orgFileNm, fileExt } = orgFileNmAndExt(nm, parsed);
+                    const { fileExt } = orgFileNmAndExt(nm, parsed);
                     const gcsPath = `${BUS_PHOTO_FILE_CATEGORY}/${custId}/${fid}.${fileExt}`;
+                    const orgFileNmFull = busModalOrgFileNmWithExtension(nm, fileExt);
 
                     await insertBusFileMaster(connection, {
                         fileId: fid,
                         category: BUS_PHOTO_FILE_CATEGORY,
                         gcsPath,
                         buffer: parsed.buffer,
-                        orgFileNm,
+                        orgFileNmFull,
                         fileExt,
                         fileSize: parsed.buffer.length,
                         contentType: parsed.mime,
@@ -4005,14 +4090,15 @@ app.patch('/api/driver/bus/documents', async (req, res) => {
                 if (!parsed) continue;
                 const fid = generateNextNumericId(currentMaxFileId, 20);
                 currentMaxFileId = fid;
-                const { orgFileNm, fileExt } = orgFileNmAndExt(d.name, parsed);
+                const { fileExt } = orgFileNmAndExt(d.name, parsed);
                 const gcsPath = `${d.cat}/${custId}/${fid}.${fileExt}`;
+                const orgFileNmFull = busModalOrgFileNmWithExtension(d.name || 'doc', fileExt);
                 await insertBusFileMaster(connection, {
                     fileId: fid,
                     category: d.cat,
                     gcsPath,
                     buffer: parsed.buffer,
-                    orgFileNm,
+                    orgFileNmFull,
                     fileExt,
                     fileSize: parsed.buffer.length,
                     contentType: parsed.mime,
@@ -4061,14 +4147,15 @@ app.patch('/api/driver/bus/photos', async (req, res) => {
                 if (!parsed) continue;
                 const fid = generateNextNumericId(currentMaxFileId, 20);
                 currentMaxFileId = fid;
-                const { orgFileNm, fileExt } = orgFileNmAndExt(ph.fileName || 'photo', parsed);
+                const { fileExt } = orgFileNmAndExt(ph.fileName || 'photo', parsed);
                 const gcsPath = `${BUS_PHOTO_FILE_CATEGORY}/${custId}/${fid}.${fileExt}`;
+                const orgFileNmFull = busModalOrgFileNmWithExtension(ph.fileName || 'photo', fileExt);
                 await insertBusFileMaster(connection, {
                     fileId: fid,
                     category: BUS_PHOTO_FILE_CATEGORY,
                     gcsPath,
                     buffer: parsed.buffer,
-                    orgFileNm,
+                    orgFileNmFull,
                     fileExt,
                     fileSize: parsed.buffer.length,
                     contentType: parsed.mime,

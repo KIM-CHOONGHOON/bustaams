@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const admin = require('firebase-admin');
-const { pool, getNextId, uploadToLocal } = require('../db');
-const { encrypt, decrypt, plainOrLegacyDecrypt } = require('../crypto');
+const { pool, getNextId, getBucket, bucketName } = require('../db');
+const { encrypt, decrypt } = require('../crypto');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
@@ -27,32 +27,31 @@ const authenticateToken = (req, res, next) => {
 const memoryStorage = multer.memoryStorage();
 const memoryUpload = multer({ storage: memoryStorage });
 
-// 로컬 파일 업로드 공통 함수 (기존 uploadToGCS를 대체하여 로컬 스토리지에 저장)
+// GCS 파일 업로드 공통 함수
 const uploadToGCS = async (file, folder, connection = null) => {
     if (!file) return null;
+    const ext = path.extname(file.originalname).replace('.', '') || 'png';
+    const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20, connection);
+    const gcsFileName = `${folder}/${fileId}.${ext}`;
+    const gcsFile = getBucket().file(gcsFileName);
 
-    // 업로드 대상 하위 폴더 결정 (signatures, profiles, documents, vehicles, legal, cancels 등)
-    let folderName = 'documents'; // 기본 디렉터리
+    await gcsFile.save(file.buffer, {
+        metadata: { contentType: file.mimetype }
+    });
 
-    if (file.fieldname === 'profileImg') {
-        folderName = 'profiles';
-    } else if (file.fieldname === 'vehiclePhotos') {
-        folderName = 'vehicles';
-    } else if (['licenseImg', 'busLicenseImg', 'careerCertImg'].includes(file.fieldname)) {
-        folderName = 'documents';
-    } else if (['bizRegFile', 'transLicFile', 'insCertFile'].includes(file.fieldname)) {
-        folderName = 'legal';
-    } else if (folder === 'cancels' || file.fieldname === 'reasonDoc') {
-        folderName = 'cancels';
-    } else if (folder === 'drivers') {
-        folderName = 'documents';
-    } else if (folder === 'buses') {
-        folderName = 'vehicles';
+    try {
+        await gcsFile.makePublic();
+    } catch (e) {
+        console.log('GCS makePublic failed:', e.message);
     }
 
-    // 로컬 스토리지 업로드 실행
-    const uploadResult = await uploadToLocal(file, folderName, connection);
-    return uploadResult;
+    return {
+        fileId,
+        url: `https://storage.googleapis.com/${bucketName}/${gcsFileName}`,
+        ext,
+        originalName: file.originalname,
+        fileSize: file.size
+    };
 };
 
 /**
@@ -526,7 +525,7 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
                 await connection.execute(
                     `INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_ID, MOD_ID) 
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [fileId, category, 'LOCAL', url, originalName, ext, uploadResult.fileSize, custId, custId]
+                    [fileId, category, bucketName, url, originalName, ext, uploadResult.fileSize, custId, custId]
                 );
                 return fileId;
             }
@@ -577,7 +576,7 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
                 await connection.execute(
                     `INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_ID, MOD_ID) 
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [fileId, `DRIVER_${type}`, 'LOCAL', currentPath, file.originalname, path.extname(file.originalname).replace('.', ''), file.size, custId, custId]
+                    [fileId, `DRIVER_${type}`, bucketName, currentPath, file.originalname, path.extname(file.originalname).replace('.', ''), file.size, custId, custId]
                 );
             } else if (docRows.length > 0) {
                 // 파일 업로드 없이 정보만 업데이트하는 경우 기존 경로 유지 (실제 운영 시에는 이력 관리 필요)
@@ -606,7 +605,7 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
                 await connection.execute(
                     `INSERT INTO TB_DRIVER_DOCS (CUST_ID, DOC_TYPE, DOC_TYPE_SEQ, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, ORG_FILE_EXT, FILE_SIZE, LICENSE_TYPE_CD, DOC_NO_ENC, ISSUE_DT, INFO_STAT_CD, REG_ID, MOD_ID) 
                      VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [custId, type, 'LOCAL', currentPath, file.originalname, ext, file.size, licType, encrypt(no), dt, status, custId, custId]
+                    [custId, type, bucketName, currentPath, file.originalname, ext, file.size, licType, encrypt(no), dt, status, custId, custId]
                 );
             }
         };
@@ -770,7 +769,7 @@ router.post('/bus/register', authenticateToken, memoryUpload.fields([
             const up = await uploadToGCS(file, 'buses', connection);
             await connection.execute(
                 `INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_ID, MOD_ID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [up.fileId, category, 'LOCAL', up.url, up.originalName, up.ext, up.fileSize, custId, custId]
+                [up.fileId, category, bucketName, up.url, up.originalName, up.ext, up.fileSize, custId, custId]
             );
             return up.fileId;
         };
@@ -791,7 +790,7 @@ router.post('/bus/register', authenticateToken, memoryUpload.fields([
                 const up = await uploadToGCS(file, 'buses', connection);
                 await connection.execute(
                     `INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_ID, MOD_ID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [up.fileId, 'BUS_PHOTO', 'LOCAL', up.url, up.originalName, up.ext, up.fileSize, custId, custId]
+                    [up.fileId, 'BUS_PHOTO', bucketName, up.url, up.originalName, up.ext, up.fileSize, custId, custId]
                 );
                 newPhotos.push(up.fileId);
             }
@@ -1665,7 +1664,7 @@ router.post('/cancel-mission/:id', authenticateToken, memoryUpload.single('reaso
             await connection.execute(
                 `INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_ID, MOD_ID) 
                  VALUES (?, 'CANCEL_DOC', ?, ?, ?, ?, ?, ?, ?)`,
-                [up.fileId, 'LOCAL', up.url, up.originalName, up.ext, up.fileSize, custId, custId]
+                [up.fileId, bucketName, up.url, up.originalName, up.ext, up.fileSize, custId, custId]
             );
             gcsPath = up.url;
         }
