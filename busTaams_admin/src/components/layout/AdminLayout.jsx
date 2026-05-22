@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import Footer from './Footer';
 import Dashboard from '../../pages/Dashboard';
 import UsersManagement from '../../pages/UsersManagement';
 import ReservationsManagement from '../../pages/ReservationsManagement';
 import MembersManagement from '../../pages/MembersManagement';
+import DriversManagement from '../../pages/DriversManagement';
 import TripsManagement from '../../pages/TripsManagement';
+import SettlementManagement from '../../pages/SettlementManagement';
 import MyCustomersManagement from '../../pages/MyCustomersManagement';
 import MyPerformanceManagement from '../../pages/MyPerformanceManagement';
 import SalesPerformanceManagement from '../../pages/SalesPerformanceManagement';
+import SystemSettings from '../../pages/SystemSettings';
 
 const AdminLayout = ({ onLogout }) => {
   // 로그인된 정보에 기초해 초기 메뉴 설정
@@ -30,8 +34,12 @@ const AdminLayout = ({ onLogout }) => {
         return <ReservationsManagement />;
       case 'members':
         return <MembersManagement />;
+      case 'drivers':
+        return <DriversManagement />;
       case 'trips':
         return <TripsManagement />;
+      case 'settlement':
+        return <SettlementManagement />;
       case 'my-customers':
         return <MyCustomersManagement />;
       case 'my-performance':
@@ -39,12 +47,7 @@ const AdminLayout = ({ onLogout }) => {
       case 'sales-performance':
         return <SalesPerformanceManagement />;
       case 'settings':
-        return (
-          <div className="p-8 max-w-7xl mx-auto">
-            <h1 className="text-2xl font-black text-slate-800">시스템 설정</h1>
-            <p className="mt-2 text-slate-500">관리자 계정 및 운영 정책을 설정하는 화면이 위치할 곳입니다.</p>
-          </div>
-        );
+        return <SystemSettings />;
       default:
         return role === 'SALES' ? <MyCustomersManagement /> : <Dashboard />;
     }
@@ -55,8 +58,11 @@ const AdminLayout = ({ onLogout }) => {
       <Sidebar currentMenu={currentMenu} setCurrentMenu={setCurrentMenu} />
       <div className="flex-1 flex flex-col min-w-0">
         <Header onLogout={onLogout} />
-        <main className="flex-1 overflow-y-auto">
-          {renderContent()}
+        <main className="flex-1 overflow-y-auto flex flex-col justify-between">
+          <div className="flex-1">
+            {renderContent()}
+          </div>
+          <Footer />
         </main>
       </div>
     </div>

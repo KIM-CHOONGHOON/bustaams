@@ -210,12 +210,21 @@ const ReservationsManagement = () => {
                     </td>
                     {/* 결제 처리 버튼 */}
                     <td className="py-5 px-4 text-center">
-                      <button
-                        onClick={() => handlePaymentProcess(item)}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-95"
-                      >
-                        결제처리
-                      </button>
+                      {String(item.paymentSts) === '2' ? (
+                        <button
+                          disabled
+                          className="bg-slate-100 text-slate-400 font-bold text-xs px-4 py-2 rounded-xl border border-slate-200 cursor-not-allowed"
+                        >
+                          처리완료
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handlePaymentProcess(item)}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-95"
+                        >
+                          결제처리
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))

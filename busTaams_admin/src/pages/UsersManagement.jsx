@@ -86,10 +86,14 @@ const UsersManagement = () => {
 
     setLoading(true);
     try {
+      // 현재 로그인한 관리자 ID 가져오기 (REG_ID, MOD_ID 기록용)
+      const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
+      const registeredBy = adminUser.adminId || 'SYSTEM';
+
       const response = await fetch('/api/admin/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(regFormData),
+        body: JSON.stringify({ ...regFormData, registeredBy }),
       });
 
       let errorMsg = '관리자 등록에 실패했습니다.';
