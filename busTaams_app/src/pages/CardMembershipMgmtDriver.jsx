@@ -1,18 +1,46 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../api';
 import Swal from 'sweetalert2';
 import BottomNavDriver from '../components/BottomNavDriver';
 
 const CardMembershipMgmtDriver = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [data, setData] = useState({ cards: [], history: [], userImage: null });
     const [loading, setLoading] = useState(true);
     const [imageVersion] = useState(Date.now());
 
     useEffect(() => {
-        fetchData();
-    }, []);
+        // 이니시스 카드 등록 완료 리다이렉트 파라미터 확인
+        const params = new URLSearchParams(location.search);
+        const status = params.get('status');
+        const msg = params.get('msg');
+        
+        if (status === 'success') {
+            Swal.fire({
+                title: '성공',
+                text: '카드 등록이 정상적으로 완료되었습니다! 💳',
+                icon: 'success',
+                confirmButtonColor: '#006a6a'
+            }).then(() => {
+                navigate('/membership-card-mgmt', { replace: true });
+                fetchData();
+            });
+        } else if (status === 'fail') {
+            Swal.fire({
+                title: '오류',
+                text: msg || '카드 등록을 완료하지 못했습니다. 다시 시도해주세요.',
+                icon: 'error',
+                confirmButtonColor: '#006a6a'
+            }).then(() => {
+                navigate('/membership-card-mgmt', { replace: true });
+                fetchData();
+            });
+        } else {
+            fetchData();
+        }
+    }, [location]);
 
     const fetchData = async () => {
         try {

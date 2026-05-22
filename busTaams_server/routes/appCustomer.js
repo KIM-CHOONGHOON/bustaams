@@ -1323,11 +1323,12 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
                 res.DRIVER_ID as driverId,
                 u_driver.USER_NM as driverName,
                 u_driver.HP_NO as driverHp,
-                u_driver.USER_IMAGE as driverAvatar,
+                (SELECT GCS_PATH FROM TB_FILE_MASTER WHERE FILE_ID = u_driver.PROFILE_FILE_ID) as driverAvatar,
                 dv.VEHICLE_NO as busNo,
                 dv.MODEL_NM as busModel,
                 dv.VEHICLE_PHOTOS_JSON as busPhotos,
                 dv.AMENITIES as amenities,
+                dv.HAS_ADAS as hasAdas,
                 res.DRIVER_BIDDING_PRICE as confirmedPrice,
                 res.DATA_STAT as resStatus
             FROM TB_AUCTION_REQ_BUS rb
@@ -1349,9 +1350,10 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
                 try {
                     let photoIds = (typeof bus.busPhotos === 'string') ? JSON.parse(bus.busPhotos) : bus.busPhotos;
                     if (Array.isArray(photoIds) && photoIds.length > 0) {
+                        const uniqueIds = [...new Set(photoIds)].map(id => String(id).trim());
                         const [fileRows] = await pool.execute(
-                            'SELECT GCS_PATH FROM TB_FILE_MASTER WHERE FILE_ID IN (?)',
-                            [photoIds]
+                            `SELECT GCS_PATH FROM TB_FILE_MASTER WHERE FILE_ID IN (${uniqueIds.map(() => '?').join(',')})`,
+                            uniqueIds
                         );
 
                         const paths = fileRows.map(f => {
@@ -1363,7 +1365,7 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
                         });
 
                         bus.busPhotos = paths;
-                        bus.busImage = paths[0]; // 첫 번째 이미지를 대표 이미지로 설정
+                        bus.busImage = paths[0] || null; // 첫 번째 이미지를 대표 이미지로 설정
                     } else {
                         bus.busPhotos = [];
                         bus.busImage = null;
@@ -1376,6 +1378,48 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
             } else {
                 bus.busPhotos = [];
                 bus.busImage = null;
+            }
+
+            // 3. 편의시설 (amenities) 처리 (객체 형태 -> 배열 형태로 가공하여 프론트 지원)
+            if (bus.amenities) {
+                try {
+                    let amenityObj = (typeof bus.amenities === 'string') ? JSON.parse(bus.amenities) : bus.amenities;
+                    const activeAmenities = [];
+
+                    if (amenityObj && typeof amenityObj === 'object' && !Array.isArray(amenityObj)) {
+                        const nameMapping = {
+                            'Table': '개인 테이블',
+                            'Wi-Fi': '와이파이(Wi-Fi)',
+                            'USB-CHARGE': 'USB 충전 포트',
+                            'Refrigerator': '냉장고',
+                            'Individual-Screen': '개인 모니터'
+                        };
+                        for (let [key, val] of Object.entries(amenityObj)) {
+                            if (val === true || val === 'Y' || val === 'true') {
+                                activeAmenities.push(nameMapping[key] || key);
+                            }
+                        }
+                    } else if (typeof bus.amenities === 'string') {
+                        activeAmenities.push(bus.amenities);
+                    } else if (Array.isArray(bus.amenities)) {
+                        activeAmenities.push(...bus.amenities);
+                    }
+
+                    // ADAS / AEBS 안전 장치 여부
+                    if (bus.hasAdas === 'Y' || bus.hasAdas === true) {
+                        activeAmenities.push('안전장치 AEBS 장착');
+                    }
+
+                    bus.amenities = activeAmenities;
+                } catch (e) {
+                    console.error('[App Reservation Detail] Amenities resolution error:', e);
+                    bus.amenities = [];
+                }
+            } else {
+                bus.amenities = [];
+                if (bus.hasAdas === 'Y' || bus.hasAdas === true) {
+                    bus.amenities = ['안전장치 AEBS 장착'];
+                }
             }
         }
 
@@ -2780,6 +2824,27 @@ router.post('/submit-review', authenticateToken, async (req, res) => {
         res.status(400).json({ success: false, error: err.message || '리뷰 등록 중 오류가 발생했습니다.' });
     } finally {
         if (connection) connection.release();
+    }
+});
+
+// 21. 무통장 입금 안내 후 결제 상태 업데이트 (PAYMENT_STS = '1')
+router.post('/payment-bank', authenticateToken, async (req, res) => {
+    try {
+        const { reqId } = req.body;
+        if (!reqId) {
+            return res.status(400).json({ success: false, error: '요청 ID가 누락되었습니다.' });
+        }
+
+        // TB_AUCTION_REQ 테이블의 PAYMENT_STS 컬럼을 "1"로 업데이트합니다.
+        await pool.execute(
+            'UPDATE TB_AUCTION_REQ SET PAYMENT_STS = "1", MOD_DT = NOW() WHERE REQ_ID = ?',
+            [reqId]
+        );
+
+        res.json({ success: true, message: '무통장 입금 안내 및 결제 상태 업데이트가 완료되었습니다.' });
+    } catch (error) {
+        console.error('Update payment status error:', error);
+        res.status(500).json({ success: false, error: error.message || '결제 상태 업데이트 중 오류가 발생했습니다.' });
     }
 });
 

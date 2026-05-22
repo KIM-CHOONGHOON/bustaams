@@ -304,10 +304,6 @@ const PastTripDetailCustomer = () => {
                         </div>
                     </div>
 
-                    <button className="w-full flex items-center justify-center gap-3 text-[#0F766E] font-black text-[15px] py-10 hover:underline transition-all">
-                        <span className="material-symbols-outlined">receipt_long</span>
-                        매출전표/영수증 다운로드
-                    </button>
                 </section>
             </main>
 
