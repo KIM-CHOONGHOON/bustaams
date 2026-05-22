@@ -3,13 +3,19 @@
 # 환경변수·비밀키·빌드 산출물을 GitHub 에서 완전히 제외한다.
 # ============================================================
 
-# ── 환경변수 파일 (절대 커밋 금지) ──────────────────────────
+# ── 환경변수 파일 (절대 커밋 금지ddddd) ──────────────────────────
 **/.env
 **/.env.local
 **/.env.*.local
 **/.env.development
 **/.env.production
 **/.env.local.backup
+
+# 서버 환경변수 파일 커밋 금지
+busTaams_server/.env
+.env
+busTaams_web/.env
+.env
 
 # ── Firebase Admin 비공개 키 (절대 커밋 금지) ───────────────
 **/firebase-admin-key.json
@@ -25,6 +31,7 @@ busTaams_web/dist-ssr/
 busTaams_admin/dist/
 busTaams_app/dist/
 busTaams_app/.firebase/
+
 
 # ── 에디터 / OS 임시 파일 ───────────────────────────────────
 .DS_Store
