@@ -3112,6 +3112,32 @@ app.post('/api/payment/return', async (req, res) => {
         
         await connection.commit();
 
+        // [알림 발송] 트랜잭션 커밋 완료 후 비동기로 기사에게 푸시 메시지 발송
+        if (reqId && driverId) {
+            (async () => {
+                try {
+                    const [reqInfo] = await pool.execute('SELECT TRIP_TITLE FROM TB_AUCTION_REQ WHERE REQ_ID = ?', [reqId]);
+                    if (reqInfo.length > 0) {
+                        const tripTitle = reqInfo[0].TRIP_TITLE;
+                        const { sendNotification } = require('./services/notificationService');
+                        const title = '[예약 확정] 결제가 완료되어 예약이 확정되었습니다.';
+                        const body = `여정: ${tripTitle}\n고객의 결제가 완료되어 최종 예약 확정되었습니다. 일정을 확인해 주세요.`;
+                        const link = `/estimate-detail-driver/${reqId}`;
+
+                        await sendNotification(pool, {
+                            custId: driverId,
+                            title,
+                            body,
+                            link,
+                            type: 'SYSTEM'
+                        });
+                    }
+                } catch (err) {
+                    console.error(`[Notification] 결제 완료 알림 발송 실패 (기사 ID: ${driverId}):`, err);
+                }
+            })();
+        }
+
         res.send(`
             <!DOCTYPE html>
             <html><head><meta charset="utf-8"></head><body>

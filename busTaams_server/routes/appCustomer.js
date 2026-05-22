@@ -8,6 +8,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const admin = require('firebase-admin');
+const { sendNotification } = require('../services/notificationService');
 
 // 업로드 디렉토리 설정
 const uploadDir = path.join(__dirname, '../uploads/profiles');
@@ -855,6 +856,17 @@ router.post('/request-bus-change', authenticateToken, async (req, res) => {
 
         await connection.beginTransaction();
 
+        // [알림용 데이터 조회] 차량 변경 전 해당 차량에 입찰 중인 기사 목록 및 여정 제목 조회
+        const [drivers] = await connection.execute(`
+            SELECT DISTINCT DRIVER_ID 
+            FROM TB_BUS_RESERVATION 
+            WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT IN ('BIDDING', 'CONFIRM')
+        `, [reqId, busSeq]);
+
+        const [reqInfo] = await connection.execute(`
+            SELECT TRIP_TITLE FROM TB_AUCTION_REQ WHERE REQ_ID = ?
+        `, [reqId]);
+
         // 1. 해당 차량 유닛 상태 변경
         const [busUpdate] = await connection.execute(`
             UPDATE TB_AUCTION_REQ_BUS 
@@ -885,6 +897,24 @@ router.post('/request-bus-change', authenticateToken, async (req, res) => {
 
         await connection.commit();
         res.json({ success: true, message: '차량 변경요청이 성공적으로 처리되었습니다.' });
+
+        // [알림 발송] 트랜잭션 커밋 완료 후 비동기로 기사에게 푸시 메시지 발송
+        if (drivers.length > 0 && reqInfo.length > 0) {
+            const tripTitle = reqInfo[0].TRIP_TITLE;
+            const title = '[차량 변경 요청] 고객님이 차량 변경을 요청했습니다.';
+            const body = `여정: ${tripTitle}\n차량 변경 요청을 확인하고 재입찰 등을 진행해 주세요.`;
+            const link = `/estimate-detail-driver/${reqId}`;
+
+            drivers.forEach(driver => {
+                sendNotification(pool, {
+                    custId: driver.DRIVER_ID,
+                    title,
+                    body,
+                    link,
+                    type: 'SYSTEM'
+                }).catch(err => console.error(`[Notification] 차량 변경 알림 발송 실패 (기사 ID: ${driver.DRIVER_ID}):`, err));
+            });
+        }
 
     } catch (error) {
         if (connection) await connection.rollback();
@@ -924,6 +954,17 @@ router.all('/cancel-bus', authenticateToken, async (req, res) => {
         }
 
         await connection.beginTransaction();
+
+        // [알림용 데이터 조회] 취소 전 해당 차량에 입찰 중인 기사 목록 및 여정 제목 조회
+        const [drivers] = await connection.execute(`
+            SELECT DISTINCT DRIVER_ID 
+            FROM TB_BUS_RESERVATION 
+            WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT NOT IN ('CONFIRM', 'DONE', 'BUS_CANCEL', 'TRAVELER_CANCEL')
+        `, [reqId, unitSeq]);
+
+        const [reqInfo] = await connection.execute(`
+            SELECT TRIP_TITLE FROM TB_AUCTION_REQ WHERE REQ_ID = ?
+        `, [reqId]);
 
         // 1. 본인의 요청인지 확인 및 현재 취소/변경 횟수 확인
         const [reqRows] = await connection.execute(`
@@ -999,6 +1040,24 @@ router.all('/cancel-bus', authenticateToken, async (req, res) => {
 
         await connection.commit();
         res.json({ success: true, message: '버스 취소가 완료되었습니다.' });
+
+        // [알림 발송] 트랜잭션 커밋 완료 후 비동기로 기사에게 푸시 메시지 발송
+        if (drivers.length > 0 && reqInfo.length > 0) {
+            const tripTitle = reqInfo[0].TRIP_TITLE;
+            const title = '[청약 취소] 고객님이 차량 청약을 취소했습니다.';
+            const body = `여정: ${tripTitle}\n요청하신 차량 청약이 취소되었습니다.`;
+            const link = `/estimate-detail-driver/${reqId}`;
+
+            drivers.forEach(driver => {
+                sendNotification(pool, {
+                    custId: driver.DRIVER_ID,
+                    title,
+                    body,
+                    link,
+                    type: 'SYSTEM'
+                }).catch(err => console.error(`[Notification] 개별 차량 취소 알림 발송 실패 (기사 ID: ${driver.DRIVER_ID}):`, err));
+            });
+        }
     } catch (error) {
         if (connection) await connection.rollback();
         console.error('[CANCEL-BUS] Error:', error);
@@ -1012,11 +1071,11 @@ router.all('/cancel-bus', authenticateToken, async (req, res) => {
 router.post('/approve-bid', authenticateToken, async (req, res) => {
     const { resId } = req.body;
     try {
-        // 1. 해당 예약 정보 조회
-        const [bidRows] = await pool.execute('SELECT REQ_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [resId]);
+        // 1. 해당 예약 정보 조회 (알림 발송을 위해 DRIVER_ID도 함께 조회)
+        const [bidRows] = await pool.execute('SELECT REQ_ID, REQ_BUS_SEQ, DRIVER_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [resId]);
         if (bidRows.length === 0) return res.status(404).json({ success: false, error: '입찰 정보를 찾을 수 없습니다.' });
 
-        const { REQ_ID: reqId, REQ_BUS_SEQ: unitSeq } = bidRows[0];
+        const { REQ_ID: reqId, REQ_BUS_SEQ: unitSeq, DRIVER_ID: driverId } = bidRows[0];
 
         // 2. 해당 차량의 모든 입찰을 일단 대기 상태로 (혹은 다른 로직)
         // 3. 선택된 입찰만 CONFIRM
@@ -1036,6 +1095,27 @@ router.post('/approve-bid', authenticateToken, async (req, res) => {
         }
 
         res.json({ success: true });
+
+        // [알림 발송] 비동기로 기사에게 푸시 메시지 발송
+        try {
+            const [reqInfo] = await pool.execute('SELECT TRIP_TITLE FROM TB_AUCTION_REQ WHERE REQ_ID = ?', [reqId]);
+            if (reqInfo.length > 0) {
+                const tripTitle = reqInfo[0].TRIP_TITLE;
+                const title = '[견적 승인] 고객님이 제출하신 견적을 승인했습니다.';
+                const body = `여정: ${tripTitle}\n고객님이 견적을 승인하여 선택하셨습니다. 결제를 대기 중입니다.`;
+                const link = `/estimate-detail-driver/${reqId}`;
+
+                sendNotification(pool, {
+                    custId: driverId,
+                    title,
+                    body,
+                    link,
+                    type: 'SYSTEM'
+                }).catch(err => console.error(`[Notification] 단건 견적 승인 알림 발송 실패 (기사 ID: ${driverId}):`, err));
+            }
+        } catch (notifErr) {
+            console.error('[Notification] 단건 견적 승인 정보 조회 실패:', notifErr);
+        }
     } catch (error) {
         console.error('Approve bid error:', error);
         res.status(500).json({ success: false, error: '승인 처리 중 오류가 발생했습니다.' });
@@ -1065,6 +1145,31 @@ router.post('/approve-all', authenticateToken, async (req, res) => {
         await pool.execute('UPDATE TB_AUCTION_REQ SET DATA_STAT = "CONFIRM" WHERE REQ_ID = ?', [reqId]);
 
         res.json({ success: true });
+
+        // [알림 발송] 비동기로 해당 경매에서 확정된 모든 기사들에게 푸시 메시지 발송
+        try {
+            const [reqInfo] = await pool.execute('SELECT TRIP_TITLE FROM TB_AUCTION_REQ WHERE REQ_ID = ?', [reqId]);
+            const [confirmedDrivers] = await pool.execute('SELECT DISTINCT DRIVER_ID FROM TB_BUS_RESERVATION WHERE REQ_ID = ? AND DATA_STAT = "CONFIRM"', [reqId]);
+            
+            if (reqInfo.length > 0 && confirmedDrivers.length > 0) {
+                const tripTitle = reqInfo[0].TRIP_TITLE;
+                const title = '[견적 승인] 고객님이 제출하신 견적을 승인했습니다.';
+                const body = `여정: ${tripTitle}\n고객님이 견적을 승인하여 선택하셨습니다. 결제를 대기 중입니다.`;
+                const link = `/estimate-detail-driver/${reqId}`;
+
+                confirmedDrivers.forEach(driver => {
+                    sendNotification(pool, {
+                        custId: driver.DRIVER_ID,
+                        title,
+                        body,
+                        link,
+                        type: 'SYSTEM'
+                    }).catch(err => console.error(`[Notification] 전체 견적 승인 알림 발송 실패 (기사 ID: ${driver.DRIVER_ID}):`, err));
+                });
+            }
+        } catch (notifErr) {
+            console.error('[Notification] 전체 견적 승인 정보 조회 실패:', notifErr);
+        }
     } catch (error) {
         console.error('Approve all error:', error);
         res.status(500).json({ success: false, error: '전체 승인 처리 중 오류가 발생했습니다.' });
@@ -1454,6 +1559,17 @@ router.post('/reservation/complete', authenticateToken, async (req, res) => {
             return res.status(403).json({ success: false, error: '완료 처리 권한이 없습니다.' });
         }
 
+        // [알림용 데이터 조회] 완료 처리 전 예약 확정 상태인 기사 목록 및 여정 제목 조회
+        const [drivers] = await pool.execute(`
+            SELECT DISTINCT DRIVER_ID 
+            FROM TB_BUS_RESERVATION 
+            WHERE REQ_ID = ? AND DATA_STAT = 'CONFIRM'
+        `, [reqId]);
+
+        const [reqInfo] = await pool.execute(`
+            SELECT TRIP_TITLE FROM TB_AUCTION_REQ WHERE REQ_ID = ?
+        `, [reqId]);
+
         await connection.beginTransaction();
 
         // 2. 상태 변경 (TB_AUCTION_REQ -> DONE)
@@ -1471,6 +1587,24 @@ router.post('/reservation/complete', authenticateToken, async (req, res) => {
 
         await connection.commit();
         res.json({ success: true, message: '여행이 완료되었습니다.' });
+
+        // [알림 발송] 트랜잭션 커밋 완료 후 비동기로 기사에게 푸시 메시지 발송
+        if (drivers.length > 0 && reqInfo.length > 0) {
+            const tripTitle = reqInfo[0].TRIP_TITLE;
+            const title = '[여행 완료] 여행이 정상적으로 완료되었습니다.';
+            const body = `여정: ${tripTitle}\n고객님이 여행 완료 처리를 완료했습니다. 수고하셨습니다!`;
+            const link = `/estimate-detail-driver/${reqId}`;
+
+            drivers.forEach(driver => {
+                sendNotification(pool, {
+                    custId: driver.DRIVER_ID,
+                    title,
+                    body,
+                    link,
+                    type: 'SYSTEM'
+                }).catch(err => console.error(`[Notification] 여행 완료 알림 발송 실패 (기사 ID: ${driver.DRIVER_ID}):`, err));
+            });
+        }
 
     } catch (error) {
         if (connection) await connection.rollback();
@@ -2365,6 +2499,17 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
             return res.status(400).json({ success: false, error: '요청 ID가 누락되었습니다.' });
         }
 
+        // [알림용 데이터 조회] 취소 전 해당 경매에 입찰 중인 기사 목록 및 여정 제목 조회
+        const [drivers] = await connection.execute(`
+            SELECT DISTINCT DRIVER_ID 
+            FROM TB_BUS_RESERVATION 
+            WHERE REQ_ID = ? AND DATA_STAT IN ('BIDDING', 'CONFIRM')
+        `, [reqId]);
+
+        const [reqInfo] = await connection.execute(`
+            SELECT TRIP_TITLE FROM TB_AUCTION_REQ WHERE REQ_ID = ?
+        `, [reqId]);
+
         // 1. 본인의 요청인지 확인 및 현재 상태 조회
         const [check] = await connection.execute('SELECT DATA_STAT FROM TB_AUCTION_REQ WHERE REQ_ID = ? AND TRAVELER_ID = ?', [reqId, custId]);
         if (check.length === 0) {
@@ -2383,7 +2528,26 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
             // await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND DATA_STAT NOT IN (\'CONFIRM\', \'DONE\')', [custId, reqId]);
 
             await connection.commit();
-            return res.json({ success: true, message: '견적 요청 취소가 완료되었습니다.' });
+            res.json({ success: true, message: '견적 요청 취소가 완료되었습니다.' });
+
+            // [알림 발송] 트랜잭션 커밋 완료 후 비동기로 기사에게 푸시 메시지 발송
+            if (drivers.length > 0 && reqInfo.length > 0) {
+                const tripTitle = reqInfo[0].TRIP_TITLE;
+                const title = '[전체 취소] 고객님이 청약을 취소했습니다.';
+                const body = `여정: ${tripTitle}\n요청하신 전체 여행 청약이 취소되었습니다.`;
+                const link = `/estimate-detail-driver/${reqId}`;
+
+                drivers.forEach(driver => {
+                    sendNotification(pool, {
+                        custId: driver.DRIVER_ID,
+                        title,
+                        body,
+                        link,
+                        type: 'SYSTEM'
+                    }).catch(err => console.error(`[Notification] 전체 청약 취소 알림 발송 실패 (기사 ID: ${driver.DRIVER_ID}):`, err));
+                });
+            }
+            return;
         }
 
         // 2. 증빙 서류 업로드 처리 (로컬 스토리지) - 페널티가 발생하는 경우에만 수행
@@ -2495,6 +2659,31 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
 
         await connection.commit();
         res.json({ success: true, message: '여행 취소 처리가 완료되었습니다.' });
+
+        // [알림 발송] 트랜잭션 커밋 완료 후 비동기로 기사에게 푸시 메시지 발송
+        if (drivers.length > 0 && reqInfo.length > 0) {
+            const tripTitle = reqInfo[0].TRIP_TITLE;
+            
+            // 이전 상태가 CONFIRM(예약 확정)인 경우 '여행 취소' 문구 적용
+            const isConfirmed = currentReqStat === 'CONFIRM';
+            const title = isConfirmed 
+                ? '[여행 취소] 고객님이 예약을 취소했습니다.' 
+                : '[전체 취소] 고객님이 청약을 취소했습니다.';
+            const body = isConfirmed
+                ? `여정: ${tripTitle}\n확정되었던 예약이 취소되었습니다. 환불 및 상세 내용을 확인해 주세요.`
+                : `여정: ${tripTitle}\n요청하신 전체 여행 청약이 취소되었습니다.`;
+            const link = `/estimate-detail-driver/${reqId}`;
+
+            drivers.forEach(driver => {
+                sendNotification(pool, {
+                    custId: driver.DRIVER_ID,
+                    title,
+                    body,
+                    link,
+                    type: 'SYSTEM'
+                }).catch(err => console.error(`[Notification] 전체 취소 알림 발송 실패 (기사 ID: ${driver.DRIVER_ID}):`, err));
+            });
+        }
     } catch (error) {
         if (connection) await connection.rollback();
         console.error('[Cancel Request] Error Details:', {

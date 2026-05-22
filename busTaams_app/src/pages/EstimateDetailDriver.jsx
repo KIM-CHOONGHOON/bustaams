@@ -210,8 +210,8 @@ const EstimateDetailDriver = () => {
                                     </label>
                                 </div>
 
-                                <div className="pt-8 text-left">
-                                    <button className="w-full py-8 bg-[#004e47] text-white font-black font-headline text-2xl italic uppercase tracking-[0.3em] rounded-full shadow-2xl shadow-teal-900/20 hover:shadow-secondary/40 hover:bg-secondary active:scale-95 transition-all duration-500" type="submit">
+                                <div className="pt-8 flex justify-center">
+                                    <button className="w-full sm:w-auto min-w-[180px] px-10 py-4 bg-[#004e47] text-white font-black font-headline text-base italic uppercase tracking-[0.18em] rounded-2xl shadow-xl shadow-teal-900/15 hover:shadow-secondary/30 hover:bg-secondary active:scale-95 transition-all duration-300" type="submit">
                                         청약승인
                                     </button>
                                 </div>

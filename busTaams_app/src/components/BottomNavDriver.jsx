@@ -1,11 +1,9 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 
 const BottomNavDriver = ({ activeTab }) => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { t } = useTranslation();
 
     // 기사님 필수 메뉴 6개 구성
     const navItems = [

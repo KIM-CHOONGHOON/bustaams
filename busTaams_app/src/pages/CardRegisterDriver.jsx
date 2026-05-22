@@ -13,6 +13,14 @@ const CardRegisterDriver = () => {
     const [imageVersion] = useState(Date.now());
 
     useEffect(() => {
+        const token = localStorage.getItem('accessToken');
+        if (!token) {
+            Swal.fire('로그인 필요', '로그인 후 이용 가능합니다.', 'warning').then(() => {
+                navigate('/login', { replace: true });
+            });
+            return;
+        }
+
         const fetchProfile = async () => {
             try {
                 // 기사 프로필 이미지를 가져오기 위해 멤버십 정보 API를 활용합니다.
@@ -25,7 +33,7 @@ const CardRegisterDriver = () => {
             }
         };
         fetchProfile();
-    }, []);
+    }, [navigate]);
 
     // payParams 가 설정되면 결제창 실행
     useEffect(() => {
@@ -33,11 +41,12 @@ const CardRegisterDriver = () => {
             // setTimeout을 주어 React가 DOM에 input들을 완전히 반영한 후에 이니시스 SDK를 실행하도록 합니다.
             const timer = setTimeout(() => {
                 try {
-                    // 이니시스 SDK 표준결제창 호출
-                    window.INIStdPay.pay('SendPayForm');
+                    const form = document.getElementById('SendPayForm');
+                    console.log('>>> [Payment] Launching Inicis Mobile Payment Page');
+                    form.submit();
                 } catch (e) {
                     console.error('Failed to launch Inicis Pay:', e);
-                    Swal.fire('오류', '결제창을 실행하는 중 오류가 발생했습니다. 라이브러리 로드 상태를 확인해주세요.', 'error');
+                    Swal.fire('오류', '결제창을 실행하는 중 오류가 발생했습니다.', 'error');
                     setPayParams(null);
                     setLoading(false);
                 }
@@ -124,23 +133,16 @@ const CardRegisterDriver = () => {
                     </p>
                 </header>
 
-                {/* 이니시스 빌링 폼 (항상 렌더링하여 DOM 요소를 보장하되 value는 안전하게 대입) */}
-                <form id="SendPayForm" style={{ display: 'none' }}>
-                    <input type="hidden" name="version" value="1.0" />
-                    <input type="hidden" name="gopaymethod" value="BILL" />
+                {/* 이니시스 모바일 빌라이트(INILite) 정기결제 등록 폼 */}
+                <form id="SendPayForm" action="https://inilite.inicis.com/inibill/inibill_card.jsp" method="POST" target="_self" style={{ display: 'none' }}>
                     <input type="hidden" name="mid" value={payParams?.mid || ''} />
-                    <input type="hidden" name="oid" value={payParams?.oid || ''} />
+                    <input type="hidden" name="authtype" value="D" />
+                    <input type="hidden" name="orderid" value={payParams?.oid || ''} />
                     <input type="hidden" name="price" value={payParams?.price || '0'} />
                     <input type="hidden" name="timestamp" value={payParams?.timestamp || ''} />
-                    <input type="hidden" name="signature" value={payParams?.signature || ''} />
-                    <input type="hidden" name="mKey" value={payParams?.mKey || ''} />
-                    <input type="hidden" name="currency" value="WON" />
-                    <input type="hidden" name="buyername" value="기사회원" />
-                    <input type="hidden" name="buyertel" value="01000000000" />
-                    <input type="hidden" name="buyeremail" value="driver@bustaams.com" />
-                    <input type="hidden" name="returnUrl" value="https://bustaams.cafe24.com/api/app/driver/inicis-bill-return" />
-                    <input type="hidden" name="merchantData" value={payParams ? `${payParams.custId}:${cardNickname}` : ''} />
-                    <input type="hidden" name="acceptmethod" value="BILLPRType(CARD):work_setup:no_receipt" />
+                    <input type="hidden" name="returnurl" value="https://bustaams.cafe24.com/api/app/driver/inicis-bill-return" />
+                    <input type="hidden" name="hashdata" value={payParams?.hashdata || ''} />
+                    <input type="hidden" name="merchantReserved" value={payParams ? `${payParams.custId}:${cardNickname}` : ''} />
                 </form>
 
                 <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 border border-slate-100 dark:border-slate-700 shadow-xl space-y-6">

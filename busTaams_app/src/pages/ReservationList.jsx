@@ -179,7 +179,7 @@ const ReservationList = () => {
                                         <div className="mt-8 flex gap-4 text-left">
                                             <button 
                                                 onClick={(e) => { e.stopPropagation(); navigate(`/reservation-detail/${res.id}`); }}
-                                                className="bg-primary text-white w-full py-4 rounded-xl font-bold text-sm tracking-wide shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
+                                                className="bg-primary text-white w-full min-h-[58px] px-4 py-4 sm:px-6 sm:py-5 rounded-2xl font-extrabold text-[15px] tracking-wide shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2.5 whitespace-nowrap"
                                             >
                                                 <span className="material-symbols-outlined text-sm">visibility</span>
                                                 상세 내역 보기

@@ -265,7 +265,7 @@ const ReservationListCustomer = () => {
                                                     </div>
                                                 </div>
 
-                                                <div className="p-10 bg-slate-50/50 rounded-[2.5rem] border border-slate-100/50 flex flex-col items-center justify-center text-center gap-8">
+                                                <div className="p-6 sm:p-10 bg-slate-50/50 rounded-[2.5rem] border border-slate-100/50 flex flex-col items-center justify-center text-center gap-8">
                                                     <div className="flex flex-col items-center gap-3">
                                                         <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-100">
                                                             <span className="material-symbols-outlined text-teal-600 text-2xl">payments</span>
@@ -283,9 +283,9 @@ const ReservationListCustomer = () => {
                                                             e.stopPropagation();
                                                             navigate(`/reservation-detail/${res.firstResId}`);
                                                         }}
-                                                        className="w-full max-w-[280px] bg-gradient-to-r from-teal-700 to-teal-900 hover:from-teal-600 hover:to-teal-800 text-white py-4.5 rounded-full font-black text-xs uppercase tracking-[0.2em] shadow-lg shadow-teal-700/20 hover:scale-[1.03] active:scale-97 transition-all duration-300 italic flex items-center justify-center gap-2"
+                                                        className="w-full max-w-[280px] min-h-[58px] bg-gradient-to-r from-teal-700 to-teal-900 hover:from-teal-600 hover:to-teal-800 text-white px-4 py-4 sm:px-6 sm:py-5 rounded-full font-black text-[13px] uppercase tracking-[0.08em] shadow-lg shadow-teal-700/20 hover:scale-[1.03] active:scale-95 transition-all duration-300 italic flex items-center justify-center gap-2.5 whitespace-nowrap"
                                                     >
-                                                        <span className="material-symbols-outlined text-base">visibility</span>
+                                                        <span className="material-symbols-outlined text-[20px]">visibility</span>
                                                         상세 내역 보기
                                                     </button>
                                                 </div>

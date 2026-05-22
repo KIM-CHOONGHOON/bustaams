@@ -7,6 +7,7 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
 const { registerBusDriverPaymentCard } = require('../lib/busDriverCreditCardRegistration');
+const { sendNotification } = require('../services/notificationService');
 
 const JWT_SECRET_KEY = process.env.JWT_SECRET || 'bustaams-dev-secret-key-2026';
 
@@ -884,9 +885,18 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
         }
 
         // 1. 기사 정보 및 차량 정보 조회
-        const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        const [uRows] = await connection.execute('SELECT CUST_ID, USER_NM FROM TB_USER WHERE USER_ID = ?', [userId]);
         if (uRows.length === 0) throw new Error('사용자를 찾을 수 없습니다.');
         const custId = uRows[0].CUST_ID;
+        const driverName = uRows[0].USER_NM || '기사';
+
+        // 1-2. 경매 마스터 정보 조회 (푸시 알림용)
+        const [reqRows] = await connection.execute(
+            'SELECT TRAVELER_ID, TRIP_TITLE FROM TB_AUCTION_REQ WHERE REQ_ID = ?',
+            [reqId]
+        );
+        const travelerId = reqRows.length > 0 ? reqRows[0].TRAVELER_ID : null;
+        const tripTitle = reqRows.length > 0 ? reqRows[0].TRIP_TITLE : '요청하신 여행';
 
         const [busRows] = await connection.execute(
             'SELECT BUS_ID, SERVICE_CLASS FROM TB_BUS_DRIVER_VEHICLE WHERE CUST_ID = ? LIMIT 1',
@@ -910,7 +920,7 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
             throw new Error('해당 차종으로 청약 가능한 슬롯이 없거나 이미 청약이 완료되었습니다.');
         }
 
-        const { REQ_BUS_SEQ: reqBusSeq, RES_BUS_AMT: busAmt, REG_ID: travelerId } = reqBusRows[0];
+        const { REQ_BUS_SEQ: reqBusSeq, RES_BUS_AMT: busAmt } = reqBusRows[0];
         console.log(`[BID_PROCESS] Selected slot: REQ_BUS_SEQ=${reqBusSeq}, busAmt=${busAmt}`);
 
         if (!reqBusSeq || reqBusSeq === 0) {
@@ -964,6 +974,19 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
 
         await connection.commit();
         res.json({ success: true, message: '청약이 성공적으로 제출되었습니다.' });
+
+        // 트랜잭션 성공 후 고객에게 청약 승인 푸시 알림 발송 (비동기 비차단)
+        if (travelerId) {
+            sendNotification(pool, {
+                custId: travelerId,
+                title: '[청약 승인] 요청하신 여행의 청약이 승인되었습니다.',
+                body: `여정: ${tripTitle}\n${driverName} 기사님이 청약을 승인했습니다. 승인대기 정보를 확인해주세요.`,
+                link: `/approval-list?reqId=${reqId}`,
+                type: 'SYSTEM'
+            }).catch(pushErr => {
+                console.error('[Notification] Failed to send push message to traveler:', pushErr.message);
+            });
+        }
 
     } catch (err) {
         if (connection) await connection.rollback();
@@ -1671,18 +1694,21 @@ router.post('/cancel-mission/:id', authenticateToken, memoryUpload.single('reaso
         const { cancelCode, cancelReasonText } = req.body;
         const file = req.file;
 
-        // 1. 기사 정보 및 CUST_ID 조회
-        const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        // 1. 기사 정보 및 CUST_ID 조회 (기사 이름 USER_NM 추가 조회)
+        const [uRows] = await connection.execute('SELECT CUST_ID, USER_NM FROM TB_USER WHERE USER_ID = ?', [userId]);
         if (uRows.length === 0) throw new Error('사용자를 찾을 수 없습니다.');
-        const { CUST_ID: custId } = uRows[0];
+        const { CUST_ID: custId, USER_NM: driverName } = uRows[0];
 
-        // 2. 예약 정보 확인 (본인 것인지 확인)
+        // 2. 예약 정보 확인 (본인 것인지 확인) 및 고객(여행자) ID, 여정명 조회
         const [resRows] = await connection.execute(
-            'SELECT RES_ID, REQ_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ? AND DRIVER_ID = ? AND DATA_STAT = \'CONFIRM\'',
+            `SELECT R.RES_ID, R.REQ_ID, R.TRAVELER_ID, A.TRIP_TITLE 
+             FROM TB_BUS_RESERVATION R
+             LEFT JOIN TB_AUCTION_REQ A ON R.REQ_ID = A.REQ_ID
+             WHERE R.RES_ID = ? AND R.DRIVER_ID = ? AND R.DATA_STAT = 'CONFIRM'`,
             [resId, custId]
         );
         if (resRows.length === 0) throw new Error('취소 가능한 운행 내역이 아니거나 권한이 없습니다.');
-        const { REQ_ID: reqId } = resRows[0];
+        const { REQ_ID: reqId, TRAVELER_ID: travelerId, TRIP_TITLE: tripTitle } = resRows[0];
 
         // 3. 파일 업로드 처리 (있는 경우)
         let gcsPath = null;
@@ -1779,6 +1805,19 @@ router.post('/cancel-mission/:id', authenticateToken, memoryUpload.single('reaso
 
         await connection.commit();
         res.json({ success: true, message: '운행 취소 처리가 완료되었습니다.' });
+
+        // 트랜잭션 성공 후 고객에게 기사 계약 취소 푸시 알림 발송 (비동기 비차단)
+        if (travelerId) {
+            sendNotification(pool, {
+                custId: travelerId,
+                title: '[계약 취소] 기사님이 예약을 취소했습니다.',
+                body: `여정: ${tripTitle || ''}\n${driverName || '기사'} 기사님이 예약을 취소했습니다. 상세 내역을 확인해 주세요.`,
+                link: `/reservation-detail/${reqId}`,
+                type: 'SYSTEM'
+            }).catch(pushErr => {
+                console.error('[Notification] Failed to send push message to traveler on driver cancel:', pushErr.message);
+            });
+        }
 
     } catch (error) {
         if (connection) await connection.rollback();
@@ -1878,17 +1917,24 @@ router.get('/inicis-bill-signature', authenticateToken, async (req, res) => {
         const custId = uRows[0].CUST_ID;
 
         const mid = process.env.INICIS_BILL_MID || 'INIBillTst';
-        const signKey = process.env.INICIS_BILL_SIGN_KEY || 'SU5JTElURV9UUklQTEVERVNfS0VZU1RS';
+        // 모바일 빌라이트 테스트 상점아이디(INIBillTst)일 경우, 전용 테스트 대칭키를 강제 적용합니다.
+        let signKey = process.env.INICIS_BILL_SIGN_KEY || 'SU5JTElURV9UUklQTEVERVNfS0VZU1RS';
+        if (mid === 'INIBillTst') {
+            signKey = 'b09LVzhuTGZVaEY1WmJoQnZzdXpRdz09';
+        }
         
         const timestamp = getTimestamp();
         const oid = `BILL_${custId}_${timestamp}`;
-        const price = '0'; // 빌링키 등록 시 가격은 0원
+        const price = '1000'; // 빌링키 등록 시 이니시스 검증 오류를 피하기 위해 더미 금액인 1000원 설정
 
         // signature = SHA256(oid + price + timestamp)
         const signature = sha256(oid + price + timestamp);
         
         // mKey = SHA256(signKey)
         const mKey = sha256(signKey);
+
+        // 모바일 빌라이트(INILite)용 해시데이터 생성: SHA256(mid + oid + timestamp + signKey)
+        const hashdata = sha256(mid + oid + timestamp + signKey);
 
         res.json({
             success: true,
@@ -1899,6 +1945,7 @@ router.get('/inicis-bill-signature', authenticateToken, async (req, res) => {
                 timestamp,
                 signature,
                 mKey,
+                hashdata,
                 custId
             }
         });
@@ -1913,72 +1960,151 @@ router.get('/inicis-bill-signature', authenticateToken, async (req, res) => {
  */
 router.post('/inicis-bill-return', async (req, res) => {
     try {
-        const { authUrl, authToken, mid, merchantData } = req.body;
-        console.log('[Inicis Bill Return] Params Received:', { authUrl, authToken, mid, merchantData });
+        // 1. 모바일 빌라이트(INILite) 응답 여부 판단 (resultcode 또는 resultCode 가 있는 경우)
+        const isMobileLite = (req.body.resultcode !== undefined || req.body.resultCode !== undefined);
+        // 2. 기존 모바일 기기 결제 콜백 여부 판단 (P_STATUS, P_TID 등이 포함된 경우)
+        const isMobile = (req.body.P_STATUS !== undefined || req.body.P_TID !== undefined);
 
-        if (!authToken) {
-            return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=' + encodeURIComponent('인증 토큰이 없습니다.'));
-        }
+        if (isMobileLite) {
+            // 이니시스 빌라이트는 리턴 파라미터가 소문자로 전달되므로 양쪽 모두 지원되도록 처리합니다.
+            const resultCode = req.body.resultcode !== undefined ? req.body.resultcode : req.body.resultCode;
+            const resultMsg = req.body.resultmsg !== undefined ? req.body.resultmsg : req.body.resultMsg;
+            const billkey = req.body.billkey !== undefined ? req.body.billkey : req.body.billKey;
+            const orderId = req.body.orderid !== undefined ? req.body.orderid : req.body.orderId;
+            const merchantReserved = req.body.merchantreserved !== undefined ? req.body.merchantreserved : req.body.merchantReserved;
+            const cardNo = req.body.cardno !== undefined ? req.body.cardno : (req.body.cardNo !== undefined ? req.body.cardNo : req.body.cardNum);
+            const cardName = req.body.cardname !== undefined ? req.body.cardname : (req.body.cardName !== undefined ? req.body.cardName : req.body.cardname);
 
-        // merchantData 파싱 (형식: "custId:cardNickname")
-        const mData = String(merchantData || '');
-        const sepIndex = mData.indexOf(':');
-        let custId = '';
-        let cardNickname = '기사결제카드';
+            console.log('[Inicis Bill Return] 모바일 빌라이트 파라미터 수신:', { resultCode, resultMsg, billkey, orderId, merchantReserved, cardNo, cardName });
 
-        if (sepIndex !== -1) {
-            custId = mData.substring(0, sepIndex).trim();
-            cardNickname = mData.substring(sepIndex + 1).trim() || '기사결제카드';
-        } else {
-            custId = mData.trim();
-        }
-
-        if (!custId) {
-            return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=' + encodeURIComponent('사용자 식별 정보(CUST_ID)가 누락되었습니다.'));
-        }
-
-        // 2. 이니시스 승인 API 통신 (HTTP POST)
-        const requestTimestamp = getTimestamp();
-        const signKey = process.env.INICIS_BILL_SIGN_KEY || 'SU5JTElURV9UUklQTEVERVNfS0VZU1RS';
-        
-        // signature = SHA256(authToken + timestamp)
-        const approveSignature = sha256(authToken + requestTimestamp);
-
-        const params = new URLSearchParams();
-        params.append('mid', mid || 'INIBillTst');
-        params.append('authToken', authToken);
-        params.append('signature', approveSignature);
-        params.append('timestamp', requestTimestamp);
-        params.append('charset', 'UTF-8');
-        params.append('format', 'JSON');
-
-        // authUrl 이 있으면 사용하고, 없으면 기본 API URL 사용
-        const approvalUrl = authUrl || 'https://iniapi.inicis.com/api/v1/auth';
-        console.log('[Inicis Bill Return] Approving at URL:', approvalUrl);
-
-        const response = await axios.post(approvalUrl, params, {
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
+            // 빌라이트 인증 실패 시 처리
+            if (resultCode !== '0000') {
+                const errorMsg = resultMsg || '모바일 빌라이트 카드 인증에 실패했습니다.';
+                return res.redirect(`https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=${encodeURIComponent(errorMsg)}`);
             }
-        });
 
-        const resultMap = response.data;
-        console.log('[Inicis Bill Return] Approval Response:', resultMap);
+            if (!billkey) {
+                return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=' + encodeURIComponent('발급된 모바일 빌키가 존재하지 않습니다.'));
+            }
 
-        const resultCode = String(resultMap.resultCode || '');
-        const resultMsg = String(resultMap.resultMsg || '인증 실패');
+            // merchantReserved 파싱하여 기사 고유 정보 및 카드 별칭 조회 (형식: "custId:cardNickname")
+            const reservedData = String(merchantReserved || '');
+            const sepIndex = reservedData.indexOf(':');
+            let custId = '';
+            let cardNickname = '기사결제카드';
 
-        if (resultCode === '0000') {
-            const billKey = resultMap.CARD_BillKey;
-            const cardNum = resultMap.cardNum || resultMap.CARD_Num || '';
-            const cardName = resultMap.cardName || resultMap.CARD_Name || '신용카드';
+            if (sepIndex !== -1) {
+                custId = reservedData.substring(0, sepIndex).trim();
+                cardNickname = reservedData.substring(sepIndex + 1).trim() || '기사결제카드';
+            } else {
+                custId = reservedData.trim();
+            }
+
+            if (!custId) {
+                return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=' + encodeURIComponent('사용자 식별 정보(CUST_ID)가 누락되었습니다.'));
+            }
+
+            // 결제 카드 DB 등록 처리
+            const registerResult = await registerBusDriverPaymentCard(pool, {
+                rawDriverId: custId,
+                billKey: billkey,
+                panDigits: cardNo || '',
+                cardNickname,
+                originalCardName: cardName || '신용카드',
+                setAsDefault: true
+            });
+
+            console.log('[Inicis Bill Return] 모바일 빌라이트 카드 등록 성공:', registerResult);
+            return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=success');
+
+        } else if (isMobile) {
+            const { P_STATUS, P_RMESG1, P_TID, P_REQ_URL, P_NOTI, P_MID } = req.body;
+            console.log('[Inicis Bill Return] 모바일 파라미터 수신:', { P_STATUS, P_RMESG1, P_TID, P_REQ_URL, P_NOTI, P_MID });
+
+            // 모바일 1차 인증 결과 실패 시 처리
+            if (P_STATUS !== '00') {
+                const errorMsg = P_RMESG1 || '모바일 카드 인증에 실패했습니다.';
+                return res.redirect(`https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=${encodeURIComponent(errorMsg)}`);
+            }
+
+            if (!P_REQ_URL || !P_TID) {
+                return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=' + encodeURIComponent('모바일 승인 요청 정보가 부족합니다.'));
+            }
+
+            // 2. 이니시스 모바일 승인 API 호출 (Server-to-Server)
+            const approvalUrl = P_REQ_URL;
+            const params = new URLSearchParams();
+            params.append('P_MID', P_MID || process.env.INICIS_BILL_MID || 'INIBillTst');
+            params.append('P_TID', P_TID);
+
+            console.log('[Inicis Bill Return] 모바일 승인 요청 URL:', approvalUrl);
+            const response = await axios.post(approvalUrl, params, {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            });
+
+            const rawText = response.data;
+            console.log('[Inicis Bill Return] 모바일 승인 API 응답(Raw):', rawText);
+
+            // 이니시스 모바일 응답 문자열 파싱 (Key=Value 형태로 연결되어 수신됨)
+            let resultMap = {};
+            if (typeof rawText === 'string') {
+                if (rawText.trim().startsWith('{')) {
+                    try {
+                        resultMap = JSON.parse(rawText);
+                    } catch (e) {
+                        console.error('모바일 승인 JSON 파싱 실패:', e);
+                    }
+                } else {
+                    rawText.split('&').forEach(pair => {
+                        const sepIdx = pair.indexOf('=');
+                        if (sepIdx !== -1) {
+                            const key = pair.substring(0, sepIdx).trim();
+                            const val = pair.substring(sepIdx + 1).trim();
+                            resultMap[key] = val;
+                        }
+                    });
+                }
+            } else if (typeof rawText === 'object') {
+                resultMap = rawText;
+            }
+
+            const resStatus = String(resultMap.P_STATUS || '');
+            const resMsg = String(resultMap.P_RMESG1 || '모바일 최종 승인 실패');
+
+            if (resStatus !== '00' && resStatus !== '0000') {
+                console.error('[Inicis Bill Return] 모바일 최종 승인 실패:', resMsg);
+                return res.redirect(`https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=${encodeURIComponent(resMsg)}`);
+            }
+
+            // 빌링키 획득
+            const billKey = resultMap.P_BILLKEY;
+            const cardNum = resultMap.P_CARD_NUM || '';
+            const cardName = resultMap.P_FN_NM || '신용카드';
 
             if (!billKey) {
-                return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=' + encodeURIComponent('발급된 빌링키가 존재하지 않습니다.'));
+                return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=' + encodeURIComponent('발급된 모바일 빌링키가 존재하지 않습니다.'));
             }
 
-            // 3. 카드 등록 모듈 호출 (registerBusDriverPaymentCard)
-            // 빌링키가 있으므로 빌링모드로 자동 동작
+            // P_NOTI 파싱하여 기사 고유 정보 조회 (형식: "custId:cardNickname")
+            const notiData = String(P_NOTI || resultMap.P_NOTI || '');
+            const sepIndex = notiData.indexOf(':');
+            let custId = '';
+            let cardNickname = '기사결제카드';
+
+            if (sepIndex !== -1) {
+                custId = notiData.substring(0, sepIndex).trim();
+                cardNickname = notiData.substring(sepIndex + 1).trim() || '기사결제카드';
+            } else {
+                custId = notiData.trim();
+            }
+
+            if (!custId) {
+                return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=' + encodeURIComponent('사용자 식별 정보(CUST_ID)가 누락되었습니다.'));
+            }
+
+            // 3. 결제 카드 DB 등록 처리
             const registerResult = await registerBusDriverPaymentCard(pool, {
                 rawDriverId: custId,
                 billKey,
@@ -1988,14 +2114,94 @@ router.post('/inicis-bill-return', async (req, res) => {
                 setAsDefault: true
             });
 
-            console.log('[Inicis Bill Return] Card registered successfully:', registerResult);
+            console.log('[Inicis Bill Return] 모바일 카드 등록 성공:', registerResult);
             return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=success');
+
         } else {
-            console.error('[Inicis Bill Return] Approval Failed:', resultMsg);
-            return res.redirect(`https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=${encodeURIComponent(resultMsg)}`);
+            // --- 기존 PC 웹표준 결과 처리 로직 ---
+            const { authUrl, authToken, mid, merchantData } = req.body;
+            console.log('[Inicis Bill Return] PC 파라미터 수신:', { authUrl, authToken, mid, merchantData });
+
+            if (!authToken) {
+                return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=' + encodeURIComponent('인증 토큰이 없습니다.'));
+            }
+
+            // merchantData 파싱 (형식: "custId:cardNickname")
+            const mData = String(merchantData || '');
+            const sepIndex = mData.indexOf(':');
+            let custId = '';
+            let cardNickname = '기사결제카드';
+
+            if (sepIndex !== -1) {
+                custId = mData.substring(0, sepIndex).trim();
+                cardNickname = mData.substring(sepIndex + 1).trim() || '기사결제카드';
+            } else {
+                custId = mData.trim();
+            }
+
+            if (!custId) {
+                return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=' + encodeURIComponent('사용자 식별 정보(CUST_ID)가 누락되었습니다.'));
+            }
+
+            // 2. 이니시스 승인 API 통신 (HTTP POST)
+            const requestTimestamp = getTimestamp();
+            const signKey = process.env.INICIS_BILL_SIGN_KEY || 'SU5JTElURV9UUklQTEVERVNfS0VZU1RS';
+            
+            // signature = SHA256(authToken + timestamp)
+            const approveSignature = sha256(authToken + requestTimestamp);
+
+            const params = new URLSearchParams();
+            params.append('mid', mid || 'INIBillTst');
+            params.append('authToken', authToken);
+            params.append('signature', approveSignature);
+            params.append('timestamp', requestTimestamp);
+            params.append('charset', 'UTF-8');
+            params.append('format', 'JSON');
+
+            // authUrl 이 있으면 사용하고, 없으면 기본 API URL 사용
+            const approvalUrl = authUrl || 'https://iniapi.inicis.com/api/v1/auth';
+            console.log('[Inicis Bill Return] PC 승인 요청 URL:', approvalUrl);
+
+            const response = await axios.post(approvalUrl, params, {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            });
+
+            const resultMap = response.data;
+            console.log('[Inicis Bill Return] PC 승인 API 응답:', resultMap);
+
+            const resultCode = String(resultMap.resultCode || '');
+            const resultMsg = String(resultMap.resultMsg || '인증 실패');
+
+            if (resultCode === '0000') {
+                const billKey = resultMap.CARD_BillKey;
+                const cardNum = resultMap.cardNum || resultMap.CARD_Num || '';
+                const cardName = resultMap.cardName || resultMap.CARD_Name || '신용카드';
+
+                if (!billKey) {
+                    return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=' + encodeURIComponent('발급된 빌링키가 존재하지 않습니다.'));
+                }
+
+                // 3. 카드 등록 모듈 호출
+                const registerResult = await registerBusDriverPaymentCard(pool, {
+                    rawDriverId: custId,
+                    billKey,
+                    panDigits: cardNum,
+                    cardNickname,
+                    originalCardName: cardName,
+                    setAsDefault: true
+                });
+
+                console.log('[Inicis Bill Return] PC 카드 등록 성공:', registerResult);
+                return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=success');
+            } else {
+                console.error('[Inicis Bill Return] PC 승인 실패:', resultMsg);
+                return res.redirect(`https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=${encodeURIComponent(resultMsg)}`);
+            }
         }
     } catch (err) {
-        console.error('[Inicis Bill Return] Critical Error:', err);
+        console.error('[Inicis Bill Return] 치명적인 에러 발생:', err);
         return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=' + encodeURIComponent(err.message || '알 수 없는 서버 에러'));
     }
 });
