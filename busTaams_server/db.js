@@ -13,7 +13,9 @@ const poolConfig = {
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
-    timezone: '+09:00'
+    timezone: '+09:00',
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 0
 };
 
 if (dbHost.startsWith('/cloudsql/')) {

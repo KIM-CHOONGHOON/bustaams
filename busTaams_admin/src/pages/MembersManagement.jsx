@@ -1,10 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { Users, User, Search, RefreshCw, SlidersHorizontal, ShieldAlert, CheckCircle, Clock } from 'lucide-react';
 
+const formatPhone = (phone) => {
+  if (!phone) return '-';
+  const cleaned = phone.replace(/\D/g, '');
+  if (cleaned.startsWith('82')) {
+    const local = '0' + cleaned.slice(2);
+    if (local.length === 11) {
+      return `${local.slice(0, 3)}-${local.slice(3, 7)}-${local.slice(7)}`;
+    } else if (local.length === 10) {
+      return `${local.slice(0, 3)}-${local.slice(3, 6)}-${local.slice(6)}`;
+    }
+  }
+  if (cleaned.length === 11) {
+    return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}-${cleaned.slice(7)}`;
+  } else if (cleaned.length === 10) {
+    if (cleaned.startsWith('02')) {
+      return `${cleaned.slice(0, 2)}-${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
+    }
+    return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+  } else if (cleaned.length === 9) {
+    if (cleaned.startsWith('02')) {
+      return `${cleaned.slice(0, 2)}-${cleaned.slice(2, 5)}-${cleaned.slice(5)}`;
+    }
+  }
+  return phone;
+};
+
 const MembersManagement = () => {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [userType, setUserType] = useState('TRAVELER'); // 기본값: 여행자
   const [searchType, setSearchType] = useState('all'); // 검색 조건
   const [searchKeyword, setSearchKeyword] = useState(''); // 검색어
 
@@ -12,7 +37,7 @@ const MembersManagement = () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
-        userType,
+        userType: 'TRAVELER',
         searchType,
         searchKeyword: searchKeyword.trim(),
       });
@@ -30,7 +55,7 @@ const MembersManagement = () => {
 
   useEffect(() => {
     fetchMembers();
-  }, [userType]); // 회원 타입이 탭 클릭으로 바뀌면 자동으로 다시 로딩
+  }, []);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -40,7 +65,6 @@ const MembersManagement = () => {
   const handleReset = () => {
     setSearchType('all');
     setSearchKeyword('');
-    // 이 상태로 새로 불러오기
     setTimeout(() => {
       fetchMembers();
     }, 0);
@@ -86,34 +110,8 @@ const MembersManagement = () => {
     <div className="p-8 max-w-7xl mx-auto flex flex-col gap-8 animate-fade-in">
       {/* Page Header */}
       <div>
-        <h1 className="text-2xl font-black text-slate-800">회원 관리</h1>
-        <p className="text-slate-500 font-medium mt-1">플랫폼에 가입한 일반 여행객 및 버스 기사님들의 계정 정보를 조회하고 검색할 수 있습니다.</p>
-      </div>
-
-      {/* Tabs Menu */}
-      <div className="flex border-b border-slate-200">
-        <button
-          onClick={() => setUserType('TRAVELER')}
-          className={`flex items-center gap-2 px-6 py-3 border-b-2 text-sm font-bold transition-all ${
-            userType === 'TRAVELER'
-              ? 'border-emerald-500 text-emerald-600'
-              : 'border-transparent text-slate-400 hover:text-slate-600'
-          }`}
-        >
-          <User size={16} />
-          여행자 회원
-        </button>
-        <button
-          onClick={() => setUserType('DRIVER')}
-          className={`flex items-center gap-2 px-6 py-3 border-b-2 text-sm font-bold transition-all ${
-            userType === 'DRIVER'
-              ? 'border-emerald-500 text-emerald-600'
-              : 'border-transparent text-slate-400 hover:text-slate-600'
-          }`}
-        >
-          <Users size={16} />
-          버스 기사 회원
-        </button>
+        <h1 className="text-2xl font-black text-slate-800">여행자 관리</h1>
+        <p className="text-slate-500 font-medium mt-1">플랫폼에 가입한 일반 여행객들의 계정 정보를 조회하고 검색할 수 있습니다.</p>
       </div>
 
       {/* Search Bar Panel */}
@@ -173,9 +171,7 @@ const MembersManagement = () => {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
             <Users className="text-emerald-500" size={22} />
-            <h2 className="text-lg font-bold text-slate-800">
-              {userType === 'DRIVER' ? '기사 회원 목록' : '여행자 회원 목록'}
-            </h2>
+            <h2 className="text-lg font-bold text-slate-800">여행자 목록</h2>
           </div>
           <button
             onClick={fetchMembers}
@@ -230,7 +226,7 @@ const MembersManagement = () => {
                     </td>
                     <td className="py-4.5 px-4 text-slate-900 font-bold">{member.userId}</td>
                     <td className="py-4.5 px-4 text-slate-500">{member.email || '-'}</td>
-                    <td className="py-4.5 px-4 text-slate-600 font-bold">{member.hpNo || '-'}</td>
+                    <td className="py-4.5 px-4 text-slate-600 font-bold">{formatPhone(member.hpNo)}</td>
                     <td className="py-4.5 px-4 text-slate-400 flex items-center gap-1.5 py-5.5">
                       <Clock size={14} />
                       {member.joinDt}

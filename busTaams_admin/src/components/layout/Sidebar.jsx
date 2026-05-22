@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Users, Bus, Settings, Compass, HeartHandshake, TrendingUp, BarChart3, Newspaper } from 'lucide-react';
+import { LayoutDashboard, Users, Bus, Settings, Compass, HeartHandshake, TrendingUp, BarChart3, UserCheck, Receipt, Newspaper } from 'lucide-react';
 
 const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
   // 로컬스토리지에서 로그인된 관리자 정보 획득
@@ -11,9 +11,11 @@ const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
   const allMenuItems = [
     { id: 'dashboard', label: '대시보드', icon: <LayoutDashboard size={20} /> },
     { id: 'users', label: '사용자 관리하기', icon: <Users size={20} /> },
-    { id: 'members', label: '회원 관리', icon: <Users size={20} /> },
+    { id: 'members', label: '여행자 관리', icon: <Users size={20} /> },
+    { id: 'drivers', label: '버스기사 관리', icon: <UserCheck size={20} /> },
     { id: 'reservations', label: '예약/입찰 관리', icon: <Bus size={20} /> },
-    { id: 'trips', label: '여행 목록', icon: <Compass size={20} /> },
+    { id: 'trips',           label: '여정/입찰현황',  icon: <Compass size={20} /> },
+    { id: 'settlement',      label: '여정/입찰 정산',  icon: <Receipt size={20} /> },
     { id: 'my-customers', label: '나의 고객관리', icon: <HeartHandshake size={20} /> },
     { id: 'my-performance', label: '나의 실적관리', icon: <TrendingUp size={20} /> },
     { id: 'sales-performance', label: '영업사원 실적', icon: <BarChart3 size={20} /> },
