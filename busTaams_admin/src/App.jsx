@@ -1,27 +1,26 @@
 import React, { useState } from 'react'
-import Login from './Login'
 import AdminSignup from './AdminSignup'
 import AdminLayout from './components/layout/AdminLayout'
+import BustaansAdminHomeScreen from './pages/BustaansAdminHomeScreen'
 
 function App() {
-  // 'login', 'signup', 'dashboard' 세 가지 상태 관리
-  const [currentView, setCurrentView] = useState('login');
+  // 'home' → 홈페이지(로그인 모달 포함), 'signup' → 관리자 가입, 'dashboard' → 어드민
+  const [currentView, setCurrentView] = useState('home');
 
   if (currentView === 'signup') {
-    return <AdminSignup onBack={() => setCurrentView('login')} />;
+    return <AdminSignup onBack={() => setCurrentView('home')} />;
   }
 
-  if (currentView === 'login') {
+  if (currentView === 'home') {
     return (
-      <Login 
-        onLoginSuccess={() => setCurrentView('dashboard')} 
-        onGoSignup={() => setCurrentView('signup')}
+      <BustaansAdminHomeScreen
+        onLoginSuccess={() => setCurrentView('dashboard')}
       />
     );
   }
 
   // 관리자 대시보드 메인 레이아웃 렌더링
-  return <AdminLayout onLogout={() => setCurrentView('login')} />;
+  return <AdminLayout onLogout={() => setCurrentView('home')} />;
 }
 
 export default App

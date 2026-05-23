@@ -18,3 +18,21 @@
     font-family: var(--font-sans);
   }
 }
+
+/* ── 헤더 버스 이동 애니메이션 ────────────────────────────── */
+@keyframes busDrive {
+  0%   { transform: translateX(0) translateY(-50%);                      opacity: 0; }
+  6%   { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { transform: translateX(var(--bus-travel)) translateY(-50%);      opacity: 0; }
+}
+
+.bus-animate {
+  position: absolute;
+  top: 50%;
+  left: 64px;                          /* margin-desktop: 왼쪽 로고 시작 위치 */
+  --bus-travel: calc(100vw - 64px - 220px);   /* 로그인 버튼 직전까지 */
+  animation: busDrive 8s ease-in-out infinite;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
