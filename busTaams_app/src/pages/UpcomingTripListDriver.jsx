@@ -54,12 +54,12 @@ const UpcomingTripListDriver = () => {
             <header className="fixed top-0 w-full z-50 bg-white/40 backdrop-blur-3xl border-b border-white/20 py-6">
                 <div className="flex justify-between items-center w-full px-6 max-w-7xl mx-auto">
                     <div className="flex items-center gap-6 text-left">
-                        <button className="p-3 bg-white rounded-2xl text-teal-800 shadow-xl shadow-teal-900/5 active:scale-95 transition-all">
+                        <button className="p-3 bg-white rounded-xl text-teal-800 shadow-xl shadow-teal-900/5 active:scale-95 transition-all">
                             <span className="material-symbols-outlined text-lg">menu</span>
                         </button>
                         <h1 className="font-headline font-black tracking-tighter text-3xl text-teal-900 italic uppercase">busTaams</h1>
                     </div>
-                    <div className="w-12 h-12 rounded-2xl overflow-hidden border-2 border-white shadow-2xl rotate-3">
+                    <div className="w-12 h-12 rounded-xl overflow-hidden border-2 border-white shadow-2xl">
                         <img alt="User profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCsf1fTFUXZEBkAapjlINnKsBJh4aLCVH588hSiZiY38jIs7xt060L40FPWV_8W9s0nyFSYUgEDeUgfTBkNsQH4LaXw0yyZRXGoqbkuvj4whXqLdwIrotpKKjUml3-_jqjhyWXJDlpYBIIwT2IlqA3oQwxvsm4VA0BMtDuh4FPEgEhmv137JUrMBRthn0z4kfT2DnWW4Ukc4o_cqKte86848uR9jxB0mOdx42GBE-F0zikuQU7AZRT91g7cMoAkaPWiB-UroEeBb9A" />
                     </div>
                 </div>
@@ -90,7 +90,7 @@ const UpcomingTripListDriver = () => {
                 {/* Contract Cards Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12 text-left">
                     {upcomingTrips.map((trip) => (
-                        <div key={trip.id} className={`${(trip.isFeatured || trip.isSecondaryFeatured) ? 'lg:col-span-2' : 'col-span-1'} group bg-white rounded-[3.5rem] p-10 relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:shadow-teal-900/5 hover:-translate-y-2 text-left`}>
+                        <div key={trip.id} className={`${(trip.isFeatured || trip.isSecondaryFeatured) ? 'lg:col-span-2' : 'col-span-1'} group bg-white rounded-2xl p-10 relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:shadow-teal-900/5 hover:-translate-y-2 text-left`}>
                             {trip.isFeatured && <div className="absolute left-0 top-0 bottom-0 w-2.5 bg-secondary"></div>}
                             
                             <div className="flex flex-col md:flex-row gap-10 text-left">
@@ -98,7 +98,7 @@ const UpcomingTripListDriver = () => {
                                     <div className="flex items-center justify-between text-left">
                                         <div className="flex items-center gap-4 text-left">
                                             {trip.isFeatured && <span className="flex h-3 w-3 rounded-full bg-secondary animate-pulse"></span>}
-                                            <span className={`px-5 py-2 rounded-full text-[9px] font-black uppercase tracking-widest ${trip.isFeatured ? 'bg-secondary/10 text-secondary' : 'bg-primary/10 text-primary'}`}>
+                                            <span className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest ${trip.isFeatured ? 'bg-secondary/10 text-secondary' : 'bg-primary/10 text-primary'}`}>
                                                 {trip.status}
                                             </span>
                                         </div>
@@ -111,11 +111,11 @@ const UpcomingTripListDriver = () => {
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-6 text-left">
-                                        <div className="bg-slate-50 p-6 rounded-[2rem] text-left">
+                                        <div className="bg-slate-50 p-6 rounded-xl text-left">
                                             <p className="text-[8px] font-black uppercase tracking-widest text-slate-300 mb-2 italic">Operation Sync</p>
                                             <p className="font-black text-primary text-sm italic">{trip.period}</p>
                                         </div>
-                                        <div className="bg-slate-50 p-6 rounded-[2rem] text-left">
+                                        <div className="bg-slate-50 p-6 rounded-xl text-left">
                                             <p className="text-[8px] font-black uppercase tracking-widest text-slate-300 mb-2 italic">Contract Value</p>
                                             <p className="font-black text-primary text-sm italic">₩{trip.price}</p>
                                         </div>
@@ -126,13 +126,13 @@ const UpcomingTripListDriver = () => {
                                         <p className="font-black text-primary text-lg italic leading-none underline decoration-primary/10 underline-offset-4">{trip.model}</p>
                                     </div>
 
-                                    <button onClick={() => navigate('/upcoming-trip-detail-driver')} className="w-full py-6 rounded-[2rem] bg-slate-900 text-white font-black text-[10px] uppercase tracking-[0.3em] hover:bg-primary transition-all active:scale-95 shadow-2xl shadow-slate-900/30 italic">
+                                    <button onClick={() => navigate('/upcoming-trip-detail-driver')} className="w-full py-4 rounded-xl bg-slate-900 text-white font-black text-[10px] uppercase tracking-[0.3em] hover:bg-primary transition-all active:scale-95 shadow-2xl shadow-slate-900/30 italic">
                                         Open Ledger 상세 보기
                                     </button>
                                 </div>
 
                                 {(trip.isFeatured || trip.isSecondaryFeatured) && (
-                                    <div className="w-full md:w-80 h-auto min-h-[300px] rounded-[3rem] overflow-hidden shadow-2xl relative group-hover:scale-[1.02] transition-transform duration-700">
+                                    <div className="w-full md:w-80 h-auto min-h-[300px] rounded-xl overflow-hidden shadow-2xl relative group-hover:scale-[1.02] transition-transform duration-700">
                                         <img alt={trip.title} className="w-full h-full object-cover" src={trip.image} />
                                         <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent"></div>
                                     </div>

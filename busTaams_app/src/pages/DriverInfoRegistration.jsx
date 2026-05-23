@@ -285,7 +285,7 @@ const DriverInfoRegistration = () => {
                     <div className="bg-white rounded-2xl overflow-hidden w-full max-w-lg relative shadow-2xl">
                         <div className="flex justify-between items-center p-4 border-b bg-slate-50">
                             <h3 className="font-bold text-teal-900">주소 검색</h3>
-                            <button onClick={() => setPostcodeOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 transition-colors">
+                            <button onClick={() => setPostcodeOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-600 transition-colors">
                                 <span className="material-symbols-outlined text-sm">close</span>
                             </button>
                         </div>
@@ -300,12 +300,12 @@ const DriverInfoRegistration = () => {
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl shadow-sm shadow-teal-900/5 h-16 flex items-center">
                 <div className="flex items-center justify-between px-6 w-full max-w-7xl mx-auto">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => navigate(-1)} className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-slate-100 transition-colors active:scale-90">
+                        <button onClick={() => navigate(-1)} className="flex items-center justify-center w-10 h-10 rounded-xl hover:bg-slate-100 transition-colors active:scale-90">
                             <span className="material-symbols-outlined text-teal-800">arrow_back</span>
                         </button>
                         <h1 className="text-teal-900 font-extrabold tracking-tight font-headline text-lg">기사정보 등록</h1>
                     </div>
-                    <div className="w-10 h-10 rounded-full bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
                         {previews.profileImg ? (
                             <img alt="Driver Profile" src={previews.profileImg} className="w-full h-full object-cover" />
                         ) : (
@@ -331,13 +331,13 @@ const DriverInfoRegistration = () => {
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
                     {/* Left Column: Profile Photo */}
                     <aside className="col-span-12 md:col-span-4 lg:col-span-3 space-y-8">
-                        <div className="bg-white p-8 rounded-[2rem] shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)]">
+                        <div className="bg-white p-8 rounded-2xl shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)]">
                             <div className="flex flex-col items-center text-center">
                                 <div className="relative group cursor-pointer" onClick={() => {
                                     setActiveUploadType('profileImg');
                                     setShowPhotoBottomSheet(true);
                                 }}>
-                                    <div className="w-40 h-40 rounded-full bg-[#f2f4f6] flex items-center justify-center overflow-hidden border-4 border-white shadow-inner mb-6 transition-transform group-hover:scale-105 duration-500">
+                                    <div className="w-40 h-40 rounded-xl bg-[#f2f4f6] flex items-center justify-center overflow-hidden border-4 border-white shadow-inner mb-6 transition-transform group-hover:scale-105 duration-500">
                                         {previews.profileImg ? (
                                             <img src={previews.profileImg} className="w-full h-full object-cover" />
                                         ) : (
@@ -353,7 +353,7 @@ const DriverInfoRegistration = () => {
                                 <button onClick={() => {
                                     setActiveUploadType('profileImg');
                                     setShowPhotoBottomSheet(true);
-                                }} className="w-full py-3 rounded-full border-2 border-[#bec9c6] text-[#191c1e] font-bold text-sm hover:bg-[#f2f4f6] transition-colors active:scale-95 duration-200">
+                                }} className="w-full py-3 rounded-xl border-2 border-[#bec9c6] text-[#191c1e] font-bold text-sm hover:bg-[#f2f4f6] transition-colors active:scale-95 duration-200">
                                     이미지 업로드
                                 </button>
                             </div>
@@ -363,7 +363,7 @@ const DriverInfoRegistration = () => {
                     {/* Right Column: Registration Sections */}
                     <div className="col-span-12 md:col-span-8 lg:col-span-9 space-y-8">
                         {/* Section 1: Personal Information */}
-                        <div className="bg-white p-8 md:p-12 rounded-[2rem] shadow-[0_40px_60px_-15px_rgba(0,104,95,0.04)] text-left">
+                        <div className="bg-white p-8 md:p-12 rounded-2xl shadow-[0_40px_60px_-15px_rgba(0,104,95,0.04)] text-left">
                             <h4 className="font-headline font-extrabold text-2xl text-[#191c1e] mb-8 flex items-center gap-3">
                                 <span className="w-8 h-8 rounded-lg bg-[#004e47]/10 text-[#004e47] flex items-center justify-center text-base">01</span>
                                 신원 정보
@@ -456,7 +456,7 @@ const DriverInfoRegistration = () => {
                         </div>
 
                         {/* Section 2: Driver's License Information */}
-                        <div className="bg-white p-8 md:p-12 rounded-[2rem] shadow-[0_40px_60px_-15px_rgba(0,104,95,0.04)] text-left">
+                        <div className="bg-white p-8 md:p-12 rounded-2xl shadow-[0_40px_60px_-15px_rgba(0,104,95,0.04)] text-left">
                             <h4 className="font-headline font-extrabold text-2xl text-[#191c1e] mb-8 flex items-center gap-3">
                                 <span className="w-8 h-8 rounded-lg bg-[#004e47]/10 text-[#004e47] flex items-center justify-center text-base">02</span>
                                 운전면허 정보
@@ -494,7 +494,7 @@ const DriverInfoRegistration = () => {
                         </div>
 
                         {/* Section 3: Transport Qualification */}
-                        <div className="bg-white p-8 md:p-12 rounded-[2rem] shadow-[0_40px_60px_-15px_rgba(0,104,95,0.04)] text-left">
+                        <div className="bg-white p-8 md:p-12 rounded-2xl shadow-[0_40px_60px_-15px_rgba(0,104,95,0.04)] text-left">
                             <h4 className="font-headline font-extrabold text-2xl text-[#191c1e] mb-8 flex items-center gap-3">
                                 <span className="w-8 h-8 rounded-lg bg-[#004e47]/10 text-[#004e47] flex items-center justify-center text-base">03</span>
                                 운수종사자 자격 정보
@@ -529,7 +529,7 @@ const DriverInfoRegistration = () => {
                         </div>
 
                         {/* 인증 서류 보관함 */}
-                        <div className="bg-white p-8 md:p-12 rounded-[2rem] shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)] text-left">
+                        <div className="bg-white p-8 md:p-12 rounded-2xl shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)] text-left">
                             <h3 className="font-headline font-extrabold text-2xl text-[#004e47] mb-8 flex items-center gap-3">
                                 <span className="w-8 h-8 rounded-lg bg-[#004e47]/10 text-[#004e47] flex items-center justify-center text-base">
                                     <span className="material-symbols-outlined text-lg">inventory_2</span>
@@ -541,7 +541,7 @@ const DriverInfoRegistration = () => {
                                 <div onClick={() => {
                                     setActiveUploadType('licenseImg');
                                     setShowPhotoBottomSheet(true);
-                                }} className="p-6 rounded-2xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
+                                }} className="p-6 rounded-xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
                                     <div className="flex items-center justify-between mb-4">
                                         <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6e7977]">운전면허증 <span className="text-red-500">*필수</span></span>
                                         <span className={`flex items-center gap-1 text-[10px] font-bold ${formData.licenseApproveStat === 'APPROVE' ? 'text-[#00685f]' : formData.licenseApproveStat === 'WAIT' ? 'text-[#9d4300]' : 'text-[#ba1a1a]'}`}>
@@ -563,7 +563,7 @@ const DriverInfoRegistration = () => {
                                 <div onClick={() => {
                                     setActiveUploadType('busLicenseImg');
                                     setShowPhotoBottomSheet(true);
-                                }} className="p-6 rounded-2xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
+                                }} className="p-6 rounded-xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
                                     <div className="flex items-center justify-between mb-4">
                                         <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6e7977]">버스운전자격증 <span className="text-red-500">*필수</span></span>
                                         <span className={`flex items-center gap-1 text-[10px] font-bold ${formData.qualApproveStat === 'APPROVE' ? 'text-[#00685f]' : formData.qualApproveStat === 'WAIT' ? 'text-[#9d4300]' : 'text-[#ba1a1a]'}`}>
@@ -585,7 +585,7 @@ const DriverInfoRegistration = () => {
                                 <div onClick={() => {
                                     setActiveUploadType('careerCertImg');
                                     setShowPhotoBottomSheet(true);
-                                }} className="p-6 rounded-2xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
+                                }} className="p-6 rounded-xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
                                     <div className="flex items-center justify-between mb-4">
                                         <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6e7977]">운전경력증명서 <span className="text-red-500">*필수</span></span>
                                         <span className={`flex items-center gap-1 text-[10px] font-bold ${formData.careerCertApproveStat === 'APPROVE' ? 'text-[#00685f]' : formData.careerCertApproveStat === 'WAIT' ? 'text-[#9d4300]' : 'text-[#ba1a1a]'}`}>
@@ -612,7 +612,7 @@ const DriverInfoRegistration = () => {
                                 <span className="material-symbols-outlined text-[#00685f]">info</span>
                                 <p className="text-xs font-medium max-w-xs">운영팀은 일반적으로 24~48시간 이내에 검토를 완료합니다. 승인 시 알림을 보내드립니다.</p>
                             </div>
-                            <button onClick={handleSubmit} disabled={submitting} className="w-full md:w-auto px-12 py-5 rounded-full bg-gradient-to-br from-[#004e47] to-[#00685f] text-white font-headline font-extrabold text-lg shadow-[0_20px_40px_-10px_rgba(0,104,95,0.3)] hover:shadow-[0_25px_50px_-12px_rgba(0,104,95,0.4)] active:scale-95 transition-all duration-300">
+                            <button onClick={handleSubmit} disabled={submitting} className="w-full md:w-auto px-12 py-4 rounded-xl bg-gradient-to-br from-[#004e47] to-[#00685f] text-white font-headline font-extrabold text-lg shadow-[0_20px_40px_-10px_rgba(0,104,95,0.3)] hover:shadow-[0_25px_50px_-12px_rgba(0,104,95,0.4)] active:scale-95 transition-all duration-300">
                                 {submitting ? '처리 중...' : '검토 요청하기'}
                             </button>
                         </div>
@@ -642,7 +642,7 @@ const DriverInfoRegistration = () => {
             {showPhotoBottomSheet && (
                 <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
                     <div className="absolute inset-0" onClick={() => setShowPhotoBottomSheet(false)}></div>
-                    <div className="relative w-full max-w-md bg-white rounded-t-[2rem] p-8 space-y-6 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] animate-in slide-in-from-bottom duration-300 z-10 border-t border-slate-100 text-center text-[#191c1e]">
+                    <div className="relative w-full max-w-md bg-white rounded-t-2xl p-8 space-y-6 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] animate-in slide-in-from-bottom duration-300 z-10 border-t border-slate-100 text-center text-[#191c1e]">
                         <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-2"></div>
                         <div className="space-y-2 text-left">
                             <h3 className="font-extrabold text-xl text-teal-900">서류 및 사진 등록</h3>
@@ -654,7 +654,7 @@ const DriverInfoRegistration = () => {
                                     setShowPhotoBottomSheet(false);
                                     commonCameraInputRef.current.click();
                                 }}
-                                className="flex flex-col items-center justify-center p-5 bg-teal-50 hover:bg-teal-100/70 text-[#004e47] rounded-2xl border border-teal-100/50 active:scale-95 transition-all space-y-2 font-bold"
+                                className="flex flex-col items-center justify-center p-5 bg-teal-50 hover:bg-teal-100/70 text-[#004e47] rounded-xl border border-teal-100/50 active:scale-95 transition-all space-y-2 font-bold"
                             >
                                 <span className="material-symbols-outlined text-4xl text-teal-800">photo_camera</span>
                                 <span className="text-sm">카메라로 촬영</span>
@@ -664,7 +664,7 @@ const DriverInfoRegistration = () => {
                                     setShowPhotoBottomSheet(false);
                                     commonAlbumInputRef.current.click();
                                 }}
-                                className="flex flex-col items-center justify-center p-5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-2xl border border-slate-100/50 active:scale-95 transition-all space-y-2 font-bold"
+                                className="flex flex-col items-center justify-center p-5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl border border-slate-100/50 active:scale-95 transition-all space-y-2 font-bold"
                             >
                                 <span className="material-symbols-outlined text-4xl text-slate-500">image</span>
                                 <span className="text-sm">앨범에서 선택</span>

@@ -10,12 +10,12 @@ const EstimateSubmissionDriver = () => {
             <header className="fixed top-0 w-full z-50 bg-white/40 backdrop-blur-3xl border-b border-white/20 py-6">
                 <div className="flex justify-between items-center w-full px-6 max-w-7xl mx-auto">
                     <div className="flex items-center gap-6 text-left">
-                        <button onClick={() => navigate(-1)} className="p-3 bg-white rounded-2xl text-teal-800 shadow-xl shadow-teal-900/5 active:scale-95 transition-all">
+                        <button onClick={() => navigate(-1)} className="p-3 bg-white rounded-xl text-teal-800 shadow-xl shadow-teal-900/5 active:scale-95 transition-all">
                             <span className="material-symbols-outlined text-lg">arrow_back</span>
                         </button>
                         <h1 className="font-headline font-black tracking-[ -0.05em] text-3xl text-teal-900 italic">청약 제출</h1>
                     </div>
-                    <div className="w-12 h-12 rounded-2xl overflow-hidden border-2 border-primary-fixed shadow-2xl rotate-3">
+                    <div className="w-12 h-12 rounded-xl overflow-hidden border-2 border-primary-fixed shadow-2xl">
                         <img alt="User profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD4vN2iJhYT28dqF3bXn1UtFElHnQDFzWTM9CdNaAeMcn5Y85HNmY9B2z1Nknl7_0LRROWW6Kp6ePpluuaaJm60f9fheJfiNCV-IjIldyuNn0rqoOsilL34BrGPY00oGI6qIOd2cKXQSsudhdeVbyanrHnuCqiifKuAoRcDX2pk1oO0TDo7Izx1aFfEP7T9ggFWTGdVNwsWWLAAqtiCftrqWM46536UPanJUNNd6GPoEFB-bpkobjeORZueHC5FbV1a-Z71vgICFjo" />
                     </div>
                 </div>
@@ -41,7 +41,7 @@ const EstimateSubmissionDriver = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 text-left">
                     {/* Left Column: Trip Details */}
                     <aside className="lg:col-span-4 text-left">
-                        <div className="bg-slate-900 rounded-[3.5rem] p-12 space-y-12 shadow-2xl shadow-slate-900/40 sticky top-48 text-left">
+                        <div className="bg-slate-900 rounded-2xl p-12 space-y-12 shadow-2xl shadow-slate-900/40 sticky top-48 text-left">
                             <h3 className="font-headline font-black text-2xl text-white italic border-l-8 border-secondary pl-6 text-left uppercase">여행 정보</h3>
                             
                             <div className="space-y-10 text-left">
@@ -53,7 +53,7 @@ const EstimateSubmissionDriver = () => {
                                     { icon: 'group', label: '탑승 인원', value: '45-52명' }
                                 ].map((item, i) => (
                                     <div key={i} className="flex items-start gap-6 text-left">
-                                        <div className="min-w-[48px] h-12 rounded-2xl bg-white/5 flex items-center justify-center text-secondary border border-white/10 shadow-inner">
+                                        <div className="min-w-[48px] h-12 rounded-xl bg-white/5 flex items-center justify-center text-secondary border border-white/10 shadow-inner">
                                             <span className="material-symbols-outlined text-2xl">{item.icon}</span>
                                         </div>
                                         <div className="text-left">
@@ -73,7 +73,7 @@ const EstimateSubmissionDriver = () => {
                             </div>
 
                             <div className="pt-6 text-left">
-                                <div className="rounded-[2.5rem] overflow-hidden border-4 border-white/5 shadow-2xl grayscale hover:grayscale-0 transition-all duration-700">
+                                <div className="rounded-2xl overflow-hidden border-4 border-white/5 shadow-2xl grayscale hover:grayscale-0 transition-all duration-700">
                                     <img alt="Luxury Bus" className="w-full h-48 object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCaOodsAP51m01nz1oLiqAzYyES4eOWvqqQrE8V6wqagIAx_H34AK3qc96yehTi5-5bcd51oZ7TjvUHKrpqwN65ENfPkkAqFoEVcefs4aYcaszvGEyus4-_At18i1DtlP75Jh9ogSmb0dcWqYMh_mnhEs2cYNKP1Nmjennfdxn6n6GnYpOm_1eyEzJVfKTld_vTOePJoot-UwpuUoDTMi_2NhqxOko2wQy-6P-EnANQTVdVSOU6Z74R79vTbcjX3EXN4xvXQ-gRPoE" />
                                 </div>
                             </div>
@@ -82,7 +82,7 @@ const EstimateSubmissionDriver = () => {
 
                     {/* Right Column: Form */}
                     <section className="lg:col-span-8 text-left space-y-12 pb-20">
-                        <div className="bg-white/40 backdrop-blur-2xl p-10 md:p-16 rounded-[4.5rem] shadow-2xl shadow-teal-900/5 border border-white relative overflow-hidden text-left">
+                        <div className="bg-white/40 backdrop-blur-2xl p-10 md:p-16 rounded-2xl shadow-2xl shadow-teal-900/5 border border-white relative overflow-hidden text-left">
                             <div className="absolute -top-32 -right-32 w-80 h-80 bg-primary/5 rounded-full blur-[100px]"></div>
                             
                             <form className="relative z-10 space-y-12 text-left">
@@ -95,7 +95,7 @@ const EstimateSubmissionDriver = () => {
                                         </div>
                                         <div className="relative text-left">
                                             <span className="absolute left-8 top-1/2 -translate-y-1/2 font-black text-slate-300 text-2xl italic">₩</span>
-                                            <input className="w-full bg-white border-4 border-slate-50 group-focus-within:border-primary rounded-[2.5rem] py-8 pl-14 pr-8 font-headline text-4xl font-black text-on-surface focus:outline-none transition-all shadow-sm italic" placeholder="1,500,000" type="number" />
+                                            <input className="w-full bg-white border-4 border-slate-50 group-focus-within:border-primary rounded-xl py-8 pl-14 pr-8 font-headline text-4xl font-black text-on-surface focus:outline-none transition-all shadow-sm italic" placeholder="1,500,000" type="number" />
                                         </div>
                                         <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest leading-loose px-4">AI 추천 범위: ₩1,200,000 - ₩1,550,000</p>
                                     </div>
@@ -104,7 +104,7 @@ const EstimateSubmissionDriver = () => {
                                     <div className="space-y-4 text-left group">
                                         <label className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-300 px-4 block italic">차량 선택</label>
                                         <div className="relative text-left">
-                                            <select className="w-full bg-white border-4 border-slate-50 group-focus-within:border-primary rounded-[2.5rem] py-8 px-8 font-black text-lg text-on-surface focus:outline-none transition-all shadow-sm appearance-none cursor-pointer italic">
+                                            <select className="w-full bg-white border-4 border-slate-50 group-focus-within:border-primary rounded-xl py-8 px-8 font-black text-lg text-on-surface focus:outline-none transition-all shadow-sm appearance-none cursor-pointer italic">
                                                 <option>배차할 차량을 선택하세요...</option>
                                                 <option>코치 #402 (Setra S417)</option>
                                                 <option>코치 #509 (MCI J4500)</option>
@@ -118,11 +118,11 @@ const EstimateSubmissionDriver = () => {
                                 {/* Service Notes */}
                                 <div className="space-y-4 text-left group">
                                     <label className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-300 px-4 block italic">서비스 안내 및 특이사항</label>
-                                    <textarea className="w-full bg-white border-4 border-slate-50 group-focus-within:border-primary rounded-[3rem] p-10 font-black text-lg text-on-surface focus:outline-none transition-all shadow-sm placeholder:text-slate-200" placeholder="Wi-Fi, 화장실 상태 또는 운전기사 경력과 같은 편의 시설을 언급해 주세요..." rows={5}></textarea>
+                                    <textarea className="w-full bg-white border-4 border-slate-50 group-focus-within:border-primary rounded-xl p-10 font-black text-lg text-on-surface focus:outline-none transition-all shadow-sm placeholder:text-slate-200" placeholder="Wi-Fi, 화장실 상태 또는 운전기사 경력과 같은 편의 시설을 언급해 주세요..." rows={5}></textarea>
                                 </div>
 
                                 {/* Terms */}
-                                <div className="p-8 rounded-[2.5rem] bg-slate-50 border-2 border-white flex items-center gap-6 text-left">
+                                <div className="p-8 rounded-2xl bg-slate-50 border-2 border-white flex items-center gap-6 text-left">
                                     <input className="w-8 h-8 rounded-xl border-4 border-white bg-white text-primary focus:ring-0 shadow-sm" type="checkbox" />
                                     <label className="text-[11px] font-black text-slate-500 italic leading-snug text-left uppercase tracking-tighter">
                                         선택한 차량이 모든 안전 요구 사항을 충족하며 이 노선에 대한 보험이 최신 상태임을 <span className="text-primary underline">디지털 서명</span>으로 인증합니다.
@@ -131,7 +131,7 @@ const EstimateSubmissionDriver = () => {
 
                                 {/* Actions */}
                                 <div className="pt-8 flex flex-col md:flex-row items-center gap-10 text-left">
-                                    <button className="w-full md:w-auto px-20 py-8 bg-gradient-to-br from-primary to-primary-container text-white font-black font-headline text-xl italic uppercase tracking-[0.2em] rounded-full shadow-2xl shadow-primary/30 hover:shadow-primary/50 active:scale-95 transition-all duration-500" type="submit">
+                                    <button className="w-full md:w-auto px-20 py-4 bg-gradient-to-br from-primary to-primary-container text-white font-black font-headline text-xl italic uppercase tracking-[0.2em] rounded-xl shadow-2xl shadow-primary/30 hover:shadow-primary/50 active:scale-95 transition-all duration-500" type="submit">
                                         청약승인
                                     </button>
                                     <button className="text-slate-300 font-black text-[10px] uppercase tracking-[0.4em] hover:text-secondary transition-all italic" type="button">

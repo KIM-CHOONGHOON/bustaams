@@ -253,12 +253,12 @@ const BusInfoRegistration = () => {
             {/* TopAppBar - 표준화된 헤더 스타일 */}
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-white/20 px-4 h-16 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-3">
-                    <button onClick={() => navigate(-1)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors">
+                    <button onClick={() => navigate(-1)} className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 transition-colors">
                         <span className="material-symbols-outlined text-slate-600">arrow_back</span>
                     </button>
                     <h1 className="text-lg font-bold text-slate-800">버스 정보 등록</h1>
                 </div>
-                <div className="w-10 h-10 rounded-full bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
                     {userProfileImg ? (
                         <img alt="User Profile" src={userProfileImg} className="w-full h-full object-cover" />
                     ) : (
@@ -307,7 +307,7 @@ const BusInfoRegistration = () => {
                         </section>
 
                         {/* Section 2 */}
-                        <section className="space-y-8 bg-white p-8 rounded-[2rem] shadow-[0_40px_60px_-15px_rgba(0,104,95,0.08)]">
+                        <section className="space-y-8 bg-white p-8 rounded-2xl shadow-[0_40px_60px_-15px_rgba(0,104,95,0.08)]">
                             <div className="flex items-baseline justify-between text-left">
                                 <h3 className="font-headline text-2xl font-bold text-[#191c1e]">02. 서비스 등급 및 유형</h3>
                                 <span className="text-[#6e7977] text-xs font-bold uppercase tracking-widest">운행 정보</span>
@@ -345,7 +345,7 @@ const BusInfoRegistration = () => {
                         </section>
 
                         {/* Section 3 */}
-                        <section className="space-y-8 bg-white p-8 rounded-[2rem] shadow-[0_40px_60px_-15px_rgba(0,104,95,0.08)]">
+                        <section className="space-y-8 bg-white p-8 rounded-2xl shadow-[0_40px_60px_-15px_rgba(0,104,95,0.08)]">
                             <div className="flex items-baseline justify-between text-left">
                                 <h3 className="font-headline text-2xl font-bold text-[#191c1e]">03. 편의 시설 및 옵션</h3>
                                 <span className="text-[#6e7977] text-xs font-bold uppercase tracking-widest">추가 옵션</span>
@@ -359,7 +359,7 @@ const BusInfoRegistration = () => {
                                         { id: 'Refrigerator', label: '냉장고', icon: 'kitchen' },
                                         { id: 'Individual-Screen', label: '개인 모니터', icon: 'monitor' }
                                     ].map(item => (
-                                        <label key={item.id} className={`flex flex-col items-center justify-center p-4 rounded-2xl cursor-pointer transition-colors group ${formData.amenities[item.id] ? 'bg-[#a1f1e5] text-[#004e47]' : 'bg-[#e6e8ea] text-[#6e7977]'}`}>
+                                        <label key={item.id} className={`flex flex-col items-center justify-center p-4 rounded-xl cursor-pointer transition-colors group ${formData.amenities[item.id] ? 'bg-[#a1f1e5] text-[#004e47]' : 'bg-[#e6e8ea] text-[#6e7977]'}`}>
                                             <input className="hidden" type="checkbox" checked={formData.amenities[item.id]} onChange={() => handleAmenityChange(item.id)} />
                                             <span className="material-symbols-outlined text-2xl transition-colors">{item.icon}</span>
                                             <span className="text-[10px] font-bold uppercase mt-2 transition-colors text-center">{item.label}</span>
@@ -370,7 +370,7 @@ const BusInfoRegistration = () => {
                             <div className="space-y-4 text-left pt-6 border-t border-[#bec9c6]/30">
                                 <p className="text-[10px] font-extrabold text-[#6e7977] uppercase tracking-[0.2em] ml-1">안전 장치</p>
                                 <div className="grid grid-cols-1 gap-4">
-                                    <label className={`flex items-center gap-4 p-4 rounded-2xl cursor-pointer transition-colors group ${formData.hasAdas === 'Y' ? 'bg-[#a1f1e5]' : 'bg-[#e6e8ea]'}`}>
+                                    <label className={`flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-colors group ${formData.hasAdas === 'Y' ? 'bg-[#a1f1e5]' : 'bg-[#e6e8ea]'}`}>
                                         <input className="w-5 h-5 rounded border-[#bec9c6] text-[#004e47] focus:ring-[#004e47]" type="checkbox" checked={formData.hasAdas === 'Y'} onChange={(e) => setFormData(prev => ({ ...prev, hasAdas: e.target.checked ? 'Y' : 'N' }))} />
                                         <span className={`text-xs font-bold ${formData.hasAdas === 'Y' ? 'text-[#004e47]' : 'text-[#3e4947]'}`}>AEBS (자동 비상 제동 장치) 장착</span>
                                     </label>
@@ -416,9 +416,9 @@ const BusInfoRegistration = () => {
                                         { key: 'transLic', title: '운송 허가증', desc: '유효한 운송 허가증의 PDF 또는 고화질 사진을 업로드해 주세요.', color: 'bg-[#ffdbca]', icon: 'local_shipping' },
                                         { key: 'insCert', title: '보험 증명서 (책임/종합보험)', desc: '유효한 보험 가입 증명서의 PDF 또는 고화질 사진을 업로드해 주세요.', color: 'bg-[#a1f1e5]', icon: 'verified_user' }
                                     ].map((doc) => (
-                                        <div key={doc.key} className="bg-[#e6e8ea] rounded-3xl p-1">
-                                            <div className="bg-white rounded-[1.4rem] p-6 flex flex-col md:flex-row items-center gap-6">
-                                                <div className={`w-16 h-16 rounded-2xl ${doc.color} flex items-center justify-center shrink-0 overflow-hidden`}>
+                                        <div key={doc.key} className="bg-[#e6e8ea] rounded-2xl p-1">
+                                            <div className="bg-white rounded-xl p-6 flex flex-col md:flex-row items-center gap-6">
+                                                <div className={`w-16 h-16 rounded-xl ${doc.color} flex items-center justify-center shrink-0 overflow-hidden`}>
                                                     {previews[doc.key + 'Img'] ? <img src={previews[doc.key + 'Img']} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-3xl">{doc.icon}</span>}
                                                 </div>
                                                 <div className="flex-1 text-center md:text-left">
@@ -428,7 +428,7 @@ const BusInfoRegistration = () => {
                                                 <button onClick={() => {
                                                     setActiveUploadType(doc.key);
                                                     setShowPhotoBottomSheet(true);
-                                                }} className="w-full md:w-auto px-6 py-3 rounded-full bg-[#eceef0] text-[#004e47] font-bold text-sm hover:bg-[#004e47] hover:text-white transition-colors">
+                                                }} className="w-full md:w-auto px-6 py-3 rounded-xl bg-[#eceef0] text-[#004e47] font-bold text-sm hover:bg-[#004e47] hover:text-white transition-colors">
                                                     파일 추가
                                                 </button>
                                             </div>
@@ -440,7 +440,7 @@ const BusInfoRegistration = () => {
 
                         {/* Action Button */}
                         <div className="pt-8 flex flex-col sm:flex-row justify-end gap-4">
-                            <button onClick={handleSubmit} disabled={submitting} className="w-full px-10 py-5 bg-gradient-to-br from-[#004e47] to-[#00685f] text-white rounded-full font-headline font-bold text-lg shadow-xl shadow-[#004e47]/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50">
+                            <button onClick={handleSubmit} disabled={submitting} className="w-full px-10 py-4 bg-gradient-to-br from-[#004e47] to-[#00685f] text-white rounded-xl font-headline font-bold text-lg shadow-xl shadow-[#004e47]/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50">
                                 {submitting ? '등록 중...' : '등록 완료'}
                             </button>
                         </div>
@@ -472,7 +472,7 @@ const BusInfoRegistration = () => {
             {showPhotoBottomSheet && (
                 <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
                     <div className="absolute inset-0" onClick={() => setShowPhotoBottomSheet(false)}></div>
-                    <div className="relative w-full max-w-md bg-white rounded-t-[2rem] p-8 space-y-6 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] animate-in slide-in-from-bottom duration-300 z-10 border-t border-slate-100 text-center text-[#191c1e]">
+                    <div className="relative w-full max-w-md bg-white rounded-t-2xl p-8 space-y-6 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] animate-in slide-in-from-bottom duration-300 z-10 border-t border-slate-100 text-center text-[#191c1e]">
                         <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-2"></div>
                         <div className="space-y-2 text-left">
                             <h3 className="font-extrabold text-xl text-teal-900">
@@ -488,7 +488,7 @@ const BusInfoRegistration = () => {
                                     setShowPhotoBottomSheet(false);
                                     commonCameraInputRef.current.click();
                                 }}
-                                className="flex flex-col items-center justify-center p-5 bg-teal-50 hover:bg-teal-100/70 text-[#004e47] rounded-2xl border border-teal-100/50 active:scale-95 transition-all space-y-2 font-bold"
+                                className="flex flex-col items-center justify-center p-5 bg-teal-50 hover:bg-teal-100/70 text-[#004e47] rounded-xl border border-teal-100/50 active:scale-95 transition-all space-y-2 font-bold"
                             >
                                 <span className="material-symbols-outlined text-4xl text-teal-800">photo_camera</span>
                                 <span className="text-sm">카메라로 촬영</span>
@@ -498,7 +498,7 @@ const BusInfoRegistration = () => {
                                     setShowPhotoBottomSheet(false);
                                     commonAlbumInputRef.current.click();
                                 }}
-                                className="flex flex-col items-center justify-center p-5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-2xl border border-slate-100/50 active:scale-95 transition-all space-y-2 font-bold"
+                                className="flex flex-col items-center justify-center p-5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl border border-slate-100/50 active:scale-95 transition-all space-y-2 font-bold"
                             >
                                 <span className="material-symbols-outlined text-4xl text-slate-500">image</span>
                                 <span className="text-sm">앨범에서 선택</span>

@@ -250,13 +250,13 @@ const ApprovalListCustomer = () => {
                 <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl shadow-[0_20px_40px_rgba(0,104,95,0.04)] py-4">
                     <div className="flex items-center justify-between px-6 max-w-7xl mx-auto w-full">
                         <div className="flex items-center gap-4">
-                            <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-full scale-95 active:scale-90 duration-200">
+                            <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-xl scale-95 active:scale-90 duration-200">
                                 <span className="material-symbols-outlined">arrow_back</span>
                             </button>
                             <h1 className="text-xl font-bold text-teal-900 tracking-tight">승인 상세 화면</h1>
                         </div>
                         <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full bg-slate-100 animate-pulse"></div>
+                            <div className="w-10 h-10 rounded-xl bg-slate-100 animate-pulse"></div>
                         </div>
                     </div>
                 </header>
@@ -268,7 +268,7 @@ const ApprovalListCustomer = () => {
                 </div>
             </div>
         );
-    }
+     }
 
     if (!tripSummary) {
         return (
@@ -276,7 +276,7 @@ const ApprovalListCustomer = () => {
                 <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl shadow-[0_20px_40px_rgba(0,104,95,0.04)] py-4">
                     <div className="flex items-center justify-between px-6 max-w-7xl mx-auto w-full">
                         <div className="flex items-center gap-4">
-                            <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-full scale-95 active:scale-90 duration-200">
+                            <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-xl scale-95 active:scale-90 duration-200">
                                 <span className="material-symbols-outlined">arrow_back</span>
                             </button>
                             <h1 className="text-xl font-bold text-teal-900 tracking-tight">승인 상세 화면</h1>
@@ -285,7 +285,7 @@ const ApprovalListCustomer = () => {
                             <Avatar
                                 profileImage={customerProfile?.profileImage}
                                 imageVersion={imageVersion}
-                                className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border-2 border-white shadow-sm transition-transform hover:scale-110 active:scale-95 cursor-pointer"
+                                className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center overflow-hidden border-2 border-white shadow-sm transition-transform hover:scale-110 active:scale-95 cursor-pointer"
                                 onClick={() => navigate('/profile-customer')}
                             />
                         </div>
@@ -294,7 +294,7 @@ const ApprovalListCustomer = () => {
                 <div className="flex flex-col items-center justify-center pt-32 p-6 text-center">
                     <span className="material-symbols-outlined text-6xl text-slate-200 mb-4">error</span>
                     <h2 className="text-2xl font-black text-teal-900 mb-2">요청 정보를 찾을 수 없습니다.</h2>
-                    <button onClick={() => navigate(-1)} className="mt-4 px-8 py-3 bg-primary text-white rounded-full font-black transition-all hover:bg-slate-900 active:scale-95">뒤로 가기</button>
+                    <button onClick={() => navigate(-1)} className="mt-4 px-8 py-3 bg-primary text-white rounded-xl font-black transition-all hover:bg-slate-900 active:scale-95 btn-primary">뒤로 가기</button>
                 </div>
             </div>
         );
@@ -308,7 +308,7 @@ const ApprovalListCustomer = () => {
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl shadow-[0_20px_40px_rgba(0,104,95,0.04)] py-4">
                 <div className="flex items-center justify-between px-6 max-w-7xl mx-auto w-full">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-full scale-95 active:scale-90 duration-200">
+                        <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-xl scale-95 active:scale-90 duration-200">
                             <span className="material-symbols-outlined">arrow_back</span>
                         </button>
                         <h1 className="text-xl font-bold text-teal-900 tracking-tight">승인 상세 화면</h1>
@@ -317,7 +317,7 @@ const ApprovalListCustomer = () => {
                         <Avatar
                             profileImage={customerProfile?.profileImage}
                             imageVersion={imageVersion}
-                            className="flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 overflow-hidden border-2 border-white shadow-sm transition-transform hover:scale-110 active:scale-95 cursor-pointer"
+                            className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 overflow-hidden border-2 border-white shadow-sm transition-transform hover:scale-110 active:scale-95 cursor-pointer"
                             onClick={() => navigate('/profile-customer')}
                         />
                     </div>
@@ -333,7 +333,7 @@ const ApprovalListCustomer = () => {
                         </h1>
                     </div>
                     <div className="md:col-span-4 text-right">
-                        <span className={`inline-flex items-center gap-2 px-6 py-2 rounded-full text-xs font-bold shadow-lg ${getBusStatusDisplay(tripSummary.status).color}`}>
+                        <span className={`inline-flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-bold shadow-lg ${getBusStatusDisplay(tripSummary.status).color}`}>
                             <span className={`w-2.5 h-2.5 rounded-full ${tripSummary.status === 'CONFIRM' ? 'bg-teal-500' : (tripSummary.status.includes('CANCEL') ? 'bg-error' : 'bg-secondary')
                                 }`}></span>
                             {getBusStatusDisplay(tripSummary.status).label}
@@ -343,7 +343,7 @@ const ApprovalListCustomer = () => {
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                     <div className="lg:col-span-7 space-y-8">
-                        <div className="bg-white rounded-[2.5rem] p-8 shadow-[0_40px_60px_rgba(0,0,0,0.03)] border border-slate-50 relative overflow-hidden">
+                        <div className="bg-white rounded-2xl p-8 shadow-[0_40px_60px_rgba(0,0,0,0.03)] border border-slate-50 relative overflow-hidden">
                             <div className="absolute top-0 left-0 w-2 h-full bg-primary/20"></div>
                             <h2 className="text-2xl font-black mb-10 flex items-center gap-3 italic text-teal-800">
                                 <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>route</span>
@@ -374,7 +374,7 @@ const ApprovalListCustomer = () => {
                                             <h3 className={`font-black tracking-tight ${(step.type === 'START' || step.type === 'END' || step.type === 'ROUND_TRIP') ? 'text-xl text-slate-900' : 'text-lg text-slate-500'
                                                 }`}>{step.addr}</h3>
                                             {step.time && (
-                                                <p className="text-xs text-on-surface-variant font-bold mt-2 bg-slate-50 inline-block px-3 py-1 rounded-lg italic">
+                                                <p className="text-xs text-on-surface-variant font-bold mt-2 bg-slate-50 inline-block px-3 py-1 rounded-xl italic">
                                                     {step.time}
                                                 </p>
                                             )}
@@ -391,10 +391,10 @@ const ApprovalListCustomer = () => {
                             </div>
 
                             {units.map((unit) => (
-                                <div key={unit.unitSeq} className="bg-white rounded-[3rem] p-8 shadow-xl shadow-teal-900/5 border border-slate-50 space-y-8 animate-in fade-in slide-in-from-bottom duration-500">
+                                <div key={unit.unitSeq} className="bg-white rounded-2xl p-8 shadow-xl shadow-teal-900/5 border border-slate-50 space-y-8 animate-in fade-in slide-in-from-bottom duration-500">
                                     <div className="flex flex-col sm:flex-row justify-between items-start gap-6 border-b border-slate-50 pb-6">
                                         <div className="flex items-center gap-5">
-                                            <div className="w-16 h-16 rounded-[1.5rem] bg-orange-50 flex items-center justify-center text-orange-600 shadow-inner">
+                                            <div className="w-16 h-16 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 shadow-inner">
                                                 <span className="material-symbols-outlined text-4xl">directions_bus</span>
                                             </div>
                                             <div className="text-left">
@@ -404,7 +404,7 @@ const ApprovalListCustomer = () => {
                                             </div>
                                         </div>
                                         <div className="flex flex-col items-end gap-3 w-full sm:w-auto">
-                                            <span className={`px-5 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase shadow-sm ${getBusStatusDisplay(unit.unitStat).color}`}>
+                                            <span className={`px-5 py-1.5 rounded-xl text-[10px] font-black tracking-widest uppercase shadow-sm ${getBusStatusDisplay(unit.unitStat).color}`}>
                                                 {getBusStatusDisplay(unit.unitStat).label}
                                             </span>
                                         </div>
@@ -412,12 +412,12 @@ const ApprovalListCustomer = () => {
 
                                     <div className="space-y-4">
                                         {unit.estimates.length === 0 ? (
-                                            <div className="py-12 bg-slate-50/50 rounded-[2rem] text-center border-2 border-dashed border-slate-100 flex flex-col items-center gap-6">
+                                            <div className="py-12 bg-slate-50/50 rounded-2xl text-center border-2 border-dashed border-slate-100 flex flex-col items-center gap-6">
                                                 <p className="text-xs font-black text-slate-400 uppercase tracking-widest italic">현재 응찰 내역이 없습니다.</p>
                                                 <div className="w-full max-w-xs space-y-3">
                                                     <button
                                                         onClick={() => handleRequestBusChange(unit.unitSeq)}
-                                                        className="w-full py-4 rounded-2xl font-black text-xs tracking-widest uppercase transition-all flex items-center justify-center gap-2 active:scale-95 bg-purple-600 text-white shadow-lg shadow-purple-900/10"
+                                                        className="w-full py-4 rounded-xl font-black text-xs tracking-widest uppercase transition-all flex items-center justify-center gap-2 active:scale-95 bg-purple-600 text-white shadow-lg shadow-purple-900/10 btn-primary"
                                                     >
                                                         <span className="material-symbols-outlined text-sm">published_with_changes</span>
                                                         차량 변경요청
@@ -425,7 +425,7 @@ const ApprovalListCustomer = () => {
                                                     {unit.unitStat !== 'TRAVELER_CANCEL' && unit.unitStat !== 'CONFIRM' && (
                                                         <button
                                                             onClick={() => handleCancelBus(unit.unitSeq)}
-                                                            className="w-full py-2 text-[10px] font-black text-error border border-error/10 rounded-xl hover:bg-error/5 transition-all active:scale-95 uppercase tracking-widest"
+                                                            className="w-full py-2 text-[10px] font-black text-error border border-error/10 rounded-xl hover:bg-error/5 transition-all active:scale-95 uppercase tracking-widest btn-secondary"
                                                         >
                                                             이 차량 청약 요청 취소
                                                         </button>
@@ -434,11 +434,11 @@ const ApprovalListCustomer = () => {
                                             </div>
                                         ) : (
                                             unit.estimates.map((est) => (
-                                                <div key={est.id} className={`p-8 rounded-[2.5rem] border transition-all duration-500 group ${est.isSelected ? 'bg-secondary/5 border-secondary shadow-lg shadow-secondary/5' : 'bg-white border-slate-100 hover:border-orange-200'}`}>
+                                                <div key={est.id} className={`p-8 rounded-2xl border transition-all duration-500 group ${est.isSelected ? 'bg-secondary/5 border-secondary shadow-lg shadow-secondary/5' : 'bg-white border-slate-100 hover:border-orange-200'}`}>
                                                     <div className="flex flex-col gap-8">
                                                         {/* 기사 및 차량 헤더 */}
                                                         <div className="flex flex-col sm:flex-row items-center gap-8 border-b border-slate-50 pb-6">
-                                                            <div className="w-24 h-24 rounded-[2rem] overflow-hidden shadow-xl border-4 border-white group-hover:rotate-3 transition-transform shrink-0 bg-slate-100 flex items-center justify-center">
+                                                            <div className="w-24 h-24 rounded-2xl overflow-hidden shadow-xl border-4 border-white group-hover:rotate-3 transition-transform shrink-0 bg-slate-100 flex items-center justify-center">
                                                                 {est.image ? (
                                                                     <img
                                                                         src={getImageUrl(est.image)}
@@ -457,7 +457,7 @@ const ApprovalListCustomer = () => {
                                                             <div className="flex-grow text-left">
                                                                 <div className="flex flex-wrap items-center gap-3 mb-3">
                                                                     <h5 className="font-black text-xl tracking-tighter italic">{est.driverName} 기사님</h5>
-                                                                    <span className="flex items-center bg-secondary/10 px-3 py-1 rounded-full text-secondary text-[11px] font-black">
+                                                                    <span className="flex items-center bg-secondary/10 px-3 py-1 rounded-xl text-secondary text-[11px] font-black">
                                                                         <span className="material-symbols-outlined text-[12px] mr-1" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
                                                                         {est.rating}
                                                                     </span>
@@ -481,7 +481,7 @@ const ApprovalListCustomer = () => {
                                                                 </div>
                                                                 <div className="grid grid-cols-1 gap-6">
                                                                     {est.busImages.map((img, iIdx) => (
-                                                                        <div key={iIdx} className="relative w-full aspect-[16/9] rounded-[2.5rem] overflow-hidden shadow-2xl border-8 border-white group/photo bg-slate-100 flex items-center justify-center">
+                                                                        <div key={iIdx} className="relative w-full aspect-[16/9] rounded-2xl overflow-hidden shadow-2xl border-8 border-white group/photo bg-slate-100 flex items-center justify-center">
                                                                             <img
                                                                                 src={getImageUrl(img)}
                                                                                 alt={`차량 사진 ${iIdx + 1}`}
@@ -494,7 +494,7 @@ const ApprovalListCustomer = () => {
                                                                             />
                                                                             <span className="material-symbols-outlined text-5xl text-slate-200 hidden">directions_bus</span>
                                                                             <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-end p-8">
-                                                                                <span className="text-white text-xs font-black uppercase tracking-[0.3em] bg-white/20 backdrop-blur-md px-4 py-2 rounded-full border border-white/30">Vehicle Photo {iIdx + 1}</span>
+                                                                                <span className="text-white text-xs font-black uppercase tracking-[0.3em] bg-white/20 backdrop-blur-md px-4 py-2 rounded-xl border border-white/30">Vehicle Photo {iIdx + 1}</span>
                                                                             </div>
                                                                         </div>
                                                                     ))}
@@ -504,7 +504,7 @@ const ApprovalListCustomer = () => {
 
                                                         {/* 차량 상세 스펙 */}
                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                            <div className="bg-slate-50/80 p-6 rounded-[2rem] space-y-4">
+                                                            <div className="bg-slate-50/80 p-6 rounded-2xl space-y-4">
                                                                 <h6 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] italic flex items-center gap-2">
                                                                     <span className="material-symbols-outlined text-[14px]">ac_unit</span>
                                                                     편의시설 및 서비스
@@ -534,7 +534,7 @@ const ApprovalListCustomer = () => {
                                                                 </div>
                                                             </div>
 
-                                                            <div className="bg-slate-50/80 p-6 rounded-[2rem] space-y-4 text-left">
+                                                            <div className="bg-slate-50/80 p-6 rounded-2xl space-y-4 text-left">
                                                                 <h6 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] italic flex items-center gap-2">
                                                                     <span className="material-symbols-outlined text-[14px]">verified_user</span>
                                                                     안전 및 인증 정보
@@ -542,7 +542,7 @@ const ApprovalListCustomer = () => {
                                                                 <div className="grid grid-cols-2 gap-y-3">
                                                                     <div>
                                                                         <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">ABES (ADAS)</p>
-                                                                        <span className={`text-[11px] font-black px-2 py-0.5 rounded ${est.hasAdas === 'Y' ? 'text-teal-600 bg-teal-50' : 'text-slate-400 bg-slate-100'}`}>
+                                                                        <span className={`text-[11px] font-black px-2 py-0.5 rounded-xl ${est.hasAdas === 'Y' ? 'text-teal-600 bg-teal-50' : 'text-slate-400 bg-slate-100'}`}>
                                                                             {est.hasAdas === 'Y' ? '장착 완료' : '미장착'}
                                                                         </span>
                                                                     </div>
@@ -563,7 +563,7 @@ const ApprovalListCustomer = () => {
                                                             <div className="grid grid-cols-1 gap-3">
                                                                 <button
                                                                     onClick={() => handleRequestBusChange(unit.unitSeq)}
-                                                                    className="w-full py-4 rounded-[1.5rem] font-black text-[11px] tracking-widest uppercase transition-all flex items-center justify-center gap-2 active:scale-95 bg-slate-100 text-slate-600 hover:bg-purple-50 hover:text-purple-700"
+                                                                    className="w-full py-4 rounded-xl font-black text-[11px] tracking-widest uppercase transition-all flex items-center justify-center gap-2 active:scale-95 bg-slate-100 text-slate-600 hover:bg-purple-50 hover:text-purple-700 btn-secondary"
                                                                 >
                                                                     <span className="material-symbols-outlined text-sm">published_with_changes</span>
                                                                     차량 변경요청
@@ -582,7 +582,7 @@ const ApprovalListCustomer = () => {
                                                     </div>
                                                 </div>
                                             ))
-                                        )}
+                                         )}
 
 
                                     </div>
@@ -592,7 +592,7 @@ const ApprovalListCustomer = () => {
                     </div>
 
                     <div className="lg:col-span-5 space-y-8">
-                        <div className="bg-slate-900 rounded-[3rem] p-8 text-white sticky top-28 shadow-2xl shadow-slate-900/20 border border-slate-800">
+                        <div className="bg-slate-900 rounded-2xl p-8 text-white sticky top-28 shadow-2xl shadow-slate-900/20 border border-slate-800">
                             <h2 className="text-2xl font-black mb-8 italic tracking-tighter">최종 승인 요약</h2>
 
                             <div className="space-y-6 mb-10">
@@ -627,7 +627,7 @@ const ApprovalListCustomer = () => {
                                     <div className="space-y-3">
                                         <button
                                             onClick={handleApproveAll}
-                                            className="w-full py-5 bg-secondary text-white rounded-2xl font-black text-sm tracking-widest uppercase shadow-xl shadow-secondary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 group"
+                                            className="w-full py-5 bg-secondary text-white rounded-xl font-black text-sm tracking-widest uppercase shadow-xl shadow-secondary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 group btn-primary"
                                         >
                                             <span className="material-symbols-outlined text-xl group-hover:rotate-12 transition-transform">task_alt</span>
                                             전체 승인 및 예약금 결제하기
@@ -641,7 +641,7 @@ const ApprovalListCustomer = () => {
                                 {tripSummary.status !== 'TRAVELER_CANCEL' && tripSummary.status !== 'CONFIRM' && (
                                     <button
                                         onClick={handleCancelRequest}
-                                        className="w-full bg-white/5 text-error border border-error/20 py-5 rounded-[2rem] font-black text-lg hover:bg-error/10 active:scale-95 transition-all flex items-center justify-center gap-3 italic"
+                                        className="w-full bg-white/5 text-error border border-error/20 py-5 rounded-xl font-black text-lg hover:bg-error/10 active:scale-95 transition-all flex items-center justify-center gap-3 italic btn-secondary"
                                     >
                                         <span className="material-symbols-outlined">cancel</span>
                                         전체 청약 취소

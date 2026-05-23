@@ -79,7 +79,7 @@ const ChatListDriver = () => {
                     </div>
                     <div className="flex items-center gap-4">
                         <div 
-                            className="h-10 w-10 rounded-full bg-slate-200 overflow-hidden ring-2 ring-[#a1f1e5] cursor-pointer hover:shadow-md transition-all"
+                            className="h-10 w-10 rounded-xl bg-slate-200 overflow-hidden ring-2 ring-[#a1f1e5] cursor-pointer hover:shadow-md transition-all"
                             onClick={() => navigate('/driver-dashboard')}
                         >
                             {userProfile?.userImage ? (
@@ -113,11 +113,11 @@ const ChatListDriver = () => {
                             </p>
                         </div>
                         <div className="flex gap-2">
-                            <button className="bg-slate-100 px-6 py-3 rounded-full font-bold text-sm text-[#004e47] flex items-center gap-2 hover:bg-slate-200 transition-colors">
+                            <button className="bg-slate-100 px-6 py-3 rounded-xl font-bold text-sm text-[#004e47] flex items-center gap-2 hover:bg-slate-200 transition-colors">
                                 <span className="material-symbols-outlined text-lg">archive</span>
                                 보관함
                             </button>
-                            <button className="bg-[#00685f] text-white px-6 py-3 rounded-full font-bold text-sm flex items-center gap-2 shadow-lg shadow-[#004e47]/20 hover:scale-105 transition-transform">
+                            <button className="bg-[#00685f] text-white px-6 py-3 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-[#004e47]/20 hover:scale-105 transition-transform">
                                 <span className="material-symbols-outlined text-lg">chat_add_on</span>
                                 새 브로드캐스트
                             </button>
@@ -131,7 +131,7 @@ const ChatListDriver = () => {
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 text-left">
                             {/* Featured Conversation (Most Recent) */}
                             <div className="md:col-span-8 group cursor-pointer" onClick={() => navigate(`/chat-room/${chats[0].resId}`)}>
-                                <div className="bg-white p-8 rounded-[2rem] shadow-[0_20px_40px_-15px_rgba(0,104,95,0.08)] relative overflow-hidden transition-all duration-300 hover:shadow-[0_30px_60px_-15px_rgba(0,104,95,0.12)] border-l-4 border-[#9d4300]">
+                                <div className="bg-white p-8 rounded-2xl shadow-[0_20px_40px_-15px_rgba(0,104,95,0.08)] relative overflow-hidden transition-all duration-300 hover:shadow-[0_30px_60px_-15px_rgba(0,104,95,0.12)] border-l-4 border-[#9d4300]">
                                     {chats[0].sourceType === 'RESERVATION' && (
                                         <div className="absolute top-0 right-0 bg-[#00685f] text-white px-4 py-1 rounded-bl-xl text-[10px] font-bold uppercase tracking-widest z-10">
                                             새로운 예약 문의
@@ -139,7 +139,7 @@ const ChatListDriver = () => {
                                     )}
                                     <div className="flex flex-col md:flex-row gap-6 items-start">
                                         <div className="relative">
-                                            <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-inner bg-slate-50">
+                                            <div className="w-20 h-20 rounded-xl overflow-hidden shadow-inner bg-slate-50">
                                                 {chats[0].otherUser?.USER_IMAGE ? (
                                                     <img 
                                                         src={chats[0].otherUser.USER_IMAGE.startsWith('http') ? 
@@ -154,7 +154,7 @@ const ChatListDriver = () => {
                                                     </div>
                                                 )}
                                             </div>
-                                            <div className="absolute -bottom-2 -right-2 bg-[#9d4300] text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-tighter">
+                                            <div className="absolute -bottom-2 -right-2 bg-[#9d4300] text-white text-[10px] font-bold px-2 py-1 rounded-xl uppercase tracking-tighter">
                                                 {chats[0].otherUser?.PART_TYPE === 'TRAVELER' ? '진행 중인 고객' : '파트너'}
                                             </div>
                                         </div>
@@ -175,7 +175,7 @@ const ChatListDriver = () => {
                                                 </span>
                                                 <div className="h-1 w-1 bg-slate-200 rounded-full"></div>
                                                 <button 
-                                                    className="bg-[#004e47] text-white px-6 py-2 rounded-full text-xs font-bold hover:bg-[#9d4300] transition-colors shadow-md shadow-[#004e47]/10"
+                                                    className="bg-[#004e47] text-white px-6 py-2 rounded-xl text-xs font-bold hover:bg-[#9d4300] transition-colors shadow-md shadow-[#004e47]/10"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         navigate(`/chat-room/${chats[0].resId}`);
@@ -202,7 +202,7 @@ const ChatListDriver = () => {
                                     <div 
                                         key={chat.resId} 
                                         onClick={() => navigate(`/chat-room/${chat.resId}`)}
-                                        className={`bg-white p-6 rounded-[1.5rem] shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)] hover:bg-slate-50 transition-colors group cursor-pointer relative ${idx === 1 ? 'opacity-80' : ''}`}
+                                        className={`bg-white p-6 rounded-2xl shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)] hover:bg-slate-50 transition-colors group cursor-pointer relative ${idx === 1 ? 'opacity-80' : ''}`}
                                     >
                                         {chat.sourceType === 'RESERVATION' && (
                                             <div className="absolute top-2 right-2 flex h-2 w-2">
@@ -240,7 +240,7 @@ const ChatListDriver = () => {
                                     </div>
                                 ))}
                                 {chats.length === 1 && (
-                                    <div className="bg-slate-50/50 border-2 border-dashed border-slate-100 p-6 rounded-[1.5rem] flex items-center justify-center h-full min-h-[150px]">
+                                    <div className="bg-slate-50/50 border-2 border-dashed border-slate-100 p-6 rounded-2xl flex items-center justify-center h-full min-h-[150px]">
                                         <p className="text-slate-300 font-bold text-xs">추가 대화 없음</p>
                                     </div>
                                 )}
@@ -254,17 +254,17 @@ const ChatListDriver = () => {
                                     <h5 className="font-headline font-bold text-xl text-[#00685f]">최근 활동</h5>
                                     <button className="text-[#004e47] font-bold text-xs uppercase tracking-widest hover:underline">모두 보기</button>
                                 </div>
-                                <div className="bg-slate-100/50 rounded-[2rem] p-4 space-y-2">
+                                <div className="bg-slate-100/50 rounded-2xl p-4 space-y-2">
                                     {chats.slice(3).map(chat => (
                                         <div 
                                             key={chat.resId} 
                                             onClick={() => navigate(`/chat-room/${chat.resId}`)}
-                                            className="bg-white flex items-center gap-6 p-4 rounded-2xl hover:translate-x-2 transition-transform cursor-pointer shadow-sm shadow-slate-200/50 relative"
+                                            className="bg-white flex items-center gap-6 p-4 rounded-xl hover:translate-x-2 transition-transform cursor-pointer shadow-sm shadow-slate-200/50 relative"
                                         >
                                             {chat.sourceType === 'RESERVATION' && (
                                                 <div className="absolute top-4 left-4 h-2 w-2 rounded-full bg-[#00685f]"></div>
                                             )}
-                                            <div className="w-14 h-14 rounded-full overflow-hidden flex-shrink-0 grayscale hover:grayscale-0 transition-all bg-slate-50">
+                                            <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 grayscale hover:grayscale-0 transition-all bg-slate-50">
                                                 {chat.otherUser?.USER_IMAGE ? (
                                                     <img 
                                                         src={chat.otherUser.USER_IMAGE.startsWith('http') ? 
@@ -294,7 +294,7 @@ const ChatListDriver = () => {
                         )}
                     </div>
                 ) : (
-                    <div className="text-center py-32 bg-white rounded-[4rem] border-2 border-dashed border-slate-100 shadow-inner">
+                    <div className="text-center py-32 bg-white rounded-2xl border-2 border-dashed border-slate-100 shadow-inner">
                         <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-8">
                             <span className="material-symbols-outlined text-5xl text-slate-200">chat_bubble</span>
                         </div>

@@ -46,12 +46,12 @@ const CompletedTripsDriver = () => {
             {/* 상단바 - 표준화된 스타일 적용 */}
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-white/20 px-4 h-16 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-3">
-                    <button onClick={() => navigate(-1)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors">
+                    <button onClick={() => navigate(-1)} className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 transition-colors">
                         <span className="material-symbols-outlined text-slate-600">arrow_back</span>
                     </button>
                     <h1 className="text-lg font-bold text-slate-800">운행 완료 목록</h1>
                 </div>
-                <div className="w-10 h-10 rounded-full bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
                     {userProfileImg ? (
                         <img alt="User Profile" src={userProfileImg} className="w-full h-full object-cover" />
                     ) : (
@@ -84,10 +84,10 @@ const CompletedTripsDriver = () => {
                 ) : trips.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
                         {trips.map((trip) => (
-                            <div key={trip.id} className="group bg-white rounded-[3rem] p-10 relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:shadow-teal-900/5 hover:-translate-y-2 text-left border border-slate-50">
+                            <div key={trip.id} className="group bg-white rounded-2xl p-10 relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:shadow-teal-900/5 hover:-translate-y-2 text-left border border-slate-50">
                                 <div className="space-y-8 text-left">
                                     <div className="flex justify-between items-center text-left">
-                                        <span className="px-5 py-2 rounded-full bg-slate-100 text-slate-500 text-[9px] font-black uppercase tracking-widest italic">
+                                        <span className="px-5 py-2 rounded-xl bg-slate-100 text-slate-500 text-[9px] font-black uppercase tracking-widest italic">
                                             운행 완료
                                         </span>
                                         <span className="material-symbols-outlined text-slate-100 group-hover:text-[#004E47]/20 transition-colors duration-500 text-4xl">verified</span>
@@ -121,7 +121,7 @@ const CompletedTripsDriver = () => {
 
                                     <button 
                                         onClick={() => navigate(`/completed-trip-detail-driver/${trip.id}`)} 
-                                        className="w-full py-6 rounded-[2.5rem] bg-slate-50 text-[#004E47] font-black text-[10px] uppercase tracking-[0.3em] hover:bg-[#004E47] hover:text-white transition-all active:scale-95 italic"
+                                        className="w-full py-4 rounded-xl bg-slate-50 text-[#004E47] font-black text-[10px] uppercase tracking-[0.3em] hover:bg-[#004E47] hover:text-white transition-all active:scale-95 italic"
                                     >
                                         상세보기
                                     </button>
@@ -130,7 +130,7 @@ const CompletedTripsDriver = () => {
                         ))}
                     </div>
                 ) : (
-                    <div className="py-32 text-center bg-white rounded-[3rem] border-2 border-dashed border-slate-100">
+                    <div className="py-32 text-center bg-white rounded-2xl border-2 border-dashed border-slate-100">
                         <span className="material-symbols-outlined text-6xl text-slate-100 mb-6 block">history_edu</span>
                         <p className="text-slate-400 font-bold italic uppercase tracking-[0.2em]">운행 완료 내역이 없습니다.</p>
                     </div>

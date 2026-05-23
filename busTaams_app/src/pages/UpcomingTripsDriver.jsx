@@ -38,12 +38,12 @@ const UpcomingTripsDriver = () => {
             {/* TopAppBar - 표준화된 헤더 스타일 */}
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-white/20 px-4 h-16 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-3">
-                    <button onClick={() => navigate(-1)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors">
+                    <button onClick={() => navigate(-1)} className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 transition-colors">
                         <span className="material-symbols-outlined text-slate-600">arrow_back</span>
                     </button>
                     <h1 className="text-lg font-bold text-slate-800">운행 일정</h1>
                 </div>
-                <div className="w-10 h-10 rounded-full bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
                     {userProfileImg ? (
                         <img alt="User Profile" src={userProfileImg} className="w-full h-full object-cover" />
                     ) : (
@@ -84,7 +84,7 @@ const UpcomingTripsDriver = () => {
                         {upcomingTrips.map((trip, idx) => {
                             const isFeatured = idx === 0;
                             return (
-                                <div key={trip.id} className={`${isFeatured ? 'lg:col-span-2' : 'col-span-1'} group bg-white rounded-[3.5rem] p-10 relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:shadow-teal-900/5 hover:-translate-y-2 text-left shadow-lg`}>
+                                <div key={trip.id} className={`${isFeatured ? 'lg:col-span-2' : 'col-span-1'} group bg-white rounded-2xl p-10 relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:shadow-teal-900/5 hover:-translate-y-2 text-left shadow-lg`}>
                                     {isFeatured && <div className="absolute left-0 top-0 bottom-0 w-2.5 bg-secondary"></div>}
                                     
                                     <div className="flex flex-col md:flex-row gap-10 text-left">
@@ -92,7 +92,7 @@ const UpcomingTripsDriver = () => {
                                             <div className="flex items-center justify-between text-left">
                                                 <div className="flex items-center gap-4 text-left">
                                                     {isFeatured && <span className="flex h-3 w-3 rounded-full bg-secondary animate-pulse"></span>}
-                                                    <span className={`px-5 py-2 rounded-full text-[9px] font-black uppercase tracking-widest ${isFeatured ? 'bg-secondary/10 text-secondary' : 'bg-primary/10 text-primary'}`}>
+                                                    <span className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest ${isFeatured ? 'bg-secondary/10 text-secondary' : 'bg-primary/10 text-primary'}`}>
                                                         {isFeatured ? '다음 운행 예정' : '확정됨'}
                                                     </span>
                                                 </div>
@@ -105,11 +105,11 @@ const UpcomingTripsDriver = () => {
                                             </div>
 
                                             <div className="grid grid-cols-2 gap-6 text-left">
-                                                <div className="bg-slate-50 p-6 rounded-[2rem] text-left">
+                                                <div className="bg-slate-50 p-6 rounded-xl text-left">
                                                     <p className="text-[8px] font-black uppercase tracking-widest text-slate-300 mb-2 italic">운행 일정</p>
                                                     <p className="font-black text-primary text-sm italic">{trip.period || trip.startDate + ' ~ ' + trip.endDate}</p>
                                                 </div>
-                                                <div className="bg-slate-50 p-6 rounded-[2rem] text-left">
+                                                <div className="bg-slate-50 p-6 rounded-xl text-left">
                                                     <p className="text-[8px] font-black uppercase tracking-widest text-slate-300 mb-2 italic">계약 금액</p>
                                                     <p className="font-black text-primary text-sm italic">₩{Number(trip.price).toLocaleString()}</p>
                                                 </div>
@@ -122,7 +122,7 @@ const UpcomingTripsDriver = () => {
 
                                             <button 
                                                 onClick={() => navigate(`/upcoming-trip-detail-driver/${trip.id}`)} 
-                                                className="w-full py-6 rounded-[2rem] bg-slate-900 text-white font-black text-[10px] uppercase tracking-[0.3em] hover:bg-primary transition-all active:scale-95 shadow-2xl shadow-slate-900/30 italic"
+                                                className="w-full py-4 rounded-xl bg-slate-900 text-white font-black text-[10px] uppercase tracking-[0.3em] hover:bg-primary transition-all active:scale-95 shadow-2xl shadow-slate-900/30 italic"
                                             >
                                                 상세 내역 보기
                                             </button>
@@ -133,8 +133,8 @@ const UpcomingTripsDriver = () => {
                         })}
                     </div>
                 ) : (
-                    <div className="bg-white rounded-[3.5rem] p-24 text-center border-2 border-dashed border-slate-100 shadow-inner">
-                        <div className="w-24 h-24 bg-slate-50 rounded-full mx-auto flex items-center justify-center mb-8">
+                    <div className="bg-white rounded-2xl p-24 text-center border-2 border-dashed border-slate-100 shadow-inner">
+                        <div className="w-24 h-24 bg-slate-50 rounded-xl mx-auto flex items-center justify-center mb-8">
                             <span className="material-symbols-outlined text-5xl text-slate-200">event_busy</span>
                         </div>
                         <div className="space-y-4">
@@ -142,7 +142,7 @@ const UpcomingTripsDriver = () => {
                             <p className="text-slate-400 font-bold italic text-lg">새로운 운행 계약을 맺어보세요.</p>
                             <button 
                                 onClick={() => navigate('/estimate-list-driver')}
-                                className="mt-8 bg-primary text-white px-12 py-5 rounded-full font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
+                                className="mt-8 bg-primary text-white px-12 py-4 rounded-xl font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
                             >
                                 경매 보러가기
                             </button>

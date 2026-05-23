@@ -99,7 +99,7 @@ const CardMembershipMgmtDriver = () => {
                     
                     <div className="flex items-center gap-3">
                         <div 
-                            className="w-10 h-10 rounded-full bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center cursor-pointer hover:shadow-md transition-all"
+                            className="w-10 h-10 rounded-xl bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center cursor-pointer hover:shadow-md transition-all"
                             onClick={() => navigate('/driver-dashboard')}
                         >
                             {data.userImage ? (
@@ -141,7 +141,7 @@ const CardMembershipMgmtDriver = () => {
                 </header>
 
                 {/* Main Card Section */}
-                <section className="relative group overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-primary to-primary-container p-8 shadow-2xl shadow-primary/20 text-white">
+                <section className="relative group overflow-hidden rounded-2xl bg-gradient-to-br from-primary to-primary-container p-8 shadow-2xl shadow-primary/20 text-white">
                     <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl"></div>
                     <div className="absolute bottom-0 left-0 w-32 h-32 bg-secondary/10 rounded-full -ml-8 -mb-8 blur-xl"></div>
                     
@@ -171,13 +171,13 @@ const CardMembershipMgmtDriver = () => {
 
                 {/* Quick Stats / Next Payment */}
                 <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col gap-2">
+                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col gap-2">
                         <span className="text-on-surface-variant text-[10px] font-bold uppercase tracking-wider">다음 결제일</span>
                         <span className="text-lg font-black text-on-surface">
                             {data.nextPaymentDate ? data.nextPaymentDate : '예정 없음'}
                         </span>
                     </div>
-                    <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col gap-2">
+                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col gap-2">
                         <span className="text-secondary text-[10px] font-bold uppercase tracking-wider">예정 금액</span>
                         <span className="text-lg font-black text-secondary">
                             {data.nextPaymentAmount > 0 ? `₩${formatPrice(data.nextPaymentAmount)}` : '-'}
@@ -196,12 +196,12 @@ const CardMembershipMgmtDriver = () => {
 
                     <div className="space-y-4">
                         {data.history.length === 0 ? (
-                            <div className="text-center py-12 bg-surface-container-low rounded-3xl text-on-surface-variant text-sm">
+                            <div className="text-center py-12 bg-surface-container-low rounded-2xl text-on-surface-variant text-sm">
                                 결제 내역이 없습니다.
                             </div>
                         ) : (
                             data.history.map((item, index) => (
-                                <div key={index} className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-50 flex items-center justify-between group hover:shadow-xl hover:translate-y-[-2px] transition-all duration-300">
+                                <div key={index} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 flex items-center justify-between group hover:shadow-xl hover:translate-y-[-2px] transition-all duration-300">
                                     <div className="flex items-center gap-4">
                                         <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300">
                                             <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1"}}>check_circle</span>
@@ -226,7 +226,7 @@ const CardMembershipMgmtDriver = () => {
                 </div>
 
                 {/* Add Card / Support Section */}
-                <div className="bg-surface-container-low rounded-[2.5rem] p-10 space-y-6 relative overflow-hidden">
+                <div className="bg-surface-container-low rounded-2xl p-10 space-y-6 relative overflow-hidden">
                     <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-primary/5 rounded-full blur-2xl"></div>
                     <div className="relative z-10">
                         <h3 className="font-headline font-black text-2xl text-primary leading-tight italic uppercase tracking-tight mb-4">
@@ -238,11 +238,11 @@ const CardMembershipMgmtDriver = () => {
                         <div className="flex flex-col gap-3">
                             <button 
                                 onClick={() => navigate('/card-register')}
-                                className="w-full bg-primary text-white py-4 rounded-full font-bold text-xs uppercase tracking-[0.2em] shadow-lg shadow-primary/20 active:scale-95 transition-all"
+                                className="w-full bg-primary text-white py-4 rounded-xl font-bold text-xs uppercase tracking-[0.2em] shadow-lg shadow-primary/20 active:scale-95 transition-all"
                             >
                                 카드 정보 변경하기
                             </button>
-                            <button className="w-full bg-white text-primary border-2 border-primary/10 py-4 rounded-full font-bold text-xs uppercase tracking-[0.2em] active:scale-95 transition-all hover:bg-primary/5">
+                            <button className="w-full bg-white text-primary border-2 border-primary/10 py-4 rounded-xl font-bold text-xs uppercase tracking-[0.2em] active:scale-95 transition-all hover:bg-primary/5">
                                 고객센터 연결
                             </button>
                         </div>

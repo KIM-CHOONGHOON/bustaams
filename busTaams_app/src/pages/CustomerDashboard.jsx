@@ -120,7 +120,7 @@ const CustomerDashboard = () => {
             {/* TopAppBar */}
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl shadow-[0px_40px_60px_rgba(0,104,95,0.06)] h-16 flex items-center justify-between px-6">
                 <div className="flex items-center gap-3">
-                    <img src="/assets/BUSTAAMS_IMAGE_LOGO.png" alt="BUSTAAMS Logo" className="w-8 h-8 object-contain rounded-lg" />
+                    <img src="/assets/BUSTAAMS_IMAGE_LOGO.png" alt="BUSTAAMS Logo" className="w-8 h-8 object-contain rounded-xl" />
                     <h1 className="text-2xl font-black text-teal-800 italic font-headline tracking-tight text-[22px]">BUSTAAMS</h1>
                 </div>
                 <div className="flex items-center gap-4">
@@ -171,20 +171,20 @@ const CustomerDashboard = () => {
                     </div>
                 )}
 
-                <section className="relative overflow-hidden rounded-[2rem] bg-primary text-white p-8 md:p-12 shadow-xl">
+                <section className="relative overflow-hidden rounded-2xl bg-primary text-white p-8 md:p-12 shadow-xl">
                     <div className="absolute top-0 right-0 w-1/2 h-full opacity-20 pointer-events-none">
                         <img alt="Bus" className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDGum5KlJoZ1QYpw5IUtpBjkmHm85WskANrUTCg5K2pp6oBoHGfm904xF0Sha_OV2yNjGAHuI_C5we-RplZzy8FNTllgSB3jrLud6xKDIt-Yn1sUdijX3D970Qn4JoiC3v5tfqVRs4VFH5cP0XqOp47pfFy5EjuwG7xK79EZy2twkr6P2kJi5Pb6AtubxOcGzAlSiIl5ew5i1lqDMgmBcs_lw4egfP7RyHxYkREFQYcVBJXOIo4hSks6H2AOFsHQmbzkLX3Ckbqzmg" />
                     </div>
                     <div className="relative z-10 space-y-8">
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/20">
+                            <div className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20">
                                 <p className="text-white/70 text-[12px] font-bold uppercase tracking-wider mb-1">진행 중</p>
                                 <div className="flex items-end gap-2">
                                     <span className="text-3xl font-black">{stats.progressing}</span>
                                     <span className="text-sm font-medium mb-1 opacity-80">건</span>
                                 </div>
                             </div>
-                            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/20">
+                            <div className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20">
                                 <p className="text-white/70 text-[12px] font-bold uppercase tracking-wider mb-1">승인 대기 중</p>
                                 <div className="flex items-end gap-2">
                                     <span className="text-3xl font-black">{stats.waiting}</span>
@@ -197,7 +197,7 @@ const CustomerDashboard = () => {
                             <button 
                                 onClick={() => navigate('/estimate-request-list?type=progress')} 
                                 disabled={stats.progressing === 0}
-                                className={`flex-1 px-6 py-4 rounded-2xl font-bold transition-all text-[13px] shadow-lg flex flex-col items-center justify-center gap-1.5 ${
+                                className={`flex-1 px-6 py-4 rounded-xl font-bold transition-all text-[13px] shadow-lg flex flex-col items-center justify-center gap-1.5 ${
                                     stats.progressing === 0 
                                     ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200 shadow-none' 
                                     : 'bg-white text-primary hover:bg-slate-50 hover:translate-y-[-2px] active:scale-95'
@@ -209,7 +209,7 @@ const CustomerDashboard = () => {
                             <button 
                                 onClick={() => navigate('/estimate-request-list?type=waiting')} 
                                 disabled={stats.waiting === 0}
-                                className={`flex-1 px-6 py-4 rounded-2xl font-bold transition-all text-[13px] shadow-lg flex flex-col items-center justify-center gap-1.5 ${
+                                className={`flex-1 px-6 py-4 rounded-xl font-bold transition-all text-[13px] shadow-lg flex flex-col items-center justify-center gap-1.5 ${
                                     stats.waiting === 0 
                                     ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200 shadow-none' 
                                     : 'bg-secondary text-white hover:opacity-90 hover:translate-y-[-2px] active:scale-95'
@@ -225,43 +225,43 @@ const CustomerDashboard = () => {
                 <section className="space-y-6">
                     <h3 className="text-xl font-bold text-on-surface">빠른 서비스</h3>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6">
-                        <div onClick={handleRequestBus} className={`cursor-pointer bg-white p-6 rounded-3xl shadow-sm border-l-4 border-secondary hover:translate-y-[-4px] transition-all ${restriction ? 'opacity-60 grayscale-[0.5]' : ''}`}>
-                            <div className="w-12 h-12 rounded-2xl bg-secondary/10 flex items-center justify-center mb-4 text-secondary">
+                        <div onClick={handleRequestBus} className={`cursor-pointer bg-white p-6 rounded-2xl shadow-sm border-l-4 border-secondary hover:translate-y-[-4px] transition-all ${restriction ? 'opacity-60 grayscale-[0.5]' : ''}`}>
+                            <div className="w-12 h-12 rounded-xl bg-secondary/10 flex items-center justify-center mb-4 text-secondary">
                                 <span className="material-symbols-outlined">add_task</span>
                             </div>
                             <h4 className="font-bold text-on-surface text-[14px]">버스 요청 등록</h4>
                             <p className="text-[10px] text-on-surface-variant mt-1">새로운 일정 생성</p>
                         </div>
-                        <div onClick={() => navigate('/reservation-list')} className="cursor-pointer bg-white p-6 rounded-3xl shadow-sm hover:translate-y-[-4px] transition-all">
-                            <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4 text-indigo-600">
+                        <div onClick={() => navigate('/reservation-list')} className="cursor-pointer bg-white p-6 rounded-2xl shadow-sm hover:translate-y-[-4px] transition-all">
+                            <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center mb-4 text-indigo-600">
                                 <span className="material-symbols-outlined">event_note</span>
                             </div>
                             <h4 className="font-bold text-on-surface text-[14px]">예약 리스트</h4>
                             <p className="text-[10px] text-on-surface-variant mt-1">나의 예약 현황</p>
                         </div>
-                        <div onClick={() => navigate('/order-history')} className="cursor-pointer bg-white p-6 rounded-3xl shadow-sm hover:translate-y-[-4px] transition-all">
-                            <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mb-4 text-slate-600">
+                        <div onClick={() => navigate('/order-history')} className="cursor-pointer bg-white p-6 rounded-2xl shadow-sm hover:translate-y-[-4px] transition-all">
+                            <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-4 text-slate-600">
                                 <span className="material-symbols-outlined">history</span>
                             </div>
                             <h4 className="font-bold text-on-surface text-[14px]">과거 여행 이력</h4>
                             <p className="text-[10px] text-on-surface-variant mt-1">지난 여행 확인</p>
                         </div>
-                        <div onClick={() => navigate('/review-pending-list')} className="cursor-pointer bg-white p-6 rounded-3xl shadow-sm hover:translate-y-[-4px] transition-all">
-                            <div className="w-12 h-12 rounded-2xl bg-orange-100 flex items-center justify-center mb-4 text-orange-600">
+                        <div onClick={() => navigate('/review-pending-list')} className="cursor-pointer bg-white p-6 rounded-2xl shadow-sm hover:translate-y-[-4px] transition-all">
+                            <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center mb-4 text-orange-600">
                                 <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1"}}>star</span>
                             </div>
                             <h4 className="font-bold text-on-surface text-[14px]">평점 및 감사글</h4>
                             <p className="text-[10px] text-on-surface-variant mt-1">이용 후기 작성</p>
                         </div>
-                        <div onClick={() => navigate('/inquiry-list')} className="cursor-pointer bg-white p-6 rounded-3xl shadow-sm hover:translate-y-[-4px] transition-all">
-                            <div className="w-12 h-12 rounded-2xl bg-teal-50 flex items-center justify-center mb-4 text-teal-600">
+                        <div onClick={() => navigate('/inquiry-list')} className="cursor-pointer bg-white p-6 rounded-2xl shadow-sm hover:translate-y-[-4px] transition-all">
+                            <div className="w-12 h-12 rounded-xl bg-teal-50 flex items-center justify-center mb-4 text-teal-600">
                                 <span className="material-symbols-outlined">contact_support</span>
                             </div>
                             <h4 className="font-bold text-on-surface text-[14px]">1:1 문의</h4>
                             <p className="text-[10px] text-on-surface-variant mt-1">고객 지원 센터</p>
                         </div>
-                        <div onClick={() => navigate('/user-profile')} className="cursor-pointer bg-white p-6 rounded-3xl shadow-sm hover:translate-y-[-4px] transition-all">
-                            <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mb-4 text-slate-600">
+                        <div onClick={() => navigate('/user-profile')} className="cursor-pointer bg-white p-6 rounded-2xl shadow-sm hover:translate-y-[-4px] transition-all">
+                            <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-4 text-slate-600">
                                 <span className="material-symbols-outlined">manage_accounts</span>
                             </div>
                             <h4 className="font-bold text-on-surface text-[14px]">회원정보관리</h4>
@@ -273,7 +273,7 @@ const CustomerDashboard = () => {
 
             <BottomNavCustomer />
 
-            <button onClick={handleRequestBus} className={`fixed bottom-28 right-6 w-14 h-14 bg-secondary rounded-full shadow-lg flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all ${restriction ? 'grayscale-[0.5]' : ''}`}>
+            <button onClick={handleRequestBus} className={`fixed bottom-28 right-6 w-14 h-14 bg-secondary rounded-2xl shadow-lg flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all ${restriction ? 'grayscale-[0.5]' : ''}`}>
                 <span className="material-symbols-outlined">add</span>
             </button>
         </div>

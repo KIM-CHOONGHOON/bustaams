@@ -95,4 +95,18 @@
     display: none;
 }
 
+/* BUSTAAMS Unification Styles */
+.btn-primary {
+  @apply bg-primary text-white font-headline font-bold py-4 px-6 rounded-xl shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-300 text-center flex items-center justify-center gap-2;
+}
+
+.btn-secondary {
+  @apply bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest font-bold py-4 px-6 rounded-xl active:scale-[0.98] transition-all duration-300 text-center flex items-center justify-center gap-2;
+}
+
+.input-field {
+  @apply w-full bg-surface-container-high border-none rounded-xl py-4 px-4 focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-highest transition-all text-on-surface placeholder:text-outline/50 font-medium;
+}
+
+
 

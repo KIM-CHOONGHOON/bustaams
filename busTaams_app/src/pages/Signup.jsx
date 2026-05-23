@@ -76,7 +76,7 @@ const SignaturePad = ({ onSave, onClear }) => {
                 <span className="text-sm font-bold text-on-surface">전자 서명</span>
                 <button type="button" onClick={clear} className="text-xs font-bold text-red-500 hover:underline">초기화</button>
             </div>
-            <div className="relative border-2 border-dashed border-outline/30 rounded-2xl bg-surface-container-low h-40 overflow-hidden">
+            <div className="relative border-2 border-dashed border-outline/30 rounded-xl bg-surface-container-low h-40 overflow-hidden">
                 <canvas
                     ref={canvasRef}
                     width={500}
@@ -186,7 +186,7 @@ const Signup = () => {
                 confirmButton: `
                     !w-[280px]
                     !h-16
-                    rounded-2xl
+                    rounded-xl
                     font-black
                     text-xl
                     bg-teal-700
@@ -441,9 +441,9 @@ const Signup = () => {
 
             <div className="w-full max-w-md space-y-10">
                 {/* 탭 전환 */}
-                <div className="flex bg-slate-200/50 p-1 rounded-full">
-                    <button onClick={() => setUserType('customer')} className={`flex-1 py-3 rounded-full font-bold transition-all ${userType === 'customer' ? 'bg-primary text-white shadow-lg' : 'text-outline hover:text-on-surface'}`}>고객</button>
-                    <button onClick={() => setUserType('driver')} className={`flex-1 py-3 rounded-full font-bold transition-all ${userType === 'driver' ? 'bg-primary text-white shadow-lg' : 'text-outline hover:text-on-surface'}`}>기사</button>
+                <div className="flex bg-slate-200/50 p-1 rounded-xl">
+                    <button onClick={() => setUserType('customer')} className={`flex-1 py-3 rounded-lg font-bold transition-all ${userType === 'customer' ? 'bg-primary text-white shadow-lg' : 'text-outline hover:text-on-surface'}`}>고객</button>
+                    <button onClick={() => setUserType('driver')} className={`flex-1 py-3 rounded-lg font-bold transition-all ${userType === 'driver' ? 'bg-primary text-white shadow-lg' : 'text-outline hover:text-on-surface'}`}>기사</button>
                 </div>
 
                 <section className="space-y-4">
@@ -452,7 +452,7 @@ const Signup = () => {
                     <p className="text-on-surface-variant font-medium leading-relaxed">엄선된 프리미엄 버스 경매를 만나보세요. 정교하게 큐레이션된 플릿 자산을 제공합니다.</p>
                 </section>
 
-                <div className="bg-white rounded-[2.5rem] p-5 sm:p-8 shadow-2xl shadow-primary/5 space-y-8">
+                <div className="bg-white rounded-2xl p-5 sm:p-8 shadow-2xl shadow-primary/5 space-y-8">
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {/* 이메일 */}
                         <div className="space-y-2">
@@ -614,7 +614,7 @@ const Signup = () => {
                         {/* 약관 동의 */}
                         <div className="space-y-4 pt-4">
                             <label className="text-xs font-bold text-on-surface ml-1">약관 및 정책동의</label>
-                            <div className="bg-slate-50 p-3 sm:p-6 rounded-3xl space-y-4 overflow-hidden">
+                            <div className="bg-slate-50 p-3 sm:p-6 rounded-2xl space-y-4 overflow-hidden">
                                 {/* 전체 동의 버튼 */}
                                 <div className="pb-4 border-b border-slate-200">
                                     <label className="flex items-center gap-3 cursor-pointer">
@@ -772,7 +772,7 @@ const Signup = () => {
                             <button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className={`w-full text-white font-headline font-bold py-5 rounded-[2rem] shadow-xl transition-all text-xl flex items-center justify-center gap-2 ${isSubmitting ? 'bg-slate-400 cursor-not-allowed shadow-none' : 'bg-[#004e47] shadow-primary/20 hover:shadow-primary/40 active:scale-[0.98]'}`}
+                                className={`w-full text-white font-headline font-bold py-4 rounded-xl shadow-xl transition-all text-xl flex items-center justify-center gap-2 ${isSubmitting ? 'bg-slate-400 cursor-not-allowed shadow-none' : 'bg-primary shadow-primary/20 hover:shadow-primary/40 active:scale-[0.98]'}`}
                             >
                                 {isSubmitting ? (
                                     <>

@@ -68,12 +68,12 @@ const EstimateListDriver = () => {
             {/* TopAppBar - 표준화된 헤더 스타일 */}
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-white/20 px-4 h-16 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-3">
-                    <button onClick={() => navigate(-1)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors">
+                    <button onClick={() => navigate(-1)} className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 transition-colors">
                         <span className="material-symbols-outlined text-slate-600">arrow_back</span>
                     </button>
                     <h1 className="text-lg font-bold text-slate-800">청약 목록</h1>
                 </div>
-                <div className="w-10 h-10 rounded-full bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
                     {userProfileImg ? (
                         <img alt="User Profile" src={userProfileImg} className="w-full h-full object-cover" />
                     ) : (
@@ -98,8 +98,8 @@ const EstimateListDriver = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-left">
                     {auctions.length > 0 ? (
                         auctions.map((auction, i) => (
-                            <div key={auction.id} className="group relative bg-white rounded-[2.5rem] p-8 shadow-xl shadow-teal-900/5 transition-all hover:-translate-y-2 duration-500 text-left border border-slate-100 flex flex-col justify-between h-full min-h-[380px]">
-                                <div className="absolute left-0 top-12 bottom-12 w-1.5 bg-secondary rounded-r-full opacity-80"></div>
+                            <div key={auction.id} className="group relative bg-white rounded-2xl p-8 shadow-xl shadow-teal-900/5 transition-all hover:-translate-y-2 duration-500 text-left border border-slate-100 flex flex-col justify-between h-full min-h-[380px]">
+                                <div className="absolute left-0 top-12 bottom-12 w-1.5 bg-secondary rounded-r-xl opacity-80"></div>
                                 
                                     <div className="text-left space-y-2">
                                         <div className="text-left">
@@ -133,14 +133,14 @@ const EstimateListDriver = () => {
                                         </div>
                                     </div>
                                 
-                                <button onClick={() => navigate(`/estimate-detail-driver/${auction.id}`)} className="mt-8 w-full py-5 rounded-2xl bg-[#004e47] text-white font-black text-[11px] uppercase tracking-[0.3em] hover:bg-secondary transition-all active:scale-95 shadow-xl shadow-teal-900/10 italic">
+                                <button onClick={() => navigate(`/estimate-detail-driver/${auction.id}`)} className="mt-8 w-full py-4 rounded-xl bg-[#004e47] text-white font-black text-[11px] uppercase tracking-[0.3em] hover:bg-secondary transition-all active:scale-95 shadow-xl shadow-teal-900/10 italic">
                                     청약 선택
                                 </button>
                             </div>
                         ))
                     ) : (
-                        <div className="md:col-span-2 lg:col-span-3 py-24 flex flex-col items-center justify-center text-center space-y-6 bg-white rounded-[3rem] shadow-xl shadow-teal-900/5 border border-dashed border-slate-200">
-                            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center">
+                        <div className="md:col-span-2 lg:col-span-3 py-24 flex flex-col items-center justify-center text-center space-y-6 bg-white rounded-2xl shadow-xl shadow-teal-900/5 border border-dashed border-slate-200">
+                            <div className="w-20 h-20 bg-slate-50 rounded-xl flex items-center justify-center">
                                 <span className="material-symbols-outlined text-4xl text-slate-300">search_off</span>
                             </div>
                             <div className="space-y-2">
@@ -153,7 +153,7 @@ const EstimateListDriver = () => {
 
                 {/* Editorial Footer Quote */}
                 <div className="pt-24 pb-12 text-left border-t border-slate-100">
-                    <div className="h-1.5 w-16 bg-secondary rounded-full mb-10"></div>
+                    <div className="h-1.5 w-16 bg-secondary rounded-xl mb-10"></div>
                     <p className="font-headline text-3xl md:text-5xl font-black text-[#004e47] leading-[1.1] tracking-tighter max-w-4xl italic text-left uppercase">
                         "단체 여행의 가치는 <span className="text-secondary underline decoration-secondary/20 underline-offset-8">정확한 청약</span>과 <br/>신뢰할 수 있는 기사님으로부터 시작됩니다."
                     </p>

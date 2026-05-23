@@ -85,7 +85,7 @@ const InquiryListCustomer = () => {
                             `}
                             
                             <div class="pt-2">
-                                <button id="modal-close-btn" class="w-full py-5 rounded-2xl font-black bg-teal-700 hover:bg-teal-800 text-white transition-all text-[15px] shadow-lg shadow-teal-900/15 active:scale-[0.98] outline-none border-none">
+                                <button id="modal-close-btn" class="w-full py-5 rounded-xl font-black bg-teal-700 hover:bg-teal-800 text-white transition-all text-[15px] shadow-lg shadow-teal-900/15 active:scale-[0.98] outline-none border-none">
                                     확인
                                 </button>
                             </div>
@@ -93,7 +93,7 @@ const InquiryListCustomer = () => {
                     `,
                     showConfirmButton: false,
                     customClass: {
-                        popup: 'rounded-[2.5rem] p-8 border-none shadow-2xl'
+                        popup: 'rounded-2xl p-8 border-none shadow-2xl'
                     },
                     didOpen: () => {
                         const btn = document.getElementById('modal-close-btn');
@@ -122,7 +122,7 @@ const InquiryListCustomer = () => {
                     <div className="flex items-center gap-4">
                         <button 
                             onClick={() => navigate(-1)} 
-                            className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-50 text-teal-700 hover:bg-teal-50 transition-all duration-300 group"
+                            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 text-teal-700 hover:bg-teal-50 transition-all duration-300 group"
                         >
                             <span className="material-symbols-outlined text-2xl group-hover:-translate-x-0.5 transition-transform">arrow_back</span>
                         </button>
@@ -136,10 +136,10 @@ const InquiryListCustomer = () => {
                     
                     <div className="flex items-center gap-3">
                         <div 
-                            className="w-11 h-11 rounded-2xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden"
+                            className="w-11 h-11 rounded-xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden"
                             onClick={() => navigate('/profile-customer')}
                         >
-                            <div className="w-full h-full rounded-[14px] overflow-hidden bg-slate-50 flex items-center justify-center relative group">
+                            <div className="w-full h-full rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center relative group">
                                 {profileImage ? (
                                     <img 
                                         alt="Customer Profile" 
@@ -192,10 +192,10 @@ const InquiryListCustomer = () => {
                                     <div className="absolute left-0 top-6 bottom-6 w-1 bg-teal-600 rounded-r-full"></div>
                                 )}
                                 <div className="flex justify-between items-start mb-4">
-                                    <span className="text-[11px] font-bold tracking-widest text-teal-700 uppercase px-3 py-1 bg-teal-50 rounded-full">
+                                    <span className="text-[11px] font-bold tracking-widest text-teal-700 uppercase px-3 py-1 bg-teal-50 rounded-xl">
                                         {inquiry.category}
                                     </span>
-                                    <span className={`text-[11px] font-bold px-3 py-1 rounded-full ${inquiry.isCompleted ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                    <span className={`text-[11px] font-bold px-3 py-1 rounded-xl ${inquiry.isCompleted ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
                                         {inquiry.status}
                                     </span>
                                 </div>
@@ -223,7 +223,7 @@ const InquiryListCustomer = () => {
 
                     {/* End State Illustration */}
                     <div className="py-12 flex flex-col items-center justify-center opacity-40">
-                        <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+                        <div className="w-16 h-16 rounded-xl bg-slate-100 flex items-center justify-center mb-4">
                             <span className="material-symbols-outlined text-3xl text-on-surface-variant">help_center</span>
                         </div>
                         <p className="text-xs font-body font-bold text-on-surface-variant">문의 내역의 끝입니다</p>
@@ -235,7 +235,7 @@ const InquiryListCustomer = () => {
             <div className="fixed bottom-28 left-0 right-0 px-6 flex justify-center pointer-events-none z-40">
                 <button 
                     onClick={handleShowAddInquiry}
-                    className="pointer-events-auto flex items-center gap-3 bg-gradient-to-br from-teal-700 to-teal-900 text-white px-8 py-4 rounded-full shadow-2xl shadow-teal-900/40 hover:scale-105 active:scale-95 transition-all duration-300"
+                    className="pointer-events-auto flex items-center gap-3 bg-gradient-to-br from-teal-700 to-teal-900 text-white px-8 py-4 rounded-xl shadow-2xl shadow-teal-900/40 hover:scale-105 active:scale-95 transition-all duration-300 btn-primary"
                 >
                     <span className="material-symbols-outlined font-black">add</span>
                     <span className="font-headline font-bold text-base tracking-tight">새로운 문의하기</span>

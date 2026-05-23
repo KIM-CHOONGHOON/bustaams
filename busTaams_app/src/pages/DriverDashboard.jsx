@@ -103,8 +103,8 @@ const DriverDashboard = () => {
             {/* TopAppBar */}
             <header className="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-xl shadow-teal-900/5 flex items-center justify-between px-6 h-16 w-full">
                 <div className="flex items-center gap-3">
-                    <img src="/assets/BUSTAAMS_IMAGE_LOGO.png" alt="busTaams Logo" className="w-8 h-8 object-contain rounded-lg" />
-                    <div className="w-10 h-10 rounded-full bg-surface-container-highest overflow-hidden border border-slate-100 flex items-center justify-center">
+                    <img src="/assets/BUSTAAMS_IMAGE_LOGO.png" alt="busTaams Logo" className="w-8 h-8 object-contain rounded-xl" />
+                    <div className="w-10 h-10 rounded-xl bg-surface-container-highest overflow-hidden border border-slate-100 flex items-center justify-center">
                         {userImage ? (
                             <img alt="Driver profile" className="w-full h-full object-cover" src={userImage} />
                         ) : (
@@ -131,7 +131,7 @@ const DriverDashboard = () => {
                     </button>
                     <button 
                         onClick={handleLogout}
-                        className="p-2 rounded-full hover:bg-red-50 transition-colors group"
+                        className="p-2 rounded-xl hover:bg-red-50 transition-colors group"
                         title="로그아웃"
                     >
                         <span className="material-symbols-outlined text-teal-800 group-hover:text-red-500">logout</span>
@@ -157,10 +157,10 @@ const DriverDashboard = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {auctionList.length > 0 ? (
                                 auctionList.slice(0, 3).map((auction, idx) => (
-                                    <div key={auction.id} className={`bg-white rounded-[2rem] p-6 shadow-xl shadow-teal-900/5 border-l-4 ${idx === 0 ? 'border-secondary' : 'border-primary'} flex flex-col justify-between h-48 hover:translate-y-[-4px] transition-all duration-300 cursor-pointer`} onClick={() => navigate(`/estimate-detail-driver/${auction.id}`)}>
+                                    <div key={auction.id} className={`bg-white rounded-2xl p-6 shadow-xl shadow-teal-900/5 border-l-4 ${idx === 0 ? 'border-secondary' : 'border-primary'} flex flex-col justify-between h-48 hover:translate-y-[-4px] transition-all duration-300 cursor-pointer`} onClick={() => navigate(`/estimate-detail-driver/${auction.id}`)}>
                                         <div className="text-left">
                                             <div className="flex justify-between items-start">
-                                                <span className={`${idx === 0 ? 'bg-secondary-fixed text-on-secondary-fixed' : 'bg-primary-fixed text-on-primary-fixed'} text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider`}>
+                                                <span className={`${idx === 0 ? 'bg-secondary-fixed text-on-secondary-fixed' : 'bg-primary-fixed text-on-primary-fixed'} text-[10px] font-bold px-2 py-1 rounded-xl uppercase tracking-wider`}>
                                                     {idx === 0 ? '수요 높음' : '일반'}
                                                 </span>
                                                 <span className="text-[10px] text-slate-400 font-bold uppercase">{auction.timeAgo}</span>
@@ -183,7 +183,7 @@ const DriverDashboard = () => {
                                             <span className="text-primary font-black text-xl tracking-tighter italic">₩{Number(auction.price).toLocaleString()}</span>
                                             <button 
                                                 onClick={() => navigate(`/estimate-detail-driver/${auction.id}`)}
-                                                className="bg-primary text-white rounded-full px-6 py-2.5 text-[12px] font-black shadow-lg shadow-primary/20 uppercase tracking-widest hover:bg-secondary transition-all"
+                                                className="bg-primary text-white rounded-xl px-6 py-2.5 text-[12px] font-black shadow-lg shadow-primary/20 uppercase tracking-widest hover:bg-secondary transition-all"
                                             >
                                                 청약선택
                                             </button>
@@ -191,7 +191,7 @@ const DriverDashboard = () => {
                                     </div>
                                 ))
                             ) : (
-                                <div className="md:col-span-2 bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2rem] p-12 flex flex-col items-center justify-center text-center space-y-4">
+                                <div className="md:col-span-2 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-12 flex flex-col items-center justify-center text-center space-y-4">
                                     <span className="material-symbols-outlined text-4xl text-slate-300">search_off</span>
                                     <p className="text-slate-500 font-bold text-sm">현재 등록된 청약 기회가 없습니다.<br/><span className="text-xs font-medium opacity-60">기사님의 차량 정보와 일치하는 요청을 기다려주세요.</span></p>
                                 </div>
@@ -226,13 +226,13 @@ const DriverDashboard = () => {
                                     <button 
                                         key={idx}
                                         onClick={() => !isDisabled && navigate(menu.path)}
-                                        className={`group bg-slate-50 p-5 rounded-[1.5rem] transition-all duration-300 flex flex-col items-center text-center gap-3 shadow-sm border border-transparent ${
+                                        className={`group bg-slate-50 p-5 rounded-2xl transition-all duration-300 flex flex-col items-center text-center gap-3 shadow-sm border border-transparent ${
                                             isDisabled 
                                             ? 'opacity-40 cursor-not-allowed grayscale' 
                                             : 'hover:bg-white hover:shadow-xl hover:translate-y-[-2px] hover:border-slate-100'
                                         }`}
                                     >
-                                        <div className={`w-12 h-12 rounded-2xl bg-white flex items-center justify-center transition-all shadow-sm ${!isDisabled && 'group-hover:bg-primary group-hover:text-white rotate-3 group-hover:rotate-0'}`}>
+                                        <div className={`w-12 h-12 rounded-xl bg-white flex items-center justify-center transition-all shadow-sm ${!isDisabled && 'group-hover:bg-primary group-hover:text-white rotate-3 group-hover:rotate-0'}`}>
                                             <span className="material-symbols-outlined">{menu.icon}</span>
                                         </div>
                                         <span className={`text-[11px] font-black uppercase tracking-tight ${isDisabled ? 'text-slate-300' : 'text-on-surface'}`}>{menu.label}</span>
@@ -246,7 +246,7 @@ const DriverDashboard = () => {
                     <div className="space-y-8">
                         {/* Today's Schedule Card */}
                         {todayTrip && (
-                            <div className="bg-primary text-white rounded-[2.5rem] p-8 shadow-2xl shadow-primary/20 relative overflow-hidden group cursor-pointer" onClick={() => navigate(`/upcoming-trip-detail-driver/${todayTrip.id}`)}>
+                            <div className="bg-primary text-white rounded-2xl p-8 shadow-2xl shadow-primary/20 relative overflow-hidden group cursor-pointer" onClick={() => navigate(`/upcoming-trip-detail-driver/${todayTrip.id}`)}>
                                 <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-125 group-hover:rotate-12 transition-all">
                                     <span className="material-symbols-outlined text-[100px]" style={{fontSize: '100px'}}>route</span>
                                 </div>
@@ -254,7 +254,7 @@ const DriverDashboard = () => {
                                     <h4 className="text-[10px] font-black tracking-[0.4em] uppercase opacity-60">오늘의 운행 일정</h4>
                                     <div className="space-y-6 text-left">
                                         <div className="flex items-center gap-4 text-left">
-                                            <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center shadow-inner">
+                                            <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center shadow-inner">
                                                 <span className="material-symbols-outlined text-xl">schedule</span>
                                             </div>
                                             <div className="text-left">
@@ -277,7 +277,7 @@ const DriverDashboard = () => {
                                         </div>
                                         <button 
                                             onClick={(e) => { e.stopPropagation(); navigate(`/upcoming-trip-detail-driver/${todayTrip.id}`); }}
-                                            className="w-full mt-4 bg-white text-primary py-4 rounded-full font-black text-[10px] uppercase tracking-[0.3em] hover:scale-105 active:scale-95 transition-all shadow-xl shadow-black/20"
+                                            className="w-full mt-4 bg-white text-primary py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.3em] hover:scale-105 active:scale-95 transition-all shadow-xl shadow-black/20"
                                         >
                                             상세 정보 확인
                                         </button>
@@ -287,10 +287,10 @@ const DriverDashboard = () => {
                         )}
 
                         {/* Earnings Ledger */}
-                        <div className="bg-white rounded-[2.5rem] p-8 shadow-2xl shadow-teal-900/5 border border-white text-left">
+                        <div className="bg-white rounded-2xl p-8 shadow-2xl shadow-teal-900/5 border border-white text-left">
                             <div className="flex justify-between items-center mb-8 text-left">
                                 <h4 className="text-[10px] font-black tracking-[0.4em] text-slate-300 uppercase">수익 요약</h4>
-                                <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-lg uppercase tracking-widest">
+                                <span className="text-[10px] font-black text-primary px-3 py-1 bg-primary/10 rounded-xl uppercase tracking-widest">
                                     {new Date().getMonth() + 1}월
                                 </span>
                             </div>
@@ -319,7 +319,7 @@ const DriverDashboard = () => {
                 </section>
 
                 {/* Membership Banner */}
-                <section className="relative h-56 rounded-[3rem] overflow-hidden bg-slate-900 flex items-center px-12 group cursor-pointer text-left shadow-2xl shadow-slate-900/30">
+                <section className="relative h-56 rounded-2xl overflow-hidden bg-slate-900 flex items-center px-12 group cursor-pointer text-left shadow-2xl shadow-slate-900/30">
                     <div className="absolute inset-0 z-0 overflow-hidden">
                         <img alt="Luxury bus" className="w-full h-full object-cover opacity-40 group-hover:scale-105 transition-transform duration-[2000ms]" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDd1cmwWadGqEVtV-xNJu4CT-nzdrjTfWs5mnHZWthPLlGqXJvDM6-zdHdIOEfxl-33alvQ51u0CWgtmCwN0I5ZHQu44L0FpRakK5R7wFj8quXWJUvAMas6cHKI5jbsD6lqeZxRbjoFfi38ifujiNRcITlXAxtpv8j5FIO9E2z_W0hPP0xxi7GBetNBEvvO5w6RnBmgNyTkxMEC74CkkLdNfnJqFjlQYAI7nkmLce_5YITHZZyErTimyYQuayN6dI6S6w8xBqchskI" />
                         <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/70 to-transparent"></div>
@@ -327,7 +327,7 @@ const DriverDashboard = () => {
                     <div className="relative z-10 max-w-xl space-y-6 text-left">
                         <h3 className="text-white text-2xl md:text-4xl font-black font-headline leading-[0.9] italic uppercase tracking-tighter">마스터 멤버 <br/><span className="text-secondary">전용 혜택.</span></h3>
                         <p className="text-slate-400 text-xs font-bold tracking-tight italic opacity-80 text-left">전국 정비 데스크 할인 및 연방 유류비 환급 서비스를 즉시 잠금 해제하세요.</p>
-                        <button className="bg-secondary text-white px-8 py-3 rounded-full font-black text-[9px] uppercase tracking-[0.3em] shadow-2xl shadow-secondary/30 active:scale-95 transition-all">혜택 확인하기</button>
+                        <button className="bg-secondary text-white px-8 py-3 rounded-xl font-black text-[9px] uppercase tracking-[0.3em] shadow-2xl shadow-secondary/30 active:scale-95 transition-all">혜택 확인하기</button>
                     </div>
                 </section>
             </main>

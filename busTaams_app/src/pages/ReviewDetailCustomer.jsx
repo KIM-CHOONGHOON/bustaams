@@ -89,7 +89,7 @@ const ReviewDetailCustomer = () => {
             <div className="flex flex-col items-center justify-center min-h-screen bg-[#F8FAFB] p-6 text-center">
                 <span className="material-symbols-outlined text-slate-300 text-6xl mb-4">rate_review</span>
                 <h1 className="text-xl font-bold text-slate-800 mb-4">리뷰 내역이 없습니다.</h1>
-                <button onClick={() => navigate(-1)} className="bg-[#0F766E] text-white px-8 py-3 rounded-full font-bold shadow-lg">돌아가기</button>
+                <button onClick={() => navigate(-1)} className="bg-[#0F766E] text-white px-8 py-3 rounded-xl font-bold shadow-lg">돌아가기</button>
             </div>
         );
     }
@@ -99,11 +99,11 @@ const ReviewDetailCustomer = () => {
             {/* Header */}
             <header className="fixed top-0 w-full z-50 bg-white border-b border-slate-100 px-6 h-16 flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                    <button onClick={() => navigate(-1)} className="material-symbols-outlined text-[#1E293B] p-2 hover:bg-slate-50 rounded-full transition-all">arrow_back</button>
+                    <button onClick={() => navigate(-1)} className="material-symbols-outlined text-[#1E293B] p-2 hover:bg-slate-50 rounded-xl transition-all">arrow_back</button>
                     <h1 className="font-bold text-[17px] text-[#1E293B]">나의 리뷰 상세</h1>
                 </div>
                 <div 
-                    className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center overflow-hidden border border-slate-100 cursor-pointer transition-transform active:scale-95 shadow-sm"
+                    className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center overflow-hidden border border-slate-100 cursor-pointer transition-transform active:scale-95 shadow-sm"
                     onClick={() => navigate('/profile-customer')}
                 >
                     {profileImage ? (
@@ -130,7 +130,7 @@ const ReviewDetailCustomer = () => {
 
             <main className="max-w-xl mx-auto px-6 pt-24 space-y-8">
                 {/* Trip Info Card */}
-                <section className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 relative overflow-hidden animate-in fade-in slide-in-from-bottom duration-700">
+                <section className="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 relative overflow-hidden animate-in fade-in slide-in-from-bottom duration-700">
                     <div className="flex items-center justify-between gap-4">
                         <div className="space-y-4 flex-1">
                             <div className="flex items-center gap-3">
@@ -149,7 +149,7 @@ const ReviewDetailCustomer = () => {
                             
                             {/* Driver/Bus Summary in Card */}
                             <div className="flex items-center gap-4 pt-4 mt-4 border-t border-slate-50">
-                                <div className="w-12 h-12 rounded-2xl bg-[#F1F5F9] overflow-hidden border border-slate-50 shadow-inner">
+                                <div className="w-12 h-12 rounded-xl bg-[#F1F5F9] overflow-hidden border border-slate-50 shadow-inner">
                                     {review.driverImage ? (
                                         <img src={`${import.meta.env.VITE_API_BASE_URL || ''}${review.driverImage}`} className="w-full h-full object-cover" alt="Driver" />
                                     ) : (
@@ -164,7 +164,7 @@ const ReviewDetailCustomer = () => {
                                 </div>
                             </div>
                         </div>
-                        <div className="bg-orange-50 px-4 py-3 rounded-2xl flex flex-col items-center gap-1 border border-orange-100 shadow-sm min-w-[70px]">
+                        <div className="bg-orange-50 px-4 py-3 rounded-xl flex flex-col items-center gap-1 border border-orange-100 shadow-sm min-w-[70px]">
                             <span className="text-[20px] font-black text-[#F97316]">{review.rating?.toFixed(1)}</span>
                             <span className="material-symbols-outlined text-[#F97316] text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
                         </div>
@@ -172,7 +172,7 @@ const ReviewDetailCustomer = () => {
                 </section>
 
                 {/* Review Content */}
-                <section className="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100 space-y-8 animate-in fade-in slide-in-from-bottom duration-700 delay-200">
+                <section className="bg-white rounded-2xl p-10 shadow-sm border border-slate-100 space-y-8 animate-in fade-in slide-in-from-bottom duration-700 delay-200">
                     <div className="flex justify-center gap-1">
                         {renderStars(review.rating)}
                     </div>
@@ -188,9 +188,9 @@ const ReviewDetailCustomer = () => {
 
                     {/* Driver Reply Section */}
                     {review.reply ? (
-                        <div className="bg-[#F8FAFB] rounded-[2rem] p-6 space-y-4 border border-slate-50">
+                        <div className="bg-[#F8FAFB] rounded-xl p-6 space-y-4 border border-slate-50">
                             <div className="flex items-center gap-4">
-                                <div className="w-14 h-14 rounded-2xl bg-white overflow-hidden shadow-sm border border-slate-100 relative">
+                                <div className="w-14 h-14 rounded-xl bg-white overflow-hidden shadow-sm border border-slate-100 relative">
                                     {review.driverImage ? (
                                         <img src={`${import.meta.env.VITE_API_BASE_URL || ''}${review.driverImage}`} className="w-full h-full object-cover" alt="Driver" />
                                     ) : (
@@ -207,7 +207,7 @@ const ReviewDetailCustomer = () => {
                                     <h4 className="text-[16px] font-black text-[#1E293B]">{review.driverName} 기사님</h4>
                                 </div>
                             </div>
-                            <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-50 relative">
+                            <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-50 relative">
                                 <p className="text-[14px] text-[#475569] font-medium leading-relaxed">
                                     {review.reply}
                                 </p>

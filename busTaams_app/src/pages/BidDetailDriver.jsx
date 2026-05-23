@@ -84,7 +84,7 @@ const BidDetailDriver = () => {
             <div className="bg-background min-h-screen flex flex-col items-center justify-center p-6 text-center">
                 <span className="material-symbols-outlined text-6xl text-red-400 mb-4">error</span>
                 <p className="text-lg font-bold text-slate-600 mb-6">{error || '데이터가 없습니다.'}</p>
-                <button onClick={() => navigate(-1)} className="bg-primary text-white px-8 py-3 rounded-2xl font-bold">뒤로 가기</button>
+                <button onClick={() => navigate(-1)} className="bg-primary text-white px-8 py-3 rounded-xl font-bold">뒤로 가기</button>
             </div>
         );
     }
@@ -95,7 +95,7 @@ const BidDetailDriver = () => {
             <header className="fixed top-0 w-full z-50 bg-white/40 backdrop-blur-3xl border-b border-white/20 py-6">
                 <div className="flex justify-between items-center w-full px-6 max-w-7xl mx-auto">
                     <div className="flex items-center gap-6 text-left">
-                        <button onClick={() => navigate(-1)} className="p-3 bg-white rounded-2xl text-teal-800 shadow-xl shadow-teal-900/5 active:scale-95 transition-all">
+                        <button onClick={() => navigate(-1)} className="p-3 bg-white rounded-xl text-teal-800 shadow-xl shadow-teal-900/5 active:scale-95 transition-all">
                             <span className="material-symbols-outlined text-lg">arrow_back</span>
                         </button>
                         <h1 className="font-headline font-black tracking-tighter text-2xl text-teal-900 italic uppercase">입찰 상세 정보 및 수정</h1>
@@ -108,12 +108,12 @@ const BidDetailDriver = () => {
                 <section className="space-y-8 text-left">
                     <div className="flex items-baseline justify-between text-left">
                         <h2 className="font-headline font-black text-3xl text-primary italic uppercase tracking-tighter text-left">고객 요청 요약</h2>
-                        <span className="text-[10px] font-black text-secondary bg-secondary/10 px-4 py-1.5 rounded-full uppercase tracking-widest italic">
+                        <span className="text-[10px] font-black text-secondary bg-secondary/10 px-4 py-1.5 rounded-xl uppercase tracking-widest italic">
                             {bidData.DATA_STAT === 'BIDDING' ? '승인 대기 중' : '운행 예정'}
                         </span>
                     </div>
 
-                    <div className="bg-white rounded-[2.5rem] p-8 shadow-2xl shadow-teal-900/5 relative overflow-hidden text-left border border-white">
+                    <div className="bg-white rounded-2xl p-8 shadow-2xl shadow-teal-900/5 relative overflow-hidden text-left border border-white">
                         <div className="absolute left-0 top-0 bottom-0 w-2 bg-secondary"></div>
                         <div className="space-y-8 text-left">
                             <div>
@@ -175,13 +175,13 @@ const BidDetailDriver = () => {
                 <section className="space-y-8 text-left">
                     <h2 className="font-headline font-black text-3xl text-primary italic uppercase tracking-tighter text-left">내 입찰 정보</h2>
                     
-                    <div className="bg-white rounded-[2.5rem] p-8 shadow-2xl shadow-teal-900/5 space-y-8 border border-white text-left">
+                    <div className="bg-white rounded-2xl p-8 shadow-2xl shadow-teal-900/5 space-y-8 border border-white text-left">
                         <div className="space-y-4 text-left group">
                             <label className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-300 px-4 block italic">현재 입찰 금액</label>
                             <div className="relative text-left">
                                 <span className="absolute left-8 top-1/2 -translate-y-1/2 font-black text-slate-200 text-3xl italic">₩</span>
                                 <input 
-                                    className="w-full bg-slate-50 border-4 border-transparent rounded-3xl py-6 pl-16 pr-8 font-headline text-4xl font-black text-primary focus:outline-none transition-all italic tracking-tighter" 
+                                    className="w-full bg-slate-50 border-4 border-transparent rounded-xl py-6 pl-16 pr-8 font-headline text-4xl font-black text-primary focus:outline-none transition-all italic tracking-tighter" 
                                     value={Number(bidData.price || 0).toLocaleString()} 
                                     readOnly
                                     type="text" 
@@ -189,8 +189,8 @@ const BidDetailDriver = () => {
                             </div>
                         </div>
 
-                        <div className="bg-primary/5 rounded-[2rem] p-6 flex gap-6 items-start border-2 border-primary/5 text-left">
-                            <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-white shrink-0 shadow-lg shadow-primary/20">
+                        <div className="bg-primary/5 rounded-2xl p-6 flex gap-6 items-start border-2 border-primary/5 text-left">
+                            <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center text-white shrink-0 shadow-lg shadow-primary/20">
                                 <span className="material-symbols-outlined text-2xl">lightbulb</span>
                             </div>
                             <div className="space-y-2 text-left">
@@ -207,7 +207,7 @@ const BidDetailDriver = () => {
                 <section className="pt-6 text-left pb-12">
                     <button 
                         onClick={handleCancelBid}
-                        className="w-full bg-red-50 text-red-600 py-6 rounded-3xl font-black text-lg italic uppercase tracking-[0.1em] shadow-xl shadow-red-900/5 hover:bg-red-100 hover:text-red-700 transition-all active:scale-[0.98] flex items-center justify-center gap-4 border border-red-100"
+                        className="w-full bg-red-50 text-red-600 py-4 rounded-xl font-black text-lg italic uppercase tracking-[0.1em] shadow-xl shadow-red-900/5 hover:bg-red-100 hover:text-red-700 transition-all active:scale-[0.98] flex items-center justify-center gap-4 border border-red-100"
                     >
                         <span className="material-symbols-outlined text-xl">cancel</span>
                         입찰 취소

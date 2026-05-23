@@ -36,7 +36,7 @@ const FailBidListDriver = () => {
             <header className="fixed top-0 w-full z-50 bg-white/40 backdrop-blur-3xl border-b border-white/20 py-6">
                 <div className="flex justify-between items-center w-full px-6 max-w-7xl mx-auto">
                     <div className="flex items-center gap-6 text-left">
-                        <button onClick={() => navigate(-1)} className="p-3 bg-white rounded-2xl text-teal-800 shadow-xl shadow-teal-900/5 active:scale-95 transition-all">
+                        <button onClick={() => navigate(-1)} className="p-3 bg-white rounded-xl text-teal-800 shadow-xl shadow-teal-900/5 active:scale-95 transition-all">
                             <span className="material-symbols-outlined text-lg">arrow_back</span>
                         </button>
                         <h1 className="font-headline font-black tracking-tighter text-3xl text-teal-900 italic uppercase">busTaams</h1>
@@ -70,11 +70,11 @@ const FailBidListDriver = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 text-left">
                     {/* Large Featured Item (First one) */}
                     <div className="lg:col-span-2 group">
-                        <div className="bg-white rounded-[4rem] p-12 relative overflow-hidden transition-all duration-700 hover:shadow-2xl hover:shadow-teal-900/5 flex flex-col md:flex-row gap-12 border border-slate-50 text-left">
+                        <div className="bg-white rounded-2xl p-12 relative overflow-hidden transition-all duration-700 hover:shadow-2xl hover:shadow-teal-900/5 flex flex-col md:flex-row gap-12 border border-slate-50 text-left">
                             <div className="absolute left-0 top-0 bottom-0 w-2 bg-slate-100"></div>
                             <div className="flex-1 space-y-8 text-left">
                                 <div className="flex items-center gap-4 text-left">
-                                    <span className="px-5 py-2 rounded-full bg-slate-50 text-slate-300 text-[9px] font-black uppercase tracking-widest italic border border-slate-100">유찰 (FAILED)</span>
+                                    <span className="px-5 py-2 rounded-xl bg-slate-50 text-slate-300 text-[9px] font-black uppercase tracking-widest italic border border-slate-100">유찰 (FAILED)</span>
                                     <span className="text-slate-300 font-bold text-[9px] uppercase tracking-widest italic">{failedBids[0].deadline}</span>
                                 </div>
                                 <div className="text-left space-y-2">
@@ -84,20 +84,20 @@ const FailBidListDriver = () => {
                                     <p className="text-slate-400 font-bold italic text-sm leading-tight uppercase tracking-widest">{failedBids[0].route}</p>
                                 </div>
                                 <div className="grid grid-cols-2 gap-6 text-left">
-                                    <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 text-left group-hover:bg-white transition-colors">
+                                    <div className="bg-slate-50 p-6 rounded-xl border border-slate-100 text-left group-hover:bg-white transition-colors">
                                         <p className="text-[8px] font-black uppercase tracking-widest text-slate-300 mb-2 italic">나의 청약가</p>
                                         <p className="font-headline text-2xl font-black text-primary italic tracking-tighter">₩{failedBids[0].price}</p>
                                     </div>
-                                    <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 text-left group-hover:bg-white transition-colors">
+                                    <div className="bg-slate-50 p-6 rounded-xl border border-slate-100 text-left group-hover:bg-white transition-colors">
                                         <p className="text-[8px] font-black uppercase tracking-widest text-slate-300 mb-2 italic">차량 모델</p>
                                         <p className="font-black text-primary text-xs italic">{failedBids[0].model}</p>
                                     </div>
                                 </div>
-                                <button onClick={() => navigate(`/fail-bid-detail-driver/${failedBids[0].id}`)} className="bg-primary text-white px-12 py-6 rounded-[2.5rem] font-black text-[10px] uppercase tracking-[0.3em] shadow-2xl shadow-primary/30 hover:scale-105 active:scale-95 transition-all italic">
+                                <button onClick={() => navigate(`/fail-bid-detail-driver/${failedBids[0].id}`)} className="bg-primary text-white px-12 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.3em] shadow-2xl shadow-primary/30 hover:scale-105 active:scale-95 transition-all italic">
                                     상세 사유 분석
                                 </button>
                             </div>
-                            <div className="w-full md:w-72 h-72 rounded-[3rem] overflow-hidden grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-1000 border-8 border-slate-50">
+                            <div className="w-full md:w-72 h-72 rounded-xl overflow-hidden grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-1000 border-8 border-slate-50">
                                 <img className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" src={failedBids[0].image} alt={failedBids[0].title} />
                             </div>
                         </div>
@@ -105,10 +105,10 @@ const FailBidListDriver = () => {
 
                     {/* Standard Items */}
                     {failedBids.slice(1).map((item) => (
-                        <div key={item.id} className="group bg-white rounded-[3.5rem] p-10 relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:shadow-teal-900/5 hover:-translate-y-2 text-left border border-slate-50">
+                        <div key={item.id} className="group bg-white rounded-2xl p-10 relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:shadow-teal-900/5 hover:-translate-y-2 text-left border border-slate-50">
                             <div className="space-y-8 text-left">
                                 <div className="flex justify-between items-center text-left">
-                                    <span className="px-5 py-2 rounded-full bg-slate-100 text-slate-300 text-[9px] font-black uppercase tracking-widest italic">유찰</span>
+                                    <span className="px-5 py-2 rounded-xl bg-slate-100 text-slate-300 text-[9px] font-black uppercase tracking-widest italic">유찰</span>
                                     <span className="material-symbols-outlined text-slate-100 group-hover:text-slate-200 transition-colors duration-500 text-4xl">cancel</span>
                                 </div>
 
@@ -130,7 +130,7 @@ const FailBidListDriver = () => {
                                     </div>
                                 </div>
 
-                                <button onClick={() => navigate(`/fail-bid-detail-driver/${item.id}`)} className="w-full py-6 rounded-[2.5rem] bg-slate-50 text-primary font-black text-[10px] uppercase tracking-[0.3em] hover:bg-primary hover:text-white transition-all active:scale-95 italic">
+                                <button onClick={() => navigate(`/fail-bid-detail-driver/${item.id}`)} className="w-full py-4 rounded-xl bg-slate-50 text-primary font-black text-[10px] uppercase tracking-[0.3em] hover:bg-primary hover:text-white transition-all active:scale-95 italic">
                                     상세 보기
                                 </button>
                             </div>

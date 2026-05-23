@@ -76,7 +76,7 @@ const RatingReplyDriver = () => {
                 <p className="text-slate-400 font-bold italic text-xl mb-8">해당 운행에 대한 고객 후기가 아직 없습니다.</p>
                 <button 
                     onClick={() => navigate(-1)} 
-                    className="px-12 py-4 bg-primary text-white rounded-2xl font-black italic uppercase tracking-widest shadow-xl shadow-primary/20"
+                    className="px-12 py-4 bg-primary text-white rounded-xl font-black italic uppercase tracking-widest shadow-xl shadow-primary/20"
                 >
                     뒤로 가기
                 </button>
@@ -90,7 +90,7 @@ const RatingReplyDriver = () => {
             <header className="fixed top-0 w-full z-50 bg-white/40 backdrop-blur-3xl border-b border-white/20 py-6">
                 <div className="flex justify-between items-center w-full px-6 max-w-7xl mx-auto">
                     <div className="flex items-center gap-6 text-left">
-                        <button onClick={() => navigate(-1)} className="p-3 bg-white rounded-2xl text-primary shadow-xl shadow-teal-900/5 active:scale-95 transition-all">
+                        <button onClick={() => navigate(-1)} className="p-3 bg-white rounded-xl text-primary shadow-xl shadow-teal-900/5 active:scale-95 transition-all">
                             <span className="material-symbols-outlined text-lg">arrow_back</span>
                         </button>
                         <h1 className="font-headline font-black tracking-tighter text-3xl text-primary italic uppercase">피드백 관리</h1>
@@ -101,7 +101,7 @@ const RatingReplyDriver = () => {
             <main className="pt-40 px-6 max-w-3xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom duration-1000 text-left">
                 {/* 헤드라인 섹션 */}
                 <section className="text-left space-y-4">
-                    <span className="inline-block px-5 py-1.5 bg-primary/10 text-primary rounded-full text-[10px] font-black tracking-[0.3em] uppercase italic">Driver Reply</span>
+                    <span className="inline-block px-5 py-1.5 bg-primary/10 text-primary rounded-xl text-[10px] font-black tracking-[0.3em] uppercase italic">Driver Reply</span>
                     <h2 className="font-headline text-5xl md:text-6xl font-black italic uppercase tracking-tighter text-primary leading-[0.9] text-left">
                         고객님의 소중한 후기에<br />
                         <span className="text-secondary tracking-widest">감사의 마음</span>을 전하세요
@@ -110,7 +110,7 @@ const RatingReplyDriver = () => {
 
                 {/* 고객 후기 카드 */}
                 <section className="space-y-6 text-left">
-                    <div className="bg-white rounded-[3.5rem] p-10 shadow-[0_40px_80px_-20px_rgba(0,104,95,0.08)] relative overflow-hidden text-left border border-white">
+                    <div className="bg-white rounded-2xl p-10 shadow-[0_40px_80px_-20px_rgba(0,104,95,0.08)] relative overflow-hidden text-left border border-white">
                         <div className="absolute top-10 right-10 flex items-center gap-1">
                             {[...Array(5)].map((_, i) => (
                                 <span key={i} className={`material-symbols-outlined text-2xl ${i < trip.reviewRating ? 'text-secondary' : 'text-slate-100'}`} style={{fontVariationSettings: "'FILL' 1"}}>star</span>
@@ -118,7 +118,7 @@ const RatingReplyDriver = () => {
                         </div>
                         
                         <div className="flex items-center gap-6 mb-8 text-left">
-                            <div className="w-16 h-16 rounded-full overflow-hidden bg-slate-50 border border-slate-100">
+                            <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-50 border border-slate-100">
                                 {trip.customerImage ? (
                                     <img className="w-full h-full object-cover" src={trip.customerImage} alt="customer" />
                                 ) : (
@@ -133,7 +133,7 @@ const RatingReplyDriver = () => {
                             </div>
                         </div>
                         
-                        <div className="bg-slate-50/50 rounded-3xl p-8 relative italic font-bold text-slate-600 leading-relaxed text-lg text-left">
+                        <div className="bg-slate-50/50 rounded-2xl p-8 relative italic font-bold text-slate-600 leading-relaxed text-lg text-left">
                             <span className="absolute -top-4 -left-2 text-primary/10 text-7xl font-serif">"</span>
                             {trip.reviewComment}
                             <span className="absolute -bottom-10 -right-2 text-primary/10 text-7xl font-serif">"</span>
@@ -143,11 +143,11 @@ const RatingReplyDriver = () => {
 
                 {/* 답글 입력 섹션 */}
                 <section className="space-y-6 text-left">
-                    <div className="bg-white rounded-[3.5rem] p-10 shadow-[0_40px_80px_-20px_rgba(0,104,95,0.08)] text-left border border-white">
+                    <div className="bg-white rounded-2xl p-10 shadow-[0_40px_80px_-20px_rgba(0,104,95,0.08)] text-left border border-white">
                         <label className="block text-primary font-black italic uppercase tracking-widest text-[10px] mb-6 ml-2" htmlFor="reply">답글 작성하기</label>
                         <textarea 
                             id="reply"
-                            className="w-full bg-slate-50 border-2 border-transparent rounded-[2.5rem] p-10 text-slate-700 placeholder:text-slate-300 focus:bg-white focus:border-primary/20 focus:ring-0 transition-all resize-none font-bold italic text-lg leading-relaxed shadow-inner"
+                            className="w-full bg-slate-50 border-2 border-transparent rounded-xl p-10 text-slate-700 placeholder:text-slate-300 focus:bg-white focus:border-primary/20 focus:ring-0 transition-all resize-none font-bold italic text-lg leading-relaxed shadow-inner"
                             placeholder="고객님께 전할 감사의 인사를 입력해주세요..."
                             rows="6"
                             value={replyText}
@@ -158,7 +158,7 @@ const RatingReplyDriver = () => {
                             <button 
                                 onClick={handleSubmit}
                                 disabled={submitting}
-                                className="w-full bg-gradient-to-br from-primary to-teal-800 text-white py-8 rounded-[2.5rem] font-black italic uppercase tracking-[0.4em] text-sm shadow-2xl shadow-primary/30 hover:scale-[1.02] active:scale-95 transition-all duration-500 flex items-center justify-center gap-6 disabled:opacity-50"
+                                className="w-full bg-gradient-to-br from-primary to-teal-800 text-white py-8 rounded-xl font-black italic uppercase tracking-[0.4em] text-sm shadow-2xl shadow-primary/30 hover:scale-[1.02] active:scale-95 transition-all duration-500 flex items-center justify-center gap-6 disabled:opacity-50"
                             >
                                 {submitting ? '저장 중...' : '답글 등록하기'}
                                 <span className="material-symbols-outlined text-xl">send</span>

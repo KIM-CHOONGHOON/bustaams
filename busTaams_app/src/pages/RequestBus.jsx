@@ -518,7 +518,7 @@ const RequestBus = () => {
             {/* Postcode Modal */}
             {postcodeOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-                    <div className="bg-white rounded-[2rem] overflow-hidden w-full max-w-lg relative shadow-2xl animate-fade-in flex flex-col border border-slate-100 h-[600px]">
+                    <div className="bg-white rounded-2xl overflow-hidden w-full max-w-lg relative shadow-2xl animate-fade-in flex flex-col border border-slate-100 h-[600px]">
                         {/* 모달 헤더 (한글 주석) */}
                         <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-slate-50">
                             <div>
@@ -561,7 +561,7 @@ const RequestBus = () => {
                                     <div 
                                         key={idx} 
                                         onClick={() => handlePlaceSelect(place)}
-                                        className="p-5 bg-white border border-slate-100 rounded-2xl hover:border-teal-600/30 hover:shadow-md cursor-pointer transition-all duration-300 text-left group"
+                                        className="p-5 bg-white border border-slate-100 rounded-xl hover:border-teal-600/30 hover:shadow-md cursor-pointer transition-all duration-300 text-left group"
                                     >
                                         <h4 className="font-headline font-bold text-teal-950 group-hover:text-teal-700 transition-colors">{place.place_name}</h4>
                                         {place.road_address_name && (
@@ -614,10 +614,10 @@ const RequestBus = () => {
 
                     <div className="flex items-center gap-3">
                         <div
-                            className="w-11 h-11 rounded-2xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden"
+                            className="w-11 h-11 rounded-xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden"
                             onClick={() => navigate('/profile-customer')}
                         >
-                            <div className="w-full h-full rounded-[14px] overflow-hidden bg-slate-50 flex items-center justify-center relative group">
+                            <div className="w-full h-full rounded-lg overflow-hidden bg-slate-50 flex items-center justify-center relative group">
                                 {profileImage ? (
                                     <img
                                         alt="Customer Profile"
@@ -669,7 +669,7 @@ const RequestBus = () => {
 
                     {/* Right Side: The Form Canvas */}
                     <div className="col-span-12 lg:col-span-7">
-                        <div className="bg-white rounded-[2rem] p-8 lg:p-12 shadow-2xl relative border border-slate-100">
+                        <div className="bg-white rounded-2xl p-8 lg:p-12 shadow-2xl relative border border-slate-100">
                             <form className="space-y-10 text-left">
                                 <section>
                                     <div className="flex items-center gap-4 mb-8">
@@ -788,7 +788,7 @@ const RequestBus = () => {
                                         <h3 className="font-headline font-black text-[15px] text-teal-950/70 uppercase tracking-widest ml-2">버스 구분 표준화 (차종 선택)</h3>
                                         <div className="grid grid-cols-1 gap-3">
                                             {busTypes.map((bus) => (
-                                                <div key={bus.code} className="flex items-center justify-between p-5 bg-white rounded-3xl border border-slate-100 shadow-sm hover:border-teal-600/30 hover:shadow-md transition-all duration-300">
+                                                <div key={bus.code} className="flex items-center justify-between p-5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-teal-600/30 hover:shadow-md transition-all duration-300">
                                                     <div>
                                                         <p className="font-headline font-bold text-teal-900">{bus.name}</p>
                                                         <p className="text-[11px] text-slate-500 font-medium">{bus.description}</p>
@@ -805,7 +805,7 @@ const RequestBus = () => {
                                 </section>
 
                                 {selectedBuses.length > 0 && (
-                                    <section className="bg-slate-50/50 rounded-[3rem] p-6 md:p-10 space-y-10 border border-slate-100">
+                                    <section className="bg-slate-50/50 rounded-2xl p-6 md:p-10 space-y-10 border border-slate-100">
                                         <div className="flex items-center justify-between">
                                             <div className="space-y-1">
                                                 <h3 className="font-headline font-black text-2xl text-teal-950">계산된 예상 청약 상세</h3>
@@ -814,7 +814,7 @@ const RequestBus = () => {
                                         </div>
                                         <div className="space-y-6">
                                             {selectedBuses.map((bus, idx) => (
-                                                <div key={`quote-${bus.id}-${idx}`} className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 space-y-8 animate-fade-in">
+                                                <div key={`quote-${bus.id}-${idx}`} className="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 space-y-8 animate-fade-in">
                                                     <div className="flex justify-between items-center border-b border-slate-50 pb-6">
                                                         <div className="flex items-center gap-4">
                                                             <span className="w-10 h-10 rounded-full bg-teal-800/10 flex items-center justify-center text-teal-800 font-bold text-sm">{String(idx + 1).padStart(2, '0')}</span>
@@ -898,7 +898,7 @@ const RequestBus = () => {
                                 )}
 
                                 <div className="pt-8">
-                                    <button onClick={handleRequestSubmit} className="w-full py-5 px-8 rounded-2xl bg-teal-700 text-white font-headline font-extrabold text-xl shadow-lg hover:shadow-xl hover:shadow-teal-900/20 active:scale-95 transition-all duration-300 flex items-center justify-center gap-3">
+                                    <button onClick={handleRequestSubmit} className="w-full py-4 px-8 rounded-xl bg-primary text-white font-headline font-extrabold text-lg shadow-lg hover:shadow-xl hover:shadow-primary/20 active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-3">
                                         <span>여행 요청하기</span>
                                         <span className="material-symbols-outlined">arrow_forward</span>
                                     </button>

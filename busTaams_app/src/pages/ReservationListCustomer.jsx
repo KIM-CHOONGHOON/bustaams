@@ -68,10 +68,10 @@ const ReservationListCustomer = () => {
                     </div>
                     <div className="flex items-center gap-3">
                         <div 
-                            className="w-11 h-11 rounded-2xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden"
+                            className="w-11 h-11 rounded-xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden"
                             onClick={() => navigate('/user-profile')}
                         >
-                            <div className="w-full h-full rounded-[14px] overflow-hidden bg-slate-50 flex items-center justify-center relative group">
+                            <div className="w-full h-full rounded-lg overflow-hidden bg-slate-50 flex items-center justify-center relative group">
                                 {customerProfile?.profileImage ? (
                                     <img 
                                         alt="Customer Profile" 
@@ -122,7 +122,7 @@ const ReservationListCustomer = () => {
                             <div 
                                 key={res.id}
                                 onClick={() => navigate(`/reservation-detail/${res.id}`)}
-                                className={`group relative bg-white rounded-[4rem] shadow-2xl shadow-teal-900/[0.04] overflow-hidden transition-all duration-700 hover:shadow-teal-900/10 cursor-pointer animate-in fade-in slide-in-from-bottom-12 border border-slate-100/50 ${res.statusCode === 'DONE' ? 'opacity-70 grayscale-[0.3]' : ''}`}
+                                className={`group relative bg-white rounded-2xl shadow-2xl shadow-teal-900/[0.04] overflow-hidden transition-all duration-700 hover:shadow-teal-900/10 cursor-pointer animate-in fade-in slide-in-from-bottom-12 border border-slate-100/50 ${res.statusCode === 'DONE' ? 'opacity-70 grayscale-[0.3]' : ''}`}
                                 style={{ animationDelay: `${idx * 150}ms` }}
                             >
                                 {/* Vertical Status Accent */}
@@ -147,7 +147,7 @@ const ReservationListCustomer = () => {
                                         </h3>
                                         
                                         {/* 운행 노선 (출발지, 경유지, 도착지) 세로 배치 */}
-                                        <div className="bg-slate-50/80 rounded-[2.5rem] p-8 md:p-10 flex flex-col gap-4 border border-slate-100 shadow-inner text-left">
+                                        <div className="bg-slate-50/80 rounded-2xl p-8 md:p-10 flex flex-col gap-4 border border-slate-100 shadow-inner text-left">
                                             {/* 출발지 */}
                                             <div className="flex items-center gap-4">
                                                 <span className="w-16 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] shrink-0">출발지</span>
@@ -186,10 +186,10 @@ const ReservationListCustomer = () => {
                                                 </div>
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                     {res.buses.map((bus, busIdx) => (
-                                                        <div key={busIdx} className="bg-white rounded-[2.5rem] p-6 border border-slate-100 shadow-sm flex items-start justify-between group/bus hover:border-teal-200 transition-all">
+                                                        <div key={busIdx} className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex items-start justify-between group/bus hover:border-teal-200 transition-all">
                                                             <div className="flex items-start gap-5">
                                                                 {/* 기사 프로필 이미지 */}
-                                                                <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-white shadow-md shrink-0">
+                                                                <div className="w-16 h-16 rounded-xl overflow-hidden border-2 border-white shadow-md shrink-0">
                                                                     {bus.driverImage ? (
                                                                         <img 
                                                                             src={bus.driverImage.startsWith('http') ? bus.driverImage : `${import.meta.env.VITE_API_BASE_URL || ''}${bus.driverImage}`} 
@@ -221,7 +221,7 @@ const ReservationListCustomer = () => {
                                                                         e.stopPropagation();
                                                                         if (bus.driverPhone) window.location.href = `tel:${bus.driverPhone}`;
                                                                     }}
-                                                                    className="w-12 h-12 bg-teal-600 text-white rounded-2xl flex items-center justify-center hover:bg-teal-700 transition-all shadow-lg shadow-teal-200"
+                                                                    className="w-12 h-12 bg-teal-600 text-white rounded-xl flex items-center justify-center hover:bg-teal-700 transition-all shadow-lg shadow-teal-200"
                                                                 >
                                                                     <span className="material-symbols-outlined">call</span>
                                                                 </button>
@@ -265,9 +265,9 @@ const ReservationListCustomer = () => {
                                                     </div>
                                                 </div>
 
-                                                <div className="p-6 sm:p-10 bg-slate-50/50 rounded-[2.5rem] border border-slate-100/50 flex flex-col items-center justify-center text-center gap-8">
+                                                <div className="p-6 sm:p-10 bg-slate-50/50 rounded-2xl border border-slate-100/50 flex flex-col items-center justify-center text-center gap-8">
                                                     <div className="flex flex-col items-center gap-3">
-                                                        <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-100">
+                                                        <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center shadow-sm border border-slate-100">
                                                             <span className="material-symbols-outlined text-teal-600 text-2xl">payments</span>
                                                         </div>
                                                         <div>
@@ -281,9 +281,9 @@ const ReservationListCustomer = () => {
                                                     <button 
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            navigate(`/reservation-detail/${res.firstResId}`);
+                                                            navigate(`/reservation-detail/${res.id}`);
                                                         }}
-                                                        className="w-full max-w-[280px] min-h-[58px] bg-gradient-to-r from-teal-700 to-teal-900 hover:from-teal-600 hover:to-teal-800 text-white px-4 py-4 sm:px-6 sm:py-5 rounded-full font-black text-[13px] uppercase tracking-[0.08em] shadow-lg shadow-teal-700/20 hover:scale-[1.03] active:scale-95 transition-all duration-300 italic flex items-center justify-center gap-2.5 whitespace-nowrap"
+                                                        className="w-full max-w-[280px] min-h-[58px] bg-primary hover:bg-primary-container text-white px-4 py-4 sm:px-6 sm:py-5 rounded-xl font-black text-[13px] uppercase tracking-[0.08em] shadow-lg shadow-primary/20 hover:scale-[1.03] active:scale-[0.98] transition-all duration-300 italic flex items-center justify-center gap-2.5 whitespace-nowrap"
                                                     >
                                                         <span className="material-symbols-outlined text-[20px]">visibility</span>
                                                         상세 내역 보기
@@ -296,18 +296,18 @@ const ReservationListCustomer = () => {
                             </div>
                         ))
                     ) : (
-                        <div className="bg-white rounded-[4rem] p-24 flex flex-col items-center justify-center text-center space-y-8 border border-slate-100 shadow-sm">
-                            <div className="w-28 h-28 bg-slate-50 rounded-full flex items-center justify-center text-slate-200 border border-slate-100 shadow-inner">
-                                <span className="material-symbols-outlined text-6xl">event_busy</span>
-                            </div>
-                            <div className="space-y-3">
-                                <h3 className="text-3xl font-black text-slate-800 tracking-tight">예약 내역이 없습니다</h3>
-                                <p className="text-slate-400 font-bold text-lg">새로운 여행을 계획하고 예약을 시작해보세요.</p>
-                            </div>
-                            <button onClick={() => navigate('/customer-dashboard')} className="bg-primary text-white px-12 py-5 rounded-full font-black text-sm shadow-2xl shadow-primary/30 hover:scale-105 active:scale-95 transition-all uppercase tracking-widest">
-                                시작하기
-                            </button>
-                        </div>
+                        <div className="bg-white rounded-2xl p-24 flex flex-col items-center justify-center text-center space-y-8 border border-slate-100 shadow-sm">
+                                                            <div className="w-28 h-28 bg-slate-50 rounded-full flex items-center justify-center text-slate-200 border border-slate-100 shadow-inner">
+                                                                <span className="material-symbols-outlined text-6xl">event_busy</span>
+                                                            </div>
+                                                            <div className="space-y-3">
+                                                                <h3 className="text-3xl font-black text-slate-800 tracking-tight">예약 내역이 없습니다</h3>
+                                                                <p className="text-slate-400 font-bold text-lg">새로운 여행을 계획하고 예약을 시작해보세요.</p>
+                                                            </div>
+                                                            <button onClick={() => navigate('/customer-dashboard')} className="bg-primary text-white px-12 py-5 rounded-xl font-black text-sm shadow-2xl shadow-primary/30 hover:scale-105 active:scale-[0.98] transition-all uppercase tracking-widest">
+                                                                시작하기
+                                                            </button>
+                                                        </div>
                     )}
             </main>
 

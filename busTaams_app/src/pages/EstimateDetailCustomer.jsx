@@ -103,7 +103,7 @@ const EstimateDetailCustomer = () => {
                 <span className="material-symbols-outlined text-6xl text-slate-200 mb-4">error</span>
                 <h2 className="text-2xl font-black text-teal-900 mb-2">{error || '청약 정보를 찾을 수 없습니다.'}</h2>
                 <p className="text-slate-400 mb-6">데이터를 불러오는 중 문제가 발생했습니다.</p>
-                <button onClick={() => navigate(-1)} className="px-8 py-3 bg-primary text-white rounded-full font-black">뒤로 가기</button>
+                <button onClick={() => navigate(-1)} className="px-8 py-3 bg-primary text-white rounded-xl font-black btn-primary">뒤로 가기</button>
             </div>
         );
     }
@@ -114,7 +114,7 @@ const EstimateDetailCustomer = () => {
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-slate-50 shadow-sm">
                 <div className="flex items-center justify-between px-6 h-20 w-full max-w-7xl mx-auto py-4">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => navigate(-1)} className="material-symbols-outlined text-slate-400 hover:bg-slate-50 p-2 rounded-full transition-all">arrow_back</button>
+                        <button onClick={() => navigate(-1)} className="material-symbols-outlined text-slate-400 hover:bg-slate-50 p-2 rounded-xl transition-all">arrow_back</button>
                         <h1 className="font-headline text-lg font-black tracking-tighter text-teal-700 italic">청약 상세 화면</h1>
                     </div>
                 </div>
@@ -125,12 +125,12 @@ const EstimateDetailCustomer = () => {
                     <div className="lg:col-span-8 space-y-16">
                         {/* Driver Profile Section */}
                         <section className="grid grid-cols-1 md:grid-cols-12 gap-10 items-center">
-                            <div className="md:col-span-5 aspect-square rounded-[3rem] overflow-hidden shadow-2xl shadow-teal-900/10 bg-white ring-8 ring-white">
+                            <div className="md:col-span-5 aspect-square rounded-2xl overflow-hidden shadow-2xl shadow-teal-900/10 bg-white ring-8 ring-white">
                                 <img alt="Driver" className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-1000" src={bid.avatar || 'https://via.placeholder.com/300'} />
                             </div>
                             <div className="md:col-span-7 space-y-6 text-left">
                                 <div className="flex items-center gap-3">
-                                    <span className="bg-primary/5 text-primary text-[10px] font-black px-4 py-1.5 rounded-full flex items-center gap-1.5 uppercase tracking-widest border border-primary/10">
+                                    <span className="bg-primary/5 text-primary text-[10px] font-black px-4 py-1.5 rounded-xl flex items-center gap-1.5 uppercase tracking-widest border border-primary/10">
                                         <span className="material-symbols-outlined text-[14px]" style={{fontVariationSettings: "'FILL' 1"}}>verified</span>
                                         Certified Partner
                                     </span>
@@ -143,7 +143,7 @@ const EstimateDetailCustomer = () => {
                                 <div className="grid grid-cols-2 gap-8 py-6 border-y border-slate-100">
                                     <div>
                                         <p className="text-slate-300 text-[10px] font-black uppercase tracking-widest mb-1">상태</p>
-                                        <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${getBusStatusDisplay(bid.status || 'BIDDING').color}`}>
+                                        <span className={`px-4 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest ${getBusStatusDisplay(bid.status || 'BIDDING').color}`}>
                                             {getBusStatusDisplay(bid.status || 'BIDDING').label}
                                         </span>
                                     </div>
@@ -166,15 +166,15 @@ const EstimateDetailCustomer = () => {
                                 </div>
                             </div>
                             <div className="grid grid-cols-12 gap-4 h-[450px]">
-                                <div className="col-span-12 rounded-[3rem] overflow-hidden bg-slate-100 relative group shadow-2xl shadow-teal-900/10">
+                                <div className="col-span-12 rounded-2xl overflow-hidden bg-slate-100 relative group shadow-2xl shadow-teal-900/10">
                                     <img alt="Exterior" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" src={bid.photos?.[0] || 'https://via.placeholder.com/800x450'} />
-                                    <div className="absolute top-8 left-8 bg-black/30 backdrop-blur-md px-5 py-2 rounded-full text-white text-[10px] font-black uppercase tracking-widest border border-white/20">Vehicle View</div>
+                                    <div className="absolute top-8 left-8 bg-black/30 backdrop-blur-md px-5 py-2 rounded-xl text-white text-[10px] font-black uppercase tracking-widest border border-white/20">Vehicle View</div>
                                 </div>
                             </div>
                         </section>
 
                         {/* Vehicle Specs */}
-                        <section className="bg-white rounded-[3rem] p-12 shadow-2xl shadow-teal-900/[0.03] border border-slate-50 space-y-10 text-left">
+                        <section className="bg-white rounded-2xl p-12 shadow-2xl shadow-teal-900/[0.03] border border-slate-50 space-y-10 text-left">
                             <h4 className="text-xl font-black tracking-tight border-b border-slate-50 pb-6 italic">차량 및 보험 상세 정보</h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-8">
                                 <div className="flex justify-between items-center group">
@@ -209,7 +209,7 @@ const EstimateDetailCustomer = () => {
                                 {Array.isArray(bid.amenities) && bid.amenities.map((opt, index) => {
                                     const label = typeof opt === 'object' ? (opt.label || opt.name || '편의시설') : opt;
                                     return (
-                                        <div key={index} className="p-6 rounded-[1.5rem] bg-slate-50 flex flex-col items-center justify-center text-center space-y-3 border-b-4 border-secondary/20">
+                                        <div key={index} className="p-6 rounded-2xl bg-slate-50 flex flex-col items-center justify-center text-center space-y-3 border-b-4 border-secondary/20">
                                             <span className="material-symbols-outlined text-primary text-3xl">star</span>
                                             <span className="text-[10px] font-black uppercase tracking-widest text-on-surface">{label}</span>
                                         </div>
@@ -221,7 +221,7 @@ const EstimateDetailCustomer = () => {
 
                     {/* Right Sticky Sidebar */}
                     <div className="lg:col-span-4">
-                        <aside className="sticky top-28 bg-white p-12 rounded-[3.5rem] shadow-2xl shadow-teal-900/10 border border-slate-50 space-y-10 text-left">
+                        <aside className="sticky top-28 bg-white p-12 rounded-2xl shadow-2xl shadow-teal-900/10 border border-slate-50 space-y-10 text-left">
                             <div className="space-y-2">
                                 <h4 className="text-xs font-black text-slate-300 uppercase tracking-[0.3em]">Estimated Receipt</h4>
                                 <h3 className="text-2xl font-black tracking-tight italic">상세 청약 내역</h3>

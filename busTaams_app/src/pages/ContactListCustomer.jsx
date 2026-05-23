@@ -39,7 +39,7 @@ const ContactListCustomer = () => {
             {/* TopAppBar */}
             <header className="fixed top-0 w-full z-50 bg-white/40 backdrop-blur-3xl border-b border-white/20 py-6">
                 <div className="flex justify-between items-center w-full px-6 max-w-2xl mx-auto">
-                    <button onClick={() => navigate(-1)} className="p-3 bg-white rounded-2xl text-teal-800 shadow-xl shadow-teal-900/5 active:scale-95 transition-all">
+                    <button onClick={() => navigate(-1)} className="p-3 bg-white rounded-xl text-teal-800 shadow-xl shadow-teal-900/5 active:scale-95 transition-all">
                         <span className="material-symbols-outlined text-lg">arrow_back</span>
                     </button>
                     <h1 className="font-headline font-black tracking-tighter text-xl text-teal-900 italic">Inquiry Archive</h1>
@@ -65,14 +65,14 @@ const ContactListCustomer = () => {
                         <article 
                             key={item.id} 
                             onClick={() => navigate('/contact-details')}
-                            className={`group relative bg-white rounded-[2.5rem] p-8 shadow-2xl shadow-teal-900/5 border border-white hover:scale-[1.02] transition-all duration-500 cursor-pointer text-left animate-in fade-in slide-in-from-bottom border-l-8 ${item.isCompleted ? 'border-l-primary' : 'border-l-slate-100 opacity-80'}`}
+                            className={`group relative bg-white rounded-2xl p-8 shadow-2xl shadow-teal-900/5 border border-white hover:scale-[1.02] transition-all duration-500 cursor-pointer text-left animate-in fade-in slide-in-from-bottom border-l-8 ${item.isCompleted ? 'border-l-primary' : 'border-l-slate-100 opacity-80'}`}
                             style={{animationDelay: `${index * 100}ms`}}
                         >
                             <div className="flex justify-between items-start mb-6 text-left">
-                                <span className={`text-[9px] font-black tracking-[0.3em] uppercase px-5 py-2 rounded-full ${item.isCompleted ? 'bg-primary/5 text-primary' : 'bg-slate-50 text-slate-300'}`}>
+                                <span className={`text-[9px] font-black tracking-[0.3em] uppercase px-5 py-2 rounded-xl ${item.isCompleted ? 'bg-primary/5 text-primary' : 'bg-slate-50 text-slate-300'}`}>
                                     {item.category}
                                 </span>
-                                <span className={`text-[8px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest shadow-lg ${item.isCompleted ? 'bg-primary text-white shadow-primary/20' : 'bg-slate-900 text-white shadow-slate-900/20'}`}>
+                                <span className={`text-[8px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest shadow-lg ${item.isCompleted ? 'bg-primary text-white shadow-primary/20' : 'bg-slate-900 text-white shadow-slate-900/20'}`}>
                                     {item.status}
                                 </span>
                             </div>
@@ -95,7 +95,7 @@ const ContactListCustomer = () => {
 
                     {/* End Marker */}
                     <div className="py-20 flex flex-col items-center justify-center opacity-20 grayscale">
-                        <div className="w-16 h-16 rounded-[2rem] bg-slate-100 flex items-center justify-center mb-4 rotate-12">
+                        <div className="w-16 h-16 rounded-xl bg-slate-100 flex items-center justify-center mb-4 rotate-12">
                             <span className="material-symbols-outlined text-3xl">terminal</span>
                         </div>
                         <p className="text-[9px] font-black uppercase tracking-[0.4em] text-slate-400">EndOfProtocol</p>
@@ -107,7 +107,7 @@ const ContactListCustomer = () => {
             <div className="fixed bottom-32 left-0 right-0 px-6 flex justify-center z-40 pointer-events-none">
                 <button 
                     onClick={() => navigate('/contact-customer')}
-                    className="pointer-events-auto flex items-center gap-4 bg-slate-900 text-white px-10 py-6 rounded-full shadow-2xl shadow-slate-900/40 hover:scale-105 hover:bg-primary active:scale-95 transition-all duration-500 group"
+                    className="pointer-events-auto flex items-center gap-4 bg-slate-900 text-white px-10 py-6 rounded-xl shadow-2xl shadow-slate-900/40 hover:scale-105 hover:bg-primary active:scale-95 transition-all duration-500 group btn-secondary"
                 >
                     <span className="material-symbols-outlined group-hover:rotate-180 transition-transform duration-700">add_circle</span>
                     <span className="font-black text-sm uppercase tracking-[0.3em]">Create Inquiry</span>
@@ -115,7 +115,7 @@ const ContactListCustomer = () => {
             </div>
 
             {/* Shared Bottom Nav */}
-            <nav className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 flex justify-around items-center px-4 py-2 bg-white/70 backdrop-blur-3xl text-slate-400 w-[90%] max-w-md mx-auto rounded-full shadow-[0_40px_80px_-20px_rgba(0,0,0,0.1)] border border-white">
+            <nav className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 flex justify-around items-center px-4 py-2 bg-white/70 backdrop-blur-3xl text-slate-400 w-[90%] max-w-md mx-auto rounded-2xl shadow-[0_40px_80px_-20px_rgba(0,0,0,0.1)] border border-white">
                 <button onClick={() => navigate('/customer-dashboard')} className="flex flex-col items-center justify-center px-5 py-2 hover:text-primary transition-all">
                     <span className="material-symbols-outlined">gavel</span>
                     <span className="font-black text-[9px] uppercase tracking-widest mt-1">Auction</span>
@@ -129,7 +129,7 @@ const ContactListCustomer = () => {
                     <span className="material-symbols-outlined">confirmation_number</span>
                     <span className="font-black text-[9px] uppercase tracking-widest mt-1">Trips</span>
                 </button>
-                <button onClick={() => navigate('/profile-customer')} className="flex flex-col items-center justify-center bg-slate-900 text-white rounded-full w-12 h-12 shadow-lg active:scale-90 transition-all">
+                <button onClick={() => navigate('/profile-customer')} className="flex flex-col items-center justify-center bg-slate-900 text-white rounded-xl w-12 h-12 shadow-lg active:scale-90 transition-all">
                     <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1"}}>person</span>
                 </button>
             </nav>

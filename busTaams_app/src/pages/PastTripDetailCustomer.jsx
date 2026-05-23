@@ -82,12 +82,12 @@ const PastTripDetailCustomer = () => {
             <header className="fixed top-0 w-full z-50 bg-white border-b border-slate-100 shadow-sm">
                 <div className="flex items-center justify-between px-6 h-16 w-full max-w-4xl mx-auto">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => navigate(-1)} className="material-symbols-outlined text-teal-700 hover:bg-slate-50 p-2 rounded-full transition-all">arrow_back</button>
+                        <button onClick={() => navigate(-1)} className="material-symbols-outlined text-teal-700 hover:bg-slate-50 p-2 rounded-xl transition-all">arrow_back</button>
                         <h1 className="font-bold text-[17px] text-[#1E293B]">여행 상세</h1>
                     </div>
                     <div className="flex items-center gap-4">
                         <div 
-                            className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center overflow-hidden border border-slate-100 cursor-pointer transition-transform active:scale-95"
+                            className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center overflow-hidden border border-slate-100 cursor-pointer transition-transform active:scale-95"
                             onClick={() => navigate('/profile-customer')}
                         >
                             {profileImage ? (
@@ -167,10 +167,10 @@ const PastTripDetailCustomer = () => {
                 <section className="space-y-6">
                     <div className="flex justify-between items-center px-2">
                         <h2 className="text-xl font-black text-[#1E293B] tracking-tight">여행 정보 요약</h2>
-                        <span className="px-4 py-1.5 rounded-full bg-[#E2E8F0] text-[#64748B] text-[11px] font-black uppercase tracking-wider">여행 완료</span>
+                        <span className="px-4 py-1.5 rounded-xl bg-[#E2E8F0] text-[#64748B] text-[11px] font-black uppercase tracking-wider">여행 완료</span>
                     </div>
                     
-                    <div className="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100 space-y-10 relative overflow-hidden">
+                    <div className="bg-white rounded-2xl p-10 shadow-sm border border-slate-100 space-y-10 relative overflow-hidden">
                         <div className="relative pl-10 space-y-12">
                             {/* Vertical Line */}
                             <div className="absolute left-[11px] top-2 bottom-2 w-[1px] bg-slate-100"></div>
@@ -236,14 +236,14 @@ const PastTripDetailCustomer = () => {
                 {/* Section 2: 배차 및 운전자 정보 */}
                 <section className="space-y-6">
                     <h2 className="text-xl font-black text-[#1E293B] tracking-tight px-2">배차 및 운전자 정보</h2>
-                    <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 relative overflow-hidden">
+                    <div className="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 relative overflow-hidden">
                         <div className="flex items-center justify-between mb-8">
                             <div className="flex items-center gap-5">
                                 <div className="relative">
                                     {detail.driverImage ? (
-                                        <img alt="Captain" className="w-20 h-20 rounded-2xl object-cover" src={`${import.meta.env.VITE_API_BASE_URL || ''}${detail.driverImage}`} />
+                                        <img alt="Captain" className="w-20 h-20 rounded-xl object-cover" src={`${import.meta.env.VITE_API_BASE_URL || ''}${detail.driverImage}`} />
                                     ) : (
-                                        <div className="w-20 h-20 rounded-2xl bg-[#F1F5F9] flex items-center justify-center text-[#94A3B8]">
+                                        <div className="w-20 h-20 rounded-xl bg-[#F1F5F9] flex items-center justify-center text-[#94A3B8]">
                                             <span className="material-symbols-outlined text-[40px]">person</span>
                                         </div>
                                     )}
@@ -257,21 +257,21 @@ const PastTripDetailCustomer = () => {
                                     <p className="text-[13px] text-[#94A3B8] font-bold">{detail.busNo}</p>
                                 </div>
                             </div>
-                            <span className="px-3 py-1 bg-[#F8FAFB] text-[#94A3B8] text-[9px] font-black rounded-full uppercase tracking-widest border border-slate-50">Vehicle 01</span>
+                            <span className="px-3 py-1 bg-[#F8FAFB] text-[#94A3B8] text-[9px] font-black rounded-xl uppercase tracking-widest border border-slate-50">Vehicle 01</span>
                         </div>
 
                         <div className="grid grid-cols-1 gap-3">
-                            <button onClick={() => navigate(`/chat-room/${detail.id}`)} className="w-full py-5 rounded-3xl bg-[#E2E8F0] text-[#475569] font-black text-[14px] flex items-center justify-center gap-3 transition-all active:scale-[0.98]">
+                            <button onClick={() => navigate(`/chat-room/${detail.id}`)} className="w-full py-4 rounded-xl bg-slate-100 text-slate-700 font-black text-[14px] flex items-center justify-center gap-3 transition-all hover:bg-slate-200 active:scale-[0.98]">
                                 <span className="material-symbols-outlined text-[20px]">chat_bubble</span>
                                 실시간 채팅 조회
                             </button>
                             {detail.isReviewed > 0 ? (
-                                <button onClick={() => navigate(`/review-detail/${detail.id}`)} className="w-full py-5 rounded-3xl border border-[#F1F5F9] text-[#475569] font-black text-[14px] flex items-center justify-center gap-3 transition-all active:scale-[0.98]">
+                                <button onClick={() => navigate(`/review-detail/${detail.id}`)} className="w-full py-4 rounded-xl border border-slate-200 text-slate-700 font-black text-[14px] flex items-center justify-center gap-3 transition-all hover:bg-slate-50 active:scale-[0.98]">
                                     <span className="material-symbols-outlined text-[18px] text-[#F97316]" style={{fontVariationSettings: "'FILL' 1"}}>star</span>
                                     평점 조회 ({detail.rating || '4.9'})
                                 </button>
                             ) : (
-                                <button onClick={() => navigate(`/add-review/${detail.id}`)} className="w-full py-5 rounded-3xl bg-[#0D6B5E] text-white font-black text-[14px] flex items-center justify-center gap-3 shadow-lg shadow-teal-900/10 transition-all active:scale-[0.98]">
+                                <button onClick={() => navigate(`/add-review/${detail.id}`)} className="w-full py-4 rounded-xl bg-[#0D6B5E] text-white font-black text-[14px] flex items-center justify-center gap-3 shadow-lg shadow-teal-900/10 transition-all hover:bg-teal-800 active:scale-[0.98]">
                                     <span className="material-symbols-outlined text-[18px]">edit_note</span>
                                     평점/감사글 작성
                                 </button>
@@ -283,13 +283,13 @@ const PastTripDetailCustomer = () => {
                 {/* Section 3: 결제 내역 상세 */}
                 <section className="space-y-6">
                     <h2 className="text-xl font-black text-[#1E293B] tracking-tight px-2">결제 내역 상세</h2>
-                    <div className="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100 space-y-8">
+                    <div className="bg-white rounded-2xl p-10 shadow-sm border border-slate-100 space-y-8">
                         <div className="flex justify-between items-center py-2">
                             <span className="text-[16px] font-black text-[#1E293B]">청약 요청 금액</span>
                             <span className="text-[20px] font-black text-[#1E293B]">₩ {totalPrice.toLocaleString()}</span>
                         </div>
 
-                        <div className="bg-[#0D6B5E] p-10 rounded-[2rem] shadow-xl shadow-teal-900/10 flex items-center justify-between text-white relative overflow-hidden">
+                        <div className="bg-[#0D6B5E] p-10 rounded-2xl shadow-xl shadow-teal-900/10 flex items-center justify-between text-white relative overflow-hidden">
                             <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl"></div>
                             <div className="space-y-1">
                                 <p className="text-[10px] font-black text-white/50 uppercase tracking-[0.2em]">Final Total Payment</p>

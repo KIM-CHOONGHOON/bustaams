@@ -89,7 +89,7 @@ const SubmitReviewCustomer = () => {
                     <div className="flex items-center gap-4">
                         <button 
                             onClick={() => navigate(-1)} 
-                            className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-50 text-teal-700 hover:bg-teal-50 transition-all duration-300 group"
+                            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 text-teal-700 hover:bg-teal-50 transition-all duration-300 group"
                         >
                             <span className="material-symbols-outlined text-2xl group-hover:-translate-x-0.5 transition-transform">close</span>
                         </button>
@@ -105,7 +105,7 @@ const SubmitReviewCustomer = () => {
                         <Avatar 
                             profileImage={profileImage}
                             imageVersion={imageVersion}
-                            className="w-11 h-11 rounded-2xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden flex items-center justify-center"
+                            className="w-11 h-11 rounded-xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden flex items-center justify-center"
                             onClick={() => navigate('/user-profile')}
                         />
                     </div>
@@ -114,9 +114,9 @@ const SubmitReviewCustomer = () => {
 
             <main className="max-w-xl mx-auto px-6 pt-24 space-y-10">
                 {/* Trip Info Summary */}
-                <section className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 space-y-4">
+                <section className="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 space-y-4">
                     <div className="flex justify-between items-center">
-                        <span className="px-3 py-1 rounded-full bg-teal-50 text-teal-700 text-[10px] font-black uppercase tracking-wider">Reviewing Trip</span>
+                        <span className="px-3 py-1 rounded-xl bg-teal-50 text-teal-700 text-[10px] font-black uppercase tracking-wider">Reviewing Trip</span>
                         <span className="text-[12px] text-slate-400 font-bold">{detail?.date}</span>
                     </div>
                     <h2 className="text-[20px] font-black text-slate-800 tracking-tight">{detail?.title || '나의 버스 여행'}</h2>
@@ -131,8 +131,8 @@ const SubmitReviewCustomer = () => {
                 </section>
 
                 {/* Driver Summary */}
-                <section className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 flex items-center gap-6 animate-in fade-in slide-in-from-top duration-700">
-                    <div className="w-20 h-20 rounded-3xl bg-[#F1F5F9] overflow-hidden shadow-inner border border-slate-50">
+                <section className="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 flex items-center gap-6 animate-in fade-in slide-in-from-top duration-700">
+                    <div className="w-20 h-20 rounded-xl bg-[#F1F5F9] overflow-hidden shadow-inner border border-slate-50">
                         {detail?.driverImage ? (
                             <img src={`${import.meta.env.VITE_API_BASE_URL || ''}${detail.driverImage}`} className="w-full h-full object-cover" alt="Driver" />
                         ) : (
@@ -183,7 +183,7 @@ const SubmitReviewCustomer = () => {
                         value={comment}
                         onChange={(e) => setComment(e.target.value)}
                         placeholder="기사님께 따뜻한 감사 인사를 전해주세요. 작성해주신 내용은 기사님께 큰 힘이 됩니다."
-                        className="w-full bg-white border border-slate-200 rounded-[2rem] p-8 text-[16px] font-bold text-[#1E293B] placeholder:text-[#CBD5E1] focus:ring-4 focus:ring-[#0F766E]/5 focus:border-[#0F766E] transition-all min-h-[240px] resize-none"
+                        className="w-full bg-white border border-slate-200 rounded-xl p-6 text-[16px] font-bold text-[#1E293B] placeholder:text-[#CBD5E1] focus:ring-4 focus:ring-[#0F766E]/5 focus:border-[#0F766E] transition-all min-h-[240px] resize-none"
                     />
                 </section>
 
@@ -192,7 +192,7 @@ const SubmitReviewCustomer = () => {
                     <button 
                         onClick={handleSubmit}
                         disabled={submitting}
-                        className={`w-full py-6 rounded-full font-black text-[16px] flex items-center justify-center gap-3 shadow-xl transition-all active:scale-[0.98] ${submitting ? 'bg-slate-200 text-slate-400' : 'bg-[#0F766E] text-white shadow-teal-900/20 hover:bg-[#0D6B5E]'}`}
+                        className={`w-full py-4 rounded-xl font-black text-[16px] flex items-center justify-center gap-3 shadow-xl transition-all active:scale-[0.98] ${submitting ? 'bg-slate-200 text-slate-400' : 'bg-[#0F766E] text-white shadow-teal-900/20 hover:bg-[#0D6B5E]'}`}
                     >
                         {submitting ? (
                             <>

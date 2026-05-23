@@ -12,7 +12,7 @@ const DriverReviewMgmt = () => {
                     <span className="material-symbols-outlined text-3xl hover:opacity-80 transition-opacity cursor-pointer">menu</span>
                     <span className="text-teal-900 font-black tracking-tighter text-[24px]">busTaams</span>
                 </div>
-                <div className="w-10 h-10 rounded-full overflow-hidden shadow-lg border-2 border-primary-fixed">
+                <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg border-2 border-primary-fixed">
                     <img alt="User" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDFDD5rwLaRuvQw9Wg94v6vrciF6SrnH2GXwWQr7Q1b-9G2k6Wk60WMXSH7DwhWreGd5RePOcqdbLfOAbMABfrl2eWjZVnLvgw3t12IXZdnvnD9J8K437wDRuCrU7IhzU5_BQVTwzk7qdYOQUuTxL8WUxixRHIriG7YVg-VCW6XWHyTsKy3Hh-7BKnlNoDK70JyD-zCcbYCwtS2KrEB5-JIDbuDzbSxbiyUNeD1-Jg69z1RA3cbVzzKmXhxaAwmXEQai_KkU8hvrEw" />
                 </div>
             </header>
@@ -32,7 +32,7 @@ const DriverReviewMgmt = () => {
 
                 {/* Stats Bento Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
-                    <div className="col-span-1 md:col-span-2 bg-white rounded-xl p-8 shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)] flex flex-col justify-between">
+                    <div className="col-span-1 md:col-span-2 bg-white rounded-2xl p-8 shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)] flex flex-col justify-between">
                         <div>
                             <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-outline mb-8">나의 평점</h3>
                             <div className="flex items-baseline gap-2">
@@ -47,7 +47,7 @@ const DriverReviewMgmt = () => {
                             <span className="ml-4 font-bold text-on-surface-variant text-[14px]">글로벌 드라이버 평균</span>
                         </div>
                     </div>
-                    <div className="bg-gradient-to-br from-primary to-primary-container rounded-xl p-8 text-white shadow-xl flex flex-col justify-between">
+                    <div className="bg-gradient-to-br from-primary to-primary-container rounded-2xl p-8 text-white shadow-xl flex flex-col justify-between">
                         <span className="material-symbols-outlined text-4xl opacity-50">quick_reference_all</span>
                         <div>
                             <div className="text-4xl font-black mb-1 text-[32px]">92%</div>
@@ -60,11 +60,11 @@ const DriverReviewMgmt = () => {
                     <h2 className="text-2xl font-black text-on-surface tracking-tight mb-8">최근 고객 감사글</h2>
                     
                     {/* Feedback Card 1 */}
-                    <div className="group bg-white rounded-xl p-8 relative shadow-sm hover:shadow-lg transition-all duration-500 overflow-hidden">
+                    <div className="group bg-white rounded-2xl p-8 relative shadow-sm hover:shadow-lg transition-all duration-500 overflow-hidden">
                         <div className="absolute left-0 top-0 bottom-0 w-1 bg-secondary opacity-0 group-hover:opacity-100 transition-opacity"></div>
                         <div className="flex flex-col md:flex-row gap-8">
                             <div className="flex-shrink-0">
-                                <div className="w-16 h-16 rounded-full bg-surface-container-high flex items-center justify-center font-black text-primary text-xl">JD</div>
+                                <div className="w-16 h-16 rounded-xl bg-surface-container-high flex items-center justify-center font-black text-primary text-xl">JD</div>
                             </div>
                             <div className="flex-grow">
                                 <div className="flex justify-between items-start mb-4">
@@ -77,7 +77,7 @@ const DriverReviewMgmt = () => {
                                             <span className="text-[10px] font-bold text-outline ml-2 uppercase tracking-tighter">인증된 이용객 • 2시간 전</span>
                                         </div>
                                     </div>
-                                    <button className="hidden md:block bg-gradient-to-br from-primary to-primary-container text-white px-8 py-3 rounded-full font-bold text-sm tracking-wide shadow-lg">답글 등록</button>
+                                    <button className="hidden md:block bg-gradient-to-br from-primary to-primary-container text-white px-8 py-3 rounded-xl font-bold text-sm tracking-wide shadow-lg">답글 등록</button>
                                 </div>
                                 <p className="text-on-surface-variant leading-relaxed text-lg font-medium italic mb-6 text-[16px]">
                                     "기사님이 굉장히 전문적이셨고 버스 상태도 신차처럼 깔끔했습니다. 프리미엄 이동 경험을 입찰 방식으로 이용할 수 있다는 게 정말 혁신적이네요. 꼭 다시 이용하겠습니다."
@@ -87,11 +87,11 @@ const DriverReviewMgmt = () => {
                     </div>
 
                     {/* Feedback Card 2 with Reply */}
-                    <div className="group bg-white rounded-xl p-8 relative shadow-sm hover:shadow-lg transition-all duration-500 overflow-hidden">
+                    <div className="group bg-white rounded-2xl p-8 relative shadow-sm hover:shadow-lg transition-all duration-500 overflow-hidden">
                         <div className="absolute left-0 top-0 bottom-0 w-1 bg-secondary opacity-0 group-hover:opacity-100 transition-opacity"></div>
                         <div className="flex flex-col md:flex-row gap-8">
                             <div className="flex-shrink-0">
-                                <img alt="User" className="w-16 h-16 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBV3f0_kHkQUCn5rvt77iRle-ZIROBZI4hcQ0IWes66-z0nQRmJn1ZNlCHoZXzCZJFVvmb52nOOtmUWAnGZFQjM0zFxFD8nIK14cl3O7mj_5Lp9u2F9XdZiusHjVVqHVE9j_uJ3eTnaLpZ5bACp13KyyPrWHh9gSoSqpssK5P9ekXs_NKALiFu5WglXmelLEiL8sus7i5ntEVDDhWX2Gn4t4PfE5j2iKxVn7EoT7mtulPzIgxpYZVumV-0mtWNcaIVgOJzzp-UwnTI" />
+                                <img alt="User" className="w-16 h-16 rounded-xl object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBV3f0_kHkQUCn5rvt77iRle-ZIROBZI4hcQ0IWes66-z0nQRmJn1ZNlCHoZXzCZJFVvmb52nOOtmUWAnGZFQjM0zFxFD8nIK14cl3O7mj_5Lp9u2F9XdZiusHjVVqHVE9j_uJ3eTnaLpZ5bACp13KyyPrWHh9gSoSqpssK5P9ekXs_NKALiFu5WglXmelLEiL8sus7i5ntEVDDhWX2Gn4t4PfE5j2iKxVn7EoT7mtulPzIgxpYZVumV-0mtWNcaIVgOJzzp-UwnTI" />
                             </div>
                             <div className="flex-grow">
                                 <div className="flex justify-between items-start mb-4">
@@ -105,7 +105,7 @@ const DriverReviewMgmt = () => {
                                             <span className="text-[10px] font-bold text-outline ml-2 uppercase tracking-tighter">인증된 이용객 • 5시간 전</span>
                                         </div>
                                     </div>
-                                    <button className="hidden md:block bg-gradient-to-br from-primary to-primary-container text-white px-8 py-3 rounded-full font-bold text-sm tracking-wide shadow-lg">답글 등록</button>
+                                    <button className="hidden md:block bg-gradient-to-br from-primary to-primary-container text-white px-8 py-3 rounded-xl font-bold text-sm tracking-wide shadow-lg">답글 등록</button>
                                 </div>
                                 <p className="text-on-surface-variant leading-relaxed text-lg font-medium italic mb-6 text-[16px]">
                                     "좋은 서비스였지만 에어컨 온도가 조금 높았던 것 같아요. 그래도 일반 노선 버스보다 훨씬 나은 이동 수단입니다."
@@ -126,7 +126,7 @@ const DriverReviewMgmt = () => {
             </main>
 
             {/* BottomNavBar */}
-            <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-md rounded-full bg-white/80 backdrop-blur-xl shadow-2xl flex justify-around items-center p-2 z-50 h-16">
+            <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-md rounded-2xl bg-white/80 backdrop-blur-xl shadow-2xl flex justify-around items-center p-2 z-50 h-16">
                 <button onClick={() => navigate('/driver-estimate-list')} className="flex flex-col items-center justify-center text-slate-500 px-4">
                     <span className="material-symbols-outlined mb-1">gavel</span>
                     <span className="text-[10px] font-bold uppercase tracking-widest">경매</span>
@@ -139,7 +139,7 @@ const DriverReviewMgmt = () => {
                     <span className="material-symbols-outlined mb-1">payments</span>
                     <span className="text-[10px] font-bold uppercase tracking-widest text-[8px]">입찰내역</span>
                 </button>
-                <button onClick={() => navigate('/driver-dashboard')} className="flex flex-col items-center justify-center bg-gradient-to-br from-teal-600 to-teal-800 text-white rounded-full w-12 h-12 shadow-lg">
+                <button onClick={() => navigate('/driver-dashboard')} className="flex flex-col items-center justify-center bg-gradient-to-br from-teal-600 to-teal-800 text-white rounded-xl w-12 h-12 shadow-lg">
                     <span className="material-symbols-outlined">person</span>
                 </button>
             </nav>

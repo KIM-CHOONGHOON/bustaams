@@ -10,7 +10,7 @@ const FailBidDetailDriver = () => {
             <header className="fixed top-0 w-full z-50 bg-white/40 backdrop-blur-3xl border-b border-white/20 py-6">
                 <div className="flex justify-between items-center w-full px-6 max-w-7xl mx-auto">
                     <div className="flex items-center gap-6 text-left">
-                        <button onClick={() => navigate(-1)} className="p-3 bg-white rounded-2xl text-teal-800 shadow-xl shadow-teal-900/5 active:scale-95 transition-all">
+                        <button onClick={() => navigate(-1)} className="p-3 bg-white rounded-xl text-teal-800 shadow-xl shadow-teal-900/5 active:scale-95 transition-all">
                             <span className="material-symbols-outlined text-lg">arrow_back</span>
                         </button>
                         <h1 className="font-headline font-black tracking-tighter text-3xl text-teal-900 italic uppercase">Auction Audit</h1>
@@ -26,14 +26,14 @@ const FailBidDetailDriver = () => {
                         <h2 className="font-headline text-5xl font-black text-primary leading-[0.85] tracking-tighter italic uppercase text-left">
                             2024년 <br/><span className="text-slate-200 underline decoration-slate-200/20 underline-offset-[8px]">추계 워크숍.</span>
                         </h2>
-                        <div className="bg-slate-900 text-white px-5 py-2 rounded-full text-[9px] font-black uppercase tracking-widest italic border border-white/10 shrink-0">
+                        <div className="bg-slate-900 text-white px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest italic border border-white/10 shrink-0">
                             Closed Entry (유찰)
                         </div>
                     </div>
                 </section>
 
                 {/* Journey Summary Card */}
-                <section className="bg-white rounded-[3.5rem] p-12 shadow-2xl shadow-teal-900/5 border border-white relative overflow-hidden text-left group">
+                <section className="bg-white rounded-2xl p-12 shadow-2xl shadow-teal-900/5 border border-white relative overflow-hidden text-left group">
                     <div className="absolute top-0 right-0 p-12 opacity-5 group-hover:rotate-12 transition-transform duration-1000">
                         <span className="material-symbols-outlined text-[8rem]">history</span>
                     </div>
@@ -70,14 +70,14 @@ const FailBidDetailDriver = () => {
                 <section className="space-y-8 text-left">
                     <h3 className="text-2xl font-black italic uppercase tracking-tighter text-primary px-4 text-left">Pricing Breakdown Analysis</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
-                        <div className="bg-slate-50 rounded-[2.5rem] p-10 relative overflow-hidden group hover:bg-white hover:shadow-2xl hover:shadow-teal-900/5 transition-all text-left">
+                        <div className="bg-slate-50 rounded-xl p-10 relative overflow-hidden group hover:bg-white hover:shadow-2xl hover:shadow-teal-900/5 transition-all text-left">
                             <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform">
                                 <span className="material-symbols-outlined text-6xl">person</span>
                             </div>
                             <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.3em] mb-4 italic">Client Target Budget</p>
                             <p className="text-3xl font-black italic headline tracking-tighter text-primary leading-none text-left">₩1,500,000</p>
                         </div>
-                        <div className="bg-primary rounded-[2.5rem] p-10 relative overflow-hidden shadow-2xl shadow-primary/30 group hover:scale-[1.02] transition-all text-left">
+                        <div className="bg-primary rounded-xl p-10 relative overflow-hidden shadow-2xl shadow-primary/30 group hover:scale-[1.02] transition-all text-left">
                             <div className="absolute top-0 right-0 p-8 opacity-20 group-hover:rotate-12 transition-transform">
                                 <span className="material-symbols-outlined text-6xl text-white">gavel</span>
                             </div>
@@ -94,8 +94,8 @@ const FailBidDetailDriver = () => {
                 {/* Fleet Proposal */}
                 <section className="space-y-8 text-left">
                     <h3 className="text-2xl font-black italic uppercase tracking-tighter text-primary px-4 text-left">Proposed Fleet Intel</h3>
-                    <div className="bg-white border-2 border-slate-50 rounded-[3.5rem] p-4 text-left shadow-2xl shadow-teal-900/5 group">
-                        <div className="aspect-video w-full rounded-[2.5rem] overflow-hidden bg-slate-50 border-8 border-white shadow-inner relative">
+                    <div className="bg-white border-2 border-slate-50 rounded-2xl p-4 text-left shadow-2xl shadow-teal-900/5 group">
+                        <div className="aspect-video w-full rounded-xl overflow-hidden bg-slate-50 border-8 border-white shadow-inner relative">
                             <img className="w-full h-full object-cover grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-1000 group-hover:scale-105" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCuRj_K06co_jZ87A_BB-ZBlL4FoyNXgCkIIcxx5_ta7XaSKskpNi-Mw3MzbNE-9RqMUZZw8MPpYUOmQOTNrWVRpv-10-iL5gR2jYh8Q5vkgxqFDJXqPLlXukOtfJWqPhd75Nms8riAj1F2fSmWaFdZIOKf01WKFutbBAFA5RvyGjRAU6MyAjKPwMO3Jqfjq5OPhUD_OqYBb_aM-8knorNt3f9kBvnseh1jdRqh8XzYph-MQePxD8PDRAhfm_cEahlgcyhTboIuKIY" />
                             <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center opacity-100 group-hover:opacity-0 transition-opacity duration-700">
                                 <span className="text-white font-black italic text-xl uppercase tracking-[0.4em]">Audit Grayscale Mode</span>
@@ -108,7 +108,7 @@ const FailBidDetailDriver = () => {
                             </div>
                             <div className="flex flex-wrap gap-3 text-left">
                                 {['WIFI', 'USB CHARGER', 'RECLINING', 'VOD'].map(tag => (
-                                    <span key={tag} className="px-4 py-2 bg-slate-50 rounded-full text-[8px] font-black text-slate-400 uppercase tracking-widest italic border border-slate-100">
+                                    <span key={tag} className="px-4 py-2 bg-slate-50 rounded-xl text-[8px] font-black text-slate-400 uppercase tracking-widest italic border border-slate-100">
                                         {tag}
                                     </span>
                                 ))}
@@ -119,7 +119,7 @@ const FailBidDetailDriver = () => {
 
                 {/* Final Action */}
                 <section className="pt-10 text-left pb-24">
-                    <button onClick={() => navigate('/estimate-list-driver')} className="w-full py-8 rounded-[2.5rem] bg-gradient-to-br from-primary to-teal-800 text-white font-black text-sm italic uppercase tracking-[0.4em] shadow-2xl shadow-primary/30 hover:scale-[1.02] active:scale-95 transition-all italic text-center">
+                    <button onClick={() => navigate('/estimate-list-driver')} className="w-full py-4 rounded-xl bg-gradient-to-br from-primary to-teal-800 text-white font-black text-sm italic uppercase tracking-[0.4em] shadow-2xl shadow-primary/30 hover:scale-[1.02] active:scale-95 transition-all italic text-center">
                         Explore Active Requests 다른 요청 확인
                     </button>
                     <p className="text-center text-[9px] font-black text-slate-300 mt-6 uppercase tracking-widest italic">
@@ -127,9 +127,9 @@ const FailBidDetailDriver = () => {
                     </p>
                 </section>
             </main>
-
+ 
             {/* Bottom Nav */}
-            <nav className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 flex justify-around items-center px-4 py-2 bg-slate-900 text-slate-500 w-[90%] max-w-lg mx-auto rounded-full shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] border border-white/10">
+            <nav className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 flex justify-around items-center px-4 py-2 bg-slate-900 text-slate-500 w-[90%] max-w-lg mx-auto rounded-2xl shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] border border-white/10">
                 <button onClick={() => navigate('/driver-main')} className="flex flex-col items-center justify-center px-5 py-2 hover:text-white transition-all">
                     <span className="material-symbols-outlined">dashboard</span>
                     <span className="font-black text-[9px] uppercase tracking-widest mt-1">Home</span>

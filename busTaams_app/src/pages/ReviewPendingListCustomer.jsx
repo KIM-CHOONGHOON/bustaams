@@ -63,7 +63,7 @@ const ReviewPendingListCustomer = () => {
                     <div className="flex items-center gap-4">
                         <button 
                             onClick={() => navigate(-1)} 
-                            className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-50 text-teal-700 hover:bg-teal-50 transition-all duration-300 group"
+                            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 text-teal-700 hover:bg-teal-50 transition-all duration-300 group"
                         >
                             <span className="material-symbols-outlined text-2xl group-hover:-translate-x-0.5 transition-transform">arrow_back</span>
                         </button>
@@ -79,7 +79,7 @@ const ReviewPendingListCustomer = () => {
                         <Avatar 
                             profileImage={profileImage}
                             imageVersion={imageVersion}
-                            className="w-11 h-11 rounded-2xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden flex items-center justify-center"
+                            className="w-11 h-11 rounded-xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden flex items-center justify-center"
                             onClick={() => navigate('/profile-customer')}
                         />
                     </div>
@@ -100,18 +100,18 @@ const ReviewPendingListCustomer = () => {
                 {/* List Section */}
                 <div className="space-y-6">
                     {missions.length === 0 ? (
-                        <div className="bg-white rounded-[2rem] p-12 text-center border border-dashed border-slate-200">
+                        <div className="bg-white rounded-2xl p-12 text-center border border-dashed border-slate-200">
                             <span className="material-symbols-outlined text-slate-200 text-6xl mb-4">rate_review</span>
                             <p className="text-slate-400 font-bold">작성 대기 중인 평점이 없습니다.</p>
                         </div>
                     ) : (
                         missions.map((mission) => (
-                            <div key={mission.id} className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 space-y-6 relative overflow-hidden group hover:shadow-xl hover:shadow-teal-900/5 transition-all duration-500">
+                            <div key={mission.id} className="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 space-y-6 relative overflow-hidden group hover:shadow-xl hover:shadow-teal-900/5 transition-all duration-500">
                                 {/* Accent Line */}
                                 <div className="absolute top-0 left-0 w-1.5 h-full bg-[#92400E]"></div>
                                 
                                 <div className="flex justify-between items-center px-1">
-                                    <span className="px-4 py-1.5 rounded-full bg-[#F1F5F9] text-[#64748B] text-[11px] font-black uppercase tracking-wider">여행 완료</span>
+                                    <span className="px-4 py-1.5 rounded-xl bg-slate-100 text-[#64748B] text-[11px] font-black uppercase tracking-wider">여행 완료</span>
                                 </div>
 
                                 <div className="space-y-4 px-1">
@@ -130,8 +130,8 @@ const ReviewPendingListCustomer = () => {
                                     </div>
                                 </div>
 
-                                <div className="bg-[#F8FAFB] p-5 rounded-3xl flex items-center gap-4">
-                                    <div className="w-14 h-14 rounded-2xl bg-white shadow-sm overflow-hidden flex items-center justify-center">
+                                <div className="bg-[#F8FAFB] p-5 rounded-xl flex items-center gap-4">
+                                    <div className="w-14 h-14 rounded-xl bg-white shadow-sm overflow-hidden flex items-center justify-center">
                                         {mission.driverImage ? (
                                             <img 
                                                 src={`${import.meta.env.VITE_API_BASE_URL || ''}${mission.driverImage}`} 
@@ -152,7 +152,7 @@ const ReviewPendingListCustomer = () => {
 
                                 <button 
                                     onClick={() => navigate(`/add-review/${mission.id}`)}
-                                    className="w-full py-5 rounded-full bg-[#0D6B5E] text-white font-black text-[15px] flex items-center justify-center gap-3 shadow-lg shadow-teal-900/10 active:scale-[0.98] transition-all"
+                                    className="w-full py-4 rounded-xl bg-[#0D6B5E] hover:bg-teal-800 text-white font-black text-[15px] flex items-center justify-center gap-3 shadow-lg shadow-teal-900/10 active:scale-[0.98] transition-all"
                                 >
                                     <span>평점 작성하기</span>
                                     <span className="material-symbols-outlined text-[18px]">edit</span>

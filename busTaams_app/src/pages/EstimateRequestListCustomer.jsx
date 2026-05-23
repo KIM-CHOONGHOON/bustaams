@@ -100,14 +100,14 @@ const EstimateRequestListCustomer = () => {
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl shadow-[0_20px_40px_rgba(0,104,95,0.04)] py-4">
                 <div className="flex items-center justify-between px-6 max-w-7xl mx-auto w-full">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-full scale-95 active:scale-90 duration-200">
+                        <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-xl scale-95 active:scale-90 duration-200">
                             <span className="material-symbols-outlined text-2xl">arrow_back</span>
                         </button>
                         <h1 className="text-xl font-bold text-teal-900 tracking-tight">{info.title}</h1>
                     </div>
                     <div className="flex items-center gap-4">
                         <div 
-                            className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors shadow-sm"
+                            className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors shadow-sm"
                             onClick={() => navigate('/profile-customer')}
                         >
                             {profileImage ? (
@@ -137,7 +137,7 @@ const EstimateRequestListCustomer = () => {
             <main className="max-w-4xl mx-auto px-6 pt-24 pb-32">
                 {/* Header Section */}
                 <section className="mb-8 space-y-2">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white shadow-sm border border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-white shadow-sm border border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
                         <span className={`w-2 h-2 rounded-full ${typeParam === 'progress' ? 'bg-teal-500' : 'bg-orange-500'}`}></span>
                         {info.chip}
                     </div>
@@ -156,7 +156,7 @@ const EstimateRequestListCustomer = () => {
                         {requests.map((req) => (
                             <div 
                                 key={req.reqUuid}
-                                className="group bg-white rounded-[2.5rem] p-8 shadow-[0_10px_40px_rgba(30,41,59,0.04)] border border-slate-100 hover:shadow-2xl hover:translate-y-[-4px] transition-all relative overflow-hidden"
+                                className="group bg-white rounded-2xl p-8 shadow-[0_10px_40px_rgba(30,41,59,0.04)] border border-slate-100 hover:shadow-2xl hover:translate-y-[-4px] transition-all relative overflow-hidden"
                             >
                                 <div className="flex justify-between items-start mb-6">
                                     <div className="space-y-4 flex-1">
@@ -166,7 +166,7 @@ const EstimateRequestListCustomer = () => {
                                                     <span className="material-symbols-outlined text-teal-600 text-sm">event</span>
                                                     <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{req.startDt}</p>
                                                 </div>
-                                                <div className={`px-3 py-1 rounded-full text-[10px] font-black border ${getRequestStatus(req.status).color}`}>
+                                                <div className={`px-3 py-1 rounded-xl text-[10px] font-black border ${getRequestStatus(req.status).color}`}>
                                                     {getRequestStatus(req.status).label}
                                                 </div>
                                             </div>
@@ -275,7 +275,7 @@ const EstimateRequestListCustomer = () => {
                                                             <p className="text-sm font-black text-slate-900">
                                                                 {bus.reqAmt ? `${Number(bus.reqAmt).toLocaleString()}원` : '금액 미정'}
                                                             </p>
-                                                            <div className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${statusInfo.color}`}>
+                                                            <div className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest ${statusInfo.color}`}>
                                                                 {statusInfo.label.replace(/\./g, '')}
                                                             </div>
                                                         </div>
@@ -291,12 +291,12 @@ const EstimateRequestListCustomer = () => {
                                 <div className="mt-8 flex gap-3">
                                     <button 
                                         onClick={() => navigate(`/${typeParam === 'waiting' ? 'approval-list' : 'estimate-list'}?reqId=${req.reqUuid}`)}
-                                        className={`flex-1 ${typeParam === 'waiting' ? 'bg-orange-600' : 'bg-teal-700'} text-white py-4 rounded-2xl font-black text-sm hover:opacity-90 active:scale-95 transition-all shadow-lg`}
+                                        className={`flex-1 ${typeParam === 'waiting' ? 'bg-orange-600' : 'bg-teal-700'} text-white py-4 rounded-xl font-black text-sm hover:opacity-90 active:scale-95 transition-all shadow-lg btn-primary`}
                                     >
                                         {typeParam === 'waiting' ? '승인 처리하기' : '상세 청약 확인'}
                                     </button>
                                     <button 
-                                        className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition-all"
+                                        className="w-14 h-14 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition-all btn-secondary"
                                     >
                                         <span className="material-symbols-outlined">more_horiz</span>
                                     </button>
@@ -305,8 +305,8 @@ const EstimateRequestListCustomer = () => {
                         ))}
                     </div>
                 ) : (
-                    <div className="bg-white rounded-[2.5rem] p-12 flex flex-col items-center justify-center text-center space-y-6 shadow-sm border border-slate-100">
-                        <div className={`w-20 h-20 ${info.bgColor} rounded-full flex items-center justify-center ${info.color}`}>
+                    <div className="bg-white rounded-2xl p-12 flex flex-col items-center justify-center text-center space-y-6 shadow-sm border border-slate-100">
+                        <div className={`w-20 h-20 ${info.bgColor} rounded-2xl flex items-center justify-center ${info.color}`}>
                             <span className="material-symbols-outlined text-4xl">{info.icon}</span>
                         </div>
                         <div>
@@ -315,7 +315,7 @@ const EstimateRequestListCustomer = () => {
                         </div>
                         <button 
                             onClick={() => navigate('/request-bus')}
-                            className="bg-teal-700 text-white px-8 py-3 rounded-xl font-black text-sm shadow-lg shadow-teal-900/20"
+                            className="bg-teal-700 text-white px-8 py-3 rounded-xl font-black text-sm shadow-lg shadow-teal-900/20 btn-primary"
                         >
                             첫 청약 요청 등록하기
                         </button>

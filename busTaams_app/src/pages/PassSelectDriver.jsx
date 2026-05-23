@@ -87,10 +87,10 @@ const PassSelectDriver = () => {
             cancelButtonText: '취소',
             background: '#ffffff',
             customClass: {
-                popup: 'rounded-[2rem] font-body',
+                popup: 'rounded-2xl font-body',
                 title: 'text-primary font-black italic uppercase tracking-tight',
-                confirmButton: 'rounded-full px-10 py-4 uppercase font-black text-[10px] tracking-widest',
-                cancelButton: 'rounded-full px-10 py-4 uppercase font-black text-[10px] tracking-widest'
+                confirmButton: 'rounded-xl px-10 py-4 uppercase font-black text-[10px] tracking-widest',
+                cancelButton: 'rounded-xl px-10 py-4 uppercase font-black text-[10px] tracking-widest'
             }
         });
 
@@ -104,7 +104,7 @@ const PassSelectDriver = () => {
                         icon: 'success',
                         confirmButtonColor: '#00695C',
                         customClass: {
-                            popup: 'rounded-[2rem] font-body',
+                            popup: 'rounded-2xl font-body',
                             title: 'text-primary font-black italic uppercase tracking-tight'
                         }
                     });
@@ -129,9 +129,9 @@ const PassSelectDriver = () => {
             confirmButtonText: '해지하기',
             cancelButtonText: '취소',
             customClass: {
-                popup: 'rounded-[2rem] font-body',
-                confirmButton: 'rounded-full px-8 py-3 uppercase font-bold text-[11px]',
-                cancelButton: 'rounded-full px-8 py-3 uppercase font-bold text-[11px]'
+                popup: 'rounded-2xl font-body',
+                confirmButton: 'rounded-xl px-8 py-3 uppercase font-bold text-[11px]',
+                cancelButton: 'rounded-xl px-8 py-3 uppercase font-bold text-[11px]'
             }
         });
 
@@ -145,7 +145,7 @@ const PassSelectDriver = () => {
                         icon: 'success',
                         confirmButtonColor: '#00695C',
                         customClass: {
-                            popup: 'rounded-[2rem] font-body',
+                            popup: 'rounded-2xl font-body',
                             title: 'text-primary font-black italic uppercase tracking-tight'
                         }
                     });
@@ -182,7 +182,7 @@ const PassSelectDriver = () => {
 
                     <div className="flex items-center gap-3">
                         <div 
-                            className="w-10 h-10 rounded-full bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center cursor-pointer hover:shadow-md transition-all"
+                            className="w-10 h-10 rounded-xl bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center cursor-pointer hover:shadow-md transition-all"
                             onClick={() => navigate('/driver-dashboard')}
                         >
                             {userImage ? (
@@ -251,7 +251,7 @@ const PassSelectDriver = () => {
                                 className={`relative bg-white rounded-2xl p-6 shadow-[0_40px_60px_-15px_rgba(0,104,95,0.08)] transition-all duration-300 text-left border border-white group ${isCurrent ? 'border-l-4 border-secondary shadow-[0_40px_60px_-15px_rgba(0,104,95,0.12)]' : 'hover:translate-y-[-4px]'}`}
                             >
                                 {isCurrent && (
-                                    <div className="absolute -top-3 right-6 bg-secondary text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-tighter italic shadow-lg z-10">
+                                    <div className="absolute -top-3 right-6 bg-secondary text-white text-[10px] font-bold px-3 py-1 rounded-xl uppercase tracking-tighter italic shadow-lg z-10">
                                         현재 이용 중
                                     </div>
                                 )}
@@ -298,7 +298,7 @@ const PassSelectDriver = () => {
                                 <button 
                                     onClick={() => handlePlanSelect(plan.id)}
                                     disabled={isCurrent}
-                                    className={`w-full py-4 rounded-full font-bold text-sm transition-all active:scale-95 ${
+                                    className={`w-full py-4 rounded-xl font-bold text-sm transition-all active:scale-95 ${
                                         isCurrent 
                                         ? 'bg-gradient-to-br from-primary to-primary-container text-white shadow-lg shadow-primary/20 cursor-default' 
                                         : 'bg-surface-container-high text-on-surface-variant hover:bg-primary hover:text-white'

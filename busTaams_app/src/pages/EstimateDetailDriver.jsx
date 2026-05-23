@@ -70,7 +70,6 @@ const EstimateDetailDriver = () => {
             }
         } catch (err) {
             console.error('Bid submit error details:', err);
-            // 서버에서 넘어온 구체적인 에러 메시지가 있는지 확인합니다.
             const serverMessage = err.message || '서버와 통신 중 오류가 발생했습니다.';
             
             Swal.fire({
@@ -94,12 +93,12 @@ const EstimateDetailDriver = () => {
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl shadow-sm border-b border-slate-100 py-4">
                 <div className="flex justify-between items-center w-full px-6 max-w-7xl mx-auto">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-full transition-colors active:scale-95 duration-200">
+                        <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors active:scale-95 duration-200">
                             <span className="material-symbols-outlined text-2xl text-slate-600">arrow_back</span>
                         </button>
                         <h1 className="font-headline font-extrabold tracking-tighter text-2xl text-[#004e47] italic">청약 상세 내역</h1>
                     </div>
-                    <div className="w-10 h-10 rounded-full bg-slate-100 overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
                         {userProfileImg ? (
                             <img alt="User profile" src={userProfileImg} className="w-full h-full object-cover" />
                         ) : (
@@ -121,7 +120,7 @@ const EstimateDetailDriver = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 text-left">
                     {/* Left: Trip Info (Matching Design) */}
                     <aside className="lg:col-span-5 text-left">
-                        <div className="bg-white rounded-[2.5rem] p-10 space-y-10 shadow-xl shadow-teal-900/5 text-left border border-slate-100">
+                        <div className="bg-white rounded-2xl p-10 space-y-10 shadow-xl shadow-teal-900/5 text-left border border-slate-100">
                             <h3 className="font-headline font-black text-2xl text-[#004e47] italic border-l-4 border-secondary pl-4 text-left uppercase">운행 정보</h3>
                             
                             <div className="space-y-10 text-left">
@@ -133,12 +132,7 @@ const EstimateDetailDriver = () => {
                                             {idx < auction.fullPath.length - 1 && (
                                                 <div className="absolute left-[19px] top-10 bottom-[-32px] w-0.5 bg-slate-100 dashed"></div>
                                             )}
-                                            <div className={`min-w-[40px] h-10 rounded-xl flex items-center justify-center border ${
-                                                item.label === '출발지' ? 'bg-primary/10 text-primary border-primary/20' : 
-                                                item.label === '최종 도착지' ? 'bg-secondary/10 text-secondary border-secondary/20' : 
-                                                item.label === '목적지' ? 'bg-orange-100 text-orange-600 border-orange-200 shadow-sm shadow-orange-200' :
-                                                'bg-slate-50 text-slate-400 border-slate-100'
-                                            }`}>
+                                            <div className="min-w-[40px] h-10 rounded-xl flex items-center justify-center border bg-slate-50 text-slate-400 border-slate-100">
                                                 <span className="material-symbols-outlined text-xl">
                                                     {item.label === '출발지' ? 'location_on' : 
                                                      item.label === '최종 도착지' ? 'flag' : 
@@ -181,7 +175,7 @@ const EstimateDetailDriver = () => {
 
                     {/* Right: Bidding Form */}
                     <section className="lg:col-span-7 text-left">
-                        <div className="bg-white p-8 md:p-12 rounded-[3.5rem] shadow-xl shadow-teal-900/5 border border-slate-50 text-left h-full">
+                        <div className="bg-white p-8 md:p-12 rounded-2xl shadow-xl shadow-teal-900/5 border border-slate-50 text-left h-full">
                             <form onSubmit={handleSubmit} className="space-y-12 text-left">
                                 <div className="space-y-4 text-left group">
                                     <div className="flex justify-between items-center px-2 text-left">
@@ -191,7 +185,7 @@ const EstimateDetailDriver = () => {
                                     <div className="relative text-left">
                                         <span className="absolute left-8 top-1/2 -translate-y-1/2 font-black text-slate-300 text-3xl italic">₩</span>
                                         <input 
-                                            className="w-full bg-slate-50 border-4 border-slate-100 rounded-[2rem] py-8 pl-16 pr-8 font-headline text-4xl font-black text-slate-500 focus:outline-none transition-all shadow-inner italic cursor-not-allowed" 
+                                            className="w-full bg-slate-50 border-4 border-slate-100 rounded-xl py-8 pl-16 pr-8 font-headline text-4xl font-black text-slate-500 focus:outline-none transition-all shadow-inner italic cursor-not-allowed" 
                                             value={Number(auction.price).toLocaleString()} 
                                             readOnly 
                                         />
@@ -201,7 +195,7 @@ const EstimateDetailDriver = () => {
                                     </p>
                                 </div>
 
-                                <div className="p-10 rounded-[2.5rem] bg-slate-50 border border-slate-100 flex items-center gap-6 text-left cursor-pointer hover:bg-white transition-colors group" onClick={() => setAgreed(!agreed)}>
+                                <div className="p-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-6 text-left cursor-pointer hover:bg-white transition-colors group" onClick={() => setAgreed(!agreed)}>
                                     <div className={`w-10 h-10 rounded-xl border-2 flex items-center justify-center transition-all ${agreed ? 'bg-secondary border-secondary' : 'bg-white border-slate-200'}`}>
                                         {agreed && <span className="material-symbols-outlined text-white text-2xl">check</span>}
                                     </div>
@@ -211,7 +205,7 @@ const EstimateDetailDriver = () => {
                                 </div>
 
                                 <div className="pt-8 flex justify-center">
-                                    <button className="w-full sm:w-auto min-w-[180px] px-10 py-4 bg-[#004e47] text-white font-black font-headline text-base italic uppercase tracking-[0.18em] rounded-2xl shadow-xl shadow-teal-900/15 hover:shadow-secondary/30 hover:bg-secondary active:scale-95 transition-all duration-300" type="submit">
+                                    <button className="w-full sm:w-auto min-w-[180px] px-10 py-4 bg-[#004e47] text-white font-black font-headline text-base italic uppercase tracking-[0.18em] rounded-xl shadow-xl shadow-teal-900/15 hover:shadow-secondary/30 hover:bg-secondary active:scale-95 transition-all duration-300" type="submit">
                                         청약승인
                                     </button>
                                 </div>

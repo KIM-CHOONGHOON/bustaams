@@ -189,7 +189,7 @@ const EstimateListCustomer = () => {
             <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6 text-center">
                 <span className="material-symbols-outlined text-6xl text-slate-200 mb-4">error</span>
                 <h2 className="text-2xl font-black text-teal-900 mb-2">요청 정보를 찾을 수 없습니다.</h2>
-                <button onClick={() => navigate(-1)} className="mt-4 px-8 py-3 bg-primary text-white rounded-full font-black transition-all hover:bg-slate-900 active:scale-95">뒤로 가기</button>
+                <button onClick={() => navigate(-1)} className="mt-4 px-8 py-3 bg-primary text-white rounded-xl font-black transition-all hover:bg-slate-900 active:scale-95 btn-primary">뒤로 가기</button>
             </div>
         );
     }
@@ -201,7 +201,7 @@ const EstimateListCustomer = () => {
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl shadow-[0_20px_40px_rgba(0,104,95,0.04)] py-4">
                 <div className="flex items-center justify-between px-6 max-w-7xl mx-auto w-full">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-full scale-95 active:scale-90 duration-200">
+                        <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-xl scale-95 active:scale-90 duration-200">
                             <span className="material-symbols-outlined">arrow_back</span>
                         </button>
                         <h1 className="text-xl font-bold text-teal-900 tracking-tight">청약 상세 화면</h1>
@@ -210,7 +210,7 @@ const EstimateListCustomer = () => {
                         <Avatar
                             profileImage={profileImage}
                             imageVersion={imageVersion}
-                            className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors"
+                            className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors"
                             onClick={() => navigate('/profile-customer')}
                         />
                     </div>
@@ -227,7 +227,7 @@ const EstimateListCustomer = () => {
                         </h1>
                     </div>
                     <div className="md:col-span-4 text-right">
-                        <span className={`inline-flex items-center gap-2 px-6 py-2 rounded-full text-xs font-bold shadow-lg ${getBusStatusDisplay(tripSummary.status).color}`}>
+                        <span className={`inline-flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-bold shadow-lg ${getBusStatusDisplay(tripSummary.status).color}`}>
                             <span className={`w-2.5 h-2.5 rounded-full ${
                                 tripSummary.status === 'CONFIRM' ? 'bg-teal-500' : (tripSummary.status.includes('CANCEL') ? 'bg-error' : 'bg-secondary')
                             }`}></span>
@@ -240,7 +240,7 @@ const EstimateListCustomer = () => {
                     {/* 왼쪽 컨텐츠 */}
                     <div className="lg:col-span-7 space-y-8">
                         {/* 여행 경로 카드 */}
-                        <div className="bg-white rounded-[2.5rem] p-8 shadow-[0_40px_60px_rgba(0,0,0,0.03)] border border-slate-50 relative overflow-hidden">
+                        <div className="bg-white rounded-2xl p-8 shadow-[0_40px_60px_rgba(0,0,0,0.03)] border border-slate-50 relative overflow-hidden">
                             <div className="absolute top-0 left-0 w-2 h-full bg-primary/20"></div>
                             <h2 className="text-2xl font-black mb-10 flex items-center gap-3 italic text-teal-800">
                                 <span className="material-symbols-outlined text-primary" style={{fontVariationSettings: "'FILL' 1"}}>route</span>
@@ -274,7 +274,7 @@ const EstimateListCustomer = () => {
                                                 (step.type === 'START' || step.type === 'END' || step.type === 'ROUND_TRIP') ? 'text-xl text-slate-900' : 'text-lg text-slate-500'
                                             }`}>{step.addr}</h3>
                                             {step.time && (
-                                                <p className="text-xs text-on-surface-variant font-bold mt-2 bg-slate-50 inline-block px-3 py-1 rounded-lg italic">
+                                                <p className="text-xs text-on-surface-variant font-bold mt-2 bg-slate-50 inline-block px-3 py-1 rounded-xl italic">
                                                     {step.time}
                                                 </p>
                                             )}
@@ -292,10 +292,10 @@ const EstimateListCustomer = () => {
                             </div>
 
                             {units.map((unit) => (
-                                <div key={unit.unitSeq} className="bg-white rounded-[3rem] p-8 shadow-xl shadow-teal-900/5 border border-slate-50 space-y-8 animate-in fade-in slide-in-from-bottom duration-500">
+                                <div key={unit.unitSeq} className="bg-white rounded-2xl p-8 shadow-xl shadow-teal-900/5 border border-slate-50 space-y-8 animate-in fade-in slide-in-from-bottom duration-500">
                                     <div className="flex flex-col sm:flex-row justify-between items-start gap-6 border-b border-slate-50 pb-6">
                                         <div className="flex items-center gap-5">
-                                            <div className="w-16 h-16 rounded-[1.5rem] bg-primary/5 flex items-center justify-center text-primary shadow-inner">
+                                            <div className="w-16 h-16 rounded-2xl bg-primary/5 flex items-center justify-center text-primary shadow-inner">
                                                 <span className="material-symbols-outlined text-4xl">directions_bus</span>
                                             </div>
                                             <div className="text-left">
@@ -305,7 +305,7 @@ const EstimateListCustomer = () => {
                                             </div>
                                         </div>
                                         <div className="flex flex-col items-end gap-3 w-full sm:w-auto">
-                                            <span className={`px-5 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase shadow-sm ${getBusStatusDisplay(unit.unitStat).color}`}>
+                                            <span className={`px-5 py-1.5 rounded-xl text-[10px] font-black tracking-widest uppercase shadow-sm ${getBusStatusDisplay(unit.unitStat).color}`}>
                                                 {getBusStatusDisplay(unit.unitStat).label}
                                             </span>
                                             {(unit.unitStat === 'AUCTION' || unit.unitStat === 'BUS_CHANGE') && (
@@ -331,7 +331,7 @@ const EstimateListCustomer = () => {
 
                                     {/* 금액 수정 입력란 (활성화 시) */}
                                     {editingUnit === unit.unitSeq && (
-                                        <div className="bg-primary/5 p-6 rounded-3xl flex flex-col sm:flex-row items-center gap-4 border border-primary/10 animate-in zoom-in duration-300">
+                                        <div className="bg-primary/5 p-6 rounded-2xl flex flex-col sm:flex-row items-center gap-4 border border-primary/10 animate-in zoom-in duration-300">
                                             <div className="flex-grow w-full relative">
                                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black">₩</span>
                                                 <input 
@@ -341,13 +341,13 @@ const EstimateListCustomer = () => {
                                                         const value = e.target.value.replace(/[^0-9]/g, '');
                                                         setTempAmount(value ? Number(value).toLocaleString() : '');
                                                     }}
-                                                    className="w-full pl-10 pr-4 py-3 rounded-2xl border-2 border-primary border-indigo-200 focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none font-black text-primary bg-indigo-50/50 transition-all placeholder:text-slate-300"
+                                                    className="w-full pl-10 pr-4 py-3 rounded-xl border-2 border-primary border-indigo-200 focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none font-black text-primary bg-indigo-50/50 transition-all placeholder:text-slate-300 input-field"
                                                     placeholder="수정할 금액을 입력하세요"
                                                 />
                                             </div>
                                             <button 
                                                 onClick={() => handleUpdateAmount(unit.unitSeq)}
-                                                className="w-full sm:w-auto px-10 py-3.5 bg-primary text-white rounded-2xl font-black text-sm shadow-lg shadow-primary/20 active:scale-95 transition-all"
+                                                className="w-full sm:w-auto px-10 py-3.5 bg-primary text-white rounded-xl font-black text-sm shadow-lg shadow-primary/20 active:scale-95 transition-all btn-primary"
                                             >
                                                 저장하기
                                             </button>
@@ -358,7 +358,7 @@ const EstimateListCustomer = () => {
                                     <div className="space-y-4">
                                         {unit.estimates.length > 0 && (
                                             unit.estimates.map((est) => (
-                                                <div key={est.id} className="bg-slate-50/30 rounded-[2.5rem] p-6 border border-slate-100/50 hover:bg-white hover:shadow-2xl transition-all duration-300 group">
+                                                <div key={est.id} className="bg-slate-50/30 rounded-2xl p-6 border border-slate-100/50 hover:bg-white hover:shadow-2xl transition-all duration-300 group">
                                                     <div className="flex flex-col gap-8">
                                                         <div className="flex-grow text-left space-y-6">
                                                             {/* 기사 정보 및 가격 */}
@@ -369,7 +369,7 @@ const EstimateListCustomer = () => {
                                                                 <div className="flex-grow">
                                                                     <div className="flex items-center gap-3">
                                                                         <h5 className="font-black text-xl tracking-tighter italic">{est.driverName} 기사님</h5>
-                                                                        <span className="flex items-center bg-secondary/10 px-3 py-1 rounded-full text-secondary text-[11px] font-black">
+                                                                        <span className="flex items-center bg-secondary/10 px-3 py-1 rounded-xl text-secondary text-[11px] font-black">
                                                                             <span className="material-symbols-outlined text-[12px] mr-1" style={{fontVariationSettings: "'FILL' 1"}}>star</span>
                                                                             {est.rating}
                                                                         </span>
@@ -393,7 +393,7 @@ const EstimateListCustomer = () => {
                                                                 <div className="grid grid-cols-1 gap-4">
                                                                     {est.busImages && est.busImages.length > 0 ? (
                                                                         est.busImages.map((img, iIdx) => (
-                                                                            <div key={iIdx} className="relative w-full aspect-video rounded-3xl overflow-hidden shadow-lg border-4 border-white">
+                                                                            <div key={iIdx} className="relative w-full aspect-video rounded-2xl overflow-hidden shadow-lg border-4 border-white">
                                                                                 <img src={img} alt={`차량 사진 ${iIdx + 1}`} className="w-full h-full object-cover" />
                                                                             </div>
                                                                         ))
@@ -407,7 +407,7 @@ const EstimateListCustomer = () => {
 
                                                             {/* 편의시설 및 안전 정보 Bento Grid */}
                                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                                <div className="bg-slate-50 p-5 rounded-3xl">
+                                                                <div className="bg-slate-50 p-5 rounded-2xl">
                                                                     <p className="text-[10px] font-black text-slate-400 uppercase mb-3">편의시설 및 서비스</p>
                                                                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                                                                         {[
@@ -458,7 +458,7 @@ const EstimateListCustomer = () => {
                                                             <div className="flex flex-col sm:flex-row gap-4">
                                                                 <button 
                                                                     onClick={() => navigate(`/estimate-detail/${est.id}`)}
-                                                                    className={`flex-grow py-4 rounded-2xl font-black text-xs tracking-widest uppercase transition-all active:scale-95 ${
+                                                                    className={`flex-grow py-4 rounded-xl font-black text-xs tracking-widest uppercase transition-all active:scale-95 btn-primary ${
                                                                         est.isSelected ? 'bg-secondary text-white shadow-lg' : 'bg-primary text-white shadow-lg shadow-primary/20'
                                                                     }`}
                                                                 >
@@ -466,7 +466,7 @@ const EstimateListCustomer = () => {
                                                                 </button>
                                                                 <button 
                                                                     onClick={() => navigate(`/chat-detail/${est.id}`)}
-                                                                    className="px-8 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                                                    className="px-8 py-4 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all active:scale-95 flex items-center justify-center gap-2 btn-primary"
                                                                 >
                                                                     <span className="material-symbols-outlined text-lg">chat_bubble</span>
                                                                     채팅문의
@@ -485,7 +485,7 @@ const EstimateListCustomer = () => {
                                             <button 
                                                 onClick={() => handleCancelBus(unit.unitSeq)}
                                                 disabled={tripSummary.busChangCnt >= 3}
-                                                className={`w-full py-4 rounded-2xl font-black text-xs tracking-widest uppercase transition-all active:scale-95 border ${
+                                                className={`w-full py-4 rounded-xl font-black text-xs tracking-widest uppercase transition-all active:scale-95 border ${
                                                     tripSummary.busChangCnt >= 3 
                                                     ? 'text-slate-300 border-slate-100 bg-slate-50 cursor-not-allowed' 
                                                     : 'text-error border-error/20 hover:bg-error/5 bg-white'
@@ -502,7 +502,7 @@ const EstimateListCustomer = () => {
 
                     {/* 오른쪽 사이드바 (요약 및 전체 액션) */}
                     <div className="lg:col-span-5 space-y-8">
-                        <div className="bg-slate-900 rounded-[3rem] p-8 text-white sticky top-28 shadow-2xl shadow-slate-900/20 border border-slate-800">
+                        <div className="bg-slate-900 rounded-2xl p-8 text-white sticky top-28 shadow-2xl shadow-slate-900/20 border border-slate-800">
                             <h2 className="text-2xl font-black mb-8 italic tracking-tighter">청약 상세 요약</h2>
                             
                             <div className="space-y-6 mb-10">
@@ -543,7 +543,7 @@ const EstimateListCustomer = () => {
                                     <div className="space-y-3">
                                         <button 
                                             onClick={handleApproveAll}
-                                            className="w-full py-5 bg-secondary text-white rounded-2xl font-black text-sm tracking-widest uppercase shadow-xl shadow-secondary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 group"
+                                            className="w-full py-5 bg-secondary text-white rounded-xl font-black text-sm tracking-widest uppercase shadow-xl shadow-secondary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 group btn-secondary"
                                         >
                                             <span className="material-symbols-outlined text-xl group-hover:rotate-12 transition-transform">task_alt</span>
                                             전체 승인하기

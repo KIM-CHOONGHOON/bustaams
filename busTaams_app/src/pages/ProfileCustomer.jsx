@@ -197,7 +197,7 @@ const ProfileCustomer = () => {
             {/* TopAppBar */}
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl flex items-center justify-between px-6 py-4 shadow-[0px_4px_20px_rgba(0,104,95,0.05)]">
                 <div className="flex items-center gap-4">
-                    <button onClick={() => navigate(-1)} className="active:scale-95 transition-transform duration-200 text-teal-700">
+                    <button onClick={() => navigate(-1)} className="p-2 rounded-xl hover:bg-slate-50 active:scale-95 transition-transform duration-200 text-teal-700">
                         <span className="material-symbols-outlined">arrow_back</span>
                     </button>
                     <h1 className="font-['Plus_Jakarta_Sans'] font-bold text-xl tracking-tight text-teal-700">회원정보 관리</h1>
@@ -214,12 +214,12 @@ const ProfileCustomer = () => {
                         <Avatar
                             profileImage={userData.profileImage}
                             imageVersion={imageVersion}
-                            className="w-24 h-24 rounded-full overflow-hidden shadow-xl ring-4 ring-surface-container-low bg-slate-100 flex items-center justify-center cursor-pointer"
+                            className="w-24 h-24 rounded-xl overflow-hidden shadow-xl ring-4 ring-surface-container-low bg-slate-100 flex items-center justify-center cursor-pointer"
                             onClick={() => setShowPhotoBottomSheet(true)}
                         />
                         <button 
                             onClick={() => setShowPhotoBottomSheet(true)}
-                            className="absolute bottom-0 right-0 bg-primary p-2 rounded-full text-white shadow-lg active:scale-90 transition-transform"
+                            className="absolute bottom-0 right-0 bg-primary p-2 rounded-xl text-white shadow-lg active:scale-90 transition-transform"
                         >
                             <span className="material-symbols-outlined text-sm">edit</span>
                         </button>
@@ -343,7 +343,7 @@ const ProfileCustomer = () => {
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-bold uppercase text-on-surface-variant px-1">이전 비밀번호</label>
                                     <input 
-                                        className="w-full bg-surface-container-low border-none rounded-lg px-4 py-3 focus:ring-2 focus:ring-secondary/20 transition-all outline-none text-sm text-left" 
+                                        className="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-secondary/20 transition-all outline-none text-sm text-left" 
                                         placeholder="현재 비밀번호를 입력하세요" 
                                         type="password" 
                                         value={passwordData.currentPassword}
@@ -353,7 +353,7 @@ const ProfileCustomer = () => {
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-bold uppercase text-on-surface-variant px-1">신규 비밀번호</label>
                                     <input 
-                                        className="w-full bg-surface-container-low border-none rounded-lg px-4 py-3 focus:ring-2 focus:ring-secondary/20 transition-all outline-none text-sm text-left" 
+                                        className="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-secondary/20 transition-all outline-none text-sm text-left" 
                                         placeholder="새 비밀번호를 입력하세요" 
                                         type="password" 
                                         value={passwordData.newPassword}
@@ -368,7 +368,7 @@ const ProfileCustomer = () => {
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-bold uppercase text-on-surface-variant px-1">신규 비밀번호 확인</label>
                                     <input 
-                                        className="w-full bg-surface-container-low border-none rounded-lg px-4 py-3 focus:ring-2 focus:ring-secondary/20 transition-all outline-none text-sm text-left" 
+                                        className="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-secondary/20 transition-all outline-none text-sm text-left" 
                                         placeholder="새 비밀번호를 다시 입력하세요" 
                                         type="password" 
                                         value={passwordData.confirmPassword}
@@ -382,7 +382,7 @@ const ProfileCustomer = () => {
                                 </div>
                                 <button 
                                     onClick={handleUpdatePassword}
-                                    className="w-full bg-secondary text-white py-3 rounded-lg text-sm font-bold mt-2 hover:bg-on-secondary-container transition-colors"
+                                    className="w-full bg-secondary text-white py-3.5 rounded-xl text-sm font-bold mt-2 hover:bg-on-secondary-container transition-colors"
                                 >
                                     비밀번호 변경하기
                                 </button>
@@ -420,7 +420,7 @@ const ProfileCustomer = () => {
                 <div className="pt-8">
                     <button 
                         onClick={handleUpdateInfo}
-                        className="w-full bg-gradient-to-br from-primary to-primary-container text-white py-5 rounded-full font-bold text-lg shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                        className="w-full bg-gradient-to-br from-primary to-primary-container text-white py-4 rounded-xl font-bold text-lg shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                     >
                         정보 수정 완료
                         <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1"}}>check_circle</span>
@@ -450,7 +450,7 @@ const ProfileCustomer = () => {
                     <div className="absolute inset-0" onClick={() => setShowPhotoBottomSheet(false)}></div>
                     
                     {/* 바텀 시트 본체 */}
-                    <div className="relative w-full max-w-md bg-white rounded-t-[2rem] p-8 space-y-6 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] animate-in slide-in-from-bottom duration-300 z-10 border-t border-slate-100 text-center">
+                    <div className="relative w-full max-w-md bg-white rounded-t-2xl p-8 space-y-6 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] animate-in slide-in-from-bottom duration-300 z-10 border-t border-slate-100 text-center">
                         {/* 상단 드래그 핸들 이미지 표현 */}
                         <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-2"></div>
                         
@@ -465,7 +465,7 @@ const ProfileCustomer = () => {
                                     setShowPhotoBottomSheet(false);
                                     cameraInputRef.current.click();
                                 }}
-                                className="flex flex-col items-center justify-center p-5 bg-teal-50 hover:bg-teal-100/70 text-teal-800 rounded-2xl border border-teal-100/50 active:scale-95 transition-all space-y-2 font-bold"
+                                className="flex flex-col items-center justify-center p-5 bg-teal-50 hover:bg-teal-100/70 text-teal-800 rounded-xl border border-teal-100/50 active:scale-95 transition-all space-y-2 font-bold"
                             >
                                 <span className="material-symbols-outlined text-4xl text-teal-700">photo_camera</span>
                                 <span className="text-sm">카메라로 촬영</span>
@@ -475,7 +475,7 @@ const ProfileCustomer = () => {
                                     setShowPhotoBottomSheet(false);
                                     fileInputRef.current.click();
                                 }}
-                                className="flex flex-col items-center justify-center p-5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-2xl border border-slate-100/50 active:scale-95 transition-all space-y-2 font-bold"
+                                className="flex flex-col items-center justify-center p-5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl border border-slate-100/50 active:scale-95 transition-all space-y-2 font-bold"
                             >
                                 <span className="material-symbols-outlined text-4xl text-slate-500">image</span>
                                 <span className="text-sm">앨범에서 선택</span>

@@ -39,12 +39,12 @@ const ApprovalPendingDriver = () => {
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl shadow-sm border-b border-slate-100 py-4 h-16 flex items-center">
                 <div className="flex justify-between items-center w-full px-6 max-w-7xl mx-auto">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-full transition-all active:scale-95 duration-200">
+                        <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-xl transition-all active:scale-95 duration-200">
                             <span className="material-symbols-outlined text-2xl text-slate-600">arrow_back</span>
                         </button>
                         <h1 className="font-headline font-black tracking-tighter text-2xl text-[#004e47] italic">승인 대기 목록</h1>
                     </div>
-                    <div className="w-10 h-10 rounded-full bg-slate-100 overflow-hidden border border-slate-200">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden border border-slate-200">
                         {userImage ? (
                             <img alt="User profile" className="w-full h-full object-cover" src={userImage} />
                         ) : (
@@ -87,14 +87,14 @@ const ApprovalPendingDriver = () => {
                 ) : bids.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         {bids.map((bid) => (
-                            <div key={bid.id} className="bg-white p-8 relative overflow-hidden transition-all duration-500 hover:shadow-[0_40px_80px_-20px_rgba(0,104,95,0.15)] rounded-[2.5rem] border border-slate-100 flex flex-col justify-between group">
+                            <div key={bid.id} className="bg-white p-8 relative overflow-hidden transition-all duration-500 hover:shadow-[0_40px_80px_-20px_rgba(0,104,95,0.15)] rounded-2xl border border-slate-100 flex flex-col justify-between group">
                                 <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:scale-125 group-hover:rotate-12 transition-all">
                                     <span className="material-symbols-outlined text-[80px]" style={{fontSize: '80px'}}>pending_actions</span>
                                 </div>
                                 
                                 <div className="relative z-10">
                                     <div className="flex justify-between items-start mb-8">
-                                        <span className="bg-[#ffdbca] text-[#783200] px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-[#ffb690]/20">
+                                        <span className="bg-[#ffdbca] text-[#783200] px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-[#ffb690]/20">
                                             승인 대기
                                         </span>
                                         <span className="material-symbols-outlined text-slate-300">more_vert</span>
@@ -124,7 +124,7 @@ const ApprovalPendingDriver = () => {
                                 <div className="relative z-10 flex flex-col gap-3">
                                     <button 
                                         onClick={() => navigate(`/bid-detail-driver/${bid.id}`)}
-                                        className="w-full bg-gradient-to-br from-[#004e47] to-[#00685f] text-white py-4 rounded-2xl font-black italic uppercase tracking-[0.2em] shadow-xl shadow-teal-900/10 hover:shadow-teal-900/30 hover:scale-[1.02] active:scale-95 transition-all duration-300"
+                                        className="w-full bg-gradient-to-br from-[#004e47] to-[#00685f] text-white py-4 rounded-xl font-black italic uppercase tracking-[0.2em] shadow-xl shadow-teal-900/10 hover:shadow-teal-900/30 hover:scale-[1.02] active:scale-95 transition-all duration-300"
                                     >
                                         상세 보기
                                     </button>
@@ -133,7 +133,7 @@ const ApprovalPendingDriver = () => {
                         ))}
                     </div>
                 ) : (
-                    <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-[3rem] p-20 flex flex-col items-center justify-center text-center space-y-6">
+                    <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-20 flex flex-col items-center justify-center text-center space-y-6">
                         <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-xl shadow-teal-900/5">
                             <span className="material-symbols-outlined text-4xl text-slate-300">hourglass_empty</span>
                         </div>
@@ -143,7 +143,7 @@ const ApprovalPendingDriver = () => {
                         </div>
                         <button 
                             onClick={() => navigate('/estimate-list-driver')}
-                            className="px-8 py-3 bg-white text-[#004e47] border border-slate-200 rounded-full font-black text-xs uppercase tracking-widest hover:border-[#004e47] hover:bg-[#004e47] hover:text-white transition-all shadow-sm"
+                            className="px-8 py-3 bg-white text-[#004e47] border border-slate-200 rounded-xl font-black text-xs uppercase tracking-widest hover:border-[#004e47] hover:bg-[#004e47] hover:text-white transition-all shadow-sm"
                         >
                             경매 리스트 보러가기
                         </button>

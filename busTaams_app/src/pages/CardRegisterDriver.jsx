@@ -92,7 +92,7 @@ const CardRegisterDriver = () => {
 
                     <div className="flex items-center gap-3">
                         <div 
-                            className="w-10 h-10 rounded-full bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center cursor-pointer hover:shadow-md transition-all"
+                            className="w-10 h-10 rounded-xl bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center cursor-pointer hover:shadow-md transition-all"
                             onClick={() => navigate('/driver-dashboard')}
                         >
                             {userImage ? (
@@ -145,7 +145,7 @@ const CardRegisterDriver = () => {
                     <input type="hidden" name="merchantReserved" value={payParams ? `${payParams.custId}:${cardNickname}` : ''} />
                 </form>
 
-                <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 border border-slate-100 dark:border-slate-700 shadow-xl space-y-6">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 border border-slate-100 dark:border-slate-700 shadow-xl space-y-6">
                     {/* Visual Card Mockup */}
                     <div className="relative h-48 w-full rounded-2xl bg-gradient-to-tr from-teal-800 to-emerald-600 text-white p-6 shadow-lg flex flex-col justify-between overflow-hidden">
                         <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
@@ -175,7 +175,7 @@ const CardRegisterDriver = () => {
                             value={cardNickname}
                             onChange={(e) => setCardNickname(e.target.value)}
                             placeholder="카드를 식별할 별칭을 입력하세요"
-                            className="w-full bg-slate-50 dark:bg-slate-900 rounded-3xl p-5 border border-slate-100 dark:border-slate-800 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-bold shadow-sm dark:text-white"
+                            className="w-full bg-slate-50 dark:bg-slate-900 rounded-xl p-5 border border-slate-100 dark:border-slate-800 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-bold shadow-sm dark:text-white"
                             required
                             disabled={loading}
                         />
@@ -185,7 +185,7 @@ const CardRegisterDriver = () => {
                         <button 
                             onClick={handleStartInicis}
                             disabled={loading}
-                            className="w-full bg-primary text-white py-5 rounded-full font-bold text-sm uppercase tracking-[0.2em] shadow-xl shadow-primary/30 active:scale-95 transition-all flex items-center justify-center gap-2"
+                            className="w-full bg-primary text-white py-5 rounded-xl font-bold text-sm uppercase tracking-[0.2em] shadow-xl shadow-primary/30 active:scale-95 transition-all flex items-center justify-center gap-2"
                         >
                             {loading ? (
                                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -199,7 +199,7 @@ const CardRegisterDriver = () => {
                     </div>
                 </div>
 
-                <div className="bg-surface-container-low rounded-3xl p-6 border border-primary/5">
+                <div className="bg-surface-container-low rounded-2xl p-6 border border-primary/5">
                     <p className="text-[10px] text-on-surface-variant leading-relaxed">
                         • 등록된 카드는 다음 멤버십 정기 결제일에 자동으로 사용됩니다. <br/>
                         • 카드 정보는 이니시스 보안 결제창을 통해 암호화되며, 가맹점에는 카드 번호가 직접 저장되지 않고 안전한 빌링키 형태로만 보관됩니다.
