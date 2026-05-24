@@ -1,9 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const fs = require('fs');
-const path = require('path');
-const { pool, getNextId } = require('../db');
-const bcrypt = require('bcryptjs');
+const { pool, getNextId, getBucket, bucketName } = require('../db');
+const bcrypt = require('bcrypt');
 const { randomUUID } = require('crypto');
 const jwt = require('jsonwebtoken');
 const { decrypt, encrypt } = require('../crypto');
@@ -167,16 +165,6 @@ router.post('/register', async (req, res) => {
         // userType 대문자 정규화 (DRIVER, TRAVELER 등)
         const finalUserType = (userType || 'TRAVELER').toUpperCase();
 
-        // [추가] 유저 타입을 데이터베이스 저장용 그룹 타입으로 매핑 (한글 주석)
-        let mappedUserType = 'TRAVELER';
-        if (finalUserType === 'CONSUMER' || finalUserType === 'TRAVELER' || finalUserType === 'CUSTOMER') {
-            mappedUserType = 'TRAVELER';
-        } else if (finalUserType === 'SALES' || finalUserType === 'SALESPERSON' || finalUserType === 'PARTNER') {
-            mappedUserType = 'PARTNER';
-        } else if (finalUserType === 'DRIVER') {
-            mappedUserType = 'DRIVER';
-        }
-
         // [추가] 기사 주민번호 유효성 및 중복 체크 (DRIVER 타입인 경우)
         if (finalUserType === 'DRIVER') {
             if (!residentNo) {
@@ -237,43 +225,37 @@ router.post('/register', async (req, res) => {
                     return res.status(400).json({ error: '활성화되지 않았거나 유효하지 않은 추천인입니다.' });
                 }
             } else {
-                // 기타 회원 가입 시 기존처럼 TB_USER 테이블 조회
+                // 기타 회원 가입 시 기존처럼 TB_USER 테이블 조회 (PARTNER 여부 확인)
                 const [partnerRows] = await connection.execute(
-                    'SELECT 1 FROM TB_USER WHERE USER_ID = ?',
+                    'SELECT 1 FROM TB_USER WHERE USER_TYPE = "PARTNER" AND USER_ID = ?',
                     [cleanRecomCode]
                 );
                 if (partnerRows.length === 0) {
                     await connection.rollback();
                     return res.status(400).json({ error: '존재하지 않는 추천인 아이디입니다.' });
                 }
+=======
+        // [추가] 추천인 코드 검증 (입력된 경우 PARTNER 타입의 USER_ID인지 확인)
+        if (recomCode) {
+            const [partnerRows] = await connection.execute(
+                'SELECT 1 FROM TB_USER WHERE USER_TYPE = "PARTNER" AND USER_ID = ?',
+                [recomCode]
+            );
+            if (partnerRows.length === 0) {
+                await connection.rollback();
+                return res.status(400).json({ error: '존재하지 않는 추천인 아이디입니다.' });
+>>>>>>> fe78dad9449a220d968b0489118a55c422f7f538
             }
         }
 
-        // [수정] 아이디 및 유저 타입별 휴대폰 번호 분리 중복 체크
-        const [existingId] = await connection.execute(
-            'SELECT 1 FROM TB_USER WHERE USER_ID = ?',
-            [userId]
+        // 아이디 및 연락처 중복 체크
+        const [existing] = await connection.execute(
+            'SELECT 1 FROM TB_USER WHERE USER_ID = ? OR HP_NO = ?', 
+            [userId, phoneNo]
         );
-        if (existingId.length > 0) {
+        if (existing.length > 0) {
             await connection.rollback();
-            return res.status(400).json({ error: '이미 존재하는 아이디입니다.' });
-        }
-
-        // 해당 유저 타입(mappedUserType) 내에서 휴대폰 번호 스캔 및 복호화 비교
-        const [allPhones] = await connection.execute(
-            'SELECT HP_NO FROM TB_USER WHERE USER_TYPE = ?',
-            [mappedUserType]
-        );
-        const isPhoneDuplicate = allPhones.some((row) => {
-            try {
-                return decrypt(row.HP_NO) === phoneNo;
-            } catch (e) {
-                return false;
-            }
-        });
-        if (isPhoneDuplicate) {
-            await connection.rollback();
-            return res.status(400).json({ error: '이미 해당 역할(유저 타입)로 등록된 휴대폰 번호입니다.' });
+            return res.status(400).json({ error: '이미 존재하는 아이디 혹은 휴대폰 번호입니다.' });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -281,36 +263,28 @@ router.post('/register', async (req, res) => {
         // 1. CUST_ID 채번 (10자리, 0 패딩)
         const custId = await getNextId('TB_USER', 'CUST_ID', 10);
 
-        // 2. 전자 서명 처리 (로컬 스토리지 업로드 및 TB_FILE_MASTER 등록)
+        // 2. 전자 서명 처리 (GCS 업로드 및 TB_FILE_MASTER 등록)
         let signFileId = null;
         if (signatureBase64 && signatureBase64.startsWith('data:image')) {
             const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20);
+            const fileName = `signatures/${fileId}.png`;
+            const file = getBucket().file(fileName);
             const buffer = Buffer.from(signatureBase64.split(',')[1], 'base64');
             
-            // 로컬 디렉터리 경로 설정 (uploads/signatures)
-            const relativeFolder = 'uploads/signatures';
-            const absoluteFolder = path.join(__dirname, '..', relativeFolder);
-            
-            // 디렉터리 생성
-            if (!fs.existsSync(absoluteFolder)) {
-                fs.mkdirSync(absoluteFolder, { recursive: true });
-            }
-            
-            const fileName = `${fileId}.png`;
-            const absoluteFilePath = path.join(absoluteFolder, fileName);
-            const relativeFilePath = `${relativeFolder}/${fileName}`; // DB GCS_PATH 컬럼에 저장될 상대 경로
-            
-            // 파일 디스크 쓰기
-            fs.writeFileSync(absoluteFilePath, buffer);
-            
+            // GCS 업로드
+            await file.save(buffer, {
+                metadata: { contentType: 'image/png' }
+            });
+
+            const gcsPath = `https://storage.googleapis.com/${bucketName}/${fileName}`;
             signFileId = fileId;
 
-            // TB_FILE_MASTER 삽입 (REG_ID 제거, MOD_ID를 CUST_ID로 설정, FILE_SIZE 추가, GCS_BUCKET_NM='LOCAL')
+            // TB_FILE_MASTER 삽입 (REG_ID 제거, MOD_ID를 CUST_ID로 설정, FILE_SIZE 추가)
             const fileQuery = `
                 INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, MOD_ID)
-                VALUES (?, 'SIGNATURE', 'LOCAL', ?, ?, 'png', ?, ?)
+                VALUES (?, 'SIGNATURE', ?, ?, ?, 'png', ?, ?)
             `;
-            await connection.execute(fileQuery, [fileId, relativeFilePath, `${userId}_signature.png`, buffer.length, custId]);
+            await connection.execute(fileQuery, [fileId, bucketName, gcsPath, `${userId}_signature.png`, buffer.length, custId]);
         }
 
         // 3. TB_USER 삽입 (REG_ID 제거, CUST_ID, RESIDENT_NO_ENC, RECOM_CODE 추가)
@@ -652,62 +626,37 @@ router.post('/send-code', async (req, res) => {
         phoneNo = phoneNo.replace(/[^0-9]/g, '');
         const verificationType = type || 'signup';
 
-        // [수정] 기가입 여부 확인 로직 분기 (유형별 복호화 중복 체크)
+        // 기가입 여부 확인 로직 분기 (유형별 중복 체크)
         if (verificationType === 'signup') {
-            const targetUserType = userType || 'TRAVELER';
-            const [existingUsers] = await pool.execute(
-                'SELECT HP_NO FROM TB_USER WHERE USER_TYPE = ?', 
-                [targetUserType]
+            const [existing] = await pool.execute(
+                'SELECT 1 FROM TB_USER WHERE HP_NO = ? AND USER_TYPE = ?', 
+                [phoneNo, userType || 'TRAVELER']
             );
-            const isDuplicate = existingUsers.some(row => {
-                try {
-                    return decrypt(row.HP_NO) === phoneNo;
-                } catch (e) {
-                    return false;
-                }
-            });
-            if (isDuplicate) {
+            if (existing.length > 0) {
                 return res.status(400).json({ success: false, error: '해당 유형으로 이미 가입된 휴대폰 번호입니다.' });
             }
         } else if (verificationType === 'find-account') {
-            const [allUsers] = await pool.execute('SELECT HP_NO FROM TB_USER');
-            const isExist = allUsers.some(row => {
-                try {
-                    return decrypt(row.HP_NO) === phoneNo;
-                } catch (e) {
-                    return false;
-                }
-            });
-            if (!isExist) {
+            const [existing] = await pool.execute('SELECT 1 FROM TB_USER WHERE HP_NO = ?', [phoneNo]);
+            if (existing.length === 0) {
                 return res.status(400).json({ success: false, error: '가입되지 않은 휴대폰 번호입니다.' });
             }
         }
 
-        // localhost 요청 여부 확인
-        const host = req.get('host') || '';
-        const origin = req.get('origin') || '';
-        const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1') || origin.includes('localhost') || origin.includes('127.0.0.1');
-
-        // 6자리 인증번호 생성 (localhost인 경우 123456으로 고정)
-        const authCode = isLocalhost ? '123456' : Math.floor(100000 + Math.random() * 900000).toString();
+        // 6자리 인증번호 생성
+        const authCode = Math.floor(100000 + Math.random() * 900000).toString();
         
         // 실제 SMS 발송 (Aligo)
         let sendStat = 'SUCCESS';
         let errorMsg = null;
-        
-        if (isLocalhost) {
-            console.log(`[SMS 발송 우회 (Localhost)] To: ${phoneNo}, Code: ${authCode}`);
-        } else {
-            try {
-                const aligoRes = await sendAligoSMS(phoneNo, authCode);
-                if (aligoRes.result_code !== '1') {
-                    sendStat = 'FAIL';
-                    errorMsg = aligoRes.message || '알리고 응답 오류';
-                }
-            } catch (e) {
+        try {
+            const aligoRes = await sendAligoSMS(phoneNo, authCode);
+            if (aligoRes.result_code !== '1') {
                 sendStat = 'FAIL';
-                errorMsg = e.message;
+                errorMsg = aligoRes.message || '알리고 응답 오류';
             }
+        } catch (e) {
+            sendStat = 'FAIL';
+            errorMsg = e.message;
         }
 
         let currentCustId = '0000000000';
@@ -767,31 +716,20 @@ router.post('/verify-code', async (req, res) => {
         };
         const category = categoryMap[verificationType] || 'VERIFY';
 
-        // localhost 요청 여부 확인
-        const host = req.get('host') || '';
-        const origin = req.get('origin') || '';
-        const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1') || origin.includes('localhost') || origin.includes('127.0.0.1');
+        // TB_SMS_LOG에서 해당 번호와 카테고리의 가장 최신 인증번호 조회
+        const [rows] = await pool.execute(
+            `SELECT MSG_CONTENT FROM TB_SMS_LOG 
+             WHERE RECEIVER_PHONE = ? AND SEND_CATEGORY = ?
+             ORDER BY REG_DT DESC LIMIT 1`,
+            [phoneNo, category]
+        );
 
-        let match = false;
-
-        // localhost 환경이면서 코드가 '123456'인 경우 즉시 인증 통과
-        if (isLocalhost && code === '123456') {
-            console.log(`[SMS 인증 우회 (Localhost)] To: ${phoneNo}, Code: ${code} - 통과 처리`);
-            match = true;
-        } else {
-            // TB_SMS_LOG에서 해당 번호와 카테고리의 가장 최신 인증번호 조회
-            const [rows] = await pool.execute(
-                `SELECT MSG_CONTENT FROM TB_SMS_LOG 
-                 WHERE RECEIVER_PHONE = ? AND SEND_CATEGORY = ?
-                 ORDER BY REG_DT DESC LIMIT 1`,
-                [phoneNo, category]
-            );
-
-            if (rows.length > 0) {
-                const msgContent = rows[0].MSG_CONTENT;
-                match = msgContent.includes(`[${code}]`);
-            }
+        if (rows.length === 0) {
+            return res.status(400).json({ success: false, error: '발송된 인증번호가 없습니다.' });
         }
+
+        const msgContent = rows[0].MSG_CONTENT;
+        const match = msgContent.includes(`[${code}]`);
 
         if (match) {
             // 인증 성공 시 서버 자체 토큰 발행 (30분 유효)
@@ -808,103 +746,6 @@ router.post('/verify-code', async (req, res) => {
     } catch (err) {
         console.error('Verify code error:', err);
         res.status(500).json({ error: '인증 확인 중 오류가 발생했습니다.' });
-    }
-});
-
-/**
- * [App 전용] 간이 아이디 찾기 (SMS 인증 없음, 이름/연락처 복호화 대조)
- */
-router.post('/find-id-simple', async (req, res) => {
-    let connection;
-    try {
-        const { userName, phoneNo } = req.body;
-        if (!userName || !phoneNo) return res.status(400).json({ error: '이름과 휴대폰 번호를 입력해주세요.' });
-
-        connection = await pool.getConnection();
-        const [rows] = await connection.execute('SELECT USER_ID, HP_NO FROM TB_USER WHERE USER_NM = ? AND USER_STAT = "ACTIVE"', [userName]);
-        
-        // 암호화된 HP_NO 복호화 비교
-        const foundUser = rows.find(row => {
-            try {
-                return decrypt(row.HP_NO) === phoneNo.replace(/-/g, '');
-            } catch (e) { return false; }
-        });
-
-        if (!foundUser) {
-            return res.status(404).json({ error: '일치하는 사용자 정보를 찾을 수 없습니다.' });
-        }
-
-        res.json({ success: true, userId: foundUser.USER_ID });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    } finally {
-        if (connection) connection.release();
-    }
-});
-
-/**
- * [App 전용] 간이 비밀번호 재설정을 위한 본인 확인 (이름/이메일/연락처 복호화 대조)
- */
-router.post('/verify-for-password-simple', async (req, res) => {
-    let connection;
-    try {
-        const { userId, phoneNo, email } = req.body;
-        if (!userId || !phoneNo || !email) return res.status(400).json({ error: '모든 정보를 입력해주세요.' });
-
-        connection = await pool.getConnection();
-        const [rows] = await connection.execute(
-            'SELECT CUST_ID, HP_NO FROM TB_USER WHERE USER_ID = ? AND EMAIL = ? AND USER_STAT = "ACTIVE"', 
-            [userId, email]
-        );
-
-        const foundUser = rows.find(row => {
-            try {
-                return decrypt(row.HP_NO) === phoneNo.replace(/-/g, '');
-            } catch (e) { return false; }
-        });
-
-        if (!foundUser) {
-            return res.status(404).json({ error: '일치하는 사용자 정보를 찾을 수 없습니다.' });
-        }
-
-        res.json({ success: true, custId: foundUser.CUST_ID });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    } finally {
-        if (connection) connection.release();
-    }
-});
-
-/**
- * [App 전용] 간이 비밀번호 재설정 완료
- */
-router.post('/reset-password-simple', async (req, res) => {
-    let connection;
-    try {
-        const { custId, newPassword } = req.body;
-        if (!custId || !newPassword) return res.status(400).json({ error: '필수 정보가 누락되었습니다.' });
-
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-        connection = await pool.getConnection();
-        await connection.beginTransaction();
-
-        const [result] = await connection.execute(
-            'UPDATE TB_USER SET PASSWORD = ?, MOD_DT = NOW(), MOD_ID = ? WHERE CUST_ID = ?',
-            [hashedPassword, custId, custId]
-        );
-
-        if (result.affectedRows === 0) {
-            throw new Error('비밀번호 변경에 실패했습니다.');
-        }
-
-        await connection.commit();
-        res.json({ success: true, message: '비밀번호가 성공적으로 변경되었습니다.' });
-    } catch (e) {
-        if (connection) await connection.rollback();
-        res.status(500).json({ error: e.message });
-    } finally {
-        if (connection) connection.release();
     }
 });
 

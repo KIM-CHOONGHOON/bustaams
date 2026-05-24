@@ -224,37 +224,48 @@ async function executeDriverBidCancellation(connection, bucket, p) {
         }
     }
 
-    const { uploadToLocal } = require('../db');
-    const fileIds = [];
-    const filesInfo = [];
+    const fileIds = files.length > 0 ? await allocateSequentialFileIds(connection, files.length) : [];
+    const reasonDoc = fileIds.length > 0 ? fileIds.join(',') : null;
 
     for (let i = 0; i < files.length; i++) {
         const f = files[i];
-        if (f.size === undefined && f.buffer) {
-            f.size = f.buffer.length;
-        }
-        const uploadRes = await uploadToLocal(f, 'cancels', connection);
-        if (uploadRes) {
-            fileIds.push(uploadRes.fileId);
-            filesInfo.push(uploadRes);
-        }
-    }
-    const reasonDoc = fileIds.length > 0 ? fileIds.join(',') : null;
+        const fileId = fileIds[i];
+        const gcsPath = `${DRIVER_CANCEL_FILE_CATEGORY}/${driverCustId}/${fileId}`;
+        const objKey = `${gcsPath}/${fileId}`;
+        const hint = f.originalname || 'file';
+        const mime = f.mimetype || 'application/octet-stream';
+        let extFromMime = '';
+        if (mime.includes('pdf')) extFromMime = 'pdf';
+        else if (mime.includes('jpeg') || mime.includes('jpg')) extFromMime = 'jpeg';
+        else if (mime.includes('png')) extFromMime = 'png';
+        else if (mime.includes('webp')) extFromMime = 'webp';
+        else if (mime.includes('gif')) extFromMime = 'gif';
 
-    for (let i = 0; i < filesInfo.length; i++) {
-        const info = filesInfo[i];
+        const { orgFileNm, fileExt } = orgFileNmAndExt(hint, {
+            buffer: f.buffer,
+            ext: extFromMime,
+            mime,
+            orgName: hint,
+        });
+
+        const gcsFile = bucket.file(objKey);
+        await gcsFile.save(f.buffer, {
+            metadata: {contentType: f.mimetype || 'application/octet-stream'},
+            resumable: false,
+        });
+
         await connection.execute(
             `INSERT INTO TB_FILE_MASTER (
                 FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_DT, REG_ID, MOD_DT, MOD_ID
             ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)`,
             [
-                info.fileId,
+                fileId,
                 DRIVER_CANCEL_FILE_CATEGORY,
-                'LOCAL',
-                info.url,
-                info.originalName,
-                info.ext,
-                info.fileSize,
+                gcsBucketNm,
+                gcsPath,
+                orgFileNm,
+                fileExt,
+                f.buffer.length,
                 modId,
                 modId,
             ]
