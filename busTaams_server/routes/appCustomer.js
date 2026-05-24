@@ -208,6 +208,83 @@ router.get('/profile', authenticateToken, async (req, res) => {
         const user = rows[0];
         const custId = user.CUST_ID;
 
+        // 마케팅 동의 이력 조회
+        const [mktRows] = await pool.execute(`
+            SELECT AGREE_YN, MKT_SMS_YN, MKT_PUSH_YN, MKT_EMAIL_YN, MKT_TEL_YN 
+            FROM TB_USER_TERMS_HIST 
+            WHERE CUST_ID = ? AND TERMS_TYPE = 'MARKETING'
+            ORDER BY TERMS_HIST_SEQ DESC LIMIT 1
+        `, [custId]);
+
+        const marketingInfo = mktRows.length > 0 ? mktRows[0] : {
+            AGREE_YN: 'N',
+            MKT_SMS_YN: 'N',
+            MKT_PUSH_YN: 'N',
+            MKT_EMAIL_YN: 'N',
+            MKT_TEL_YN: 'N'
+        };
+
+        // 모든 약관 동의 이력 조회 (가장 최근 이력 추출)
+        const [termsRows] = await pool.execute(`
+            SELECT t.TERMS_TYPE, t.AGREE_YN, DATE_FORMAT(t.AGREE_DT, '%Y.%m.%d %H:%i:%s') as AGREE_DT
+            FROM TB_USER_TERMS_HIST t
+            INNER JOIN (
+                SELECT TERMS_TYPE, MAX(TERMS_HIST_SEQ) as MAX_SEQ
+                FROM TB_USER_TERMS_HIST
+                WHERE CUST_ID = ?
+                GROUP BY TERMS_TYPE
+            ) m ON t.TERMS_TYPE = m.TERMS_TYPE AND t.TERMS_HIST_SEQ = m.MAX_SEQ
+            WHERE t.CUST_ID = ?
+        `, [custId, custId]);
+
+        // 약관 동의 데이터를 Map 형태로 전환
+        const termsMap = {};
+        termsRows.forEach(row => {
+            termsMap[row.TERMS_TYPE] = {
+                agreeYn: row.AGREE_YN,
+                agreeDt: row.AGREE_DT
+            };
+        });
+
+        // 사용자 타입에 따른 3번째 약관 타입 매핑
+        const travelerTermsType = user.USER_TYPE === 'DRIVER' ? 'DRIVER_SERVICE' : 'TRAVELER_SERVICE';
+        const travelerTermsLabel = user.USER_TYPE === 'DRIVER' ? '파트너 입점 계약' : '여행자 서비스 이용 규정 동의';
+
+        const termsConsent = [
+            {
+                id: 'service',
+                dbType: 'SERVICE',
+                label: '서비스 이용약관 동의',
+                required: true,
+                agreeYn: termsMap['SERVICE'] ? termsMap['SERVICE'].agreeYn : 'N',
+                agreeDt: termsMap['SERVICE'] ? termsMap['SERVICE'].agreeDt : null
+            },
+            {
+                id: 'privacy',
+                dbType: 'PRIVACY',
+                label: '개인정보 수집 및 이용 동의',
+                required: true,
+                agreeYn: termsMap['PRIVACY'] ? termsMap['PRIVACY'].agreeYn : 'N',
+                agreeDt: termsMap['PRIVACY'] ? termsMap['PRIVACY'].agreeDt : null
+            },
+            {
+                id: 'traveler',
+                dbType: travelerTermsType,
+                label: travelerTermsLabel,
+                required: true,
+                agreeYn: termsMap[travelerTermsType] ? termsMap[travelerTermsType].agreeYn : 'N',
+                agreeDt: termsMap[travelerTermsType] ? termsMap[travelerTermsType].agreeDt : null
+            },
+            {
+                id: 'marketing',
+                dbType: 'MARKETING',
+                label: '마케팅 정보 수신 및 알림 동의',
+                required: false,
+                agreeYn: termsMap['MARKETING'] ? termsMap['MARKETING'].agreeYn : 'N',
+                agreeDt: termsMap['MARKETING'] ? termsMap['MARKETING'].agreeDt : null
+            }
+        ];
+
         // 취소 관리 정보 조회
         const [cancelRows] = await pool.execute(`
             SELECT CANCEL_CNT, RESTRICT_STAT, DATE_FORMAT(RESTRICT_END_DT, '%Y-%m-%d %H:%i:%s') as RESTRICT_END_DT 
@@ -241,7 +318,15 @@ router.get('/profile', authenticateToken, async (req, res) => {
                 profileImage: userImage || null,
                 cancelCnt: cancelInfo.CANCEL_CNT,
                 restrictStat: cancelInfo.RESTRICT_STAT,
-                restrictEndDt: cancelInfo.RESTRICT_END_DT
+                restrictEndDt: cancelInfo.RESTRICT_END_DT,
+                marketing: {
+                    agree: marketingInfo.AGREE_YN === 'Y',
+                    sms: marketingInfo.MKT_SMS_YN === 'Y',
+                    push: marketingInfo.MKT_PUSH_YN === 'Y',
+                    email: marketingInfo.MKT_EMAIL_YN === 'Y',
+                    tel: marketingInfo.MKT_TEL_YN === 'Y'
+                },
+                termsConsent: termsConsent
             }
         });
     } catch (error) {
@@ -252,13 +337,19 @@ router.get('/profile', authenticateToken, async (req, res) => {
 
 // 2. 프로필 정보 업데이트
 router.post('/profile/update', authenticateToken, async (req, res) => {
-    const { name, phone, email, firebaseToken } = req.body;
+    const { name, phone, email, firebaseToken, marketing } = req.body;
+    const connection = await pool.getConnection();
     try {
+        await connection.beginTransaction();
         const userId = req.user.userId;
 
         // 0. CUST_ID 조회
-        const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
-        const custId = uRows.length > 0 ? uRows[0].CUST_ID : userId;
+        const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        if (uRows.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ status: 404, message: '사용자를 찾을 수 없습니다.' });
+        }
+        const custId = uRows[0].CUST_ID;
 
         const updates = [];
         const params = [];
@@ -269,11 +360,12 @@ router.post('/profile/update', authenticateToken, async (req, res) => {
         }
         if (phone) {
             // 0-1. 휴대폰 번호 변경 시 Firebase Token 검증
-            const [currentRows] = await pool.execute('SELECT HP_NO FROM TB_USER WHERE USER_ID = ?', [userId]);
+            const [currentRows] = await connection.execute('SELECT HP_NO FROM TB_USER WHERE USER_ID = ?', [userId]);
             const currentPhone = currentRows.length > 0 ? currentRows[0].HP_NO : '';
 
             if (phone !== currentPhone) {
                 if (!firebaseToken) {
+                    await connection.rollback();
                     return res.status(400).json({ status: 400, message: '휴대폰 번호 변경 시 인증 토큰이 필요합니다.' });
                 }
 
@@ -284,10 +376,12 @@ router.post('/profile/update', authenticateToken, async (req, res) => {
                     const cleanRequestPhone = phone.replace(/[^0-9]/g, '');
 
                     if (!cleanFirebasePhone.endsWith(cleanRequestPhone)) {
+                        await connection.rollback();
                         return res.status(400).json({ status: 400, message: '인증된 휴대폰 번호와 입력된 번호가 일치하지 않습니다.' });
                     }
                 } catch (tokenError) {
                     console.error('Firebase Token Verification Error:', tokenError);
+                    await connection.rollback();
                     return res.status(401).json({ status: 401, message: '유효하지 않은 인증 토큰입니다.' });
                 }
             }
@@ -305,19 +399,61 @@ router.post('/profile/update', authenticateToken, async (req, res) => {
         params.push(custId);
         updates.push('MOD_DT = NOW()');
 
-        if (updates.length === 2) { // MOD_ID와 MOD_DT만 있는 경우
+        if (updates.length === 2 && !marketing) { // MOD_ID와 MOD_DT만 있고 마케팅 데이터도 없는 경우
+            await connection.rollback();
             return res.status(400).json({ status: 400, message: '업데이트할 항목이 없습니다.' });
         }
 
-        const sql = `UPDATE TB_USER SET ${updates.join(', ')} WHERE USER_ID = ?`;
-        params.push(userId);
+        if (updates.length > 2) {
+            const sql = `UPDATE TB_USER SET ${updates.join(', ')} WHERE USER_ID = ?`;
+            params.push(userId);
+            await connection.execute(sql, params);
+        }
 
-        await pool.execute(sql, params);
+        // 1. 마케팅 알림 동의 이력 저장 (TB_USER_TERMS_HIST)
+        if (marketing && typeof marketing === 'object') {
+            const mktSms = marketing.sms ? 'Y' : 'N';
+            const mktPush = marketing.push ? 'Y' : 'N';
+            const mktEmail = marketing.email ? 'Y' : 'N';
+            const mktTel = marketing.tel ? 'Y' : 'N';
+            // 알림설정 4개 매체 중 1개라도 'Y'가 있으면 AGREE_YN은 'Y', 모두 'N'이면 'N'
+            const agreeYn = (mktSms === 'Y' || mktPush === 'Y' || mktEmail === 'Y' || mktTel === 'Y') ? 'Y' : 'N';
 
+            // 다음 시퀀스 번호 조회
+            const [seqRows] = await connection.execute(`
+                SELECT IFNULL(MAX(TERMS_HIST_SEQ), 0) + 1 AS NEXT_SEQ 
+                FROM TB_USER_TERMS_HIST 
+                WHERE CUST_ID = ?
+            `, [custId]);
+            const nextSeq = seqRows[0].NEXT_SEQ;
+
+            const histQuery = `
+                INSERT INTO TB_USER_TERMS_HIST (
+                    CUST_ID, TERMS_HIST_SEQ, TERMS_TYPE, TERMS_VER, AGREE_YN, 
+                    MKT_SMS_YN, MKT_PUSH_YN, MKT_EMAIL_YN, MKT_TEL_YN,
+                    AGREE_DT
+                ) VALUES (?, ?, 'MARKETING', 'v1.0', ?, ?, ?, ?, ?, NOW())
+            `;
+
+            await connection.execute(histQuery, [
+                custId,
+                nextSeq,
+                agreeYn,
+                mktSms,
+                mktPush,
+                mktEmail,
+                mktTel
+            ]);
+        }
+
+        await connection.commit();
         res.status(200).json({ status: 200, message: '정보가 성공적으로 수정되었습니다.' });
     } catch (error) {
+        if (connection) await connection.rollback();
         console.error('App Customer profile update error:', error);
         res.status(500).json({ status: 500, error: '회원 정보를 수정하는 데 실패했습니다.' });
+    } finally {
+        if (connection) connection.release();
     }
 });
 
@@ -2916,6 +3052,9 @@ router.post('/upsert-device-token', authenticateToken, async (req, res) => {
             return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
         }
         const custId = uRows[0].CUST_ID;
+
+        // [안전장치] 동일한 FCM 토큰이 다른 사용자에게 이미 등록되어 있다면 삭제 (기기 소유주 변경 대응)
+        await pool.execute('DELETE FROM TB_USER_DEVICE_TOKEN WHERE FCM_TOKEN = ?', [fcmToken]);
 
         // 2. Upsert 실행 (CUST_ID, CLIENT_KIND가 PK이므로 중복 시 UPDATE)
         await pool.execute(`

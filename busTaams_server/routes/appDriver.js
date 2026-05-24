@@ -420,12 +420,97 @@ router.get('/profile', authenticateToken, async (req, res) => {
             }
         }
 
+        // 마케팅 동의 이력 조회
+        const [mktRows] = await pool.execute(`
+            SELECT AGREE_YN, MKT_SMS_YN, MKT_PUSH_YN, MKT_EMAIL_YN, MKT_TEL_YN 
+            FROM TB_USER_TERMS_HIST 
+            WHERE CUST_ID = ? AND TERMS_TYPE = 'MARKETING'
+            ORDER BY TERMS_HIST_SEQ DESC LIMIT 1
+        `, [custId]);
+
+        const marketingInfo = mktRows.length > 0 ? mktRows[0] : {
+            AGREE_YN: 'N',
+            MKT_SMS_YN: 'N',
+            MKT_PUSH_YN: 'N',
+            MKT_EMAIL_YN: 'N',
+            MKT_TEL_YN: 'N'
+        };
+
+        // 모든 약관 동의 이력 조회 (가장 최근 이력 추출)
+        const [termsRows] = await pool.execute(`
+            SELECT t.TERMS_TYPE, t.AGREE_YN, DATE_FORMAT(t.AGREE_DT, '%Y.%m.%d %H:%i:%s') as AGREE_DT
+            FROM TB_USER_TERMS_HIST t
+            INNER JOIN (
+                SELECT TERMS_TYPE, MAX(TERMS_HIST_SEQ) as MAX_SEQ
+                FROM TB_USER_TERMS_HIST
+                WHERE CUST_ID = ?
+                GROUP BY TERMS_TYPE
+            ) m ON t.TERMS_TYPE = m.TERMS_TYPE AND t.TERMS_HIST_SEQ = m.MAX_SEQ
+            WHERE t.CUST_ID = ?
+        `, [custId, custId]);
+
+        // 약관 동의 데이터를 Map 형태로 전환
+        const termsMap = {};
+        termsRows.forEach(row => {
+            termsMap[row.TERMS_TYPE] = {
+                agreeYn: row.AGREE_YN,
+                agreeDt: row.AGREE_DT
+            };
+        });
+
+        // 기사(DRIVER)용 약관 타입 매핑
+        const driverTermsType = 'DRIVER_SERVICE';
+        const driverTermsLabel = '파트너 입점 계약';
+
+        const termsConsent = [
+            {
+                id: 'service',
+                dbType: 'SERVICE',
+                label: '서비스 이용약관 동의',
+                required: true,
+                agreeYn: termsMap['SERVICE'] ? termsMap['SERVICE'].agreeYn : 'N',
+                agreeDt: termsMap['SERVICE'] ? termsMap['SERVICE'].agreeDt : null
+            },
+            {
+                id: 'privacy',
+                dbType: 'PRIVACY',
+                label: '개인정보 수집 및 이용 동의',
+                required: true,
+                agreeYn: termsMap['PRIVACY'] ? termsMap['PRIVACY'].agreeYn : 'N',
+                agreeDt: termsMap['PRIVACY'] ? termsMap['PRIVACY'].agreeDt : null
+            },
+            {
+                id: 'traveler',
+                dbType: driverTermsType,
+                label: driverTermsLabel,
+                required: true,
+                agreeYn: termsMap[driverTermsType] ? termsMap[driverTermsType].agreeYn : 'N',
+                agreeDt: termsMap[driverTermsType] ? termsMap[driverTermsType].agreeDt : null
+            },
+            {
+                id: 'marketing',
+                dbType: 'MARKETING',
+                label: '마케팅 정보 수신 및 알림 동의',
+                required: false,
+                agreeYn: termsMap['MARKETING'] ? termsMap['MARKETING'].agreeYn : 'N',
+                agreeDt: termsMap['MARKETING'] ? termsMap['MARKETING'].agreeDt : null
+            }
+        ];
+
         res.json({
             success: true,
             data: {
                 user: {
                     name: userData.USER_NM,
-                    phone: userData.HP_NO
+                    phone: userData.HP_NO,
+                    marketing: {
+                        agree: marketingInfo.AGREE_YN === 'Y',
+                        sms: marketingInfo.MKT_SMS_YN === 'Y',
+                        push: marketingInfo.MKT_PUSH_YN === 'Y',
+                        email: marketingInfo.MKT_EMAIL_YN === 'Y',
+                        tel: marketingInfo.MKT_TEL_YN === 'Y'
+                    },
+                    termsConsent: termsConsent
                 },
                 driver: driverData
             }
@@ -467,7 +552,7 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
             name, phone, residentNo, zipcode, address, detailAddress,
             licenseType, licenseNo, licenseIssueDt, licenseValidity,
             busLicenseNo, qualAcquisitionDt, qualStatus,
-            sex, addrType, selfIntro, firebaseToken
+            sex, addrType, selfIntro, firebaseToken, marketing
         } = req.body;
 
         // 주민등록번호 유효성 검증
@@ -640,8 +725,51 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
 
         await upsertDoc('LICENSE', licenseNo, licenseIssueDt, 'licenseImg', licenseType, licenseValidity === 'Y' ? 'VALID' : 'EXPIRED');
         await upsertDoc('QUALIFICATION', busLicenseNo, qualAcquisitionDt, 'busLicenseImg', null, qualStatus || 'ACTIVE');
-        // 3번째 필수 서류: 운전경력증명서 (번호가 없으므로 'CAREER' 상수로 대체)
         await upsertDoc('CAREER_CERT', 'CAREER-' + custId, today, 'careerCertImg', null, 'VALID');
+
+        // 마케팅 알림 동의 이력 저장 (TB_USER_TERMS_HIST)
+        if (marketing) {
+            let marketingData = null;
+            try {
+                marketingData = typeof marketing === 'string' ? JSON.parse(marketing) : marketing;
+            } catch (parseError) {
+                console.error('[Profile Update] Marketing parse error:', parseError);
+            }
+
+            if (marketingData && typeof marketingData === 'object') {
+                const mktSms = marketingData.sms ? 'Y' : 'N';
+                const mktPush = marketingData.push ? 'Y' : 'N';
+                const mktEmail = marketingData.email ? 'Y' : 'N';
+                const mktTel = marketingData.tel ? 'Y' : 'N';
+                const agreeYn = (mktSms === 'Y' || mktPush === 'Y' || mktEmail === 'Y' || mktTel === 'Y') ? 'Y' : 'N';
+
+                // 다음 시퀀스 번호 조회
+                const [seqRows] = await connection.execute(`
+                    SELECT IFNULL(MAX(TERMS_HIST_SEQ), 0) + 1 AS NEXT_SEQ 
+                    FROM TB_USER_TERMS_HIST 
+                    WHERE CUST_ID = ?
+                `, [custId]);
+                const nextSeq = seqRows[0].NEXT_SEQ;
+
+                const histQuery = `
+                    INSERT INTO TB_USER_TERMS_HIST (
+                        CUST_ID, TERMS_HIST_SEQ, TERMS_TYPE, TERMS_VER, AGREE_YN, 
+                        MKT_SMS_YN, MKT_PUSH_YN, MKT_EMAIL_YN, MKT_TEL_YN,
+                        AGREE_DT
+                    ) VALUES (?, ?, 'MARKETING', 'v1.0', ?, ?, ?, ?, ?, NOW())
+                `;
+
+                await connection.execute(histQuery, [
+                    custId,
+                    nextSeq,
+                    agreeYn,
+                    mktSms,
+                    mktPush,
+                    mktEmail,
+                    mktTel
+                ]);
+            }
+        }
 
         await connection.commit();
         res.json({ success: true, message: '기사 정보 등록이 완료되었습니다.' });
@@ -1598,6 +1726,9 @@ router.post('/upsert-device-token', authenticateToken, async (req, res) => {
             return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
         }
         const custId = uRows[0].CUST_ID;
+
+        // [안전장치] 동일한 FCM 토큰이 다른 기사/사용자에게 이미 등록되어 있다면 삭제 (기기 소유주 변경 대응)
+        await pool.execute('DELETE FROM TB_USER_DEVICE_TOKEN WHERE FCM_TOKEN = ?', [fcmToken]);
 
         // 2. Upsert 실행 (CUST_ID, CLIENT_KIND가 PK이므로 중복 시 UPDATE)
         await pool.execute(`

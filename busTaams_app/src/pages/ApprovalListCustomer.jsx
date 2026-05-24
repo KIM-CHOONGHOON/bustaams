@@ -96,38 +96,97 @@ const ApprovalListCustomer = () => {
     //    });
     //};
 
+    //const handleApproveAll = async () => {
+    //    const totalResFee = units.reduce(
+    //        (acc, unit) => acc + (Number(unit.unitResFee) || 0),
+    //        0
+    //    );
+    //
+    //    const confirmed = await notify.confirm(
+    //        '전체 승인',
+    //        `진행 중인 모든 청약을 승인하시겠습니까?\n\n예약금: ${totalResFee.toLocaleString()}원`
+    //    );
+    //
+    //    if (!confirmed) return;
+    //
+        // 무통장 입금 안내 노출
+    //    await notify.info(
+    //        '예약금 입금 안내',
+    //        `은행명 : IBK기업은행\n계좌번호 : 088-038608-04-011\n예금주 : (주)청솔테크\n입금금액 : ${totalResFee.toLocaleString()}원\n* 입금 확인 후 예약이 승인됩니다.`
+    //    );
+    // 
+    //    try {
+            // 백엔드 API를 호출하여 결제 상태 업데이트 (PAYMENT_STS = '1')
+    //        const res = await api.post('/app/customer/payment-bank', { reqId });
+    //        if (res.success) {
+    //            notify.success('승인 요청 완료', '무통장 입금 안내 및 결제 대기 상태가 반영되었습니다.');
+    //            fetchEstimates(); // 화면 데이터 갱신
+    //        } else {
+    //            notify.error('업데이트 실패', res.error || '결제 상태 업데이트 중 오류가 발생했습니다.');
+    //        }
+    //    } catch (error) {
+    //        console.error('Update payment status error:', error);
+    //        notify.error('오류 발생', '서버와의 통신 중 오류가 발생했습니다.');
+    //    }
+    //};
+
     const handleApproveAll = async () => {
         const totalResFee = units.reduce(
             (acc, unit) => acc + (Number(unit.unitResFee) || 0),
             0
         );
 
+        const today = new Date();
+        const bankEndDate = new Date('2026-05-23T23:59:59');
+
+        // 2026년 5월 23일까지는 무통장 입금
+        if (today <= bankEndDate) {
+            const confirmed = await notify.confirm(
+                '전체 승인',
+                `진행 중인 모든 청약을 승인하시겠습니까?\n\n예약금: ${totalResFee.toLocaleString()}원`
+            );
+
+            if (!confirmed) return;
+
+            await notify.info(
+                '예약금 입금 안내',
+                `은행명 : IBK기업은행\n계좌번호 : 088-038608-04-011\n예금주 : (주)청솔테크\n입금금액 : ${totalResFee.toLocaleString()}원\n* 입금 확인 후 예약이 승인됩니다.`
+            );
+
+            try {
+                // 백엔드 API를 호출하여 결제 상태 업데이트 (PAYMENT_STS = '1')
+                const res = await api.post('/app/customer/payment-bank', { reqId });
+
+                if (res.success) {
+                    notify.success('승인 요청 완료', '무통장 입금 안내 및 결제 대기 상태가 반영되었습니다.');
+                    fetchEstimates();
+                } else {
+                    notify.error('업데이트 실패', res.error || '결제 상태 업데이트 중 오류가 발생했습니다.');
+                }
+            } catch (error) {
+                console.error('Update payment status error:', error);
+                notify.error('오류 발생', '서버와의 통신 중 오류가 발생했습니다.');
+            }
+
+            return;
+        }
+
+        // 2026년 5월 31일부터는 카드결제
         const confirmed = await notify.confirm(
-            '전체 승인',
-            `진행 중인 모든 청약을 승인하시겠습니까?\n\n예약금: ${totalResFee.toLocaleString()}원`
+            '전체 승인 및 카드결제',
+            `진행 중인 모든 청약을 승인하고 예약금 (6.6%)인 총 ${totalResFee.toLocaleString()}원을 카드결제 하시겠습니까?`
         );
 
         if (!confirmed) return;
 
-        // 무통장 입금 안내 노출
-        await notify.info(
-            '예약금 입금 안내',
-            `은행명 : IBK기업은행\n계좌번호 : 088-038608-04-011\n예금주 : (주)청솔테크\n입금금액 : ${totalResFee.toLocaleString()}원\n* 입금 확인 후 예약이 승인됩니다.`
-        );
-
-        try {
-            // 백엔드 API를 호출하여 결제 상태 업데이트 (PAYMENT_STS = '1')
-            const res = await api.post('/app/customer/payment-bank', { reqId });
-            if (res.success) {
-                notify.success('승인 요청 완료', '무통장 입금 안내 및 결제 대기 상태가 반영되었습니다.');
-                fetchEstimates(); // 화면 데이터 갱신
-            } else {
-                notify.error('업데이트 실패', res.error || '결제 상태 업데이트 중 오류가 발생했습니다.');
-            }
-        } catch (error) {
-            console.error('Update payment status error:', error);
-            notify.error('오류 발생', '서버와의 통신 중 오류가 발생했습니다.');
-        }
+        initiatePayment({
+            reqId: reqId,
+            price: totalResFee,
+            goodname: `${tripSummary.title} 예약금 결제`,
+            buyername: customerProfile?.custNm || '구매자',
+            buyertel: customerProfile?.phoneNo || '010-0000-0000',
+            buyeremail: customerProfile?.email || 'test@example.com'
+        });
     };
 
     const initiatePayment = async (payData) => {

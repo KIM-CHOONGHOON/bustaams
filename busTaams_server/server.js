@@ -2948,11 +2948,21 @@ app.post('/api/driver/profile-setup', async (req, res) => {
 });
 
 // --- KG 이니시스 결제 준비 (서명 생성) ---
-app.get('/api/payment/ready', async (req, res) => {
+app.all('/api/payment/ready', async (req, res) => {
     try {
-        const { reqId, driverId, amount } = req.query;
+        // GET/POST 두 형태의 파라미터를 모두 수용하고, price와 amount도 호환 처리합니다.
+        const reqId = req.body?.reqId || req.query?.reqId;
+        const driverId = req.body?.driverId || req.query?.driverId;
+        const amount = req.body?.price || req.body?.amount || req.query?.amount;
+
+        // 프론트엔드에서 전달받은 결제 정보 추출 (누락 시 Fallback 적용)
+        const goodname = req.body?.goodname || req.query?.goodname || '예약금 결제';
+        const buyername = req.body?.buyername || req.query?.buyername || '구매자';
+        const buyertel = req.body?.buyertel || req.query?.buyertel || '010-0000-0000';
+        const buyeremail = req.body?.buyeremail || req.query?.buyeremail || 'test@example.com';
+
         if (!reqId || !amount) {
-            return res.status(400).json({ error: 'reqId and amount are required' });
+            return res.status(400).json({ error: 'reqId and amount(or price) are required' });
         }
 
         const mid = (process.env.INI_MID || 'INIpayTest').trim();
@@ -2990,10 +3000,13 @@ app.get('/api/payment/ready', async (req, res) => {
             oid,
             timestamp,
             amount: cleanAmount,
+            price: cleanAmount,
             signature,
             mKey,
-            buyertel: '01012345678',
-            buyername: '홍길동'
+            goodname,
+            buyertel,
+            buyername,
+            buyeremail
         });
     } catch (error) {
         console.error('Payment ready error:', error);

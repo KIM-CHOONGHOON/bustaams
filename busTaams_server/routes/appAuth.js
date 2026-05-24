@@ -354,7 +354,7 @@ router.post('/register', async (req, res) => {
             const validTypes = ['SERVICE', 'TRAVELER_SERVICE', 'DRIVER_SERVICE', 'PRIVACY', 'MARKETING', 'PARTNER_CONTRACT', 'LOCATION'];
             
             for (const term of termsData) {
-                const agreeYn = term.agreed ? 'Y' : 'N';
+                let agreeYn = term.agreed ? 'Y' : 'N';
                 let normalizedType = (term.type || '').toUpperCase();
                 
                 // 앱에서 보내는 다양한 명칭 매핑
@@ -429,6 +429,9 @@ router.post('/register', async (req, res) => {
                         
                         console.log(`[Registration] Marketing Result for ${userId} - SMS:${mktSms}, PUSH:${mktPush}, EMAIL:${mktEmail}, TEL:${mktTel}`);
                         console.log(`[Registration] term.channels:`, JSON.stringify(term.channels || {}));
+                        
+                        // 4대 알림 매체 중 하나라도 Y가 있으면 AGREE_YN은 Y
+                        agreeYn = (mktSms === 'Y' || mktPush === 'Y' || mktEmail === 'Y' || mktTel === 'Y') ? 'Y' : 'N';
                     }
 
                     const histQuery = `
