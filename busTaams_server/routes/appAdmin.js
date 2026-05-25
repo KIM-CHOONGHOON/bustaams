@@ -75,10 +75,10 @@ module.exports = (pool) => {
     // 3. 신규 관리자 등록 API (실제 DB INSERT)
     router.post('/signup', async (req, res) => {
         try {
-            const { adminId, password, adminNm, deptNm, hpNo, email, role, registeredBy } = req.body;
+            const { adminId, adminNm, deptNm, hpNo, email, role, registeredBy } = req.body;
             
-            if (!adminId || !password || !adminNm) {
-                return res.status(400).json({ error: '아이디, 비밀번호, 이름은 필수 입력 항목입니다.' });
+            if (!adminId || !adminNm || !hpNo) {
+                return res.status(400).json({ error: '아이디, 이름, 휴대폰 번호는 필수 입력 항목입니다.' });
             }
 
             // 중복 아이디 체크
@@ -90,19 +90,33 @@ module.exports = (pool) => {
                 return res.status(400).json({ error: '이미 존재하는 관리자 ID입니다.' });
             }
 
-            const hashedPassword = await bcrypt.hash(password, 10);
+            // 휴대폰 번호 뒷 4자리 추출하여 임시 비밀번호 설정
+            let tempPassword = '';
+            const cleanedHp = hpNo.replace(/[^0-9]/g, '');
+            if (cleanedHp.length >= 4) {
+                tempPassword = cleanedHp.slice(-4);
+            } else {
+                // 휴대폰 번호가 4자리 미만일 때 Fallback 예외 처리
+                tempPassword = adminId.length >= 4 ? adminId.slice(-4) : '1234';
+            }
+
+            const hashedPassword = await bcrypt.hash(tempPassword, 10);
             const adminGrade = role || 'MANAGER'; // SUPER, MANAGER, SALES 중 하나
             const regId = registeredBy || 'SYSTEM'; // 등록자 ID
 
+            // PWD_CHG_DT를 NULL로 명시적 입력하여 최초 로그인 비밀번호 변경 대상 상태로 등록
             await pool.execute(
                 `INSERT INTO TB_ADMIN (
                     ADMIN_ID, PASSWORD, ADMIN_NM, DEPT_NM, ADMIN_GRADE, HP_NO, EMAIL, ADMIN_STAT,
-                    REG_DT, REG_ID, MOD_DT, MOD_ID
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', NOW(), ?, NOW(), ?)`,
+                    REG_DT, REG_ID, MOD_DT, MOD_ID, PWD_CHG_DT
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', NOW(), ?, NOW(), ?, NULL)`,
                 [adminId, hashedPassword, adminNm, deptNm || null, adminGrade, hpNo || null, email || null, regId, regId]
             );
 
-            res.status(201).json({ message: '관리자가 성공적으로 등록되었습니다.' });
+            res.status(201).json({ 
+                message: '관리자가 성공적으로 등록되었습니다.',
+                tempPassword: tempPassword
+            });
         } catch (error) {
             console.error('Signup API Error:', error);
             res.status(500).json({ error: `서버 내부 오류: ${error.message}` });
@@ -145,14 +159,20 @@ module.exports = (pool) => {
                 return res.status(401).json({ error: '비밀번호가 일치하지 않습니다.' });
             }
 
-            // 로그인 성공 시 마지막 로그인 시간 업데이트
-            await pool.execute(
-                `UPDATE TB_ADMIN SET LAST_LOGIN_DT = CURRENT_TIMESTAMP WHERE ADMIN_ID = ?`,
-                [adminId]
-            );
+            // PWD_CHG_DT가 NULL인지 확인하여 최초 로그인(비밀번호 변경 필요) 감지
+            const requirePasswordChange = adminObj.PWD_CHG_DT === null;
+
+            // 비밀번호 변경이 불필요한 경우에만 최종 로그인 시각 업데이트
+            if (!requirePasswordChange) {
+                await pool.execute(
+                    `UPDATE TB_ADMIN SET LAST_LOGIN_DT = CURRENT_TIMESTAMP WHERE ADMIN_ID = ?`,
+                    [adminId]
+                );
+            }
 
             res.status(200).json({
-                message: '로그인 성공',
+                message: requirePasswordChange ? '로그인 성공 (비밀번호 변경 필요)' : '로그인 성공',
+                requirePasswordChange,
                 admin: {
                     adminId: adminObj.ADMIN_ID,
                     adminNm: adminObj.ADMIN_NM,
@@ -164,6 +184,47 @@ module.exports = (pool) => {
         } catch (error) {
             console.error('Login API Error:', error);
             res.status(500).json({ error: '로그인 처리 중 서버 오류가 발생했습니다.' });
+        }
+    });
+
+    // 4-1. 관리자 비밀번호 변경 API
+    router.post('/change-password', async (req, res) => {
+        try {
+            const { adminId, currentPassword, newPassword } = req.body;
+            if (!adminId || !currentPassword || !newPassword) {
+                return res.status(400).json({ error: '필수 입력 항목이 누락되었습니다.' });
+            }
+
+            const [rows] = await pool.execute(
+                `SELECT * FROM TB_ADMIN WHERE ADMIN_ID = ?`,
+                [adminId]
+            );
+
+            if (rows.length === 0) {
+                return res.status(404).json({ error: '존재하지 않는 관리자입니다.' });
+            }
+
+            const adminObj = rows[0];
+
+            // 현재 비밀번호 검증
+            const isMatch = await bcrypt.compare(currentPassword, adminObj.PASSWORD);
+            if (!isMatch) {
+                return res.status(401).json({ error: '현재 비밀번호가 일치하지 않습니다.' });
+            }
+
+            // 새 비밀번호 해싱 및 업데이트
+            const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+            await pool.execute(
+                `UPDATE TB_ADMIN 
+                 SET PASSWORD = ?, PWD_CHG_DT = NOW(), LAST_LOGIN_DT = CURRENT_TIMESTAMP, MOD_DT = NOW(), MOD_ID = ?
+                 WHERE ADMIN_ID = ?`,
+                [hashedNewPassword, adminId, adminId]
+            );
+
+            res.status(200).json({ message: '비밀번호가 성공적으로 변경되었습니다.' });
+        } catch (error) {
+            console.error('Change Password API Error:', error);
+            res.status(500).json({ error: '비밀번호 변경 처리 중 서버 오류가 발생했습니다.' });
         }
     });
 

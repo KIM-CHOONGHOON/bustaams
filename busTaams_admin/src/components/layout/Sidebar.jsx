@@ -85,12 +85,21 @@ const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
       </nav>
 
       <div className="p-4 border-t border-slate-800">
-        <div className="flex items-center gap-3 px-4 py-3 bg-slate-800 rounded-xl mb-4">
-          <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-emerald-400">
+        <div 
+          onClick={() => setCurrentMenu('my-info')}
+          className={`flex items-center gap-3 px-4 py-3 rounded-xl mb-4 cursor-pointer transition-all ${
+            currentMenu === 'my-info'
+              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold'
+              : 'bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white'
+          }`}
+        >
+          <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-emerald-400 shrink-0">
             <Users size={16} />
           </div>
           <div className="text-left flex-1 min-w-0">
-            <p className="text-sm font-bold text-white truncate">{adminUser?.adminNm || '관리자'}</p>
+            <p className={`text-sm font-bold truncate ${currentMenu === 'my-info' ? 'text-emerald-400' : 'text-white'}`}>
+              {adminUser?.adminNm || '관리자'}
+            </p>
             <p className="text-xs text-slate-400 truncate">
               {adminUser?.deptNm ? `${adminUser.deptNm} (${getRoleLabel(role)})` : getRoleLabel(role)}
             </p>
