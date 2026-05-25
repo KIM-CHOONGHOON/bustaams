@@ -12,6 +12,14 @@ const SalesPerformanceManagement = () => {
   // 검색 필터 상태
   const [searchId, setSearchId] = useState('');
   const [searchName, setSearchName] = useState('');
+  // 실적년월 필터 (YYYY-MM 형식) - 기본값: 당월
+  const getDefaultYm = () => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    return `${yyyy}-${mm}`;
+  };
+  const [searchPerfYm, setSearchPerfYm] = useState(getDefaultYm);
 
   // 상단 요약 카드 데이터
   const [summary, setSummary] = useState({
@@ -20,15 +28,17 @@ const SalesPerformanceManagement = () => {
     totalRevenue: 0,
   });
 
-  // 영업사원별 실적 데이터 조회
-  const fetchSalesPerformance = async () => {
+  // 영업사원별 실적 데이터 조회 (실적년월 파라미터 포함)
+  const fetchSalesPerformance = async (perfYm = '') => {
     setLoadingMaster(true);
     try {
-      const response = await fetch('/api/admin/sales-performance');
+      const params = new URLSearchParams();
+      if (perfYm) params.append('perfYm', perfYm.replace('-', ''));
+      const response = await fetch(`/api/admin/sales-performance${params.toString() ? '?' + params.toString() : ''}`);
       if (response.ok) {
         const data = await response.json();
         setSalespeople(data);
-        setFilteredSalespeople(data); // 초기값 세팅
+        setFilteredSalespeople(data); // 실적년월 필터는 서버에서 처리하므로 전체 노출
 
         // 총계 계산
         const sumDrivers = data.reduce((acc, curr) => acc + parseInt(curr.driverCount || 0), 0);
@@ -49,55 +59,59 @@ const SalesPerformanceManagement = () => {
   };
 
   useEffect(() => {
-    fetchSalesPerformance();
+    fetchSalesPerformance(getDefaultYm());
   }, []);
 
-  // 검색(조회) 실행
-  const handleSearch = (e) => {
+  // 검색(조회) 실행 - 실적년월은 서버에서 필터, 사원ID/이름은 클라이언트 필터
+  const handleSearch = async (e) => {
     if (e) e.preventDefault();
-    
+
+    // 실적년월이 변경된 경우 서버에서 새로 조회
+    await fetchSalesPerformance(searchPerfYm);
+
+    // 사원ID/이름은 클라이언트 사이드 필터 (fetchSalesPerformance 완료 후 아래서 처리)
+    // fetchSalesPerformance가 setSalespeople + setFilteredSalespeople를 갱신하므로
+    // 이름/ID 필터는 그 결과에서 다시 필터링
     const idQuery = searchId.trim().toLowerCase();
     const nameQuery = searchName.trim().toLowerCase();
 
-    // 두 검색란이 모두 비어있는 경우, 전체 영업사원 표시
-    if (!idQuery && !nameQuery) {
-      setFilteredSalespeople(salespeople);
-      return;
-    }
-    
-    const filtered = salespeople.filter(sp => {
-      const matchId = idQuery 
-        ? sp.adminId.toLowerCase().includes(idQuery) 
-        : true;
-      const matchName = nameQuery 
-        ? sp.adminName.toLowerCase().includes(nameQuery) 
-        : true;
-      return matchId && matchName;
-    });
-
-    setFilteredSalespeople(filtered);
-    
-    // 만약 현재 선택된 영업사원이 검색 필터링으로 인해 사라지면 상세정보도 닫음
-    if (selectedSalesperson && !filtered.some(sp => sp.adminId === selectedSalesperson.adminId)) {
-      setSelectedSalesperson(null);
-      setDetails([]);
+    if (idQuery || nameQuery) {
+      setFilteredSalespeople(prev => {
+        const filtered = prev.filter(sp => {
+          const matchId = idQuery ? sp.adminId.toLowerCase().includes(idQuery) : true;
+          const matchName = nameQuery ? sp.adminName.toLowerCase().includes(nameQuery) : true;
+          return matchId && matchName;
+        });
+        // 선택된 사원이 필터에서 사라지면 닫기
+        if (selectedSalesperson && !filtered.some(sp => sp.adminId === selectedSalesperson.adminId)) {
+          setSelectedSalesperson(null);
+          setDetails([]);
+        }
+        return filtered;
+      });
     }
   };
 
-  // 초기화 실행
+  // 초기화 실행 - 실적년월은 당월로 복원
   const handleReset = () => {
     setSearchId('');
     setSearchName('');
-    setFilteredSalespeople(salespeople);
+    const defaultYm = getDefaultYm();
+    setSearchPerfYm(defaultYm);
+    fetchSalesPerformance(defaultYm);
   };
 
   // 특정 영업사원 선택 시 상세 정보 조회
-  const handleSelectSalesperson = async (salesperson) => {
+  const handleSelectSalesperson = async (salesperson, perfYm) => {
     setSelectedSalesperson(salesperson);
     setLoadingDetail(true);
     setDetails([]);
     try {
-      const response = await fetch(`/api/admin/my-performance?adminId=${salesperson.adminId}`);
+      const params = new URLSearchParams();
+      params.append('adminId', salesperson.adminId);
+      const ym = perfYm !== undefined ? perfYm : searchPerfYm;
+      if (ym) params.append('perfYm', ym.replace('-', ''));
+      const response = await fetch(`/api/admin/my-performance?${params.toString()}`);
       if (response.ok) {
         const data = await response.json();
         setDetails(data);
@@ -197,6 +211,16 @@ const SalesPerformanceManagement = () => {
             />
           </div>
 
+          <div className="flex flex-col gap-2" style={{minWidth: '180px'}}>
+            <label className="text-xs font-bold text-slate-600">실적년월</label>
+            <input
+              type="month"
+              value={searchPerfYm}
+              onChange={(e) => setSearchPerfYm(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
+            />
+          </div>
+
           <div className="flex gap-2">
             <button
               type="button"
@@ -231,8 +255,7 @@ const SalesPerformanceManagement = () => {
               <tr className="border-b border-slate-100 text-xs font-bold text-slate-400 uppercase tracking-wider">
                 <th className="py-4 px-4 text-center">사원 아이디</th>
                 <th className="py-4 px-4 text-center">이름</th>
-                <th className="py-4 px-4 text-center">소속 부서</th>
-                <th className="py-4 px-4 text-center">권한 등급</th>
+                <th className="py-4 px-4 text-center">실적년월</th>
                 <th className="py-4 px-4 text-center">유치 기사 수</th>
                 <th className="py-4 px-4 text-center">매칭 성사 수</th>
                 <th className="py-4 px-4 text-center">총 거래액 (입찰가)</th>
@@ -242,13 +265,13 @@ const SalesPerformanceManagement = () => {
             <tbody className="divide-y divide-slate-50">
               {loadingMaster ? (
                 <tr>
-                  <td colSpan="8" className="py-8 text-center text-slate-400 font-medium">
+                  <td colSpan="7" className="py-8 text-center text-slate-400 font-medium">
                     데이터를 불러오는 중입니다...
                   </td>
                 </tr>
               ) : filteredSalespeople.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="py-8 text-center text-slate-400 font-medium">
+                  <td colSpan="7" className="py-8 text-center text-slate-400 font-medium">
                     검색 조건에 일치하는 영업사원 실적 정보가 없습니다.
                   </td>
                 </tr>
@@ -266,11 +289,10 @@ const SalesPerformanceManagement = () => {
                     <td className="py-4 px-4 text-slate-900 font-bold text-center">{sp.adminId}</td>
                     <td className="py-4 px-4 text-slate-800 font-bold text-center">{sp.adminName}</td>
                     <td className="py-4 px-4 text-center">
-                      <span className="px-2 py-0.5 bg-slate-100 rounded text-xs font-bold text-slate-600">
-                        {sp.deptName || '미정'}
+                      <span className="px-2 py-0.5 bg-emerald-50 rounded text-xs font-bold text-emerald-700">
+                        {searchPerfYm ? searchPerfYm : '전체'}
                       </span>
                     </td>
-                    <td className="py-4 px-4 text-center">{getRoleBadge(sp.role)}</td>
                     <td className="py-4 px-4 font-bold text-blue-600 text-center">{sp.driverCount.toLocaleString()} 명</td>
                     <td className="py-4 px-4 font-bold text-emerald-600 text-center">{sp.matchCount.toLocaleString()} 건</td>
                     <td className="py-4 px-4 text-slate-600 text-center">{parseInt(sp.totalBidding).toLocaleString()} 원</td>
@@ -289,7 +311,10 @@ const SalesPerformanceManagement = () => {
           <TrendingUp className="text-emerald-500" size={22} />
           <h2 className="text-lg font-bold text-slate-800">
             {selectedSalesperson ? (
-              <span className="text-emerald-600">[{selectedSalesperson.adminName}] 사원의 상세 매칭 실적</span>
+              <span className="text-emerald-600">
+                [{selectedSalesperson.adminName}] 사원의 상세 매칭 실적
+                <span className="ml-2 text-sm font-bold text-slate-400">({searchPerfYm || '전체'})</span>
+              </span>
             ) : (
               '상세 매칭 실적 내역'
             )}

@@ -89,3 +89,10 @@
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
 }
+
+/* 외부 아이콘 스타일시트(Material Symbols 등)가 Tailwind의 hidden 클래스를 덮어쓰지 않도록 명시도(Specificity)를 높여 display: none 적용 */
+.material-symbols-outlined.hidden {
+    display: none;
+}
+
+

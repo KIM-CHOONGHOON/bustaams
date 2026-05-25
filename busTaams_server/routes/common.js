@@ -1,12 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
-const { getBucket, bucketName } = require('../db');
 
 /**
  * [공통] 이미지 표시용 프록시 라우트
- * GCS URL이나 로컬 경로를 받아 이미지를 클라이언트에 전달합니다.
- * @google-cloud/storage SDK를 사용하여 보안 및 성능을 최적화합니다.
+ * 로컬 파일 시스템을 먼저 탐색하고, 없으면 Cafe24 실서버(https://bustaams.cafe24.com)에서 프록시합니다.
+ * ※ Google Cloud Storage는 더 이상 사용하지 않습니다.
+ *
+ * 동작 순서:
+ *   1. rawPath가 https://bustaams.cafe24.com/... 이면 상대 경로(uploads/xxx)로 변환
+ *   2. 로컬 디스크(busTaams_server/uploads/...)에 파일이 있으면 로컬에서 스트리밍
+ *   3. 없으면 https://bustaams.cafe24.com/{relativePath} 로 프록시 요청
  */
 router.get('/display-image', async (req, res) => {
     const { path: rawPath } = req.query;
@@ -18,55 +22,84 @@ router.get('/display-image', async (req, res) => {
     console.log(`[Display Image] Request path: ${rawPath}`);
 
     try {
-        let gcsFilePath = '';
+        const path = require('path');
+        const fs = require('fs');
+
+        // ────────────────────────────────────────────────────────────────
+        // STEP 1. rawPath 정규화 → relativePath (uploads/xxx/yyy.jpg 형태)
+        // ────────────────────────────────────────────────────────────────
+        let relativePath;
 
         if (rawPath.startsWith('http')) {
-            // 1. GCS URL 또는 외부 URL 처리
-            const urlPrefix = `https://storage.googleapis.com/${bucketName}/`;
-            
-            if (rawPath.startsWith(urlPrefix)) {
-                gcsFilePath = rawPath.replace(urlPrefix, '');
-                console.log(`[Display Image] GCS URL detected. Stripped path: ${gcsFilePath}`);
+            const cafe24Prefix = 'https://bustaams.cafe24.com/';
+            if (rawPath.startsWith(cafe24Prefix)) {
+                // https://bustaams.cafe24.com/uploads/documents/xxx.jpg → uploads/documents/xxx.jpg
+                relativePath = rawPath.substring(cafe24Prefix.length);
+                console.log(`[Display Image] Cafe24 absolute URL → relative: ${relativePath}`);
             } else {
-                console.log(`[Display Image] External URL detected. Proxying: ${rawPath}`);
-                const response = await axios.get(rawPath, { responseType: 'stream' });
-                res.setHeader('Content-Type', response.headers['content-type']);
-                return response.data.pipe(res);
+                // 완전히 다른 외부 URL은 그대로 프록시
+                console.log(`[Display Image] External URL. Proxying directly: ${rawPath}`);
+                const extResp = await axios.get(rawPath, { responseType: 'stream', timeout: 10000 });
+                res.setHeader('Content-Type', extResp.headers['content-type'] || 'image/jpeg');
+                res.setHeader('Cache-Control', 'public, max-age=3600');
+                return extResp.data.pipe(res);
             }
         } else {
-            // 2. GCS 상대 경로인 경우
-            gcsFilePath = rawPath.startsWith('/') ? rawPath.substring(1) : rawPath; // 맨 앞 슬래시 제거
-            console.log(`[Display Image] Relative path detected: ${gcsFilePath}`);
+            // 상대 경로: 맨 앞 슬래시 제거
+            relativePath = rawPath.startsWith('/') ? rawPath.substring(1) : rawPath;
         }
 
-        const bucket = getBucket();
-        const file = bucket.file(gcsFilePath);
+        // ────────────────────────────────────────────────────────────────
+        // STEP 2. 로컬 디스크 탐색
+        //   Cafe24 실서버에 배포 시 로컬 = 실제 파일이므로 먼저 확인
+        // ────────────────────────────────────────────────────────────────
+        let localFilePath = path.join(__dirname, '..', relativePath);
 
-        const [exists] = await file.exists();
-        if (!exists) {
-            console.error(`[Display Image] FILE NOT FOUND in GCS Bucket: "${bucketName}", Path: "${gcsFilePath}"`);
-            // 버킷 내 파일 목록 확인 (디버깅용 - 실제 서비스에선 제외 가능)
-            return res.status(404).send('Image not found in storage');
+        // uploads/ 가 붙어있지 않은 경우 한 번 더 시도
+        if (!fs.existsSync(localFilePath) || !fs.lstatSync(localFilePath).isFile()) {
+            const fallbackPath = path.join(__dirname, '..', 'uploads', relativePath);
+            if (fs.existsSync(fallbackPath) && fs.lstatSync(fallbackPath).isFile()) {
+                localFilePath = fallbackPath;
+            }
         }
 
-        // 이미지 메타데이터 가져오기
-        const [metadata] = await file.getMetadata();
-        console.log(`[Display Image] Serving file: ${gcsFilePath}, Type: ${metadata.contentType}`);
-        
-        res.setHeader('Content-Type', metadata.contentType || 'image/png');
-        res.setHeader('Cache-Control', 'public, max-age=3600'); 
+        if (fs.existsSync(localFilePath) && fs.lstatSync(localFilePath).isFile()) {
+            console.log(`[Display Image] Serving local file: ${localFilePath}`);
+            const ext = path.extname(localFilePath).toLowerCase();
+            let contentType = 'image/png';
+            if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
+            else if (ext === '.gif') contentType = 'image/gif';
+            else if (ext === '.pdf') contentType = 'application/pdf';
+            else if (ext === '.svg') contentType = 'image/svg+xml';
 
-        // 스트림으로 클라이언트에 전송
-        file.createReadStream()
-            .on('error', (err) => {
-                console.error('[GCS Stream Error]:', err.message);
-                if (!res.headersSent) res.status(500).send('Stream error');
-            })
-            .pipe(res);
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Cache-Control', 'public, max-age=3600');
+            return fs.createReadStream(localFilePath).pipe(res);
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        // STEP 3. 로컬에 없으면 Cafe24 실서버에서 프록시
+        //   uploads/documents/xxx.jpg
+        //     → https://bustaams.cafe24.com/uploads/documents/xxx.jpg
+        // ────────────────────────────────────────────────────────────────
+        const cafe24Url = `https://bustaams.cafe24.com/${relativePath}`;
+        console.log(`[Display Image] Local not found. Proxying from Cafe24: ${cafe24Url}`);
+
+        const response = await axios.get(cafe24Url, {
+            responseType: 'stream',
+            timeout: 10000,
+            headers: { 'User-Agent': 'BusTaams-Admin/1.0' }
+        });
+
+        const contentType = response.headers['content-type'] || 'image/jpeg';
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        return response.data.pipe(res);
+
     } catch (error) {
-        console.error('[Display Image Error]:', error.message);
+        console.error(`[Display Image Error] path="${rawPath}":`, error.message);
         if (!res.headersSent) {
-            res.status(500).send('Internal Server Error');
+            res.status(404).send('Image not found');
         }
     }
 });

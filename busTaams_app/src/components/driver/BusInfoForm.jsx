@@ -37,7 +37,7 @@ const BusInfoForm = ({ onNext }) => {
   useEffect(() => {
     const fetchBusDetail = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8080/api/app/driver/bus/detail', {
+        const response = await fetch('/api/app/driver/bus/detail', {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
           }
@@ -75,7 +75,7 @@ const BusInfoForm = ({ onNext }) => {
     const fd = new FormData();
     fd.append('file', file);
     try {
-      const res = await fetch('http://127.0.0.1:8080/api/upload', {
+      const res = await fetch('/api/upload', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
         body: fd
@@ -118,7 +118,7 @@ const BusInfoForm = ({ onNext }) => {
 
     setLoading(true);
     try {
-      const res = await fetch('http://127.0.0.1:8080/api/app/driver/bus/register', {
+      const res = await fetch('/api/app/driver/bus/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -223,7 +223,7 @@ const BusInfoForm = ({ onNext }) => {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {formData.vehiclePhotos?.map((url, idx) => (
               <div key={idx} className="aspect-video rounded-2xl bg-gray-100 relative group overflow-hidden border border-gray-100 shadow-sm">
-                <img src={url.startsWith('http') ? url : `http://127.0.0.1:8080${url}`} className="w-full h-full object-cover" alt="" />
+                <img src={url} className="w-full h-full object-cover" alt="" />
                 <button 
                   onClick={() => setFormData(p => ({ ...p, vehiclePhotos: p.vehiclePhotos.filter((_, i) => i !== idx) }))}
                   className="absolute inset-0 bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -297,7 +297,7 @@ const FileRow = ({ label, value, isUploading, onSelect }) => (
     </div>
     <div className="flex items-center gap-3">
       {value && !isUploading && (
-        <a href={value.startsWith('http') ? value : `http://127.0.0.1:8080${value}`} target="_blank" rel="noreferrer" className="text-xs font-bold text-gray-400 hover:text-[#004e47] underline underline-offset-4">확인</a>
+        <a href={value} target="_blank" rel="noreferrer" className="text-xs font-bold text-gray-400 hover:text-[#004e47] underline underline-offset-4">확인</a>
       )}
       <button 
         type="button"
