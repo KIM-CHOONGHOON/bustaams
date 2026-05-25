@@ -2,6 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { UserPlus, Shield, User, Clock, X, Save } from 'lucide-react';
 
 const UsersManagement = () => {
+  // 휴대폰 번호 포맷 헬퍼 (010-1234-5678)
+  const formatHpNo = (hp) => {
+    if (!hp) return '';
+    const cleaned = hp.replace(/[^0-9]/g, '');
+    if (cleaned.length === 11) {
+      return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}-${cleaned.slice(7)}`;
+    }
+    if (cleaned.length === 10) {
+      if (cleaned.startsWith('02')) {
+        return `${cleaned.slice(0, 2)}-${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
+      }
+      return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+    }
+    return hp;
+  };
+
   // 상태 관리
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -53,7 +69,7 @@ const UsersManagement = () => {
       adminNm: admin.adminNm,
       status: admin.adminStat || 'ACTIVE',
       deptNm: admin.deptNm || '',
-      hpNo: admin.hpNo || '',
+      hpNo: formatHpNo(admin.hpNo || ''),
       email: admin.email || '',
     });
   };
@@ -61,13 +77,35 @@ const UsersManagement = () => {
   // 신규 등록 입력 변경
   const handleRegChange = (e) => {
     const { name, value } = e.target;
-    setRegFormData(prev => ({ ...prev, [name]: value }));
+    if (name === 'hpNo') {
+      const cleaned = value.replace(/[^0-9]/g, '');
+      let formatted = cleaned;
+      if (cleaned.length > 3 && cleaned.length <= 7) {
+        formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
+      } else if (cleaned.length > 7) {
+        formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}-${cleaned.slice(7, 11)}`;
+      }
+      setRegFormData(prev => ({ ...prev, hpNo: formatted }));
+    } else {
+      setRegFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   // 수정 입력 변경
   const handleEditChange = (e) => {
     const { name, value } = e.target;
-    setEditFormData(prev => ({ ...prev, [name]: value }));
+    if (name === 'hpNo') {
+      const cleaned = value.replace(/[^0-9]/g, '');
+      let formatted = cleaned;
+      if (cleaned.length > 3 && cleaned.length <= 7) {
+        formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
+      } else if (cleaned.length > 7) {
+        formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}-${cleaned.slice(7, 11)}`;
+      }
+      setEditFormData(prev => ({ ...prev, hpNo: formatted }));
+    } else {
+      setEditFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   // 신규 관리자 등록 처리 (모달 폼 제출)
@@ -259,7 +297,7 @@ const UsersManagement = () => {
                         {admin.deptNm || '미정'}
                       </span>
                     </td>
-                    <td className="py-4 px-4 text-slate-500 text-center">{admin.hpNo || '-'}</td>
+                    <td className="py-4 px-4 text-slate-500 text-center">{formatHpNo(admin.hpNo) || '-'}</td>
                     <td className="py-4 px-4 text-slate-500 text-center">{admin.email || '-'}</td>
                     <td className="py-4 px-4 text-slate-400 text-center">
                       <div className="flex items-center justify-center gap-1.5 py-1">
@@ -366,7 +404,7 @@ const UsersManagement = () => {
               <input
                 type="text"
                 name="hpNo"
-                placeholder="- 없이 휴대폰 번호 입력"
+                placeholder="010-0000-0000"
                 value={editFormData.hpNo}
                 onChange={handleEditChange}
                 disabled={!selectedAdmin}
@@ -481,7 +519,7 @@ const UsersManagement = () => {
                   <input
                     type="text"
                     name="hpNo"
-                    placeholder="- 없이 숫자만 입력"
+                    placeholder="010-0000-0000"
                     value={regFormData.hpNo}
                     onChange={handleRegChange}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
