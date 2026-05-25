@@ -2,6 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { User, Shield, Key, Save, Phone, Mail, MapPin } from 'lucide-react';
 
 const MyInfo = () => {
+  // 휴대폰 번호 포맷 헬퍼 (010-1234-5678)
+  const formatHpNo = (hp) => {
+    if (!hp) return '';
+    const cleaned = hp.replace(/[^0-9]/g, '');
+    if (cleaned.length === 11) {
+      return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}-${cleaned.slice(7)}`;
+    }
+    if (cleaned.length === 10) {
+      if (cleaned.startsWith('02')) {
+        return `${cleaned.slice(0, 2)}-${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
+      }
+      return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+    }
+    return hp;
+  };
+
   // 로컬스토리지에서 로그인된 관리자 정보 로드
   const [adminUser, setAdminUser] = useState(() => {
     const saved = localStorage.getItem('adminUser');
@@ -32,7 +48,7 @@ const MyInfo = () => {
         adminId: adminUser.adminId || '',
         adminNm: adminUser.adminNm || '',
         deptNm: adminUser.deptNm || '',
-        hpNo: adminUser.hpNo || '',
+        hpNo: formatHpNo(adminUser.hpNo || ''),
         email: adminUser.email || '',
         role: adminUser.role || 'MANAGER',
       });
@@ -42,7 +58,18 @@ const MyInfo = () => {
   // 프로필 정보 변경 입력 처리
   const handleProfileChange = (e) => {
     const { name, value } = e.target;
-    setProfileData((prev) => ({ ...prev, [name]: value }));
+    if (name === 'hpNo') {
+      const cleaned = value.replace(/[^0-9]/g, '');
+      let formatted = cleaned;
+      if (cleaned.length > 3 && cleaned.length <= 7) {
+        formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
+      } else if (cleaned.length > 7) {
+        formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}-${cleaned.slice(7, 11)}`;
+      }
+      setProfileData((prev) => ({ ...prev, hpNo: formatted }));
+    } else {
+      setProfileData((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   // 비밀번호 변경 입력 처리
@@ -250,7 +277,7 @@ const MyInfo = () => {
                     name="hpNo"
                     value={profileData.hpNo}
                     onChange={handleProfileChange}
-                    placeholder="- 없이 숫자만 입력"
+                    placeholder="010-0000-0000"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
                   />
                 </div>
