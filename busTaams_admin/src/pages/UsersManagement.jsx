@@ -2,6 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { UserPlus, Shield, User, Clock, X, Save } from 'lucide-react';
 
 const UsersManagement = () => {
+  // 휴대폰 번호 포맷 헬퍼 (010-1234-5678)
+  const formatHpNo = (hp) => {
+    if (!hp) return '';
+    const cleaned = hp.replace(/[^0-9]/g, '');
+    if (cleaned.length === 11) {
+      return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}-${cleaned.slice(7)}`;
+    }
+    if (cleaned.length === 10) {
+      if (cleaned.startsWith('02')) {
+        return `${cleaned.slice(0, 2)}-${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
+      }
+      return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+    }
+    return hp;
+  };
+
   // 상태 관리
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -11,8 +27,6 @@ const UsersManagement = () => {
   // 신규 등록 폼 데이터
   const [regFormData, setRegFormData] = useState({
     adminId: '',
-    password: '',
-    confirmPassword: '',
     adminNm: '',
     deptNm: '',
     hpNo: '',
@@ -55,7 +69,7 @@ const UsersManagement = () => {
       adminNm: admin.adminNm,
       status: admin.adminStat || 'ACTIVE',
       deptNm: admin.deptNm || '',
-      hpNo: admin.hpNo || '',
+      hpNo: formatHpNo(admin.hpNo || ''),
       email: admin.email || '',
     });
   };
@@ -63,25 +77,43 @@ const UsersManagement = () => {
   // 신규 등록 입력 변경
   const handleRegChange = (e) => {
     const { name, value } = e.target;
-    setRegFormData(prev => ({ ...prev, [name]: value }));
+    if (name === 'hpNo') {
+      const cleaned = value.replace(/[^0-9]/g, '');
+      let formatted = cleaned;
+      if (cleaned.length > 3 && cleaned.length <= 7) {
+        formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
+      } else if (cleaned.length > 7) {
+        formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}-${cleaned.slice(7, 11)}`;
+      }
+      setRegFormData(prev => ({ ...prev, hpNo: formatted }));
+    } else {
+      setRegFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   // 수정 입력 변경
   const handleEditChange = (e) => {
     const { name, value } = e.target;
-    setEditFormData(prev => ({ ...prev, [name]: value }));
+    if (name === 'hpNo') {
+      const cleaned = value.replace(/[^0-9]/g, '');
+      let formatted = cleaned;
+      if (cleaned.length > 3 && cleaned.length <= 7) {
+        formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
+      } else if (cleaned.length > 7) {
+        formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}-${cleaned.slice(7, 11)}`;
+      }
+      setEditFormData(prev => ({ ...prev, hpNo: formatted }));
+    } else {
+      setEditFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   // 신규 관리자 등록 처리 (모달 폼 제출)
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
 
-    if (!regFormData.adminId || !regFormData.password || !regFormData.confirmPassword || !regFormData.adminNm) {
-      return alert('아이디, 비밀번호, 비밀번호 확인, 이름은 필수 입력 항목입니다.');
-    }
-
-    if (regFormData.password !== regFormData.confirmPassword) {
-      return alert('입력하신 비밀번호와 비밀번호 확인이 서로 일치하지 않습니다.');
+    if (!regFormData.adminId || !regFormData.adminNm || !regFormData.hpNo) {
+      return alert('아이디, 이름, 휴대폰 번호는 필수 입력 항목입니다.');
     }
 
     setLoading(true);
@@ -99,11 +131,9 @@ const UsersManagement = () => {
       let errorMsg = '관리자 등록에 실패했습니다.';
       const data = await response.json();
       if (response.ok) {
-        alert('신규 관리자가 성공적으로 등록되었습니다.');
+        alert(`신규 관리자가 성공적으로 등록되었습니다.\n\n초기 비밀번호: [ ${data.tempPassword} ] (휴대폰 번호 뒷 4자리)`);
         setRegFormData({
           adminId: '',
-          password: '',
-          confirmPassword: '',
           adminNm: '',
           deptNm: '',
           hpNo: '',
@@ -135,6 +165,9 @@ const UsersManagement = () => {
 
     setLoading(true);
     try {
+      const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
+      const modifiedBy = adminUser.adminId || 'SYSTEM';
+
       const response = await fetch(`/api/admin/${editFormData.adminId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -144,6 +177,7 @@ const UsersManagement = () => {
           deptNm: editFormData.deptNm,
           hpNo: editFormData.hpNo,
           email: editFormData.email,
+          modifiedBy
         }),
       });
 
@@ -263,7 +297,7 @@ const UsersManagement = () => {
                         {admin.deptNm || '미정'}
                       </span>
                     </td>
-                    <td className="py-4 px-4 text-slate-500 text-center">{admin.hpNo || '-'}</td>
+                    <td className="py-4 px-4 text-slate-500 text-center">{formatHpNo(admin.hpNo) || '-'}</td>
                     <td className="py-4 px-4 text-slate-500 text-center">{admin.email || '-'}</td>
                     <td className="py-4 px-4 text-slate-400 text-center">
                       <div className="flex items-center justify-center gap-1.5 py-1">
@@ -370,7 +404,7 @@ const UsersManagement = () => {
               <input
                 type="text"
                 name="hpNo"
-                placeholder="- 없이 휴대폰 번호 입력"
+                placeholder="010-0000-0000"
                 value={editFormData.hpNo}
                 onChange={handleEditChange}
                 disabled={!selectedAdmin}
@@ -446,7 +480,7 @@ const UsersManagement = () => {
 
             {/* 모달 바디 */}
             <form onSubmit={handleRegisterSubmit} className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
-              {/* 계정 필수 정보 (아이디, 비번, 비번확인) */}
+              {/* 계정 필수 정보 (아이디, 이름, 휴대폰) */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-bold text-slate-600 flex items-center gap-1">
@@ -465,39 +499,6 @@ const UsersManagement = () => {
 
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-bold text-slate-600 flex items-center gap-1">
-                    비밀번호 <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    name="password"
-                    placeholder="비밀번호 입력"
-                    value={regFormData.password}
-                    onChange={handleRegChange}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
-                    required
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold text-slate-600 flex items-center gap-1">
-                    비밀번호 확인 <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    name="confirmPassword"
-                    placeholder="비밀번호 확인 입력"
-                    value={regFormData.confirmPassword}
-                    onChange={handleRegChange}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* 사용자 기본 정보 (이름, 소속, 등급) */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold text-slate-600 flex items-center gap-1">
                     이름 <span className="text-rose-500">*</span>
                   </label>
                   <input
@@ -512,12 +513,42 @@ const UsersManagement = () => {
                 </div>
 
                 <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold text-slate-600 flex items-center gap-1">
+                    휴대폰 번호 <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="hpNo"
+                    placeholder="010-0000-0000"
+                    value={regFormData.hpNo}
+                    onChange={handleRegChange}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* 사용자 부가 정보 (소속, 이메일, 등급) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="flex flex-col gap-2">
                   <label className="text-xs font-bold text-slate-600">소속 부서</label>
                   <input
                     type="text"
                     name="deptNm"
                     placeholder="예: 운영팀, 영업부"
                     value={regFormData.deptNm}
+                    onChange={handleRegChange}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold text-slate-600">업무용 이메일</label>
+                  <input
+                    type="email"
+                    name="email"
+                    placeholder="example@bustaams.com"
+                    value={regFormData.email}
                     onChange={handleRegChange}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
                   />
@@ -538,33 +569,6 @@ const UsersManagement = () => {
                     <option value="MANAGER">MANAGER (일반 관리자)</option>
                     <option value="SALES">SALES (영업 담당자)</option>
                   </select>
-                </div>
-              </div>
-
-              {/* 연락처 정보 (전화번호, 이메일) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold text-slate-600">휴대폰 번호</label>
-                  <input
-                    type="text"
-                    name="hpNo"
-                    placeholder="- 없이 숫자만 입력"
-                    value={regFormData.hpNo}
-                    onChange={handleRegChange}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold text-slate-600">업무용 이메일</label>
-                  <input
-                    type="email"
-                    name="email"
-                    placeholder="example@bustaams.com"
-                    value={regFormData.email}
-                    onChange={handleRegChange}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
-                  />
                 </div>
               </div>
 

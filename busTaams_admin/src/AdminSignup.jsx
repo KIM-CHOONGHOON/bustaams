@@ -3,8 +3,6 @@ import React, { useState } from 'react';
 const AdminSignup = ({ onBack }) => {
   const [formData, setFormData] = useState({
     adminId: '',
-    password: '',
-    confirmPassword: '', // 비밀번호 확인 필드 추가
     adminNm: '',
     deptNm: '',
     hpNo: '',
@@ -21,13 +19,8 @@ const AdminSignup = ({ onBack }) => {
     e.preventDefault();
     
     // 필수값 검증
-    if (!formData.adminId || !formData.password || !formData.confirmPassword || !formData.adminNm) {
-      return alert('아이디, 비밀번호, 비밀번호 확인, 이름은 필수 입력 항목입니다.');
-    }
-
-    // 비밀번호 일치 확인
-    if (formData.password !== formData.confirmPassword) {
-      return alert('입력하신 비밀번호와 비밀번호 확인이 서로 일치하지 않습니다.');
+    if (!formData.adminId || !formData.adminNm || !formData.hpNo) {
+      return alert('아이디, 이름, 휴대폰 번호는 필수 입력 항목입니다.');
     }
 
     setLoading(true);
@@ -37,18 +30,18 @@ const AdminSignup = ({ onBack }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           adminId: formData.adminId,
-          password: formData.password,
           adminNm: formData.adminNm,
           deptNm: formData.deptNm,
           hpNo: formData.hpNo,
           email: formData.email,
-          role: 'SUPER' // 가입 화면을 통해 직접 가입하는 계정은 기본 SUPER 권한 부여
+          role: 'SUPER', // 가입 화면을 통해 직접 가입하는 계정은 기본 SUPER 권한 부여
+          registeredBy: formData.adminId
         }),
       });
 
       const data = await response.json();
       if (response.ok) {
-        alert('관리자 가입 신청이 성공적으로 완료되었습니다. 로그인해 주세요.');
+        alert(`관리자 가입 신청이 성공적으로 완료되었습니다.\n\n초기 비밀번호는 휴대폰 번호 뒷 4자리인 [ ${data.tempPassword} ] 입니다.\n최초 로그인 시 비밀번호를 변경해 주세요.`);
         onBack(); // 가입 후 로그인 화면으로 이동
       } else {
         alert(data.error || '가입에 실패했습니다.');
@@ -79,42 +72,35 @@ const AdminSignup = ({ onBack }) => {
               </h3>
               
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2 ml-1">아이디 (ADMIN_ID)</label>
+                <label className="block text-xs font-bold text-slate-700 mb-2 ml-1">아이디 (ADMIN_ID) <span className="text-rose-500">*</span></label>
                 <input 
                   type="text" name="adminId"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-medium" 
                   placeholder="사용할 아이디를 영문/숫자로 입력하세요" 
                   value={formData.adminId} onChange={handleChange}
+                  required
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2 ml-1">비밀번호 (PASSWORD)</label>
-                <input 
-                  type="password" name="password"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-medium" 
-                  placeholder="비밀번호를 입력하세요" 
-                  value={formData.password} onChange={handleChange}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2 ml-1">비밀번호 확인 (CONFIRM PASSWORD)</label>
-                <input 
-                  type="password" name="confirmPassword"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-medium" 
-                  placeholder="비밀번호를 한번 더 입력하세요" 
-                  value={formData.confirmPassword} onChange={handleChange}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2 ml-1">이름 (ADMIN_NM)</label>
+                <label className="block text-xs font-bold text-slate-700 mb-2 ml-1">이름 (ADMIN_NM) <span className="text-rose-500">*</span></label>
                 <input 
                   type="text" name="adminNm"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-medium" 
                   placeholder="실명을 입력하세요" 
                   value={formData.adminNm} onChange={handleChange}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-2 ml-1">휴대폰 번호 (HP_NO) <span className="text-rose-500">*</span></label>
+                <input 
+                  type="text" name="hpNo"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-medium" 
+                  placeholder="- 없이 숫자만 입력" 
+                  value={formData.hpNo} onChange={handleChange}
+                  required
                 />
               </div>
             </div>
@@ -126,25 +112,14 @@ const AdminSignup = ({ onBack }) => {
                  추가 정보
               </h3>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2 ml-1">소속 부서 (DEPT_NM)</label>
-                  <input 
-                    type="text" name="deptNm"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-medium" 
-                    placeholder="예: 운영팀, CS팀" 
-                    value={formData.deptNm} onChange={handleChange}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2 ml-1">휴대폰 번호 (HP_NO)</label>
-                  <input 
-                    type="text" name="hpNo"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-medium" 
-                    placeholder="- 없이 입력" 
-                    value={formData.hpNo} onChange={handleChange}
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-2 ml-1">소속 부서 (DEPT_NM)</label>
+                <input 
+                  type="text" name="deptNm"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-medium" 
+                  placeholder="예: 운영팀, CS팀" 
+                  value={formData.deptNm} onChange={handleChange}
+                />
               </div>
 
               <div>

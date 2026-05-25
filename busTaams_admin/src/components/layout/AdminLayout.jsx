@@ -14,6 +14,7 @@ import MyCustomersManagement from '../../pages/MyCustomersManagement';
 import MyPerformanceManagement from '../../pages/MyPerformanceManagement';
 import SalesPerformanceManagement from '../../pages/SalesPerformanceManagement';
 import SystemSettings from '../../pages/SystemSettings';
+import MyInfo from '../../pages/MyInfo';
 
 const AdminLayout = ({ onLogout }) => {
   // 로그인된 정보에 기초해 초기 메뉴 설정
@@ -52,6 +53,8 @@ const AdminLayout = ({ onLogout }) => {
         return <SalesPerformanceManagement />;
       case 'settings':
         return <SystemSettings />;
+      case 'my-info':
+        return <MyInfo />;
       default:
         return role === 'SALES' ? <MyCustomersManagement /> : <Dashboard />;
     }

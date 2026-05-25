@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Users, Bus, Settings, Compass, HeartHandshake, TrendingUp, BarChart3, UserCheck, Receipt, Newspaper } from 'lucide-react';
+import { LayoutDashboard, Users, Bus, Settings, Compass, HeartHandshake, TrendingUp, BarChart3, UserCheck, Receipt, Newspaper, User } from 'lucide-react';
 
 const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
   // 로컬스토리지에서 로그인된 관리자 정보 획득
@@ -19,6 +19,7 @@ const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
     { id: 'my-customers', label: '나의 고객관리', icon: <HeartHandshake size={20} /> },
     { id: 'my-performance', label: '나의 실적관리', icon: <TrendingUp size={20} /> },
     { id: 'sales-performance', label: '영업사원 실적', icon: <BarChart3 size={20} /> },
+    { id: 'my-info', label: '내 정보 관리', icon: <User size={20} /> },
     { id: 'BatchDashBoard', label: 'BATCH JOB 모니터링', icon: <Newspaper size={20} />, isModal: true },
     { id: 'settings', label: '시스템 설정', icon: <Settings size={20} /> },
   ];
@@ -26,16 +27,16 @@ const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
   // 권한별 메뉴 필터링 로직
   // 1. SUPER: 모든 메뉴
   // 2. MANAGER: 시스템 설정 빼고 전부 노출
-  // 3. SALES: '나의 고객관리', '나의 실적관리' 두 개만 노출
+  // 3. SALES: '나의 고객관리', '나의 실적관리', '내 정보 관리' 노출
   const getFilteredMenuItems = () => {
     if (role === 'SUPER') {
-      return allMenuItems;
+      return allMenuItems.filter(item => item.id !== 'my-info');
     }
     if (role === 'MANAGER') {
-      return allMenuItems.filter(item => item.id !== 'settings');
+      return allMenuItems.filter(item => item.id !== 'settings' && item.id !== 'my-info');
     }
     if (role === 'SALES') {
-      return allMenuItems.filter(item => item.id === 'my-customers' || item.id === 'my-performance');
+      return allMenuItems.filter(item => item.id === 'my-customers' || item.id === 'my-performance' || item.id === 'my-info');
     }
     return []; // 권한 없거나 정의 안 됨
   };
@@ -85,12 +86,25 @@ const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
       </nav>
 
       <div className="p-4 border-t border-slate-800">
-        <div className="flex items-center gap-3 px-4 py-3 bg-slate-800 rounded-xl mb-4">
-          <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-emerald-400">
+        <div 
+          onClick={() => {
+            if (role === 'SALES') {
+              setCurrentMenu('my-info');
+            }
+          }}
+          className={`flex items-center gap-3 px-4 py-3 rounded-xl mb-4 transition-all ${
+            role === 'SALES'
+              ? 'cursor-pointer ' + (currentMenu === 'my-info' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold' : 'bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white')
+              : 'bg-slate-800 text-slate-300 cursor-default'
+          }`}
+        >
+          <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-emerald-400 shrink-0">
             <Users size={16} />
           </div>
           <div className="text-left flex-1 min-w-0">
-            <p className="text-sm font-bold text-white truncate">{adminUser?.adminNm || '관리자'}</p>
+            <p className={`text-sm font-bold truncate ${role === 'SALES' && currentMenu === 'my-info' ? 'text-emerald-400' : 'text-white'}`}>
+              {adminUser?.adminNm || '관리자'}
+            </p>
             <p className="text-xs text-slate-400 truncate">
               {adminUser?.deptNm ? `${adminUser.deptNm} (${getRoleLabel(role)})` : getRoleLabel(role)}
             </p>
