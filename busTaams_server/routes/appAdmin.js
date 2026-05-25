@@ -102,7 +102,7 @@ module.exports = (pool) => {
 
             const hashedPassword = await bcrypt.hash(tempPassword, 10);
             const adminGrade = role || 'MANAGER'; // SUPER, MANAGER, SALES 중 하나
-            const regId = registeredBy || 'SYSTEM'; // 등록자 ID
+            const regId = registeredBy || adminId || 'SYSTEM'; // 등록자 ID
 
             // PWD_CHG_DT를 NULL로 명시적 입력하여 최초 로그인 비밀번호 변경 대상 상태로 등록
             await pool.execute(
@@ -681,7 +681,7 @@ module.exports = (pool) => {
     router.patch('/:adminId/status', async (req, res) => {
         try {
             const { adminId } = req.params;
-            const { role, status, adminNm, deptNm, hpNo, email } = req.body;
+            const { role, status, adminNm, deptNm, hpNo, email, modifiedBy } = req.body;
 
             const sets = [];
             const params = [];
@@ -710,6 +710,11 @@ module.exports = (pool) => {
                 sets.push('EMAIL = ?');
                 params.push(email);
             }
+
+            // MOD_ID 기록
+            const modId = modifiedBy || 'SYSTEM';
+            sets.push('MOD_ID = ?');
+            params.push(modId);
 
             if (sets.length === 0) {
                 return res.status(400).json({ error: '변경할 정보가 입력되지 않았습니다.' });

@@ -68,6 +68,7 @@ const MyInfo = () => {
           deptNm: profileData.deptNm,
           hpNo: profileData.hpNo,
           email: profileData.email,
+          modifiedBy: profileData.adminId
         }),
       });
 

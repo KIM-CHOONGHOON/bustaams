@@ -34,7 +34,8 @@ const AdminSignup = ({ onBack }) => {
           deptNm: formData.deptNm,
           hpNo: formData.hpNo,
           email: formData.email,
-          role: 'SUPER' // 가입 화면을 통해 직접 가입하는 계정은 기본 SUPER 권한 부여
+          role: 'SUPER', // 가입 화면을 통해 직접 가입하는 계정은 기본 SUPER 권한 부여
+          registeredBy: formData.adminId
         }),
       });
 

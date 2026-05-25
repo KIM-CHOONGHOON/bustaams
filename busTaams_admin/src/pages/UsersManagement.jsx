@@ -127,6 +127,9 @@ const UsersManagement = () => {
 
     setLoading(true);
     try {
+      const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
+      const modifiedBy = adminUser.adminId || 'SYSTEM';
+
       const response = await fetch(`/api/admin/${editFormData.adminId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -136,6 +139,7 @@ const UsersManagement = () => {
           deptNm: editFormData.deptNm,
           hpNo: editFormData.hpNo,
           email: editFormData.email,
+          modifiedBy
         }),
       });
 
