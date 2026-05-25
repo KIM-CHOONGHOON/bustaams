@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Users, Bus, Settings, Compass, HeartHandshake, TrendingUp, BarChart3, UserCheck, Receipt, Newspaper } from 'lucide-react';
+import { LayoutDashboard, Users, Bus, Settings, Compass, HeartHandshake, TrendingUp, BarChart3, UserCheck, Receipt, Newspaper, User } from 'lucide-react';
 
 const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
   // 로컬스토리지에서 로그인된 관리자 정보 획득
@@ -19,6 +19,7 @@ const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
     { id: 'my-customers', label: '나의 고객관리', icon: <HeartHandshake size={20} /> },
     { id: 'my-performance', label: '나의 실적관리', icon: <TrendingUp size={20} /> },
     { id: 'sales-performance', label: '영업사원 실적', icon: <BarChart3 size={20} /> },
+    { id: 'my-info', label: '내 정보 관리', icon: <User size={20} /> },
     { id: 'BatchDashBoard', label: 'BATCH JOB 모니터링', icon: <Newspaper size={20} />, isModal: true },
     { id: 'settings', label: '시스템 설정', icon: <Settings size={20} /> },
   ];
@@ -26,7 +27,7 @@ const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
   // 권한별 메뉴 필터링 로직
   // 1. SUPER: 모든 메뉴
   // 2. MANAGER: 시스템 설정 빼고 전부 노출
-  // 3. SALES: '나의 고객관리', '나의 실적관리' 두 개만 노출
+  // 3. SALES: '나의 고객관리', '나의 실적관리', '내 정보 관리' 노출
   const getFilteredMenuItems = () => {
     if (role === 'SUPER') {
       return allMenuItems;
@@ -35,7 +36,7 @@ const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
       return allMenuItems.filter(item => item.id !== 'settings');
     }
     if (role === 'SALES') {
-      return allMenuItems.filter(item => item.id === 'my-customers' || item.id === 'my-performance');
+      return allMenuItems.filter(item => item.id === 'my-customers' || item.id === 'my-performance' || item.id === 'my-info');
     }
     return []; // 권한 없거나 정의 안 됨
   };
