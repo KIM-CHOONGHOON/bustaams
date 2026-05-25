@@ -177,6 +177,7 @@ module.exports = (pool) => {
                     adminId: adminObj.ADMIN_ID,
                     adminNm: adminObj.ADMIN_NM,
                     deptNm: adminObj.DEPT_NM,
+                    hpNo: adminObj.HP_NO,
                     email: adminObj.EMAIL,
                     role: adminObj.ADMIN_GRADE
                 }

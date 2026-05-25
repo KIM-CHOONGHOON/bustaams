@@ -30,10 +30,10 @@ const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
   // 3. SALES: '나의 고객관리', '나의 실적관리', '내 정보 관리' 노출
   const getFilteredMenuItems = () => {
     if (role === 'SUPER') {
-      return allMenuItems;
+      return allMenuItems.filter(item => item.id !== 'my-info');
     }
     if (role === 'MANAGER') {
-      return allMenuItems.filter(item => item.id !== 'settings');
+      return allMenuItems.filter(item => item.id !== 'settings' && item.id !== 'my-info');
     }
     if (role === 'SALES') {
       return allMenuItems.filter(item => item.id === 'my-customers' || item.id === 'my-performance' || item.id === 'my-info');
@@ -87,18 +87,22 @@ const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
 
       <div className="p-4 border-t border-slate-800">
         <div 
-          onClick={() => setCurrentMenu('my-info')}
-          className={`flex items-center gap-3 px-4 py-3 rounded-xl mb-4 cursor-pointer transition-all ${
-            currentMenu === 'my-info'
-              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold'
-              : 'bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white'
+          onClick={() => {
+            if (role === 'SALES') {
+              setCurrentMenu('my-info');
+            }
+          }}
+          className={`flex items-center gap-3 px-4 py-3 rounded-xl mb-4 transition-all ${
+            role === 'SALES'
+              ? 'cursor-pointer ' + (currentMenu === 'my-info' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold' : 'bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white')
+              : 'bg-slate-800 text-slate-300 cursor-default'
           }`}
         >
           <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-emerald-400 shrink-0">
             <Users size={16} />
           </div>
           <div className="text-left flex-1 min-w-0">
-            <p className={`text-sm font-bold truncate ${currentMenu === 'my-info' ? 'text-emerald-400' : 'text-white'}`}>
+            <p className={`text-sm font-bold truncate ${role === 'SALES' && currentMenu === 'my-info' ? 'text-emerald-400' : 'text-white'}`}>
               {adminUser?.adminNm || '관리자'}
             </p>
             <p className="text-xs text-slate-400 truncate">
