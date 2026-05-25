@@ -30,8 +30,8 @@
 .bus-animate {
   position: absolute;
   top: 50%;
-  left: 64px;                          /* margin-desktop: 왼쪽 로고 시작 위치 */
-  --bus-travel: calc(100vw - 64px - 220px);   /* 로그인 버튼 직전까지 */
+  right: 220px;                        /* 로그인 버튼 직전에서 시작 */
+  --bus-travel: calc(-1 * (100vw - 64px - 220px));  /* 오른쪽 → 왼쪽 */
   animation: busDrive 8s ease-in-out infinite;
   pointer-events: none;
   will-change: transform, opacity;
