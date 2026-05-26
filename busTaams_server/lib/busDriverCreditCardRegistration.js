@@ -90,13 +90,17 @@ async function custIdHasDuplicatePan(conn, custId, panNormalized) {
  */
 async function registerBusDriverPaymentCard(pool, p) {
     const raw = String(p.rawDriverId || '').trim();
+    const billKey = String(p.billKey || '').trim();
+    const isBillingMode = billKey.length > 0;
+
     const pan = digitsOnly(p.panDigits);
-    const em = normalizeExpMonth(p.expMonth);
-    const ey = normalizeExpYear(p.expYearYY);
+    const em = isBillingMode ? (p.expMonth ? normalizeExpMonth(p.expMonth) : '12') : normalizeExpMonth(p.expMonth);
+    const ey = isBillingMode ? (p.expYearYY ? normalizeExpYear(p.expYearYY) : '99') : normalizeExpYear(p.expYearYY);
     const nickRaw = String(p.cardNickname ?? p.CARD_NICKNAME ?? '').trim();
     const nickname = nickRaw.length > 0 ? nickRaw.slice(0, 50) : null;
     const setAsDefault = Boolean(p.setAsDefault);
     const screenId = String(p.screenId || '').trim() || 'BusDriverCreditCardRegistration';
+    const originalCardName = String(p.originalCardName || '').trim() || null;
 
     if (!raw) {
         const e = new Error('driverId가 필요합니다.');
@@ -108,23 +112,28 @@ async function registerBusDriverPaymentCard(pool, p) {
         e.statusCode = 400;
         throw e;
     }
-    if (!luhnValid(pan)) {
-        const e = new Error('카드 번호가 올바르지 않습니다.');
-        e.statusCode = 400;
-        throw e;
-    }
-    if (!expiryMonthInRange01to12(em)) {
-        const e = new Error('유효기간 월(MM)은 01~12 사이여야 합니다.');
-        e.statusCode = 400;
-        throw e;
-    }
-    if (!expiryNotPast(em, ey)) {
-        const e = new Error('유효기간이 현재 년·월보다 이전입니다. MM/YY를 확인해 주세요.');
-        e.statusCode = 400;
-        throw e;
+    
+    // 빌링 모드가 아닐 때만 직접 입력 카드 번호 및 유효기간 검증
+    if (!isBillingMode) {
+        if (!luhnValid(pan)) {
+            const e = new Error('카드 번호가 올바르지 않습니다.');
+            e.statusCode = 400;
+            throw e;
+        }
+        if (!expiryMonthInRange01to12(em)) {
+            const e = new Error('유효기간 월(MM)은 01~12 사이여야 합니다.');
+            e.statusCode = 400;
+            throw e;
+        }
+        if (!expiryNotPast(em, ey)) {
+            const e = new Error('유효기간이 현재 년·월보다 이전입니다. MM/YY를 확인해 주세요.');
+            e.statusCode = 400;
+            throw e;
+        }
     }
 
     const encPan = encrypt(pan);
+    const encBillKey = isBillingMode ? encrypt(billKey) : null;
     let conn;
     try {
         conn = await pool.getConnection();
@@ -146,12 +155,15 @@ async function registerBusDriverPaymentCard(pool, p) {
         const custId = String(user.CUST_ID || '').trim();
         const regId = String(user.USER_ID || custId || '').trim().slice(0, 10);
 
-        const dup = await custIdHasDuplicatePan(conn, custId, pan);
-        if (dup) {
-            await conn.rollback();
-            const e = new Error('이미 등록된 카드 번호 입니다. 다른 카드 번호를 입력하세요!');
-            e.statusCode = 409;
-            throw e;
+        // 빌링 모드가 아닐 때만 중복 PAN 검사
+        if (!isBillingMode) {
+            const dup = await custIdHasDuplicatePan(conn, custId, pan);
+            if (dup) {
+                await conn.rollback();
+                const e = new Error('이미 등록된 카드 번호 입니다. 다른 카드 번호를 입력하세요!');
+                e.statusCode = 409;
+                throw e;
+            }
         }
 
         const [cntRows] = await conn.execute(
@@ -177,10 +189,10 @@ async function registerBusDriverPaymentCard(pool, p) {
 
         await conn.execute(
             `INSERT INTO TB_PAYMENT_CARD (
-                CUST_ID, CARD_SEQ, CARD_NICKNAME, CARD_NO_ENC, EXP_MONTH, EXP_YEAR,
+                CUST_ID, CARD_SEQ, CARD_NICKNAME, ORIGINAL_CARD_NAME, CARD_NO_ENC, CARD_BILLING_KEY_ENC, EXP_MONTH, EXP_YEAR,
                 IS_PRIMARY, AUTO_PAY_START_DT, AUTO_PAY_END_DT, AUTO_PAY_DAY, REG_ID
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
-            [custId, cardSeq, nickname, encPan, em, ey, isPrimary, autoPayStartDt, autoPayEndDt, regId || null]
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+            [custId, cardSeq, nickname, originalCardName, encPan, encBillKey, em, ey, isPrimary, autoPayStartDt, autoPayEndDt, regId || null]
         );
 
         await conn.commit();

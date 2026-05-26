@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+// busTaams - 버스 대절 예약 요청 페이지 (V2.0.2 - 캐시 갱신용 더미 주석 추가)
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../api';
 import Swal from 'sweetalert2';
@@ -172,40 +173,72 @@ const RequestBus = () => {
     const [isKakaoLoaded, setIsKakaoLoaded] = useState(false);
     const [kakaoError, setKakaoError] = useState(false);
 
-    // 동적으로 카카오맵 SDK 로드 (한글 주석)
+    // 동적으로 카카오맵 SDK 로드 (중복 로드 방지 및 타이밍 개선 적용)
     useEffect(() => {
-        const kakaoApiKey = import.meta.env.VITE_KAKAO_API_KEY || 'fdbe7b320906be89ddd194a26a1c6487';
-        if (!kakaoApiKey) {
-            console.warn('VITE_KAKAO_API_KEY가 설정되지 않았습니다. 장소 검색 시 로컬 Mock 데이터로 검색합니다.');
+        const kakaoApiKey = import.meta.env.VITE_KAKAO_JAVASCRIPT_KEY;
+        console.log('KAKAO KEY =', import.meta.env.VITE_KAKAO_JAVASCRIPT_KEY);
+
+        if (!kakaoApiKey || kakaoApiKey === 'undefined' || kakaoApiKey === 'null') {
+            console.error('VITE_KAKAO_JAVASCRIPT_KEY가 유효하지 않거나 없습니다. 현재 값:', kakaoApiKey);
+            setIsKakaoLoaded(false);
             setKakaoError(true);
             return;
         }
 
-        if (window.kakao && window.kakao.maps) {
-            setIsKakaoLoaded(true);
+        const loadKakao = () => {
+            if (!window.kakao || !window.kakao.maps) {
+                console.error('window.kakao.maps 객체가 없습니다.');
+                setIsKakaoLoaded(false);
+                setKakaoError(true);
+                return;
+            }
+
+            window.kakao.maps.load(() => {
+                if (window.kakao.maps.services) {
+                    console.log('Kakao Maps SDK 로드 성공');
+                    setIsKakaoLoaded(true);
+                    setKakaoError(false);
+                } else {
+                    console.error('Kakao services 라이브러리 로드 실패');
+                    setIsKakaoLoaded(false);
+                    setKakaoError(true);
+                }
+            });
+        };
+
+        const existingScript = document.querySelector(
+            'script[src*="dapi.kakao.com/v2/maps/sdk.js"]'
+        );
+
+        if (existingScript) {
+            if (window.kakao?.maps?.services) {
+                setIsKakaoLoaded(true);
+                setKakaoError(false);
+            } else {
+                existingScript.addEventListener('load', loadKakao, { once: true });
+                existingScript.addEventListener('error', () => {
+                    console.error('기존 Kakao SDK 스크립트 로드 실패');
+                    setIsKakaoLoaded(false);
+                    setKakaoError(true);
+                }, { once: true });
+            }
             return;
         }
 
         const script = document.createElement('script');
         script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${kakaoApiKey}&libraries=services&autoload=false`;
         script.async = true;
-        document.head.appendChild(script);
-
-        script.onload = () => {
-            if (window.kakao && window.kakao.maps) {
-                window.kakao.maps.load(() => {
-                    setIsKakaoLoaded(true);
-                    console.log('Kakao Maps SDK 로드 성공');
-                });
-            } else {
-                setKakaoError(true);
-            }
-        };
-
-        script.onerror = () => {
+        script.onload = loadKakao;
+        script.onerror = (e) => {
             console.error('Kakao Maps SDK 로드 실패');
+            console.error('요청 URL:', script.src);
+            console.error('현재 도메인:', window.location.origin);
+            console.error('Kakao Key:', kakaoApiKey);
+            setIsKakaoLoaded(false);
             setKakaoError(true);
         };
+
+        document.head.appendChild(script);
     }, []);
 
     // 키워드로 장소 검색 실행 함수 (한글 주석)
@@ -217,23 +250,6 @@ const RequestBus = () => {
         }
 
         setIsSearching(true);
-
-        const MOCK_PLACES = [
-            { place_name: '서울역', road_address_name: '서울 중구 한강대로 405', address_name: '서울 중구 봉래동2가 122' },
-            { place_name: '부산역', road_address_name: '부산 동구 중앙대로 206', address_name: '부산 동구 초량동 1187-1' },
-            { place_name: '대전역', road_address_name: '대전 동구 중앙로 215', address_name: '대전 동구 정동 1' },
-            { place_name: '광주송정역', road_address_name: '광주 광산구 상무대로 201-1', address_name: '광주 광산구 송정동 1003' },
-            { place_name: '인천국제공항', road_address_name: '인천 중구 공항로 272', address_name: '인천 중구 운서동 2851' },
-            { place_name: '김포국제공항', road_address_name: '서울 강서구 하늘길 112', address_name: '서울 강서구 공항동 137-3' },
-            { place_name: '롯데월드', road_address_name: '서울 송파구 올림픽로 240', address_name: '서울 송파구 잠실동 40-1' },
-            { place_name: '에버랜드', road_address_name: '경기 용인시 처인구 포곡읍 에버랜드로 199', address_name: '경기 용인시 처인구 포곡읍 전대리 310' },
-            { place_name: '경복궁', road_address_name: '서울 종로구 사직로 161', address_name: '서울 종로구 세종로 1-1' },
-            { place_name: '제주국제공항', road_address_name: '제주 제주시 공항로 2', address_name: '제주 제주시 용담이동 2002' },
-            { place_name: '해운대해수욕장', road_address_name: '부산 해운대구 우동', address_name: '부산 해운대구 우동 1414' },
-            { place_name: '강릉역', road_address_name: '강원 강릉시 용지로 176', address_name: '강원 강릉시 교동 118' },
-            { place_name: '여수엑스포역', road_address_name: '전남 여수시 망양로 2', address_name: '전남 여수시 덕충동 2005' },
-            { place_name: '경주보문단지', road_address_name: '경북 경주시 보문로 424-33', address_name: '경북 경주시 신평동 375-1' },
-        ];
 
         if (isKakaoLoaded && window.kakao && window.kakao.maps && window.kakao.maps.services) {
             const ps = new window.kakao.maps.services.Places();
@@ -250,19 +266,12 @@ const RequestBus = () => {
                 }
             });
         } else {
-            // 목(Mock) 데이터 검색 모드 (사용자 경험을 위해 500ms 지연)
-            setTimeout(() => {
-                const filtered = MOCK_PLACES.filter(place => 
-                    place.place_name.includes(searchKeyword) || 
-                    place.road_address_name.includes(searchKeyword) || 
-                    place.address_name.includes(searchKeyword)
-                );
-                setSearchResults(filtered);
-                setIsSearching(false);
-                if (filtered.length === 0) {
-                    notify.info('알림', '검색 결과가 없습니다. (테스트용 키워드: 서울역, 에버랜드, 롯데월드 등)');
-                }
-            }, 500);
+            setIsSearching(false);
+            setSearchResults([]);
+            notify.error(
+                '오류',
+                '카카오 지도 API가 로드되지 않았습니다. JavaScript 키, 도메인 등록, .env 설정을 확인하세요.'
+            );
         }
     };
 
@@ -470,7 +479,7 @@ const RequestBus = () => {
                             <div>
                                 <h3 className="font-headline font-black text-xl text-teal-900">장소 검색</h3>
                                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                                    {isKakaoLoaded && !kakaoError ? 'Kakao Maps API 연동 중' : '로컬 테스트 (Mock) 모드'}
+                                    {isKakaoLoaded && !kakaoError ? 'Kakao Maps API 연동 중' : 'Kakao Maps API 로드 실패'}
                                 </p>
                             </div>
                             <button onClick={() => { setPostcodeOpen(false); setSearchKeyword(''); setSearchResults([]); }} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 transition-all active:scale-95">
@@ -530,8 +539,8 @@ const RequestBus = () => {
                                     <p className="text-sm font-bold">검색 결과가 없습니다.</p>
                                     <p className="text-xs opacity-70">원하시는 장소명을 입력하신 후 검색해 보세요!</p>
                                     {!isKakaoLoaded && (
-                                        <p className="text-[10px] text-teal-600 font-semibold mt-4 bg-teal-50 px-3 py-1 rounded-full">
-                                            💡 테스트용 추천 검색어: 서울역, 에버랜드, 롯데월드
+                                        <p className="text-[10px] text-red-600 font-semibold mt-4 bg-red-50 px-3 py-1 rounded-full">
+                                            카카오 지도 API가 로드되지 않았습니다.
                                         </p>
                                     )}
                                 </div>

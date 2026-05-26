@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import api from '../api';
+import api, { getImageUrl } from '../api';
 import BottomNavCustomer from '../components/BottomNavCustomer';
 
 const ReservationDetailCustomer = () => {
@@ -11,6 +11,13 @@ const ReservationDetailCustomer = () => {
     const [error, setError] = useState(null); // 에러 상태 추가
     const [customerProfile, setCustomerProfile] = useState(null);
     const [imageVersion, setImageVersion] = useState(Date.now());
+
+    // 취소 모달 관련 상태들 (Early Return 이전에 호출되도록 최상단 배치)
+    const [showCancelModal, setShowCancelModal] = useState(false);
+    const [cancelCode, setCancelCode] = useState('06');
+    const [cancelReasonText, setCancelReasonText] = useState('');
+    const [cancelFile, setCancelFile] = useState(null);
+    const [isCancelling, setIsCancelling] = useState(false);
 
     useEffect(() => {
         const fetchDetail = async () => {
@@ -110,11 +117,7 @@ const ReservationDetailCustomer = () => {
         }
     };
 
-    const [showCancelModal, setShowCancelModal] = useState(false);
-    const [cancelCode, setCancelCode] = useState('06');
-    const [cancelReasonText, setCancelReasonText] = useState('');
-    const [cancelFile, setCancelFile] = useState(null);
-    const [isCancelling, setIsCancelling] = useState(false);
+
 
     const handleCancel = async () => {
         if (!cancelReasonText.trim()) {
@@ -168,9 +171,7 @@ const ReservationDetailCustomer = () => {
                         <div className="flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 overflow-hidden border-2 border-white shadow-sm transition-transform hover:scale-110 active:scale-95 cursor-pointer" onClick={() => navigate('/profile-customer')}>
                             {customerProfile?.profileImage ? (
                                 <img 
-                                    src={customerProfile.profileImage.startsWith('http') ? 
-                                        `${customerProfile.profileImage}${customerProfile.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}` : 
-                                        `${import.meta.env.VITE_API_BASE_URL || ''}${customerProfile.profileImage.startsWith('/') ? '' : '/'}${customerProfile.profileImage}${customerProfile.profileImage.includes('?') ? '&' : '?'}t=${imageVersion}`} 
+                                    src={getImageUrl(customerProfile.profileImage, imageVersion)} 
                                     alt="Profile" 
                                     className="w-full h-full object-cover"
                                 />
@@ -183,7 +184,7 @@ const ReservationDetailCustomer = () => {
             </header>
 
             <main className="pt-28 px-6 max-w-7xl mx-auto">
-                {customerProfile?.restrictStat && customerProfile.restrictStat !== 'N' && (
+                {customerProfile && customerProfile.restrictStat && customerProfile.restrictStat !== 'N' && (
                     <div className="mb-8 p-6 rounded-[2rem] bg-rose-500 text-white shadow-xl shadow-rose-500/20 flex items-center gap-4 animate-pulse">
                         <span className="material-symbols-outlined text-3xl">warning</span>
                         <div>
@@ -271,7 +272,7 @@ const ReservationDetailCustomer = () => {
                                                 <div className="flex items-center gap-4">
                                                     <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-teal-100 shadow-sm flex-shrink-0">
                                                         <img 
-                                                            src={bus.driverAvatar || 'https://via.placeholder.com/300?text=Driver'} 
+                                                            src={bus.driverAvatar ? getImageUrl(bus.driverAvatar, imageVersion) : 'https://via.placeholder.com/300?text=Driver'} 
                                                             alt="Driver Avatar" 
                                                             className="w-full h-full object-cover"
                                                         />
@@ -309,20 +310,36 @@ const ReservationDetailCustomer = () => {
                                                     </div>
                                                     <div className="bg-slate-50 px-6 py-3 rounded-2xl border border-slate-100">
                                                         <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">최종 예약 금액</p>
-                                                        <p className="text-2xl font-black text-teal-600">₩ {(bus.confirmedPrice || 0).toLocaleString()}</p>
+                                                        <p className="text-2xl font-black text-teal-600">₩ {Number(bus.confirmedPrice || 0).toLocaleString()}</p>
                                                     </div>
                                                 </div>
                                                 
-                                                {/* 차량 이미지 제거 (사용자 요청) */}
+                                                {/* 차량 이미지 복구 및 렌더링 */}
+                                                {bus.busImage && (
+                                                    <div className="relative group rounded-[2.5rem] overflow-hidden aspect-[16/9] bg-slate-100 border border-slate-100 shadow-md">
+                                                        <img 
+                                                            src={getImageUrl(bus.busImage, imageVersion)} 
+                                                            alt={bus.busModel} 
+                                                            className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+                                                        />
+                                                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 via-transparent to-transparent"></div>
+                                                    </div>
+                                                )}
 
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-6 pt-10 border-t border-slate-50">
-                                                    <div className="flex justify-between items-center py-2 border-b border-slate-50 md:border-0">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-4 pt-10 border-t border-slate-50">
+                                                    <div className="flex justify-between items-center py-3 border-b border-slate-50">
                                                         <span className="text-slate-400 font-bold uppercase text-[11px] tracking-widest">차량 번호</span>
                                                         <span className="font-black text-on-surface">{bus.busNo || '-'}</span>
                                                     </div>
-                                                    <div className="flex justify-between items-center py-2 border-b border-slate-50 md:border-0">
+                                                    <div className="flex justify-between items-center py-3 border-b border-slate-50">
                                                         <span className="text-slate-400 font-bold uppercase text-[11px] tracking-widest">운행 상태</span>
                                                         <span className="px-3 py-1 bg-teal-50 text-teal-600 rounded-full font-black text-[10px] tracking-widest uppercase border border-teal-100">배차 확정</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center py-3 border-b border-slate-50 md:col-span-2">
+                                                        <span className="text-slate-400 font-bold uppercase text-[11px] tracking-widest">안전장치(AEBS)</span>
+                                                        <span className={`font-black ${bus.hasAdas === 'Y' ? 'text-teal-600' : 'text-slate-500'}`}>
+                                                            {bus.hasAdas === 'Y' ? '장착 완료' : '미장착'}
+                                                        </span>
                                                     </div>
                                                 </div>
 
@@ -378,7 +395,7 @@ const ReservationDetailCustomer = () => {
                             </div>
                             <div className="pt-8 border-t border-white/10">
                                 <div className="flex justify-between items-baseline mb-6">
-                                    <span className="text-5xl font-black tracking-tighter text-white">₩ {(Number(reservation.total_price) || 0).toLocaleString()}</span>
+                                    <span className="text-5xl font-black tracking-tighter text-white">₩ {Number(reservation.total_price || 0).toLocaleString()}</span>
                                     <span className="material-symbols-outlined text-primary text-3xl">verified</span>
                                 </div>
                                 <p className="text-[10px] text-slate-500 font-bold leading-relaxed italic">

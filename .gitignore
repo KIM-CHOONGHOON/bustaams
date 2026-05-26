@@ -65,3 +65,7 @@ lerna-debug.log*
 
 # ── 서버 로컬 업로드 (구 busTaams_server/.gitignore 통합) ──
 busTaams_server/uploads/signatures/
+
+# ── Antigravity 임시 작업용 디렉터리 ──
+**/scratch/
+

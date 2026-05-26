@@ -103,45 +103,37 @@ const ApprovalListCustomer = () => {
         );
 
         const confirmed = await notify.confirm(
-            '전체 청약 승인',
+            '전체 승인',
             `진행 중인 모든 청약을 승인하시겠습니까?\n\n예약금: ${totalResFee.toLocaleString()}원`
         );
 
         if (!confirmed) return;
 
-        // 2026-05-30 까지는 계좌입금 방식
-        const now = new Date();
-        const limitDate = new Date('2026-05-30T23:59:59');
-
-        if (now <= limitDate) {
-
-            await notify.info(
-                '예약금 입금 안내',
-                `
+        // 무통장 입금 안내 노출
+        await notify.info(
+            '예약금 입금 안내',
+            `
     은행명 : 국민은행\n
-
     계좌번호 : 123456-01-123456\n
-
     예금주 : (주)버스타암즈\n
-
     입금금액 : ${totalResFee.toLocaleString()}원\n
-
     ※ 입금 확인 후 예약이 승인됩니다.
-                `
-            );
+            `
+        );
 
-            return;
+        try {
+            // 백엔드 API를 호출하여 결제 상태 업데이트 (PAYMENT_STS = '1')
+            const res = await api.post('/app/customer/payment-bank', { reqId });
+            if (res.success) {
+                notify.success('승인 요청 완료', '무통장 입금 안내 및 결제 대기 상태가 반영되었습니다.');
+                fetchEstimates(); // 화면 데이터 갱신
+            } else {
+                notify.error('업데이트 실패', res.error || '결제 상태 업데이트 중 오류가 발생했습니다.');
+            }
+        } catch (error) {
+            console.error('Update payment status error:', error);
+            notify.error('오류 발생', '서버와의 통신 중 오류가 발생했습니다.');
         }
-
-        // 이후 카드결제 진행
-        initiatePayment({
-            reqId: reqId,
-            price: totalResFee,
-            goodname: `${tripSummary.title} 예약금 결제`,
-            buyername: customerProfile?.custNm || '구매자',
-            buyertel: customerProfile?.phoneNo || '010-0000-0000',
-            buyeremail: customerProfile?.email || 'test@example.com'
-        });
     };
 
     const initiatePayment = async (payData) => {

@@ -151,9 +151,8 @@ module.exports = (pool) => {
                     return res.status(403).json({ error: '비활성화 상태의 관리자 계정입니다.' });
                 }
             }
-            const logMsg = `[${new Date().toISOString()}] Login Attempt - adminId: ${adminId}, inputPwdLen: ${password ? password.length : 0}, hashInDb: "${adminObj.PASSWORD}"\n`;
-            require('fs').appendFileSync('d:\\project_bustaams\\busTaams_server\\admin_debug.log', logMsg, 'utf8');
-            console.log(`[DEBUG Admin Login] adminId: ${adminId}, inputPasswordLength: ${password ? password.length : 0}, hashInDb: "${adminObj.PASSWORD}"`);
+            console.log(`[DEBUG Admin Login] adminId: ${adminId}, inputPasswordLength: ${password ? password.length : 0}`);
+
             const isMatch = await bcrypt.compare(password, adminObj.PASSWORD);
             if (!isMatch) {
                 return res.status(401).json({ error: '비밀번호가 일치하지 않습니다.' });

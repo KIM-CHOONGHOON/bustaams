@@ -5,6 +5,7 @@ import { getDriverProfile, updateDriverProfile, request, sendAuthCode, verifyAut
 import { validateRRN } from '../utils/validation';
 import { notify } from '../utils/toast';
 import BottomNavDriver from '../components/BottomNavDriver';
+import { compressImage } from '../utils/image';
 
 const DriverInfoRegistration = () => {
     const navigate = useNavigate();
@@ -173,11 +174,13 @@ const DriverInfoRegistration = () => {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleFileChange = (e, type) => {
+    const handleFileChange = async (e, type) => {
         const file = e.target.files[0];
         if (file) {
-            setFiles(prev => ({ ...prev, [type]: file }));
-            setPreviews(prev => ({ ...prev, [type]: URL.createObjectURL(file) }));
+            // 한글 주석: 업로드 전 이미지 압축 수행
+            const compressedFile = await compressImage(file);
+            setFiles(prev => ({ ...prev, [type]: compressedFile }));
+            setPreviews(prev => ({ ...prev, [type]: URL.createObjectURL(compressedFile) }));
         }
     };
 

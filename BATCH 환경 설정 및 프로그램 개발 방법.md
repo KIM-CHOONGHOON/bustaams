@@ -495,40 +495,6 @@ bash scripts/ci/check-bustaams-no-ddl.sh
 6. 배치 실행기는 요청 상태를 읽거나, 관리자 API가 별도 실행 명령을 전달한다.
 7. 재실행 결과를 기존 실행 건과 연결해 기록한다.
 
-### 11.4 배치 관리를 위한 주요 등록 온라인 거래 (API/화면 기능)
-
-배치 작업을 효율적으로 관리하기 위해 관리자 화면(온라인 환경)에서 제공해야 하는 주요 등록 온라인 거래(API 및 화면 기능)는 다음과 같습니다.
-
-1. **배치 작업 등록/수정 거래 (Master Management)**
-   - **설명**: 새로운 배치 작업을 시스템에 등록하거나 기존 배치 설정을 수정합니다.
-   - **주요 기능**: 배치 ID, 배치명, 실행 파일 경로, 재실행 정책, 최대 시도 횟수 등의 정보를 `TB_BATCH_JOB_MST` 테이블에 등록/갱신합니다.
-   - **온라인 트랜잭션**: `POST /api/admin/batch/jobs`, `PUT /api/admin/batch/jobs/:id`
-
-2. **배치 스케줄 등록/변경 거래 (Schedule Management)**
-   - **설명**: 등록된 배치 작업이 주기적으로 자동 실행될 수 있도록 스케줄 기준을 설정합니다.
-   - **주요 기능**: 실행 시간, 수행 월/일/요일 및 기준일 계산 규칙, 휴일 처리 방식을 설정하고 `TB_BATCH_SCHED` 테이블에 등록합니다.
-   - **온라인 트랜잭션**: `POST /api/admin/batch/schedules`, `PUT /api/admin/batch/schedules/:id`
-
-3. **수동 배치 실행/계획 추가 거래 (On-Demand Execution)**
-   - **설명**: 정기 스케줄 외에 특정 시점에 특정 처리 기준일의 배치를 수동으로 실행하고 싶을 때 사용합니다.
-   - **주요 기능**: 수행일자(`JOB_DT`)와 회차(`JOB_ROUND`)를 입력하여 당일 수행 계획(`TB_BATCH_PLAN`)에 `MANUAL` 유형으로 `READY` 상태 계획을 수동 추가합니다.
-   - **온라인 트랜잭션**: `POST /api/admin/batch/plans`
-
-4. **실패 배치 재실행 요청 거래 (Retry Request)**
-   - **설명**: 배치가 비정상 종료(FAILED)되었을 때, 이를 안전하게 다시 실행할 수 있도록 요청을 등록합니다.
-   - **주요 기능**: 실패한 원본 실행 ID(`ORIG_EXEC_ID`)와 재실행 사유를 입력하여 `TB_BATCH_RETRY_REQ` 테이블에 `REQUESTED` 상태로 등록합니다.
-   - **온라인 트랜잭션**: `POST /api/admin/batch/retries`
-
-5. **재실행 요청 승인 및 실행 거래 (Retry Approval & Execution)**
-   - **설명**: 등록된 재실행 요청을 검토하고 승인하여 배치를 즉시 또는 다음 배치 실행 사이클에 구동되도록 지시합니다.
-   - **주요 기능**: `TB_BATCH_RETRY_REQ`의 상태를 `APPROVED`로 변경하고, 신규 실행 계획/이력을 생성하여 배치 프로그램이 연동될 수 있도록 기동 API를 호출합니다.
-   - **온라인 트랜잭션**: `POST /api/admin/batch/retries/:id/approve`
-
-6. **배치 실행 잠금 강제 해제 거래 (Force Unlock)**
-   - **설명**: 서버 비정상 종료 등으로 인해 배치 락이 해제되지 않고 남아있는 경우, 이를 강제로 삭제하여 배치가 다시 실행될 수 있도록 조치합니다.
-   - **주요 기능**: `TB_BATCH_LOCK` 테이블에서 특정 배치 잠금키(`LOCK_KEY`)를 강제 삭제합니다.
-   - **온라인 트랜잭션**: `DELETE /api/admin/batch/locks/:key`
-
 ## 12. 배치 실행 정보 관리 테이블
 
 배치 작업의 정상 종료, 오류 종료, 재실행 여부를 관리하려면 실행 정보를 저장하는 테이블이 필요하다. 이 저장소에서는 운영 DB에 대한 DDL을 배치 코드에 넣지 않으므로, 테이블 생성은 DBA 또는 승인된 마이그레이션 절차에서 별도로 처리한다.
@@ -559,9 +525,9 @@ CREATE TABLE TB_BATCH_JOB_MST (
     USE_YN CHAR(1) DEFAULT 'Y' NOT NULL COMMENT '사용여부(Y,N)',
     RETRY_POLICY VARCHAR(30) DEFAULT 'RETRYABLE' NOT NULL COMMENT '재실행가능정책(RETRYABLE,MANUAL_CHECK_REQUIRED,NOT_RETRYABLE)',
     MAX_RETRY_CNT INT DEFAULT 3 NOT NULL COMMENT '최대재시도횟수',
-    REG_ID VARCHAR(10) DEFAULT 'SYSTEM' NOT NULL COMMENT '등록자ID (TB_USER.CUST_ID)',
+    REG_USR_ID VARCHAR(20) DEFAULT 'SYSTEM' NOT NULL COMMENT '등록자ID',
     REG_DT DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '등록일시',
-    MOD_ID VARCHAR(10) COMMENT '수정자ID (TB_USER.CUST_ID)',
+    MOD_USR_ID VARCHAR(20) COMMENT '수정자ID',
     MOD_DT DATETIME COMMENT '수정일시',
     PRIMARY KEY (BATCH_JOB_ID)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='배치작업마스터';
@@ -624,7 +590,7 @@ CREATE TABLE TB_BATCH_HIST (
     ERR_CD VARCHAR(50) COMMENT '오류코드',
     ERR_MSG VARCHAR(1000) COMMENT '오류메시지',
     ORIG_EXEC_ID BIGINT COMMENT '재실행원본실행ID',
-    REQ_USR_ID VARCHAR(10) COMMENT '요청자ID (TB_USER.CUST_ID)',
+    REQ_USR_ID VARCHAR(20) COMMENT '요청자ID',
     REQ_REASON VARCHAR(500) COMMENT '요청사유',
     REG_DT DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '등록일시',
     PRIMARY KEY (EXEC_ID),
@@ -663,9 +629,9 @@ CREATE TABLE TB_BATCH_RETRY_REQ (
     RETRY_REQ_ID BIGINT AUTO_INCREMENT NOT NULL COMMENT '재실행요청ID',
     ORIG_EXEC_ID BIGINT NOT NULL COMMENT '원본실행ID',
     NEW_EXEC_ID BIGINT COMMENT '신규실행ID',
-    REQ_USR_ID VARCHAR(10) NOT NULL COMMENT '요청자ID (TB_USER.CUST_ID)',
+    REQ_USR_ID VARCHAR(20) NOT NULL COMMENT '요청자ID',
     REQ_REASON VARCHAR(500) NOT NULL COMMENT '요청사유',
-    APPR_USR_ID VARCHAR(10) COMMENT '승인자ID (TB_USER.CUST_ID)',
+    APPR_USR_ID VARCHAR(20) COMMENT '승인자ID',
     APPR_STAT VARCHAR(10) DEFAULT 'REQUESTED' NOT NULL COMMENT '승인상태(REQUESTED,APPROVED,REJECTED)',
     REG_DT DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '요청일시',
     APPR_DT DATETIME COMMENT '승인일시',
@@ -719,52 +685,6 @@ CREATE TABLE TB_BATCH_NOTI_HIST (
   3. 수행일자(`JOB_DT`)와 회차(`JOB_ROUND`)를 산출하고, 이미 중복된 계획이 존재하는지 확인한다.
   4. 당일 수행 계획(`TB_BATCH_PLAN`)에 `READY` 상태로 일괄 생성한다.
   5. 정해진 주기에 도달하면 배치 락(`TB_BATCH_LOCK`)을 시도하여 획득 성공 시 `TB_BATCH_HIST`를 `RUNNING` 상태로 등록하고 배치 업무 코드를 기동한다.
-
-### 12.3 배치 관리 테이블 생성 순서 및 TB_USER 연결 관계
-
-#### 1) 배치 관리 테이블 생성 순서 (Table Creation Order)
-테이블 생성 시, 외래키(FOREIGN KEY) 참조 무결성 제약조건으로 인한 에러를 방지하기 위해 반드시 다음 순서로 테이블을 생성해야 합니다.
-
-1. **`TB_USER`** (기존 운영 회원 테이블, 배치 테이블 생성 전에 먼저 생성 및 존재해야 함)
-2. **`TB_BATCH_JOB_MST`** (배치 작업 마스터 테이블 - 다른 배치 테이블들의 참조 대상)
-3. **1단계 의존 테이블** (`TB_BATCH_JOB_MST`를 외래키로 참조하는 테이블들)
-   - **`TB_BATCH_SCHED`** (배치 스케줄 등록)
-   - **`TB_BATCH_PLAN`** (배치 수행 계획)
-   - **`TB_BATCH_HIST`** (배치 실행 결과/이력)
-   - **`TB_BATCH_LOCK`** (배치 실행 잠금)
-4. **2단계 의존 테이블** (`TB_BATCH_HIST`를 외래키로 참조하는 테이블들)
-   - **`TB_BATCH_DTL`** (배치 처리 상세)
-   - **`TB_BATCH_RETRY_REQ`** (배치 재실행 요청)
-   - **`TB_BATCH_NOTI_HIST`** (배치 알림 이력)
-
-#### 2) TB_USER 테이블과의 연결 관계 및 외래키 제약조건 고려사항
-배치 관리 테이블 설계에서 사용자 ID를 다루는 컬럼들과 `TB_USER` 테이블의 관계는 다음과 같습니다.
-
-- **연결 대상 컬럼**:
-  - `TB_BATCH_JOB_MST.REG_ID`, `TB_BATCH_JOB_MST.MOD_ID`
-  - `TB_BATCH_HIST.REQ_USR_ID`
-  - `TB_BATCH_RETRY_REQ.REQ_USR_ID`, `TB_BATCH_RETRY_REQ.APPR_USR_ID`
-- **데이터 타입 일치**:
-  - `TB_USER` 테이블의 기본 키는 **`CUST_ID VARCHAR(10)`** 입니다.
-  - 따라서, 위의 모든 사용자 ID 컬럼의 데이터 타입을 기존 `VARCHAR(20)`에서 **`VARCHAR(10)`**으로 수정하여 타입 정합성을 보장합니다.
-- **물리적 외래키(FOREIGN KEY) 제약조건 추가 시 예외 처리**:
-  - `TB_BATCH_JOB_MST.REG_ID` 컬럼은 스케줄러 등에 의해 자동으로 등록되는 경우를 위해 `DEFAULT 'SYSTEM'` 값을 갖습니다.
-  - 만약 해당 컬럼에 물리적 외래키 제약조건(`REFERENCES TB_USER(CUST_ID)`)을 지정하려면, **`TB_USER` 테이블에 `CUST_ID = 'SYSTEM'`인 가상 사용자(시스템 계정)가 반드시 사전에 등록되어 있어야 합니다.**
-  - 사전 등록이 불가능하거나 불필요한 경우, 물리적 외래키 제약조건을 생략하고 논리적(Logical) 외래키 연결 관계로만 유지하여 운영하는 방안을 권장합니다.
-
-#### 3) 배치 실행 스케줄 및 선/후행 작업(의존성) 관리 분석 결과
-
-현재 배치 관리 테이블 설계 명세 기준, 선/후행 작업 및 오류 발생 시 흐름 제어에 대한 관리 여부는 다음과 같습니다.
-
-- **선/후행 작업명(의존성) 관리 여부**: **미관리**
-  - `TB_BATCH_SCHED`(배치 스케줄 등록) 및 `TB_BATCH_PLAN`(배치 수행 계획) 테이블 설계에 특정 배치의 선행 작업(Pre-task)이나 후행 작업(Post-task)을 명시적으로 연결하고 추적할 수 있는 컬럼(예: `PREV_BATCH_JOB_ID` 등)이나 의존성 관계 테이블이 존재하지 않습니다.
-- **선행 작업 오류 시 후행 작업 실행 여부 관리 여부**: **미관리**
-  - 선행 배치 작업이 실패(`FAILED`)했을 때 후행 작업을 강제 진행할지, 혹은 중단할지 여부를 제어하는 설정 정책 컬럼(예: `ON_FAIL_POLICY` 등)이 설계되어 있지 않습니다.
-- **현재 구조의 실행 방식**:
-  - 각 배치 작업은 다른 배치 작업의 성공/실패 여부와 관계없이, 개별적으로 지정된 수행 주기(`EXEC_TIME` 등)에 도달하면 **완전히 독립적**으로 실행 계획(`TB_BATCH_PLAN`)이 생성되고 기동되는 구조입니다.
-- **향후 확장 방안 제안**:
-  1. **테이블 스키마 확장**: 배치 간 선/후행 의존성 관계를 동적으로 제어하기 위해 `TB_BATCH_DEP(DEP_ID, PREV_JOB_ID, NEXT_JOB_ID, ON_FAIL_POLICY 등)` 테이블을 추가 설계하여 스케줄링 시점에 이를 검증하도록 확장할 수 있습니다.
-  2. **애플리케이션 레벨 제어**: 단일 배치 실행 프로그램 내부에서 여러 내부 태스크를 순차 실행하도록 구현하고, try-catch 예외 처리 블록을 통해 오류 발생 시 후속 실행 여부를 코드 단에서 직접 제어하는 방법이 있습니다.
 
 ## 13. 우선 개발 대상 배치 프로그램
 
@@ -1048,120 +968,3 @@ run().catch(async (error) => {
 8. 운영 스케줄러에 등록한다.
 9. 로그와 실패 알림을 확인한다.
 10. 운영 실행 후 처리 건수와 DB 결과를 검증한다.
-
-## 17. 배치 업무 관리 개발 절차 및 순서 (테이블 ➡️ 백엔드 ➡️ 화면)
-
-배치 업무 관리 플랫폼(어드민)을 신규 구축할 때, 데이터의 등록 및 생성 수명 주기(Lifecycle) 흐름에 맞춘 최적의 개발 순서는 다음과 같습니다. 외래키 제약조건 및 데이터 흐름을 고려하여 **[테이블 생성 ➡️ 백엔드 API 개발 ➡️ 온라인 화면 개발]**을 순차적으로 진행합니다.
-
----
-
-### Step 1. 배치 기본 정의 및 등록 단계 (Master & Schedule)
-> **목적**: 시스템에 어떤 배치가 존재하고, 해당 배치가 언제 동작해야 하는지 기준 데이터를 등록하는 기본 환경을 구축합니다.
-
-1. **테이블 생성**:
-   - `TB_BATCH_JOB_MST` (배치 작업 마스터 테이블)
-   - `TB_BATCH_SCHED` (배치 스케줄 등록 테이블)
-2. **백엔드(API) 개발**:
-   - 배치 마스터 등록/수정/상세 조회 API (`POST/PUT/GET /api/admin/batch/jobs`)
-   - 배치 스케줄 등록/변경/상세 조회 API (`POST/PUT/GET /api/admin/batch/schedules`)
-3. **온라인 화면(프론트엔드) 개발**:
-   - **배치 작업 관리 화면**: 새로운 배치를 등록(실행 파일 경로, 최대 재시도 횟수, 재실행 가능 여부 설정)하고 조회/수정하는 화면
-   - **배치 스케줄 설정 화면**: 마스터에 등록된 배치의 실행 주기(매일/매월/수시, 특정 시간, 요일 등)와 휴일 처리 방식을 등록 및 관리하는 화면
-
----
-
-### Step 2. 실행 계획 수립 및 기동 단계 (Plan & On-Demand Execution)
-> **목적**: 매일 스케줄러가 당일 실행할 배치 목록을 산출하여 계획을 등록하고, 필요 시 관리자가 수동으로 즉시 실행할 수 있게 합니다.
-
-1. **테이블 생성**:
-   - `TB_BATCH_PLAN` (배치 수행 계획 테이블)
-2. **백엔드(API) 개발**:
-   - 배치 스케줄(`TB_BATCH_SCHED`) 기반으로 익일/당일 실행할 배치 계획을 자동 생성하는 데몬/함수 구현
-   - 특정 수행일자와 회차로 배치 수행 계획을 수동 생성하고 실행 준비를 마치는 즉시 실행 API (`POST /api/admin/batch/plans`)
-3. **온라인 화면(프론트엔드) 개발**:
-   - **배치 실행 계획 조회 화면**: 오늘 또는 지정된 일자에 실행 대기(`READY`) 중이거나 이미 실행된 배치 계획을 타임라인 또는 목록으로 표시
-   - **수동 배치 실행 팝업/버튼**: 특정 일자와 회차를 입력해 배치를 수동으로 즉시 구동하는 UI
-
----
-
-### Step 3. 실시간 모니터링 및 동시성 제어 단계 (Execution & Lock)
-> **목적**: 배치가 기동될 때 중복 실행되지 않도록 잠금 장치를 제어하고, 실제 실행 상태(시작/종료 시간, 성공/실패 여부)를 실시간 모니터링합니다.
-
-1. **테이블 생성**:
-   - `TB_BATCH_HIST` (배치 실행 결과/이력 테이블)
-   - `TB_BATCH_LOCK` (배치 실행 잠금 테이블)
-2. **백엔드(API) 개발**:
-   - 배치 기동 시 동시 실행 방지를 위해 잠금을 설정하고 해제하는 Lock 유틸리티 구현
-   - 배치 실행 상태 전이 처리 API (Ready ➡️ Running ➡️ Success / Failed)
-   - 서버 비정상 종료 등으로 발생한 좀비 락 강제 해제 API (`DELETE /api/admin/batch/locks/:key`)
-   - 현재 실행 중이거나 최근 실행 완료된 배치 이력 조회 API (`GET /api/admin/batch/histories`)
-3. **온라인 화면(프론트엔드) 개발**:
-   - **배치 실행 모니터링 Dashboard**: 실행 중인 배치 목록, Lock 획득 상태, 실시간 진행 상태(시작 시각, 경과 시간) 시각화
-   - **강제 잠금 해제(Force Unlock) 기능**: 활성화된 Lock을 강제로 해제하는 관리 도구
-
----
-
-### Step 4. 사후 분석, 오류 관리 및 재실행 단계 (Detail & Retry & Alert)
-> **목적**: 배치 실패 시 상세 오류 원인을 분석하고, 관리자에게 알림을 발송하며, 문제가 해결된 배치에 대해 승인을 거쳐 안전하게 재실행합니다.
-
-1. **테이블 생성**:
-   - `TB_BATCH_DTL` (배치 처리 상세 테이블)
-   - `TB_BATCH_NOTI_HIST` (배치 알림 이력 테이블)
-   - `TB_BATCH_RETRY_REQ` (배치 재실행 요청 테이블)
-2. **백엔드(API) 개발**:
-   - 배치 내부 상세 처리 로그 및 외부 연동 결과를 건별로 기록하는 API (`POST /api/admin/batch/details`)
-   - 배치 오류/지연 발생 시 알림 서비스 연동 및 알림 발송 API (Slack, Email 등)
-   - 실패 배치에 대한 재실행 요청 API (`POST /api/admin/batch/retries`) 및 승인/즉시 실행 기동 API (`POST /api/admin/batch/retries/:id/approve`)
-3. **온라인 화면(프론트엔드) 개발**:
-   - **실패 상세 분석 및 로그 조회 화면**: 실패 원인 에러 메시지와 건별 처리 결과(`TB_BATCH_DTL`)를 상세 추적하는 화면
-   - **배치 재실행(Retry) 관리 화면**: 실패 건에 대해 재실행 요청서(사유 입력)를 등록하고, 승인 권한자가 이를 검토하여 승인/실행 처리를 내릴 수 있는 화면
-
-## 18. BATCH JOB 모니터링
-
-관리자 어드민 화면의 좌측 사이드바 메뉴에 "BATCH JOB 모니터링" 항목을 추가하여, 클릭 시 `BatchDashBoard` 영문 ID를 가진 전체 화면 모달(Modal)을 호출한다. 이 모달은 배치 업무 관리에 필요한 데이터 등록/조회 메뉴와 실시간 모니터링 기능을 통합 대시보드 형태로 제공한다.
-
-### 18.1 진입 경로 및 컴포넌트 구조
-
-- **진입 메뉴**: 좌측 사이드바 → "BATCH JOB 모니터링" (아이콘: `Newspaper`, 위치: "시스템 설정" 바로 위)
-- **모달 컴포넌트**: `BatchDashBoardModal.jsx` (`id="BatchDashBoard"`)
-- **호출 방식**: 사이드바 메뉴 클릭 시 모달(Overlay) 형태로 열림 (페이지 전환 아님)
-- **관련 소스 파일**:
-  - `busTaams_admin/src/components/layout/Sidebar.jsx` — 메뉴 정의 및 모달 호출 콜백
-  - `busTaams_admin/src/components/layout/AdminLayout.jsx` — 모달 상태 관리 및 렌더링
-  - `busTaams_admin/src/components/layout/BatchDashBoardModal.jsx` — 대시보드 모달 본체
-
-### 18.2 대시보드 메뉴 구성
-
-모달 내부의 대시보드 Home 화면은 아래 두 가지 그룹으로 메뉴 버튼을 분리하여 구성한다.
-
-#### 1) 배치 기본 정보 관리
-
-배치 작업의 정의(마스터)와 실행 주기(스케줄)를 등록/조회/수정하는 기준 데이터 관리 영역이다.
-
-| 버튼 ID | 메뉴명 | 연동 테이블 | 설명 |
-|---|---|---|---|
-| `master` | 배치 작업 마스터 관리 | `TB_BATCH_JOB_MST` | 배치 작업 정의(ID, 명칭, 실행 파일 경로, 재실행 정책 등) 등록/수정/조회 |
-| `schedule` | 배치 스케줄 관리 | `TB_BATCH_SCHED` | 배치 실행 주기(수행 시간, 월/일/요일, 휴일 처리 방식 등) 등록/변경/조회 |
-
-#### 2) 배치 실행 및 결과 관리
-
-배치의 실행 계획, 실행 이력, 상세 처리 결과, 재실행 요청, 알림 이력, 잠금 관리 등 실행 수명 주기 전체를 관리하는 영역이다.
-
-| 버튼 ID | 메뉴명 | 연동 테이블 | 설명 |
-|---|---|---|---|
-| `plan` | 배치 수행 계획 관리 | `TB_BATCH_PLAN` | 자동/수동 실행 계획 생성 및 당일 실행 대기 목록 조회 |
-| `history` | 배치 실행 이력 조회 | `TB_BATCH_HIST` | 배치 실행 결과(시작/종료 시각, 성공/실패 건수, 오류 메시지) 조회 |
-| `detail` | 배치 처리 상세 조회 | `TB_BATCH_DTL` | 건별 처리 결과(대상 업무키, 처리 전/후 상태, 외부 연동 응답) 조회 |
-| `retry` | 배치 재실행 요청 관리 | `TB_BATCH_RETRY_REQ` | 실패 배치에 대한 재실행 요청 등록 및 승인/반려 처리 |
-| `notification` | 배치 알림 이력 조회 | `TB_BATCH_NOTI_HIST` | 배치 실패/지연/성공 알림(Email, Slack, SMS, PUSH) 발송 이력 조회 |
-| `lock` | 배치 실행 잠금 관리 | `TB_BATCH_LOCK` | 현재 활성화된 배치 잠금 목록 조회 및 강제 해제(Force Unlock) |
-
-### 18.3 실시간 모니터링 영역
-
-대시보드 Home 화면 하단에는 다음 모니터링 요소들이 배치된다.
-
-- **요약 카드 (4개)**: 전체 배치 수, 대기/실행 중 수, 성공 수, 실패 수
-- **배치 등록 목록 및 상태 테이블**: 모든 배치 작업의 ID, 작업명, 주기, 최종 실행시각, 상태(성공/실패) 표시 및 수동 구동(Play) 버튼
-- **강제 락 해제(Force Unlock) 버튼**: 좀비 Lock을 강제 해제하는 관리 기능
-- **실시간 배치 콘솔 로그 (Live Console Logs)**: 터미널 스타일의 실시간 로그 출력 영역
-
