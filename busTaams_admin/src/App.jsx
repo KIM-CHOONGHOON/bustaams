@@ -1,10 +1,11 @@
 import React, { useState } from 'react'
 import AdminSignup from './AdminSignup'
 import AdminLayout from './components/layout/AdminLayout'
-import BustaansAdminHomeScreen from './pages/BustaansAdminHomeScreen'
+// bustaamsAdminScreen — 공개 랜딩 홈페이지 (로그인 모달 포함)
+import BustaamsAdminScreen from './pages/BustaamsAdminScreen'
 
 function App() {
-  // 'home' → 홈페이지(로그인 모달 포함), 'signup' → 관리자 가입, 'dashboard' → 어드민
+  // 'home' → 홈페이지(bustaamsAdminScreen), 'signup' → 관리자 가입, 'dashboard' → 어드민
   const [currentView, setCurrentView] = useState('home');
 
   if (currentView === 'signup') {
@@ -13,7 +14,7 @@ function App() {
 
   if (currentView === 'home') {
     return (
-      <BustaansAdminHomeScreen
+      <BustaamsAdminScreen
         onLoginSuccess={() => setCurrentView('dashboard')}
       />
     );
