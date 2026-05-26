@@ -20,6 +20,7 @@
 | **REG_ID** | varchar(10) | YES |  | NULL |  | 등록자 ID |
 | **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 수정 일시 |
 | **MOD_ID** | varchar(10) | YES |  | NULL |  | 수정자 ID |
+| **PAYMENT_STS** | varchar(1) | YES |  | NULL |  | 결제 상태 (Y/N) |
 
 ## TB_AUCTION_REQ_BUS
 
@@ -103,6 +104,10 @@
 | **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 수정 일시 |
 | **MOD_ID** | varchar(10) | YES |  | NULL |  | 수정자 ID |
 
+### 비즈니스 규칙 (Business Rules)
+- **예약 확정 일시 기록**:
+  - 관리자 페이지의 예약 및 입찰 관리 화면에서 수동 결제 확정 처리 시, 예약 진행 상태(`DATA_STAT`)를 `'CONFIRM'`으로 업데이트함과 동시에 확정 완료 일시(`CONFIRM_DT = NOW()`)를 필수로 기록합니다.
+
 ## TB_CHAT_LOG
 
 > 스키마 정본: `busTaams_server/sql/tb_chat_log_room_hist_part.sql` — 대화(방) 마스터. 메시지 본문은 `TB_CHAT_LOG_HIST`, 참가자는 `TB_CHAT_LOG_PART`.
@@ -173,7 +178,7 @@
 
 | 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **USER_ID** | varchar(255) | NO | PRI | NULL |  | 기사 식별자 (USER_ID) |
+| **CUST_ID** | varchar(10) | NO | PRI | NULL |  | 기사 식별자 CUST_ID |
 | **BIRTH_YMD** | varchar(6) | YES |  | NULL |  | 생년월일 (YYMMDD) |
 | **SEX** | varchar(1) | YES |  | NULL |  | 성별 |
 | **ADDR_TYPE** | enum('HOME','OFFICE','OTHER') | NO | MUL | HOME |  | 주소 구분 |
@@ -193,7 +198,7 @@
 | 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **CUST_ID** | varchar(10) | NO | PRI | NULL |  | 기사 CUST_ID |
-| **DOC_TYPE** | enum('LICENSE','QUALIFICATION','APTITUDE','BIZ_REG','TRANSPORT_PERMIT','INSURANCE','DRIVER_PHOTO','VEHICLE_PHOTO','TERMS_OF_USE','PRIVACY_CONSENT','MARKETING_CONSENT','DRIVER_CONTRACT','TRAVELER_CONTRACT','PARTNER_CONTRACT','TERMS_INTEGRATED') | NO | PRI | NULL |  | 문서 종류 |
+| **DOC_TYPE** | enum('LICENSE','QUALIFICATION','APTITUDE','BIZ_REG','TRANSPORT_PERMIT','INSURANCE','DRIVER_PHOTO','VEHICLE_PHOTO','TERMS_OF_USE','PRIVACY_CONSENT','MARKETING_CONSENT','DRIVER_CONTRACT','TRAVELER_CONTRACT','PARTNER_CONTRACT','TERMS_INTEGRATED','CAREER_CERT') | NO | PRI | NULL |  | 문서 종류 |
 | **DOC_TYPE_SEQ** | int unsigned | NO | PRI | NULL |  | 이력 순번 |
 | **GCS_BUCKET_NM** | varchar(100) | YES |  | bustaams-secure-data |  | GCS 버킷명 |
 | **GCS_PATH** | varchar(255) | NO |  | NULL |  | GCS 객체 경로 |
@@ -250,13 +255,13 @@
 | **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 수정 일시 |
 | **MOD_ID** | varchar(10) | YES |  | NULL |  | 수정자 ID |
 
-## TB_MON_MEMBER
+## TB_MOM_MEMBER
 
 | 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **CUST_ID** | varchar(10) | NO | PRI | NULL |  | 기사 CUST_ID |
 | **YYYYMM** | varchar(6) | NO | PRI | NULL |  | 구독년월 |
-| **FEE_POLICY** | enum('DRIVER_GENERAL','DRIVER_MIDDLE','DRIVER_HIGH') | NO |  | NULL |  | 요금 정책 |
+| **FEE_POLICY** | enum('DRIVER','DRIVER_GENERAL','DRIVER_MIDDLE','DRIVER_HIGH') | NO |  | NULL |  | 요금 정책 |
 | **BASIC_CNT** | int | NO |  | 0 |  | 월 응찰 가능 건수 |
 | **USE_CNT** | int | NO |  | 0 |  | 월 사용 건수 |
 | **REMAINING_CNT** | int | NO |  | 0 |  | 잔여 건수 |
@@ -264,6 +269,11 @@
 | **REG_ID** | varchar(10) | YES |  | NULL |  | 등록자 ID |
 | **MOD_DT** | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP | 수정 일시 |
 | **MOD_ID** | varchar(10) | YES |  | NULL |  | 수정자 ID |
+
+### 비즈니스 규칙 (Business Rules)
+- **수동 입금 확정 시 청약 카운트 차감 및 생성**:
+  - 카드 결제가 아닌 무통장 입금 건 등에 대해 관리자가 수동으로 예약을 확정할 시, 대상 버스 기사의 당월(`YYYYMM`) 청약 데이터가 `TB_MOM_MEMBER`에 존재하지 않으면 `FEE_POLICY = 'DRIVER'` 상태로 신규 행을 삽입(기본 카운트 `BASIC_CNT`는 공통코드 조회를 바탕으로 하되 없을 시 10000회 기본 부여)하고, `USE_CNT`를 1로 세팅합니다.
+  - 이미 당월 데이터가 존재하는 기사의 경우 `USE_CNT`를 1 증가시키고 `REMAINING_CNT`를 차감(0보다 작아지지 않게 조정)하여 횟수를 차감합니다.
 
 ## TB_PAYMENT_CARD
 
@@ -380,18 +390,20 @@
 | **USER_NM** | varchar(255) | YES |  | NULL |  | 사용자명 |
 | **RESIDENT_NO_ENC** | varchar(255) | YES |  | NULL |  | 주민등록번호 양방향 암호화(`crypto.js` 권장) |
 | **HP_NO** | varchar(255) | YES |  | NULL |  | 휴대폰번호 |
-| **PROFILE_IMG_PATH** | varchar(512) | YES |  | NULL |  | 프로필 이미지 경로(URL·상대경로 등) |
+| **USER_IMAGE** | varchar(255) | YES |  | NULL |  | 사용자 이미지 경로 |
+| **PROFILE_IMG_PATH** | varchar(255) | YES |  | NULL |  | 프로필 이미지 경로(URL·상대경로 등) |
+| **SIGNATURE_FILE_ID** | varchar(20) | YES |  | NULL |  | 서명 파일 ID |
 | **PROFILE_FILE_ID** | varchar(20) | YES |  | NULL |  | 프로필 사진 `TB_FILE_MASTER.FILE_ID` |
 | **SMS_AUTH_YN** | enum('Y','N') | YES |  | N |  | SMS 인증 여부 |
 | **RECOM_CODE** | varchar(20) | YES |  | NULL |  | 추천인 코드(영업파트너 `CUST_ID` 등) |
 | **JOIN_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 가입 일시 |
 | **USER_STAT** | enum('ACTIVE','LEAVE','BANNED','TEMPORARY') | YES |  | ACTIVE |  | 계정 상태 |
 | **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 수정 일시 |
-| **MOD_ID** | varchar(30) | YES |  | NULL |  | 수정자 ID |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  | 수정자 ID |
 
 **키·문자집합**: `PRIMARY KEY (CUST_ID)`, `UNIQUE KEY UK_USER_LOGIN_ID (USER_ID)` — `ENGINE=InnoDB`, `utf8mb4` / `utf8mb4_0900_ai_ci` (DDL 준수).
 
-**변경 요약(구 설계 대비 `bustaams`)**: `USER_TYPE`에 `ADMIN` 추가, `USER_IMAGE`·`SIGNATURE_FILE_ID` 컬럼 제거, 프로필 URL은 **`PROFILE_IMG_PATH`** 로 통일.
+**변경 요약(구 설계 대비 `bustaams`)**: `USER_TYPE`에 `ADMIN` 추가, `PROFILE_IMG_PATH` 추가.
 
 ## TB_USER_CANCEL_HIST
 
@@ -413,11 +425,15 @@
 | 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **CUST_ID** | varchar(10) | NO | PRI | NULL |  | 사용자 CUST_ID |
+| **USER_TYPE** | varchar(20) | YES |  | TRAVELER |  | 회원 유형 |
 | **CANCEL_CNT** | int | NO |  | 0 |  | 누적 취소 건수 |
 | **CANCEL_BUS_DRIVER_CNT** | int | NO |  | 0 |  | 기사 취소 건수 |
 | **CANCEL_TRAVELER_ALL_CNT** | int | NO |  | 0 |  | 여행자 전체취소 건수 |
 | **CANCEL_TRAVELER_PARTIAL_BUS_CNT** | int | NO |  | 0 |  | 여행자 부분취소 건수 |
 | **TRADE_RESTRICT_YN** | char(1) | NO |  | N |  | 거래제한 여부 |
+| **RESTRICT_STAT** | char(1) | YES |  | N |  | 제한 상태 |
+| **RESTRICT_START_DT** | datetime | YES |  | NULL |  | 제한 시작 일시 |
+| **RESTRICT_END_DT** | datetime | YES |  | NULL |  | 제한 종료 일시 |
 | **TRADE_RESTRICT_START_DT** | datetime | YES |  | NULL |  | 제한 시작일 |
 | **TRADE_RESTRICT_END_DT** | datetime | YES |  | NULL |  | 제한 종료일 |
 | **REG_DT** | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 등록 일시 |
@@ -436,8 +452,8 @@
 | 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **CUST_ID** | varchar(10) | NO | PRI | NULL |  | 사용자 CUST_ID |
-| **FCM_TOKEN** | varchar(512) | NO |  | NULL |  | FCM 토큰 |
-| **CLIENT_KIND** | varchar(20) | NO |  | web |  | 클라이언트 종류 |
+| **FCM_TOKEN** | varchar(512) | NO | UNI | NULL |  | FCM 토큰 |
+| **CLIENT_KIND** | varchar(20) | NO | PRI | mobile |  | 클라이언트 종류 |
 | **REG_DT** | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 등록 일시 |
 | **REG_ID** | varchar(10) | YES |  | NULL |  | 등록자 ID |
 | **MOD_DT** | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP | 수정 일시 |
@@ -458,6 +474,181 @@
 | **MKT_TEL_YN** | enum('Y','N') | YES |  | N |  | 마케팅 전화 동의 |
 | **SIGN_FILE_ID** | varchar(20) | YES |  | NULL |  | 서명 파일 ID |
 | **AGREE_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 동의 일시 |
+
+## TB_ADMIN
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **ADMIN_ID** | varchar(50) | NO | PRI | NULL |  | 관리자 로그인 ID |
+| **PASSWORD** | varchar(255) | NO |  | NULL |  | 비밀번호 |
+| **ADMIN_NM** | varchar(50) | NO |  | NULL |  | 관리자명 |
+| **DEPT_NM** | varchar(50) | YES |  | NULL |  | 부서명 |
+| **ADMIN_GRADE** | enum('SUPER','MANAGER','SALES') | NO |  | MANAGER |  | 관리 등급 (SUPER, MANAGER, SALES) |
+| **EMAIL** | varchar(100) | YES |  | NULL |  | 이메일 |
+| **HP_NO** | varchar(255) | YES |  | NULL |  | 휴대폰번호 |
+| **ADMIN_STAT** | enum('ACTIVE','LOCKED','LEAVE') | NO |  | ACTIVE |  | 계정 상태 (ACTIVE: 활성, LOCKED: 잠김, LEAVE: 탈퇴) |
+| **LOGIN_FAIL_CNT** | int | NO |  | 0 |  | 로그인 실패 횟수 |
+| **PWD_CHG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 비밀번호 변경일시 |
+| **LAST_LOGIN_DT** | datetime | YES |  | NULL |  | 최종 로그인 일시 |
+| **MEMO** | varchar(500) | YES |  | NULL |  | 메모 |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 등록 일시 |
+| **REG_ID** | varchar(50) | YES |  | NULL |  | 등록자 ID |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP | 수정 일시 |
+| **MOD_ID** | varchar(50) | YES |  | NULL |  | 수정자 ID |
+
+## TB_NOTIFICATION
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **SEQ** | bigint | NO | PRI | NULL | auto_increment | 일련번호 |
+| **CUST_ID** | varchar(10) | NO | MUL | NULL |  | 사용자 CUST_ID |
+| **TITLE** | varchar(255) | NO |  | NULL |  | 알림 제목 |
+| **BODY** | text | NO |  | NULL |  | 알림 내용 |
+| **LINK** | varchar(255) | YES |  | NULL |  | 알림 이동 링크 |
+| **NOTIF_TYPE** | varchar(50) | YES |  | SYSTEM |  | 알림 타입 |
+| **READ_YN** | char(1) | NO |  | N |  | 읽음 여부 (Y/N) |
+| **REG_DT** | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 등록 일시 |
+
+## TB_BATCH_JOB_MST
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **BATCH_JOB_ID** | varchar(50) | NO | PRI | NULL |  | 배치 Job ID |
+| **BATCH_JOB_NM** | varchar(100) | NO |  | NULL |  | 배치 Job 명 |
+| **JOB_DESC** | varchar(500) | YES |  | NULL |  | 배치 설명 |
+| **EXEC_FILE_PATH** | varchar(200) | NO |  | NULL |  | 실행 파일 경로 |
+| **EXEC_CYCLE** | varchar(10) | NO |  | NULL |  | 실행 주기 |
+| **USE_YN** | char(1) | NO |  | Y |  | 사용 여부 (Y/N) |
+| **RETRY_POLICY** | varchar(30) | NO |  | RETRYABLE |  | 재시도 정책 |
+| **MAX_RETRY_CNT** | int | NO |  | 3 |  | 최대 재시도 횟수 |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 등록 일시 |
+| **REG_ID** | varchar(10) | YES |  | NULL |  | 등록자 ID |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP | 수정 일시 |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  | 수정자 ID |
+
+## TB_BATCH_SCHED
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **SCHED_ID** | int | NO | PRI | NULL | auto_increment | 스케줄 ID |
+| **BATCH_JOB_ID** | varchar(50) | NO | MUL | NULL |  | 배치 Job ID |
+| **EXEC_TIME** | time | NO |  | NULL |  | 실행 시각 |
+| **EXEC_MONTH** | varchar(2) | NO |  | * |  | 실행 월 |
+| **EXEC_DAY** | varchar(2) | NO |  | * |  | 실행 일 |
+| **EXEC_DOW** | varchar(7) | NO |  | * |  | 실행 요일 |
+| **CALC_RULE** | varchar(10) | NO |  | T |  | 계산 규칙 |
+| **HOLIDAY_RULE** | varchar(20) | NO |  | RUN |  | 휴일 규칙 |
+| **USE_YN** | char(1) | NO |  | Y |  | 사용 여부 (Y/N) |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 등록 일시 |
+| **REG_ID** | varchar(10) | YES |  | NULL |  | 등록자 ID |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP | 수정 일시 |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  | 수정자 ID |
+
+## TB_BATCH_PLAN
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **PLAN_ID** | bigint | NO | PRI | NULL | auto_increment | 배치 계획 ID |
+| **BATCH_JOB_ID** | varchar(20) | NO | MUL | NULL |  | 배치 Job ID |
+| **JOB_DT** | date | NO |  | NULL |  | 실행 예정 일자 |
+| **JOB_ROUND** | int | NO |  | 1 |  | 실행 차수 |
+| **PLAN_STAT** | varchar(10) | NO |  | READY |  | 실행 계획 상태 |
+| **PLAN_TYPE** | varchar(10) | NO |  | AUTO |  | 실행 계획 타입 |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 등록 일시 |
+| **REG_ID** | varchar(10) | YES |  | NULL |  | 등록자 ID |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP | 수정 일시 |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  | 수정자 ID |
+
+## TB_BATCH_HIST
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **EXEC_ID** | bigint | NO | PRI | NULL | auto_increment | 실행 ID |
+| **BATCH_JOB_ID** | varchar(20) | NO | MUL | NULL |  | 배치 Job ID |
+| **JOB_DT** | date | NO |  | NULL |  | 실행 일자 |
+| **JOB_ROUND** | int | NO |  | 1 |  | 실행 차수 |
+| **EXEC_STAT** | varchar(10) | NO |  | READY |  | 실행 상태 |
+| **START_DT** | datetime | YES |  | NULL |  | 실행 시작일시 |
+| **END_DT** | datetime | YES |  | NULL |  | 실행 종료일시 |
+| **TARGET_CNT** | int | NO |  | 0 |  | 처리 대상 건수 |
+| **SUCC_CNT** | int | NO |  | 0 |  | 처리 성공 건수 |
+| **FAIL_CNT** | int | NO |  | 0 |  | 처리 실패 건수 |
+| **DRY_RUN_YN** | char(1) | NO |  | N |  | dry_run 여부 (Y/N) |
+| **ERR_CD** | varchar(50) | YES |  | NULL |  | 에러 코드 |
+| **ERR_MSG** | varchar(1000) | YES |  | NULL |  | 에러 메시지 |
+| **ORIG_EXEC_ID** | bigint | YES |  | NULL |  | 원본 실행 ID |
+| **REQ_USR_ID** | varchar(10) | YES |  | NULL |  | 요청 사용자 ID |
+| **REQ_REASON** | varchar(500) | YES |  | NULL |  | 요청 사유 |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 등록 일시 |
+| **REG_ID** | varchar(10) | YES |  | NULL |  | 등록자 ID |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP | 수정 일시 |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  | 수정자 ID |
+
+## TB_BATCH_DTL
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **DTL_ID** | bigint | NO | PRI | NULL | auto_increment | 상세 ID |
+| **EXEC_ID** | bigint | NO | MUL | NULL |  | 실행 ID |
+| **TARGET_KEY** | varchar(50) | NO |  | NULL |  | 대상 Key |
+| **TARGET_TABLE** | varchar(50) | NO |  | NULL |  | 대상 테이블명 |
+| **BEFORE_STAT** | varchar(20) | YES |  | NULL |  | 처리 전 상태 |
+| **AFTER_STAT** | varchar(20) | YES |  | NULL |  | 처리 후 상태 |
+| **WORK_STAT** | varchar(10) | NO |  | NULL |  | 작업 상태 |
+| **ERR_MSG** | varchar(1000) | YES |  | NULL |  | 에러 메시지 |
+| **EXT_REQ_ID** | varchar(100) | YES |  | NULL |  | 외부 요청 ID |
+| **EXT_RES_CD** | varchar(20) | YES |  | NULL |  | 외부 응답 코드 |
+| **EXT_RES_MSG** | varchar(500) | YES |  | NULL |  | 외부 응답 메시지 |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 등록 일시 |
+| **REG_ID** | varchar(10) | YES |  | NULL |  | 등록자 ID |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP | 수정 일시 |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  | 수정자 ID |
+
+## TB_BATCH_LOCK
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **LOCK_KEY** | varchar(100) | NO | PRI | NULL |  | Lock Key |
+| **BATCH_JOB_ID** | varchar(20) | NO | MUL | NULL |  | 배치 Job ID |
+| **PROCESS_ID** | varchar(50) | NO |  | NULL |  | 프로세스 ID |
+| **ACQUIRED_DT** | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | Lock 획득 일시 |
+| **EXPIRED_DT** | datetime | NO |  | NULL |  | Lock 만료 일시 |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 등록 일시 |
+| **REG_ID** | varchar(10) | YES |  | NULL |  | 등록자 ID |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP | 수정 일시 |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  | 수정자 ID |
+
+## TB_BATCH_NOTI_HIST
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **NOTI_ID** | bigint | NO | PRI | NULL | auto_increment | 알림 ID |
+| **EXEC_ID** | bigint | NO | MUL | NULL |  | 실행 ID |
+| **NOTI_TYPE** | varchar(10) | NO |  | NULL |  | 알림 타입 |
+| **NOTI_STAT** | varchar(10) | NO |  | SUCCESS |  | 알림 발송 상태 |
+| **NOTI_MSG** | varchar(1000) | NO |  | NULL |  | 알림 메시지 |
+| **ERR_MSG** | varchar(1000) | YES |  | NULL |  | 에러 메시지 |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 등록 일시 |
+| **REG_ID** | varchar(10) | YES |  | NULL |  | 등록자 ID |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP | 수정 일시 |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  | 수정자 ID |
+
+## TB_BATCH_RETRY_REQ
+
+| 컬럼명 | 타입 | Null | Key | Default | Extra | 비고 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **RETRY_REQ_ID** | bigint | NO | PRI | NULL | auto_increment | 재시도 요청 ID |
+| **ORIG_EXEC_ID** | bigint | NO | MUL | NULL |  | 원본 실행 ID |
+| **NEW_EXEC_ID** | bigint | YES |  | NULL |  | 신규 실행 ID |
+| **REQ_USR_ID** | varchar(10) | NO |  | NULL |  | 요청 사용자 ID |
+| **REQ_REASON** | varchar(500) | NO |  | NULL |  | 요청 사유 |
+| **APPR_USR_ID** | varchar(10) | YES |  | NULL |  | 승인자 ID |
+| **APPR_STAT** | varchar(10) | NO |  | REQUESTED |  | 승인 상태 |
+| **APPR_DT** | datetime | YES |  | NULL |  | 승인 일시 |
+| **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 등록 일시 |
+| **REG_ID** | varchar(10) | YES |  | NULL |  | 등록자 ID |
+| **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP | 수정 일시 |
+| **MOD_ID** | varchar(10) | YES |  | NULL |  | 수정자 ID |
 
 ## 비즈니스 규칙 (Business Rules)
 
