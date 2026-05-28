@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import { notify } from '../utils/toast';
-import BottomNavDriver from '../components/BottomNavDriver';
+import BottomNavCustomer from '../components/BottomNavCustomer';
 
-const ChatListDriver = () => {
+const ChatListCustomer = () => {
     const navigate = useNavigate();
     const [chats, setChats] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -29,11 +29,11 @@ const ChatListDriver = () => {
 
         const fetchProfile = async () => {
             try {
-                const res = await api.get('/app/driver/dashboard');
-                if (res.success) {
+                const res = await api.get('/app/customer/profile');
+                if (res.success && res.data) {
                     setUserProfile({
-                        userName: res.data.userName,
-                        userImage: res.data.userImage
+                        userName: res.data.name || res.data.userName || '고객님',
+                        userImage: res.data.profileImage || null
                     });
                 }
             } catch (err) {
@@ -80,7 +80,7 @@ const ChatListDriver = () => {
                     <div className="flex items-center gap-4">
                         <div 
                             className="h-10 w-10 rounded-xl bg-slate-200 overflow-hidden ring-2 ring-[#a1f1e5] cursor-pointer hover:shadow-md transition-all"
-                            onClick={() => navigate('/driver-dashboard')}
+                            onClick={() => navigate('/user-profile')}
                         >
                             {userProfile?.userImage ? (
                                 <img 
@@ -109,17 +109,8 @@ const ChatListDriver = () => {
                                 메시지 목록
                             </h2>
                             <p className="font-body text-[#3e4947] text-lg max-w-sm">
-                                진행 중인 입찰 문의를 관리하고 실시간으로 운송 물류를 조율하세요.
+                                매칭된 버스 기사님들과 실시간 대화를 나누고 세부 운송 내용을 조율하세요.
                             </p>
-                        </div>
-                        <div className="flex gap-2">
-                            <button 
-                                onClick={() => navigate('/archive-list-driver')}
-                                className="bg-slate-100 px-6 py-3 rounded-xl font-bold text-sm text-[#004e47] flex items-center gap-2 hover:bg-slate-200 transition-colors"
-                            >
-                                <span className="material-symbols-outlined text-lg">archive</span>
-                                보관함
-                            </button>
                         </div>
                     </div>
                 </section>
@@ -134,7 +125,7 @@ const ChatListDriver = () => {
                             >
                                 {chat.sourceType === 'RESERVATION' && (
                                     <div className="absolute top-0 right-0 bg-[#00685f] text-white px-3 py-1 rounded-tr-2xl rounded-bl-xl text-[10px] font-bold uppercase tracking-wider z-10">
-                                        새 문의 대기
+                                        새 대화 대기
                                     </div>
                                 )}
                                 
@@ -157,7 +148,7 @@ const ChatListDriver = () => {
                                             )}
                                         </div>
                                         <div className="absolute -bottom-1 -right-1 bg-[#9d4300] text-white text-[9px] font-bold px-2 py-0.5 rounded-lg uppercase tracking-tight">
-                                            {chat.otherUser?.PART_TYPE === 'TRAVELER' ? '고객' : '파트너'}
+                                            {chat.otherUser?.PART_TYPE === 'DRIVER' ? '기사님' : '고객'}
                                         </div>
                                     </div>
 
@@ -212,14 +203,14 @@ const ChatListDriver = () => {
                             <span className="material-symbols-outlined text-5xl text-slate-200">chat_bubble</span>
                         </div>
                         <h3 className="text-2xl font-black text-[#004e47] italic uppercase tracking-tighter mb-2">채팅 내역 없음</h3>
-                        <p className="text-slate-400 font-bold italic text-sm">현재 활성화된 채팅 내역이 없습니다.</p>
+                        <p className="text-slate-400 font-bold italic text-sm">기사님과의 활성화된 채팅 내역이 없습니다.</p>
                     </div>
                 )}
             </main>
 
-            <BottomNavDriver activeTab="chat" />
+            <BottomNavCustomer />
         </div>
     );
 };
 
-export default ChatListDriver;
+export default ChatListCustomer;

@@ -129,8 +129,15 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH && fs.existsSync(path.resolve(__di
 }
 
 // 2. Google Cloud Storage Initialization
-// Uses GOOGLE_APPLICATION_CREDENTIALS from environment variables automatically if present
-const storage = new Storage(); 
+let storageOptions = {};
+const keyPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH 
+    ? path.resolve(process.cwd(), process.env.FIREBASE_SERVICE_ACCOUNT_PATH)
+    : null;
+
+if (keyPath && fs.existsSync(keyPath)) {
+    storageOptions.keyFilename = keyPath;
+}
+const storage = new Storage(storageOptions); 
 const bucketName = process.env.GCS_BUCKET_NAME || 'bustaams-secure-data';
 const bucket = storage.bucket(bucketName);
 
@@ -142,6 +149,7 @@ const SMS_VERIFIED_TTL_MS = 15 * 60 * 1000;
 const appAuthRouter = require('./routes/appAuth');
 const appCustomerRouter = require('./routes/appCustomer');
 const appDriverRouter = require('./routes/appDriver');
+const appChatRouter = require('./routes/appChat');
 
 app.use('/api/app/auth', appAuthRouter);
 app.use('/app/auth', appAuthRouter);
@@ -151,6 +159,10 @@ app.use('/app/customer', appCustomerRouter);
 
 app.use('/api/app/driver', appDriverRouter);
 app.use('/app/driver', appDriverRouter);
+
+app.use('/api/app/chat', appChatRouter);
+app.use('/app/chat', appChatRouter);
+app.use('/api/chat', appChatRouter);
 
 // 🔄 클라이언트 호환성을 위해 /app/... 요청을 내부적으로 /api/... 로 투명하게 Rewrite해 주는 미들웨어 추가!
 app.use((req, res, next) => {
@@ -3013,14 +3025,14 @@ app.all('/api/payment/ready', async (req, res) => {
             return res.status(400).json({ error: 'reqId and amount(or price) are required' });
         }
 
-        const mid = (process.env.INI_MID || 'INIpayTest').trim();
-        // 분석 결과: INIpayTest의 정식 PC웹표준 키는 아래 값이 확실합니다.
-        const signKey = 'SU5JTElURV9UUklQTEVERVNfS0VZU1RS'; 
+        const mid = (process.env.INI_MID || process.env.INICIS_MID || 'INIpayTest').trim();
+        // 환경변수에서 실제 SignKey를 읽어오며, 기본값으로 테스트 키를 사용합니다. (한글 주석)
+        const signKey = process.env.INICIS_SIGN_KEY || 'SU5JTElURV9UUklQTEVERVNfS0VZU1RS'; 
         
         // 1. 금액에서 숫자만 남기기
         let cleanAmount = String(amount).replace(/[^0-9]/g, '');
         
-        // [안전장치] 테스트 모드일 경우 사고 방지를 위해 금액을 1,000원으로 강제 고정
+        // [안전장치] 테스트 모드일 경우 사고 방지를 위해 금액을 1,000원으로 강제 고정 (한글 주석)
         if (mid === 'INIpayTest') {
             console.log(`[PAY_SAFETY_V2] Test mode detected. Forcing amount from ${cleanAmount} to 1000 KRW.`);
             cleanAmount = '1000';

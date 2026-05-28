@@ -23,6 +23,18 @@ const EstimateDetailDriver = () => {
 
                 const res = await request(`/app/driver/auctions/${id}`);
                 if (res.success) {
+                    // [추가] 해당 건이 차량 변경 요청 상태인 경우, 청약 상세 진입 차단 (한글 주석)
+                    if (res.data.driverReservationStatus === 'BUS_CHANGE') {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: '청약 진행 불가',
+                            text: '해당 여정은 차량 변경이 요청된 건으로, 다시 청약 승인을 진행하실 수 없습니다.',
+                            confirmButtonColor: '#004e47'
+                        }).then(() => {
+                            navigate('/driver-dashboard');
+                        });
+                        return;
+                    }
                     setAuction(res.data);
                 }
             } catch (err) {
@@ -58,7 +70,7 @@ const EstimateDetailDriver = () => {
                     text: '청약이 정상적으로 제출되었습니다!',
                     confirmButtonColor: '#004e47'
                 }).then(() => {
-                    navigate('/estimate-list-driver');
+                    navigate('/driver-dashboard');
                 });
             } else {
                 Swal.fire({

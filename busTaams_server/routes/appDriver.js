@@ -6,6 +6,7 @@ const { encrypt, decrypt } = require('../crypto');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const { registerBusDriverPaymentCard } = require('../lib/busDriverCreditCardRegistration');
 const { sendNotification } = require('../services/notificationService');
 
@@ -28,27 +29,24 @@ const authenticateToken = (req, res, next) => {
 const memoryStorage = multer.memoryStorage();
 const memoryUpload = multer({ storage: memoryStorage });
 
-// GCS 파일 업로드 공통 함수
+// 로컬 파일 업로드 공통 함수 (GCS 대체)
 const uploadToGCS = async (file, folder, connection = null) => {
     if (!file) return null;
     const ext = path.extname(file.originalname).replace('.', '') || 'png';
     const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20, connection);
-    const gcsFileName = `${folder}/${fileId}.${ext}`;
-    const gcsFile = getBucket().file(gcsFileName);
-
-    await gcsFile.save(file.buffer, {
-        metadata: { contentType: file.mimetype }
-    });
-
-    try {
-        await gcsFile.makePublic();
-    } catch (e) {
-        console.log('GCS makePublic failed:', e.message);
+    const objectKey = `${folder}/${fileId}.${ext}`;
+    
+    // 📂 로컬 uploads 디렉토리에 저장
+    const localPath = path.join(__dirname, '..', 'uploads', objectKey);
+    const localDir = path.dirname(localPath);
+    if (!fs.existsSync(localDir)) {
+        fs.mkdirSync(localDir, { recursive: true });
     }
+    fs.writeFileSync(localPath, file.buffer);
 
     return {
         fileId,
-        url: `https://storage.googleapis.com/${bucketName}/${gcsFileName}`,
+        url: `https://bustaams.cafe24.com/uploads/${objectKey}`,
         ext,
         originalName: file.originalname,
         fileSize: file.size
@@ -314,6 +312,7 @@ router.get('/auctions/:id', authenticateToken, async (req, res) => {
                 DATE_FORMAT(r.START_DT, '%Y-%m-%d %H:%i') as startDate,
                 DATE_FORMAT(r.END_DT, '%Y-%m-%d %H:%i') as endDate,
                 r.PASSENGER_CNT as passengers,
+                r.DATA_STAT as reqStatus,
                 COALESCE(
                     (SELECT b.RES_BUS_AMT FROM TB_AUCTION_REQ_BUS b WHERE b.REQ_ID = r.REQ_ID AND b.BUS_TYPE_CD = ? LIMIT 1),
                     r.REQ_AMT
@@ -331,6 +330,16 @@ router.get('/auctions/:id', authenticateToken, async (req, res) => {
         const row = masterRows[0];
         const endAddr = row.endAddrVia || row.endAddrMaster;
 
+        // [추가] 해당 기사의 이 요청에 대한 입찰/예약 상태 조회 (한글 주석)
+        const [reservationRows] = await pool.execute(
+            `SELECT DATA_STAT 
+             FROM TB_BUS_RESERVATION 
+             WHERE REQ_ID = ? AND DRIVER_ID = ?
+             ORDER BY REG_DT DESC LIMIT 1`,
+            [id, custId]
+        );
+        const driverReservationStatus = reservationRows.length > 0 ? reservationRows[0].DATA_STAT : null;
+
         // 경로 시퀀스 가공
         const fullPath = [
             { label: '출발지', addr: row.startAddrVia || row.startAddr },
@@ -344,7 +353,8 @@ router.get('/auctions/:id', authenticateToken, async (req, res) => {
             success: true,
             data: {
                 ...row,
-                fullPath
+                fullPath,
+                driverReservationStatus
             }
         });
     } catch (err) {
@@ -389,13 +399,29 @@ router.get('/profile', authenticateToken, async (req, res) => {
             [custId]
         );
 
+        // 다음 달 적용 예정 요금제 조회 (한글 주석)
+        const today = new Date();
+        const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+        const nextYyyymm = nextMonth.getFullYear().toString() + String(nextMonth.getMonth() + 1).padStart(2, '0');
+
+        const [reqRows] = await pool.execute(
+            `SELECT FEE_POLICY FROM TB_MOM_MEMBER_REQ 
+             WHERE CUST_ID = ? AND YYYYMM = ? AND APPLY_YN = 'N' 
+             ORDER BY REG_DT DESC LIMIT 1`,
+            [custId, nextYyyymm]
+        );
+        const pendingPolicyRaw = reqRows.length > 0 ? reqRows[0].FEE_POLICY : null;
+        // DB의 DRIVER_GENERAL 스펠링을 프론트엔드의 DRIVER_GENNERAL과 매핑 (한글 주석)
+        const pendingPolicy = pendingPolicyRaw === 'DRIVER_GENERAL' ? 'DRIVER_GENNERAL' : pendingPolicyRaw;
+
         const driverData = {
             sex: 'M',
             addrType: 'HOME',
             selfIntro: '',
             ...(detailRows.length > 0 ? detailRows[0] : {}),
             residentNo: userData.RESIDENT_NO_ENC ? decrypt(userData.RESIDENT_NO_ENC) : '',
-            profileImg: userData.userImage
+            profileImg: userData.userImage,
+            pendingPolicy: pendingPolicy // 다음달 변경 신청된 요금제 (없으면 null)
         };
 
         // 서류 데이터 매핑 (가장 최근 것 기준)
@@ -1017,13 +1043,33 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
         const custId = uRows[0].CUST_ID;
         const driverName = uRows[0].USER_NM || '기사';
 
-        // 1-2. 경매 마스터 정보 조회 (푸시 알림용)
+        // 1-2. 경매 마스터 정보 조회 (푸시 알림 및 일정 중복 체크용)
         const [reqRows] = await connection.execute(
-            'SELECT TRAVELER_ID, TRIP_TITLE FROM TB_AUCTION_REQ WHERE REQ_ID = ?',
+            'SELECT TRAVELER_ID, TRIP_TITLE, START_DT, END_DT FROM TB_AUCTION_REQ WHERE REQ_ID = ?',
             [reqId]
         );
-        const travelerId = reqRows.length > 0 ? reqRows[0].TRAVELER_ID : null;
-        const tripTitle = reqRows.length > 0 ? reqRows[0].TRIP_TITLE : '요청하신 여행';
+        if (reqRows.length === 0) throw new Error('요청된 경매 정보를 찾을 수 없습니다.');
+        const travelerId = reqRows[0].TRAVELER_ID;
+        const tripTitle = reqRows[0].TRIP_TITLE || '요청하신 여행';
+        const newStartDt = reqRows[0].START_DT;
+        const newEndDt = reqRows[0].END_DT;
+
+        // [추가] 해당 기사의 동일 일정 중복 예약 검증 (BIDDING, CONFIRM 상태 대상)
+        const [duplicateRows] = await connection.execute(
+            `SELECT 1 
+             FROM TB_BUS_RESERVATION b
+             JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID
+             WHERE b.DRIVER_ID = ? 
+               AND b.DATA_STAT IN ('BIDDING', 'CONFIRM')
+               AND r.START_DT < ? 
+               AND r.END_DT > ?
+             LIMIT 1`,
+            [custId, newEndDt, newStartDt]
+        );
+
+        if (duplicateRows.length > 0) {
+            throw new Error('해당 일정에 이미 진행 중이거나 확정된 예약이 존재하여 청약할 수 없습니다.');
+        }
 
         const [busRows] = await connection.execute(
             'SELECT BUS_ID, SERVICE_CLASS FROM TB_BUS_DRIVER_VEHICLE WHERE CUST_ID = ? LIMIT 1',
@@ -1044,7 +1090,7 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
 
         if (reqBusRows.length === 0) {
             console.log(`[BID_PROCESS] No available slot for reqId: ${reqId}, serviceClass: ${serviceClass}`);
-            throw new Error('해당 차종으로 청약 가능한 슬롯이 없거나 이미 청약이 완료되었습니다.');
+            throw new Error('해당 차종으로 청약 가능한 버스 요청 정보가 없습니다.');
         }
 
         const { REQ_BUS_SEQ: reqBusSeq, RES_BUS_AMT: busAmt } = reqBusRows[0];
@@ -1384,6 +1430,25 @@ router.post('/complete-mission/:id', authenticateToken, async (req, res) => {
             return res.status(404).json({ success: false, error: '운행 정보를 찾을 수 없거나 권한이 없습니다.' });
         }
 
+        // 💰 위약금/정산 관리 테이블에 완료 정보 적재 (기사 회원 등급 조회 포함, 한글 주석)
+        try {
+            const [driverDetailRows] = await pool.execute(
+                'SELECT FEE_POLICY FROM TB_DRIVER_DETAIL WHERE CUST_ID = ?',
+                [custId]
+            );
+            const feePolicy = driverDetailRows.length > 0 ? driverDetailRows[0].FEE_POLICY : null;
+
+            await pool.execute(
+                `INSERT INTO TB_BUS_PENALTY_DEPOSIT (YYYYMMDD, RES_ID, DATA_STAT, PENALTY_DEPOSIT_YN, FEE_POLICY, REG_ID, MOD_ID)
+                 VALUES (DATE_FORMAT(NOW(), '%Y%m%d'), ?, 'DONE', 'N', ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE DATA_STAT = 'DONE', FEE_POLICY = ?, MOD_DT = NOW(), MOD_ID = ?`,
+                [id, feePolicy, custId, custId, feePolicy, custId]
+            );
+        } catch (depositErr) {
+            console.error('[Complete Mission] Penalty Deposit insertion failed:', depositErr);
+            // 메인 비즈니스 성공을 방해하지 않도록 예외 무시
+        }
+
         res.json({ success: true, message: '운행이 완료 처리되었습니다.' });
     } catch (err) {
         console.error('Complete mission error:', err);
@@ -1436,6 +1501,47 @@ router.get('/completed-missions', authenticateToken, async (req, res) => {
 });
 
 /**
+ * [App] 기사 보관함 목록 조회
+ * TB_BUS_RESERVATION 테이블의 DATA_STAT가 CONFIRM, DONE 이고
+ * TB_AUCTION_REQ_BUS 테이블의 DATA_STAT가 CONFIRM, DONE 인 목록을 조회
+ */
+router.get('/archive-list', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        // CUST_ID 조회
+        const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        if (uRows.length === 0) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+        const custId = uRows[0].CUST_ID;
+
+        // DB 쿼리: 보관함 리스트 조회 (CONFIRM, DONE 상태 기사별 필터링)
+        const [rows] = await pool.execute(`
+            SELECT 
+                br.RES_ID as id,
+                r.TRIP_TITLE as title,
+                DATE_FORMAT(r.START_DT, '%Y-%m-%d') as startDate,
+                DATE_FORMAT(r.END_DT, '%Y-%m-%d') as endDate,
+                u.USER_NM as driverName,
+                br.DATA_STAT as reservationStat,
+                ab.DATA_STAT as auctionBusStat
+            FROM TB_BUS_RESERVATION br
+            JOIN TB_AUCTION_REQ_BUS ab ON br.REQ_ID = ab.REQ_ID AND br.REQ_BUS_SEQ = ab.REQ_BUS_SEQ
+            JOIN TB_AUCTION_REQ r ON br.REQ_ID = r.REQ_ID
+            JOIN TB_USER u ON br.DRIVER_ID = u.CUST_ID
+            WHERE br.DRIVER_ID = ?
+              AND br.DATA_STAT IN ('CONFIRM', 'DONE')
+              AND ab.DATA_STAT IN ('CONFIRM', 'DONE')
+            ORDER BY r.START_DT DESC
+        `, [custId]);
+
+        res.json({ success: true, data: rows });
+    } catch (err) {
+        console.error('Fetch archive list error:', err);
+        res.status(500).json({ error: '보관함 목록을 가져오는 중 오류가 발생했습니다.' });
+    }
+});
+
+/**
  * [App] 리뷰 답글 저장
  */
 router.post('/save-review-reply/:id', authenticateToken, async (req, res) => {
@@ -1484,24 +1590,26 @@ router.post('/membership/update', authenticateToken, async (req, res) => {
         if (uRows.length === 0) return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
         const custId = uRows[0].CUST_ID;
 
-        // 요금제 업데이트 (TB_DRIVER_DETAIL)
-        const [result] = await pool.execute(
-            'UPDATE TB_DRIVER_DETAIL SET FEE_POLICY = ?, MOD_ID = ?, MOD_DT = NOW() WHERE CUST_ID = ?',
-            [feePolicy, custId, custId]
+        // 다음 달 YYYYMM 구하기 (오늘 기준 다음 달 1일) (한글 주석)
+        const today = new Date();
+        const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+        const yyyymm = nextMonth.getFullYear().toString() + String(nextMonth.getMonth() + 1).padStart(2, '0');
+
+        // DB enum 형식으로 오타 보정 (DRIVER_GENNERAL -> DRIVER_GENERAL) (한글 주석)
+        const dbFeePolicy = feePolicy === 'DRIVER_GENNERAL' ? 'DRIVER_GENERAL' : feePolicy;
+
+        // TB_MOM_MEMBER_REQ 에 저장 (중복 시 업데이트) (한글 주석)
+        await pool.execute(
+            `INSERT INTO TB_MOM_MEMBER_REQ (YYYYMM, CUST_ID, FEE_POLICY, APPLY_YN, REG_ID, REG_DT, MOD_ID, MOD_DT)
+             VALUES (?, ?, ?, 'N', ?, NOW(), ?, NOW())
+             ON DUPLICATE KEY UPDATE FEE_POLICY = VALUES(FEE_POLICY), MOD_ID = VALUES(MOD_ID), MOD_DT = NOW()`,
+            [yyyymm, custId, dbFeePolicy, custId, custId]
         );
 
-        if (result.affectedRows === 0) {
-            // 상세 정보가 없는 경우 신규 생성 (기본값과 함께)
-            await pool.execute(
-                'INSERT INTO TB_DRIVER_DETAIL (CUST_ID, FEE_POLICY, REG_ID, MOD_ID) VALUES (?, ?, ?, ?)',
-                [custId, feePolicy, custId, custId]
-            );
-        }
-
-        res.json({ success: true, message: '요금제가 성공적으로 변경되었습니다.' });
+        res.json({ success: true, message: '다음 달 요금제 변경 예약이 완료되었습니다.' });
     } catch (error) {
         console.error('[App Membership Update] Error:', error);
-        res.status(500).json({ success: false, error: '요금제 변경 중 오류가 발생했습니다.' });
+        res.status(500).json({ success: false, error: '요금제 변경 예약 중 오류가 발생했습니다.' });
     }
 });
 
@@ -1517,24 +1625,23 @@ router.post('/membership/terminate', authenticateToken, async (req, res) => {
         if (uRows.length === 0) return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
         const custId = uRows[0].CUST_ID;
 
-        // 요금제 해지 처리 (FEE_POLICY = 'DRIVER')
-        const [result] = await pool.execute(
-            'UPDATE TB_DRIVER_DETAIL SET FEE_POLICY = ?, MOD_ID = ?, MOD_DT = NOW() WHERE CUST_ID = ?',
-            ['DRIVER', custId, custId]
+        // 다음 달 YYYYMM 구하기 (한글 주석)
+        const today = new Date();
+        const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+        const yyyymm = nextMonth.getFullYear().toString() + String(nextMonth.getMonth() + 1).padStart(2, '0');
+
+        // TB_MOM_MEMBER_REQ 에 해지('DRIVER') 상태로 저장 (중복 시 업데이트) (한글 주석)
+        await pool.execute(
+            `INSERT INTO TB_MOM_MEMBER_REQ (YYYYMM, CUST_ID, FEE_POLICY, APPLY_YN, REG_ID, REG_DT, MOD_ID, MOD_DT)
+             VALUES (?, ?, 'DRIVER', 'N', ?, NOW(), ?, NOW())
+             ON DUPLICATE KEY UPDATE FEE_POLICY = VALUES(FEE_POLICY), MOD_ID = VALUES(MOD_ID), MOD_DT = NOW()`,
+            [yyyymm, custId, custId, custId]
         );
 
-        if (result.affectedRows === 0) {
-            // 상세 정보가 없는 경우 신규 생성
-            await pool.execute(
-                'INSERT INTO TB_DRIVER_DETAIL (CUST_ID, FEE_POLICY, REG_ID, MOD_ID) VALUES (?, ?, ?, ?)',
-                [custId, 'DRIVER', custId, custId]
-            );
-        }
-
-        res.json({ success: true, message: '멤버십 해지가 완료되었습니다. 다음 결제일부터는 요금이 청구되지 않습니다.' });
+        res.json({ success: true, message: '멤버십 해지가 예약되었습니다. 다음 결제일부터는 요금이 청구되지 않습니다.' });
     } catch (error) {
         console.error('[App Membership Terminate] Error:', error);
-        res.status(500).json({ success: false, error: '멤버십 해지 처리 중 오류가 발생했습니다.' });
+        res.status(500).json({ success: false, error: '멤버십 해지 예약 중 오류가 발생했습니다.' });
     }
 });
 
@@ -1605,24 +1712,38 @@ router.get('/membership-card-info', authenticateToken, async (req, res) => {
 
         const currentPolicy = detail[0]?.FEE_POLICY || 'DRIVER_GENERAL';
 
-        // 정책별 금액 매핑
-        const policyPrices = {
-            'DRIVER_GENERAL': 0,
-            'DRIVER_GENNERAL': 0, // DB 오타 대응
-            'DRIVER': 0,
-            'DRIVER_MIDDLE': 500000,
-            'DRIVER_HIGH': 800000
-        };
+        // 공통코드 테이블(TB_COMMON_CODE)에서 FEE_POLICY 요금 정책의 단가(CD_FNUM) 정보를 실시간 조회하여 반영 (한글 주석)
+        const [codeRows] = await pool.execute(
+            `SELECT DTL_CD, CD_FNUM FROM TB_COMMON_CODE 
+             WHERE GRP_CD = 'FEE_POLICY' AND (USE_YN = 'Y' OR USE_YN IS NULL)`
+        );
+
+        const policyPrices = {};
+        codeRows.forEach(row => {
+            const val = Number(row.CD_FNUM);
+            policyPrices[row.DTL_CD] = Number.isFinite(val) ? Math.round(val) : 0;
+        });
+
+        // 일반 요금제 오타 또는 상호 호환성을 위한 예외 방지 (한글 주석)
+        if (policyPrices['DRIVER_GENERAL'] === undefined && policyPrices['DRIVER_GENNERAL'] !== undefined) {
+            policyPrices['DRIVER_GENERAL'] = policyPrices['DRIVER_GENNERAL'];
+        } else if (policyPrices['DRIVER_GENNERAL'] === undefined && policyPrices['DRIVER_GENERAL'] !== undefined) {
+            policyPrices['DRIVER_GENNERAL'] = policyPrices['DRIVER_GENERAL'];
+        }
+
+        // 기본값이 없는 경우 안전하게 0원으로 초기화 (한글 주석)
+        if (policyPrices['DRIVER_GENERAL'] === undefined) policyPrices['DRIVER_GENERAL'] = 0;
+        if (policyPrices['DRIVER_GENNERAL'] === undefined) policyPrices['DRIVER_GENNERAL'] = 0;
+        if (policyPrices['DRIVER'] === undefined) policyPrices['DRIVER'] = 0;
 
         let nextPaymentDate = null;
-        let nextPaymentAmount = 0;
+        let nextPaymentAmount = policyPrices[currentPolicy] || 0;
 
-        // 유료 멤버십인 경우에만 다음 결제 정보 생성 (다음 달 1일 결제)
-        if (currentPolicy !== 'DRIVER_GENERAL' && currentPolicy !== 'DRIVER_GENNERAL') {
+        // 예정금액이 존재하는 유료 멤버십인 경우에 다음 결제일 정보를 함께 생성 (한글 주석)
+        if (nextPaymentAmount > 0) {
             const now = new Date();
             const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
             nextPaymentDate = `${nextMonth.getMonth() + 1}월 ${nextMonth.getDate()}일`;
-            nextPaymentAmount = policyPrices[currentPolicy] || 0;
         }
 
         const formattedHistory = history.map(item => ({
@@ -1870,16 +1991,6 @@ router.post('/cancel-mission/:id', authenticateToken, memoryUpload.single('reaso
         }
 
         const newCnt = currentCnt + 1;
-        let restrictStat = 'Y';
-        let restrictDays = 0;
-
-        if (newCnt === 1) {
-            restrictDays = 7;
-        } else if (newCnt === 2) {
-            restrictDays = 14;
-        } else {
-            restrictStat = 'P'; // Permanent
-        }
 
         // 5. 상태 업데이트
         // 예약 상태 변경
@@ -1888,33 +1999,41 @@ router.post('/cancel-mission/:id', authenticateToken, memoryUpload.single('reaso
         // 슬롯 상태 변경 (다시 경매로 돌릴지 취소로 할지 고민이나, 여기서는 취소로 처리)
         await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'DRIVER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND BUS_TYPE_CD = (SELECT SERVICE_CLASS FROM TB_BUS_DRIVER_VEHICLE WHERE BUS_ID = (SELECT BUS_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?))', [custId, reqId, resId]);
 
-        // 패널티 적용
-        if (restrictStat === 'P') {
+        // 💰 위약금/정산 관리 테이블에 기사 취소 정보 적재 (기사 회원 등급 조회 및 트랜잭션 연동, 한글 주석)
+        await connection.execute(
+            `INSERT INTO TB_BUS_PENALTY_DEPOSIT (YYYYMMDD, RES_ID, DATA_STAT, PENALTY_DEPOSIT_YN, REG_ID, MOD_ID)
+             VALUES (DATE_FORMAT(NOW(), '%Y%m%d'), ?, 'DRIVER_CANCEL', 'N', ?, ?)
+             ON DUPLICATE KEY UPDATE DATA_STAT = 'DRIVER_CANCEL', MOD_DT = NOW(), MOD_ID = ?`,
+            [resId, custId, custId, custId]
+        );
+
+        // 패널티 적용 (9회까지 당일부터 1주일, 10회부터 당일부터 9999-12-31 무기한 제한 설정) (한글 주석)
+        if (newCnt >= 10) {
             await connection.execute(`
                 UPDATE TB_USER_CANCEL_MANAGE 
                 SET CANCEL_BUS_DRIVER_CNT = ?, 
                     RESTRICT_STAT = 'P',
-                    RESTRICT_END_DT = NULL,
+                    RESTRICT_START_DT = NOW(),
+                    RESTRICT_END_DT = '9999-12-31 23:59:59',
                     TRADE_RESTRICT_YN = 'Y',
                     TRADE_RESTRICT_START_DT = NOW(),
-                    TRADE_RESTRICT_END_DT = NULL,
+                    TRADE_RESTRICT_END_DT = '9999-12-31 23:59:59',
                     MOD_ID = ?, MOD_DT = NOW()
                 WHERE CUST_ID = ? AND USER_TYPE = 'DRIVER'
             `, [newCnt, custId, custId]);
         } else {
-            // 정지 시작일은 익일(내일)부터
             await connection.execute(`
                 UPDATE TB_USER_CANCEL_MANAGE 
                 SET CANCEL_BUS_DRIVER_CNT = ?, 
                     RESTRICT_STAT = 'Y',
-                    RESTRICT_START_DT = DATE_ADD(CURDATE(), INTERVAL 1 DAY),
-                    RESTRICT_END_DT = DATE_ADD(CURDATE(), INTERVAL ? + 1 DAY),
+                    RESTRICT_START_DT = NOW(),
+                    RESTRICT_END_DT = DATE_ADD(NOW(), INTERVAL 7 DAY),
                     TRADE_RESTRICT_YN = 'Y',
-                    TRADE_RESTRICT_START_DT = DATE_ADD(CURDATE(), INTERVAL 1 DAY),
-                    TRADE_RESTRICT_END_DT = DATE_ADD(CURDATE(), INTERVAL ? + 1 DAY),
+                    TRADE_RESTRICT_START_DT = NOW(),
+                    TRADE_RESTRICT_END_DT = DATE_ADD(NOW(), INTERVAL 7 DAY),
                     MOD_ID = ?, MOD_DT = NOW()
                 WHERE CUST_ID = ? AND USER_TYPE = 'DRIVER'
-            `, [newCnt, restrictDays, restrictDays, custId, custId]);
+            `, [newCnt, custId, custId]);
         }
 
         // 6. 취소 이력 등록
@@ -2333,6 +2452,177 @@ router.post('/inicis-bill-return', async (req, res) => {
     } catch (err) {
         console.error('[Inicis Bill Return] 치명적인 에러 발생:', err);
         return res.redirect('https://bustaams.cafe24.com/membership-card-mgmt?status=fail&msg=' + encodeURIComponent(err.message || '알 수 없는 서버 에러'));
+    }
+});
+
+
+/**
+ * [App] 기사 정산 내역 및 상세 조회 (TB_BUS_PENALTY_DEPOSIT 연동, 한글 주석)
+ * GET /app/driver/settlement-history
+ */
+router.get('/settlement-history', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const year = req.query.year || '2026';
+
+        // 1. 기사의 CUST_ID 조회
+        const [uRows] = await pool.execute(
+            `SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?`,
+            [userId]
+        );
+        if (uRows.length === 0) {
+            return res.status(404).json({ success: false, error: '사용자 정보를 찾을 수 없습니다.' });
+        }
+        const custId = uRows[0].CUST_ID;
+
+        // 2. 기사의 요금제 정보(FEE_POLICY) 및 면제 한도 건수(CD_FNUM) 조회 (기본값 제공 및 호환용)
+        const [policyRows] = await pool.execute(
+            `SELECT d.FEE_POLICY, c.CD_FNUM 
+             FROM TB_DRIVER_DETAIL d
+             LEFT JOIN TB_COMMON_CODE c ON c.GRP_CD = 'FEE_POLICY_CNT' AND c.DTL_CD = d.FEE_POLICY
+             WHERE d.CUST_ID = ?`,
+            [custId]
+        );
+
+        let feePolicy = null;
+        let limitCount = 0;
+        if (policyRows.length > 0) {
+            feePolicy = policyRows[0].FEE_POLICY;
+            limitCount = policyRows[0].CD_FNUM ? parseInt(policyRows[0].CD_FNUM, 10) : 0;
+        }
+
+        // 2-B. 요금 정책별 면제 한도 건수(CD_FNUM) 일괄 캐싱 조회
+        const [codeRows] = await pool.execute(
+            `SELECT DTL_CD, CD_FNUM FROM TB_COMMON_CODE 
+             WHERE GRP_CD = 'FEE_POLICY_CNT' AND (USE_YN = 'Y' OR USE_YN IS NULL)`
+        );
+        const policyLimits = {};
+        codeRows.forEach(row => {
+            policyLimits[row.DTL_CD] = row.CD_FNUM ? parseInt(row.CD_FNUM, 10) : 0;
+        });
+        // 'DRIVER' 요금제(멤버십 적용)의 경우 기본 면제 한도를 10000건으로 고정하여 혜택 보장
+        policyLimits['DRIVER'] = 10000;
+
+        // 3. 기사의 전체 위약금 및 정산 내역(TB_BUS_PENALTY_DEPOSIT)과 예약 정보(TB_BUS_RESERVATION) 조인 조회
+        // 누적 완료 횟수 카운트를 위해 전체 조회하며 REG_DT ASC 순으로 정렬
+        const [historyRows] = await pool.execute(
+            `SELECT 
+                p.YYYYMMDD,
+                p.RES_ID,
+                p.DATA_STAT,
+                p.REG_DT as DEPOSIT_REG_DT,
+                r.DRIVER_BIDDING_PRICE,
+                r.RES_FEE_TOTAL_AMT,
+                r.RES_FEE_REFUND_AMT,
+                r.RES_FEE_ATTRIBUTION_AMT,
+                r.FEE_POLICY, -- 예약 테이블(TB_BUS_RESERVATION)의 FEE_POLICY 이용
+                req.TRIP_TITLE,
+                req.START_ADDR,
+                req.END_ADDR,
+                DATE_FORMAT(req.START_DT, '%Y-%m-%d %H:%i') as START_DT,
+                DATE_FORMAT(req.END_DT, '%Y-%m-%d %H:%i') as END_DT
+             FROM TB_BUS_PENALTY_DEPOSIT p
+             INNER JOIN TB_BUS_RESERVATION r ON p.RES_ID = r.RES_ID
+             INNER JOIN TB_AUCTION_REQ req ON r.REQ_ID = req.REQ_ID
+             WHERE r.DRIVER_ID = ?
+             ORDER BY p.REG_DT ASC, p.RES_ID ASC`,
+            [custId]
+        );
+
+        let doneCount = 0;
+        const allCalculated = [];
+
+        for (const row of historyRows) {
+            let settlementAmount = 0;
+            const biddingPrice = parseInt(row.DRIVER_BIDDING_PRICE || 0, 10);
+            const feeAttribution = parseInt(row.RES_FEE_ATTRIBUTION_AMT || 0, 10);
+            const feeTotal = parseInt(row.RES_FEE_TOTAL_AMT || 0, 10);
+            const feeRefund = parseInt(row.RES_FEE_REFUND_AMT || 0, 10);
+
+            // 개별 예약 건에 적용된 요금제(FEE_POLICY)에 기반하여 면제 한도 동적 결정
+            const currentItemPolicy = row.FEE_POLICY || 'DRIVER_GENERAL';
+            const currentItemLimit = policyLimits[currentItemPolicy] !== undefined ? policyLimits[currentItemPolicy] : 0;
+
+            if (row.DATA_STAT === 'DONE') {
+                doneCount++;
+                if (doneCount <= currentItemLimit) {
+                    // 면제 횟수 이하: DRIVER_BIDDING_PRICE - RES_FEE_ATTRIBUTION_AMT
+                    settlementAmount = biddingPrice - feeAttribution;
+                } else {
+                    // 면제 횟수 초과: DRIVER_BIDDING_PRICE - RES_FEE_TOTAL_AMT
+                    settlementAmount = biddingPrice - feeTotal;
+                }
+            } else if (row.DATA_STAT === 'TRAVELER_CANCEL') {
+                // 여행자 취소: RES_FEE_REFUND_AMT
+                settlementAmount = feeRefund;
+            } else if (row.DATA_STAT === 'DRIVER_CANCEL') {
+                // 기사 취소: 0원
+                settlementAmount = 0;
+            }
+
+            allCalculated.push({
+                resId: row.RES_ID,
+                yyyyyMMdd: row.YYYYMMDD,
+                dataStat: row.DATA_STAT,
+                tripTitle: row.TRIP_TITLE,
+                startAddr: row.START_ADDR,
+                endAddr: row.END_ADDR,
+                startDt: row.START_DT,
+                endDt: row.END_DT,
+                biddingPrice,
+                feeAttribution,
+                feeTotal,
+                feeRefund,
+                settlementAmount,
+                feePolicy: currentItemPolicy, // 해당 개별 정산 건의 요금 정책 전달
+                doneSeq: row.DATA_STAT === 'DONE' ? doneCount : null,
+                isAttribution: row.DATA_STAT === 'DONE' && doneCount <= currentItemLimit
+            });
+        }
+
+        // 4. 선택 연도로 필터링 및 월별 요약 합산
+        const filtered = allCalculated.filter(item => item.yyyyyMMdd.startsWith(year));
+
+        const monthlySummary = {};
+        let totalSettlementYear = 0;
+
+        filtered.forEach(item => {
+            const monthPart = item.yyyyyMMdd.substring(4, 6);
+            const monthKey = `${year}년 ${monthPart}월`;
+            if (!monthlySummary[monthKey]) {
+                monthlySummary[monthKey] = {
+                    month: monthKey,
+                    amount: 0,
+                    count: 0
+                };
+            }
+            monthlySummary[monthKey].amount += item.settlementAmount;
+            monthlySummary[monthKey].count += 1;
+            totalSettlementYear += item.settlementAmount;
+        });
+
+        // 📅 최신 월이 상단에 배치되도록 내림차순 정렬 (한글 주석)
+        const monthlyDataList = Object.values(monthlySummary).sort((a, b) => b.month.localeCompare(a.month));
+
+        res.json({
+            success: true,
+            data: {
+                feePolicy,
+                limitCount,
+                summary: {
+                    year: parseInt(year, 10),
+                    totalAmount: totalSettlementYear,
+                    nextSettlementDate: '2026.06.12',
+                    pendingAmount: 1250000
+                },
+                monthlyData: monthlyDataList,
+                details: filtered
+            }
+        });
+
+    } catch (err) {
+        console.error('Fetch settlement history error:', err);
+        res.status(500).json({ error: '정산 내역 조회 중 오류가 발생했습니다.' });
     }
 });
 

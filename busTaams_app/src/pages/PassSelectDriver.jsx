@@ -7,6 +7,7 @@ import BottomNavDriver from '../components/BottomNavDriver';
 const PassSelectDriver = () => {
     const navigate = useNavigate();
     const [currentPolicy, setCurrentPolicy] = useState('');
+    const [pendingPolicy, setPendingPolicy] = useState(null);
     const [loading, setLoading] = useState(true);
     const [userImage, setUserImage] = useState(null);
     const [imageVersion] = useState(Date.now());
@@ -60,8 +61,9 @@ const PassSelectDriver = () => {
         try {
             const response = await api.get('/app/driver/profile');
             if (response.success) {
-                // 백엔드에서 준 feePolicy 사용 (없을 경우 빈 값)
+                // 백엔드에서 준 feePolicy 사용 (없을 경우 빈 값) (한글 주석)
                 setCurrentPolicy(response.data.driver.feePolicy || '');
+                setPendingPolicy(response.data.driver.pendingPolicy || null);
                 setUserImage(response.data.driver.profileImg || null);
             }
         } catch (error) {
@@ -78,7 +80,7 @@ const PassSelectDriver = () => {
 
         const result = await Swal.fire({
             title: `${planName} 요금제로 변경하시겠습니까?`,
-            text: "변경 시 즉시 새로운 혜택이 적용됩니다.",
+            text: "다음달부터 새로운 혜택이 적용됩니다.",
             icon: 'question',
             showCancelButton: true,
             confirmButtonColor: '#00695C',
@@ -99,8 +101,8 @@ const PassSelectDriver = () => {
                 const response = await api.post('/app/driver/membership/update', { feePolicy: planId });
                 if (response.success) {
                     await Swal.fire({
-                        title: '변경 완료!',
-                        text: `${planName} 요금제로 변경되었습니다.`,
+                        title: '변경 예약 완료!',
+                        text: `다음 달 1일부터 ${planName} 요금제로 변경 예정입니다.`,
                         icon: 'success',
                         confirmButtonColor: '#00695C',
                         customClass: {
@@ -108,7 +110,7 @@ const PassSelectDriver = () => {
                             title: 'text-primary font-black italic uppercase tracking-tight'
                         }
                     });
-                    setCurrentPolicy(planId);
+                    fetchProfile();
                 } else {
                     throw new Error(response.error || '변경에 실패했습니다.');
                 }
@@ -222,18 +224,30 @@ const PassSelectDriver = () => {
                     </div>
 
                     {/* 현재 요금제 상태 표시 추가 */}
-                    <div className="inline-flex items-center gap-3 bg-white/50 backdrop-blur-sm border border-primary/5 px-4 py-3 rounded-2xl shadow-sm">
-                        <div className={`w-2 h-2 rounded-full animate-pulse ${currentPolicy ? 'bg-secondary' : 'bg-slate-300'}`}></div>
-                        <div className="flex flex-col">
-                            <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-tighter leading-none mb-1">Current Status</span>
-                            <span className={`text-sm font-black ${currentPolicy ? 'text-primary' : 'text-slate-400'}`}>
-                                {currentPolicy ? (
-                                    `${plans.find(p => p.id === currentPolicy)?.name || currentPolicy} 요금제 이용 중`
-                                ) : (
-                                    '등록된 요금제 없음'
-                                )}
-                            </span>
+                    <div className="inline-flex flex-col gap-2 bg-white/50 backdrop-blur-sm border border-primary/5 px-4 py-3 rounded-2xl shadow-sm w-fit">
+                        <div className="flex items-center gap-3">
+                            <div className={`w-2 h-2 rounded-full animate-pulse ${currentPolicy ? 'bg-secondary' : 'bg-slate-300'}`}></div>
+                            <div className="flex flex-col text-left">
+                                <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-tighter leading-none mb-1">Current Status</span>
+                                <span className={`text-sm font-black ${currentPolicy ? 'text-primary' : 'text-slate-400'}`}>
+                                    {currentPolicy ? (
+                                        `${plans.find(p => p.id === currentPolicy)?.name || currentPolicy} 요금제 이용 중`
+                                    ) : (
+                                        '등록된 요금제 없음'
+                                    )}
+                                </span>
+                            </div>
                         </div>
+
+                        {/* 다음 달 변경 예정 요금제 표시 (한글 주석) */}
+                        {pendingPolicy && (
+                            <div className="flex items-center gap-2 border-t border-slate-100 pt-2 mt-1">
+                                <span className="material-symbols-outlined text-amber-600 text-sm">schedule</span>
+                                <span className="text-xs font-bold text-amber-700">
+                                    다음 달 변경 예정: {pendingPolicy === 'DRIVER' ? '해지 예정' : `${plans.find(p => p.id === pendingPolicy)?.name || pendingPolicy} 요금제`}
+                                </span>
+                            </div>
+                        )}
                     </div>
 
                     <p className="text-on-surface-variant text-sm leading-relaxed max-w-[90%]">
@@ -245,14 +259,20 @@ const PassSelectDriver = () => {
                 <div className="space-y-8 text-left">
                     {plans.map(plan => {
                         const isCurrent = plan.id === currentPolicy;
+                        const isPending = plan.id === pendingPolicy;
                         return (
                             <section 
                                 key={plan.id} 
-                                className={`relative bg-white rounded-2xl p-6 shadow-[0_40px_60px_-15px_rgba(0,104,95,0.08)] transition-all duration-300 text-left border border-white group ${isCurrent ? 'border-l-4 border-secondary shadow-[0_40px_60px_-15px_rgba(0,104,95,0.12)]' : 'hover:translate-y-[-4px]'}`}
+                                className={`relative bg-white rounded-2xl p-6 shadow-[0_40px_60px_-15px_rgba(0,104,95,0.08)] transition-all duration-300 text-left border border-white group ${isCurrent ? 'border-l-4 border-secondary shadow-[0_40px_60px_-15px_rgba(0,104,95,0.12)]' : isPending ? 'border-l-4 border-amber-500 shadow-[0_40px_60px_-15px_rgba(0,104,95,0.12)]' : 'hover:translate-y-[-4px]'}`}
                             >
                                 {isCurrent && (
                                     <div className="absolute -top-3 right-6 bg-secondary text-white text-[10px] font-bold px-3 py-1 rounded-xl uppercase tracking-tighter italic shadow-lg z-10">
                                         현재 이용 중
+                                    </div>
+                                )}
+                                {!isCurrent && isPending && (
+                                    <div className="absolute -top-3 right-6 bg-amber-500 text-white text-[10px] font-bold px-3 py-1 rounded-xl uppercase tracking-tighter italic shadow-lg z-10">
+                                        다음 달 적용 예정
                                     </div>
                                 )}
                                 {plan.isPremium && (

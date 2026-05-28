@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import api from '../api';
 import { notify } from '../utils/toast';
 import BottomNavCustomer from '../components/BottomNavCustomer';
+import BottomNavDriver from '../components/BottomNavDriver';
 
 /**
  * busTaams Talk - 실시간 채팅 화면
@@ -27,9 +28,16 @@ const ChatRoom = () => {
         
         const fetchProfile = async () => {
             try {
-                const response = await api.get('/app/customer/profile');
-                if (response.success && response.data) {
-                    setProfileImage(response.data.profileImage);
+                if (user?.userType === 'DRIVER') {
+                    const response = await api.get('/app/driver/dashboard');
+                    if (response.success && response.data) {
+                        setProfileImage(response.data.userImage);
+                    }
+                } else {
+                    const response = await api.get('/app/customer/profile');
+                    if (response.success && response.data) {
+                        setProfileImage(response.data.profileImage);
+                    }
                 }
             } catch (error) {
                 console.error('Fetch profile error:', error);
@@ -137,19 +145,45 @@ const ChatRoom = () => {
             <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
                 <div className="flex justify-between items-center px-6 py-4 max-w-2xl mx-auto w-full">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => navigate(-1)} className="text-[#004D40]">
+                        <button onClick={() => navigate(-1)} className="text-[#004D40] hover:opacity-80 transition-opacity flex items-center justify-center">
                             <span className="material-symbols-outlined text-2xl">arrow_back</span>
                         </button>
-                        <div className="flex flex-col">
-                            <h2 className="font-black text-lg text-[#004D40] tracking-tighter italic">busTaams Talk</h2>
-                            <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">실시간 채팅 지원</span>
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-50 border border-slate-100 flex items-center justify-center">
+                                {chatRoom?.otherUser?.USER_IMAGE ? (
+                                    <img 
+                                        src={chatRoom.otherUser.USER_IMAGE.startsWith('http') ? 
+                                            chatRoom.otherUser.USER_IMAGE : 
+                                            `${import.meta.env.VITE_API_BASE_URL || ''}${chatRoom.otherUser.USER_IMAGE}`}
+                                        className="w-full h-full object-cover" 
+                                        alt={chatRoom.otherUser?.USER_NM} 
+                                    />
+                                ) : (
+                                    <span className="material-symbols-outlined text-slate-300">person</span>
+                                )}
+                            </div>
+                            <div className="flex flex-col text-left">
+                                <h2 className="font-black text-base text-[#004D40] tracking-tight leading-tight">
+                                    {chatRoom?.otherUser?.USER_NM || '대화 상대'}
+                                </h2>
+                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none mt-1">
+                                    {chatRoom?.otherUser?.PART_TYPE === 'DRIVER' ? '배정 기사님' : 
+                                     chatRoom?.otherUser?.PART_TYPE === 'TRAVELER' ? '예약 고객님' : '파트너'}
+                                </span>
+                            </div>
                         </div>
                     </div>
 
                     {/* 내 프로필 이미지 (마이페이지 이동) */}
                     <div 
                         className="w-10 h-10 rounded-full bg-white flex items-center justify-center overflow-hidden border border-gray-100 cursor-pointer shadow-sm active:scale-95 transition-transform"
-                        onClick={() => navigate('/profile-customer')}
+                        onClick={() => {
+                            if (currentUser?.userType === 'DRIVER') {
+                                navigate('/driver-dashboard');
+                            } else {
+                                navigate('/profile-customer');
+                            }
+                        }}
                     >
                         {profileImage ? (
                             <img 
@@ -235,7 +269,11 @@ const ChatRoom = () => {
                 </div>
             </div>
 
-            <BottomNavCustomer />
+            {currentUser?.userType === 'DRIVER' ? (
+                <BottomNavDriver activeTab="chat" />
+            ) : (
+                <BottomNavCustomer />
+            )}
         </div>
     );
 };

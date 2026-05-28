@@ -10,6 +10,38 @@ const fs = require('fs');
 const admin = require('firebase-admin');
 const { sendNotification } = require('../services/notificationService');
 
+
+/**
+ * 💰 기사의 멤버십 정보 및 등급에 따라 저장할 FEE_POLICY를 판별하여 반환하는 헬퍼 함수 (한글 주석)
+ */
+async function determineFeePolicy(connection, driverId) {
+    try {
+        // 1. TB_MOM_MEMBER에서 기사의 현재 월(YYYYMM) 정보 조회
+        const [momRows] = await connection.execute(
+            "SELECT REMAINING_CNT FROM TB_MOM_MEMBER WHERE CUST_ID = ? AND YYYYMM = DATE_FORMAT(NOW(), '%Y%m')",
+            [driverId]
+        );
+        
+        // 2. 해당 월 정보가 존재하고 REMAINING_CNT가 0건이면 'DRIVER' 저장
+        if (momRows.length > 0 && parseInt(momRows[0].REMAINING_CNT, 10) === 0) {
+            return 'DRIVER';
+        }
+        
+        // 3. 그렇지 않거나 월 정보가 없으면 TB_DRIVER_DETAIL에서 기사 등급 조회
+        const [driverRows] = await connection.execute(
+            "SELECT FEE_POLICY FROM TB_DRIVER_DETAIL WHERE CUST_ID = ?",
+            [driverId]
+        );
+        if (driverRows.length > 0) {
+            return driverRows[0].FEE_POLICY;
+        }
+        return null;
+    } catch (err) {
+        console.error('[determineFeePolicy] Error determining fee policy:', err);
+        return null;
+    }
+}
+
 // 업로드 디렉토리 설정
 const uploadDir = path.join(__dirname, '../uploads/profiles');
 if (!fs.existsSync(uploadDir)) {
@@ -1052,9 +1084,9 @@ router.post('/request-bus-change', authenticateToken, async (req, res) => {
         // [알림 발송] 트랜잭션 커밋 완료 후 비동기로 기사에게 푸시 메시지 발송
         if (drivers.length > 0 && reqInfo.length > 0) {
             const tripTitle = reqInfo[0].TRIP_TITLE;
-            const title = '[차량 변경 요청] 고객님이 차량 변경을 요청했습니다.';
-            const body = `여정: ${tripTitle}\n차량 변경 요청을 확인하고 재입찰 등을 진행해 주세요.`;
-            const link = `/estimate-detail-driver/${reqId}`;
+            const title = '[차량 변경 요청] 차량 변경이 요청되었습니다.';
+            const body = `여정: ${tripTitle}\n차량 변경 요청 확인 바랍니다.`;
+            const link = `/driver-dashboard`;
 
             drivers.forEach(driver => {
                 sendNotification(pool, {
@@ -1228,9 +1260,12 @@ router.post('/approve-bid', authenticateToken, async (req, res) => {
 
         const { REQ_ID: reqId, REQ_BUS_SEQ: unitSeq, DRIVER_ID: driverId } = bidRows[0];
 
+        // 기사 등급(FEE_POLICY) 판별
+        const feePolicy = await determineFeePolicy(pool, driverId);
+
         // 2. 해당 차량의 모든 입찰을 일단 대기 상태로 (혹은 다른 로직)
         // 3. 선택된 입찰만 CONFIRM
-        await pool.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = "CONFIRM", CONFIRM_DT = NOW() WHERE RES_ID = ?', [resId]);
+        await pool.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = "CONFIRM", CONFIRM_DT = NOW(), FEE_POLICY = ? WHERE RES_ID = ?', [feePolicy, resId]);
 
         // 4. 차량 상태도 CONFIRM으로 변경
         await pool.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = "CONFIRM" WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?', [reqId, unitSeq]);
@@ -1281,14 +1316,20 @@ router.post('/approve-all', authenticateToken, async (req, res) => {
         // (실제로는 사용자가 선택한 견적들이 있어야 하지만, 요청에 따라 전체 승인 처리)
 
         const [bids] = await pool.execute(`
-            SELECT RES_ID, REQ_BUS_SEQ 
+            SELECT RES_ID, REQ_BUS_SEQ, DRIVER_ID 
             FROM TB_BUS_RESERVATION 
             WHERE REQ_ID = ? AND DATA_STAT = 'BIDDING'
             GROUP BY REQ_BUS_SEQ
         `, [reqId]);
 
         for (const bid of bids) {
-            await pool.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = "CONFIRM", CONFIRM_DT = NOW() WHERE RES_ID = ?', [bid.RES_ID]);
+            // 기사 등급(FEE_POLICY) 판별
+            const feePolicy = await determineFeePolicy(pool, bid.DRIVER_ID);
+
+            await pool.execute(
+                'UPDATE TB_BUS_RESERVATION SET DATA_STAT = "CONFIRM", CONFIRM_DT = NOW(), FEE_POLICY = ? WHERE RES_ID = ?', 
+                [feePolicy, bid.RES_ID]
+            );
             await pool.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = "CONFIRM" WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?', [reqId, bid.REQ_BUS_SEQ]);
         }
 
@@ -2309,9 +2350,9 @@ router.post('/confirm-bid', authenticateToken, async (req, res) => {
         const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
         const custId = uRows.length > 0 ? uRows[0].CUST_ID : userId;
 
-        // 1. 해당 입찰 정보 조회 (REQ_ID 확인용)
+        // 1. 해당 입찰 정보 조회 (REQ_ID 및 DRIVER_ID 확인용)
         const [bidRows] = await connection.execute(
-            'SELECT REQ_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?',
+            'SELECT REQ_ID, DRIVER_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?',
             [resId]
         );
 
@@ -2319,12 +2360,15 @@ router.post('/confirm-bid', authenticateToken, async (req, res) => {
             throw new Error('해당 입찰을 찾을 수 없습니다.');
         }
 
-        const reqId = bidRows[0].REQ_ID;
+        const { REQ_ID: reqId, DRIVER_ID: driverId } = bidRows[0];
 
-        // 2. 선택된 입찰은 'CONFIRM' 처리
+        // 기사 등급(FEE_POLICY) 판별
+        const feePolicy = await determineFeePolicy(connection, driverId);
+
+        // 2. 선택된 입찰은 'CONFIRM' 처리 (FEE_POLICY 반영)
         await connection.execute(
-            "UPDATE TB_BUS_RESERVATION SET DATA_STAT = 'CONFIRM', MOD_ID = ?, MOD_DT = NOW() WHERE RES_ID = ?",
-            [custId, resId]
+            "UPDATE TB_BUS_RESERVATION SET DATA_STAT = 'CONFIRM', FEE_POLICY = ?, MOD_ID = ?, MOD_DT = NOW() WHERE RES_ID = ?",
+            [feePolicy, custId, resId]
         );
 
         // 3. 모든 요청 차량이 예약되었는지 확인하여 마스터 상태 변경
@@ -2701,28 +2745,36 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
             return;
         }
 
-        // 2. 증빙 서류 업로드 처리 (GCS) - 페널티가 발생하는 경우에만 수행
+        // 2. 증빙 서류 업로드 처리 (로컬) - 페널티가 발생하는 경우에만 수행
         let gcsPath = null;
         if (req.file) {
             const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20, connection);
-            const fileName = `cancel_docs/${fileId}${path.extname(req.file.originalname)}`;
-            const file = getBucket().file(fileName);
+            const fileExt = path.extname(req.file.originalname).replace('.', '') || 'png';
+            const objectKey = `cancel_docs/${fileId}.${fileExt}`;
+            
+            // 📂 로컬 uploads 디렉토리에 저장
+            const localPath = path.join(__dirname, '..', 'uploads', objectKey);
+            const localDir = path.dirname(localPath);
+            if (!fs.existsSync(localDir)) {
+                fs.mkdirSync(localDir, { recursive: true });
+            }
+            fs.writeFileSync(localPath, req.file.buffer);
 
-            await file.save(req.file.buffer, {
-                metadata: { contentType: req.file.mimetype }
-            });
-
-            gcsPath = `https://storage.googleapis.com/${bucketName}/${fileName}`;
+            gcsPath = `https://bustaams.cafe24.com/uploads/${objectKey}`;
 
             // TB_FILE_MASTER 등록
             const fileQuery = `
                 INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_ID, MOD_ID)
-                VALUES (?, 'CANCEL_DOC', ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, 'CANCEL_DOC', 'uploads', ?, ?, ?, ?, ?, ?)
             `;
             await connection.execute(fileQuery, [
-                fileId, bucketName, gcsPath, req.file.originalname,
-                path.extname(req.file.originalname).replace('.', ''),
-                req.file.size, custId, custId
+                fileId,
+                gcsPath,
+                req.file.originalname,
+                fileExt,
+                req.file.size,
+                custId,
+                custId
             ]);
         }
 
@@ -2744,52 +2796,33 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
         }
 
         const newCnt = currentCnt + 1;
-        let restrictMonths = 0;
-        let restrictYn = 'N'; // N: 정상, Y: 이용제한
-        let restrictEndDt = null;
 
-        // 페널티 정책 (누적 횟수에 따른 차등 제한)
-        if (newCnt === 1) {
-            restrictMonths = 3;
-            restrictYn = 'Y';
-        } else if (newCnt === 2) {
-            restrictMonths = 6;
-            restrictYn = 'Y';
-        } else if (newCnt === 3) {
-            restrictMonths = 9;
-            restrictYn = 'Y';
-        } else if (newCnt >= 4) {
-            restrictYn = 'Y'; // 무기한은 별도 플래그가 없으므로 아주 먼 미래나 관리자 처리 필요하나 일단 Y로 세팅
-        }
-
-        // 취소 관리 테이블 업데이트 (DB.md 스키마에 맞게 컬럼명 보정)
-        if (newCnt >= 4) {
+        // 취소 관리 테이블 업데이트 (9회까지 당일부터 1주일, 10회부터 당일부터 9999-12-31 무기한 제한 설정) (한글 주석)
+        if (newCnt >= 10) {
             await connection.execute(`
                 UPDATE TB_USER_CANCEL_MANAGE 
                 SET CANCEL_CNT = ?, 
                     CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
+                    RESTRICT_STAT = 'P',
+                    RESTRICT_START_DT = NOW(),
+                    RESTRICT_END_DT = '9999-12-31 23:59:59',
                     TRADE_RESTRICT_YN = 'Y',
                     TRADE_RESTRICT_START_DT = NOW(),
-                    TRADE_RESTRICT_END_DT = '2099-12-31 23:59:59',
+                    TRADE_RESTRICT_END_DT = '9999-12-31 23:59:59',
                     MOD_ID = ?, MOD_DT = NOW()
                 WHERE CUST_ID = ?
             `, [newCnt, custId, custId]);
-        } else if (restrictYn === 'Y') {
-            await connection.execute(`
-                UPDATE TB_USER_CANCEL_MANAGE 
-                SET CANCEL_CNT = ?, 
-                    CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
-                    TRADE_RESTRICT_YN = ?,
-                    TRADE_RESTRICT_START_DT = NOW(),
-                    TRADE_RESTRICT_END_DT = DATE_ADD(NOW(), INTERVAL ? MONTH),
-                    MOD_ID = ?, MOD_DT = NOW()
-                WHERE CUST_ID = ?
-            `, [newCnt, restrictYn, restrictMonths, custId, custId]);
         } else {
             await connection.execute(`
                 UPDATE TB_USER_CANCEL_MANAGE 
                 SET CANCEL_CNT = ?, 
                     CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
+                    RESTRICT_STAT = 'Y',
+                    RESTRICT_START_DT = NOW(),
+                    RESTRICT_END_DT = DATE_ADD(NOW(), INTERVAL 7 DAY),
+                    TRADE_RESTRICT_YN = 'Y',
+                    TRADE_RESTRICT_START_DT = NOW(),
+                    TRADE_RESTRICT_END_DT = DATE_ADD(NOW(), INTERVAL 7 DAY),
                     MOD_ID = ?, MOD_DT = NOW()
                 WHERE CUST_ID = ?
             `, [newCnt, custId, custId]);
@@ -2815,6 +2848,31 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
         await connection.execute('UPDATE TB_AUCTION_REQ SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?', [custId, reqId]);
         await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?', [custId, reqId]);
         await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND DATA_STAT NOT IN (\'CONFIRM\', \'DONE\')', [custId, reqId]);
+
+        // 💰 위약금/정산 관리 테이블에 여행자 취소 정보 적재 (예약 확정 'CONFIRM' 상태였던 경우에만, 한글 주석)
+        if (currentReqStat === 'CONFIRM') {
+            const [confirmedResRows] = await connection.execute(
+                `SELECT R.RES_ID, R.DRIVER_ID, D.FEE_POLICY 
+                 FROM TB_BUS_RESERVATION R
+                 LEFT JOIN TB_DRIVER_DETAIL D ON R.DRIVER_ID = D.CUST_ID
+                 WHERE R.REQ_ID = ? AND R.DATA_STAT = 'CONFIRM'`,
+                [reqId]
+            );
+            for (const resRow of confirmedResRows) {
+                await connection.execute(
+                    `INSERT INTO TB_BUS_PENALTY_DEPOSIT (YYYYMMDD, RES_ID, DATA_STAT, PENALTY_DEPOSIT_YN, FEE_POLICY, REG_ID, MOD_ID)
+                     VALUES (DATE_FORMAT(NOW(), '%Y%m%d'), ?, 'TRAVELER_CANCEL', 'N', ?, ?, ?)
+                     ON DUPLICATE KEY UPDATE DATA_STAT = 'TRAVELER_CANCEL', FEE_POLICY = ?, MOD_DT = NOW(), MOD_ID = ?`,
+                    [resRow.RES_ID, resRow.FEE_POLICY, custId, custId, resRow.FEE_POLICY, custId]
+                );
+            }
+            
+            // 확정된 예약 건 또한 상태를 TRAVELER_CANCEL로 업데이트하여 기사 화면에 반영 (한글 주석)
+            await connection.execute(
+                `UPDATE TB_BUS_RESERVATION SET DATA_STAT = 'TRAVELER_CANCEL', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND DATA_STAT = 'CONFIRM'`,
+                [custId, reqId]
+            );
+        }
 
         await connection.commit();
         res.json({ success: true, message: '여행 취소 처리가 완료되었습니다.' });

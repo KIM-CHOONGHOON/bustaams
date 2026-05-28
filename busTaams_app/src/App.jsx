@@ -37,6 +37,8 @@ import FailBidListDriver from './pages/FailBidListDriver';
 import FailBidDetailDriver from './pages/FailBidDetailDriver';
 import ChatListDriver from './pages/ChatListDriver';
 import SettlementHistoryDriver from './pages/SettlementHistoryDriver';
+import ArchiveListDriver from './pages/ArchiveListDriver';
+import ChatListCustomer from './pages/ChatListCustomer';
 import PassSelectDriver from './pages/PassSelectDriver';
 import CardMembershipMgmtDriver from './pages/CardMembershipMgmtDriver';
 import CardRegisterDriver from './pages/CardRegisterDriver';
@@ -160,6 +162,7 @@ function App() {
         <Route path="/approval-list" element={<ApprovalListCustomer />} />
         <Route path="/approval-detail/:id" element={<ApprovalDetailCustomer />} />
         <Route path="/inquiry-list" element={<InquiryListCustomer />} />
+        <Route path="/chat-list-customer" element={<ChatListCustomer />} />
         <Route path="/add-inquiry" element={<InquiryForm />} />
         <Route path="/inquiry-detail/:id" element={<InquiryDetailCustomer />} />
         
@@ -180,6 +183,7 @@ function App() {
         <Route path="/failed-estimate-list-driver" element={<FailBidListDriver />} />
         <Route path="/fail-bid-detail-driver/:id" element={<FailBidDetailDriver />} />
         <Route path="/chat-list-driver" element={<ChatListDriver />} />
+        <Route path="/archive-list-driver" element={<ArchiveListDriver />} />
         <Route path="/payment-history-driver" element={<SettlementHistoryDriver />} />
         <Route path="/pass-select-driver" element={<PassSelectDriver />} />
         <Route path="/membership-card-mgmt" element={<CardMembershipMgmtDriver />} />

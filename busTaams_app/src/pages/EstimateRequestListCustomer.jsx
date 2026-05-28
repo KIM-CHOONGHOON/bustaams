@@ -295,11 +295,6 @@ const EstimateRequestListCustomer = () => {
                                     >
                                         {typeParam === 'waiting' ? '승인 처리하기' : '상세 청약 확인'}
                                     </button>
-                                    <button 
-                                        className="w-14 h-14 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition-all btn-secondary"
-                                    >
-                                        <span className="material-symbols-outlined">more_horiz</span>
-                                    </button>
                                 </div>
                             </div>
                         ))}

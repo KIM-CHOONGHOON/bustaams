@@ -185,45 +185,7 @@ const CardMembershipMgmtDriver = () => {
                     </div>
                 </div>
 
-                {/* Payment History List */}
-                <div className="space-y-6">
-                    <div className="flex items-center justify-between px-2">
-                        <h4 className="font-headline font-bold text-lg text-primary italic uppercase tracking-tight">멤버십 결제 내역</h4>
-                        <button className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest flex items-center gap-1">
-                            <span className="material-symbols-outlined text-sm">filter_list</span> 필터
-                        </button>
-                    </div>
 
-                    <div className="space-y-4">
-                        {data.history.length === 0 ? (
-                            <div className="text-center py-12 bg-surface-container-low rounded-2xl text-on-surface-variant text-sm">
-                                결제 내역이 없습니다.
-                            </div>
-                        ) : (
-                            data.history.map((item, index) => (
-                                <div key={index} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-50 flex items-center justify-between group hover:shadow-xl hover:translate-y-[-2px] transition-all duration-300">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300">
-                                            <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1"}}>check_circle</span>
-                                        </div>
-                                        <div>
-                                            <span className="block font-black text-on-surface tracking-tight uppercase text-sm">
-                                                {item.YYYYMM.slice(0, 4)}년 {item.YYYYMM.slice(4)}월
-                                            </span>
-                                            <span className="text-on-surface-variant text-[10px] font-bold uppercase tracking-widest">
-                                                Membership Fee • {item.FEE_POLICY ? item.FEE_POLICY.split('_')[1] : '일반'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <span className="block font-black text-primary text-lg italic tracking-tighter">₩{formatPrice(item.amount)}</span>
-                                        <button className="text-[10px] font-bold text-secondary uppercase tracking-widest hover:underline mt-1">Receipt</button>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
 
                 {/* Add Card / Support Section */}
                 <div className="bg-surface-container-low rounded-2xl p-10 space-y-6 relative overflow-hidden">

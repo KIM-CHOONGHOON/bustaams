@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { pool, getNextId, getBucket, bucketName } = require('../db');
+const path = require('path');
+const fs = require('fs');
 const bcrypt = require('bcrypt');
 const { randomUUID } = require('crypto');
 const jwt = require('jsonwebtoken');
@@ -234,17 +236,6 @@ router.post('/register', async (req, res) => {
                     await connection.rollback();
                     return res.status(400).json({ error: '존재하지 않는 추천인 아이디입니다.' });
                 }
-=======
-        // [추가] 추천인 코드 검증 (입력된 경우 PARTNER 타입의 USER_ID인지 확인)
-        if (recomCode) {
-            const [partnerRows] = await connection.execute(
-                'SELECT 1 FROM TB_USER WHERE USER_TYPE = "PARTNER" AND USER_ID = ?',
-                [recomCode]
-            );
-            if (partnerRows.length === 0) {
-                await connection.rollback();
-                return res.status(400).json({ error: '존재하지 않는 추천인 아이디입니다.' });
->>>>>>> fe78dad9449a220d968b0489118a55c422f7f538
             }
         }
 
@@ -263,28 +254,30 @@ router.post('/register', async (req, res) => {
         // 1. CUST_ID 채번 (10자리, 0 패딩)
         const custId = await getNextId('TB_USER', 'CUST_ID', 10);
 
-        // 2. 전자 서명 처리 (GCS 업로드 및 TB_FILE_MASTER 등록)
+        // 2. 전자 서명 처리 (로컬 업로드 및 TB_FILE_MASTER 등록)
         let signFileId = null;
         if (signatureBase64 && signatureBase64.startsWith('data:image')) {
             const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20);
-            const fileName = `signatures/${fileId}.png`;
-            const file = getBucket().file(fileName);
-            const buffer = Buffer.from(signatureBase64.split(',')[1], 'base64');
+            const objectKey = `signatures/${fileId}.png`;
             
-            // GCS 업로드
-            await file.save(buffer, {
-                metadata: { contentType: 'image/png' }
-            });
+            // 📂 로컬 uploads 디렉토리에 저장
+            const localPath = path.join(__dirname, '..', 'uploads', objectKey);
+            const localDir = path.dirname(localPath);
+            if (!fs.existsSync(localDir)) {
+                fs.mkdirSync(localDir, { recursive: true });
+            }
+            const buffer = Buffer.from(signatureBase64.split(',')[1], 'base64');
+            fs.writeFileSync(localPath, buffer);
 
-            const gcsPath = `https://storage.googleapis.com/${bucketName}/${fileName}`;
+            const gcsPath = `https://bustaams.cafe24.com/uploads/${objectKey}`;
             signFileId = fileId;
 
             // TB_FILE_MASTER 삽입 (REG_ID 제거, MOD_ID를 CUST_ID로 설정, FILE_SIZE 추가)
             const fileQuery = `
                 INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, MOD_ID)
-                VALUES (?, 'SIGNATURE', ?, ?, ?, 'png', ?, ?)
+                VALUES (?, 'SIGNATURE', 'uploads', ?, ?, 'png', ?, ?)
             `;
-            await connection.execute(fileQuery, [fileId, bucketName, gcsPath, `${userId}_signature.png`, buffer.length, custId]);
+            await connection.execute(fileQuery, [fileId, gcsPath, `${userId}_signature.png`, buffer.length, custId]);
         }
 
         // 3. TB_USER 삽입 (REG_ID 제거, CUST_ID, RESIDENT_NO_ENC, RECOM_CODE 추가)

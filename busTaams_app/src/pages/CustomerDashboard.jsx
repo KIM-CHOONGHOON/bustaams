@@ -224,7 +224,7 @@ const CustomerDashboard = () => {
 
                 <section className="space-y-6">
                     <h3 className="text-xl font-bold text-on-surface">빠른 서비스</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4 md:gap-6">
                         <div onClick={handleRequestBus} className={`cursor-pointer bg-white p-6 rounded-2xl shadow-sm border-l-4 border-secondary hover:translate-y-[-4px] transition-all ${restriction ? 'opacity-60 grayscale-[0.5]' : ''}`}>
                             <div className="w-12 h-12 rounded-xl bg-secondary/10 flex items-center justify-center mb-4 text-secondary">
                                 <span className="material-symbols-outlined">add_task</span>
@@ -259,6 +259,13 @@ const CustomerDashboard = () => {
                             </div>
                             <h4 className="font-bold text-on-surface text-[14px]">1:1 문의</h4>
                             <p className="text-[10px] text-on-surface-variant mt-1">고객 지원 센터</p>
+                        </div>
+                        <div onClick={() => navigate('/chat-list-customer')} className="cursor-pointer bg-white p-6 rounded-2xl shadow-sm hover:translate-y-[-4px] transition-all">
+                            <div className="w-12 h-12 rounded-xl bg-teal-100/50 flex items-center justify-center mb-4 text-[#00685f]">
+                                <span className="material-symbols-outlined">chat</span>
+                            </div>
+                            <h4 className="font-bold text-on-surface text-[14px]">실시간 채팅</h4>
+                            <p className="text-[10px] text-on-surface-variant mt-1">기사님과 대화</p>
                         </div>
                         <div onClick={() => navigate('/user-profile')} className="cursor-pointer bg-white p-6 rounded-2xl shadow-sm hover:translate-y-[-4px] transition-all">
                             <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-4 text-slate-600">

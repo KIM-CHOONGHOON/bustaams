@@ -202,18 +202,6 @@ const ApprovalListCustomer = () => {
                 return;
             }
 
-            console.log('>>> [Payment] Launching Mobile Payment Page:', data.oid);
-
-            // 모바일 결제 설정 (기기에 관계없이 모바일 전용 URL 사용)
-            form.action = "https://mobile.inicis.com/smart/payment/";
-            form.target = "_self";
-            form.method = "POST";
-
-            // 모바일 필수 파라미터 매핑
-            form.P_MID.value = data.mid;
-            form.P_OID.value = data.oid;
-            form.P_AMT.value = data.price;
-
             // 1. 상품명 정제: 특수문자 제거 및 13자 제한 (UTF-8 기준 약 40바이트 이내)
             const cleanGoodName = data.goodname.replace(/[^\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\uA960-\uA97F\uD7B0-\uD7FF0-9a-zA-Z\s]/g, '');
             // 한글 1자=3바이트이므로 13자까지만 허용하여 40바이트 제한 준수
@@ -225,29 +213,56 @@ const ApprovalListCustomer = () => {
             // 3. 전화번호 정제: 하이픈 제거 (이니시스 모바일 필수)
             const cleanMobile = data.buyertel.replace(/[^0-9]/g, '');
 
-            form.P_GOODS.value = finalGoodName;
-            form.P_UNAME.value = cleanBuyerName;
-            form.P_MOBILE.value = cleanMobile;
-            form.P_EMAIL.value = data.buyeremail;
-            form.P_NEXT_URL.value = data.returnUrl;
+            // 모바일과 PC 기기 구분 분기 처리 (한글 주석)
+            const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-            // 4. P_RESERVED: 인코딩 및 앱 스킴 설정
-            // twotrs=Y (신모바일 승인응답), cp_cls=euc-kr (콘텐츠 인코딩)
-            form.P_RESERVED.value = "twotrs=Y&app_scheme=bustaams://&cp_cls=euc-kr&vbank_receipt=Y";
-            form.P_INI_PAYMENT.value = "CARD";
+            if (isMobile) {
+                console.log('>>> [Payment] Launching Mobile Payment Page:', data.oid);
+                form.action = "https://mobile.inicis.com/smart/payment/";
+                form.target = "_self";
+                form.method = "POST";
 
-            // 5. P_CHARSET: 'euc-kr' 사용 (사용자 요청 강제 설정)
-            form.P_CHARSET.value = "euc-kr";
+                // 모바일 필수 파라미터 매핑
+                form.P_MID.value = data.mid;
+                form.P_OID.value = data.oid;
+                form.P_AMT.value = data.price;
+                form.P_GOODS.value = finalGoodName;
+                form.P_UNAME.value = cleanBuyerName;
+                form.P_MOBILE.value = cleanMobile;
+                form.P_EMAIL.value = data.buyeremail;
+                form.P_NEXT_URL.value = data.returnUrl;
+                form.P_RESERVED.value = "twotrs=Y&app_scheme=bustaams://&cp_cls=euc-kr&vbank_receipt=Y";
+                form.P_INI_PAYMENT.value = "CARD";
+                form.P_CHARSET.value = "euc-kr";
 
-            console.log('>>> [Payment] Submitting Form with:', {
-                goodname: finalGoodName,
-                buyername: cleanBuyerName,
-                mobile: cleanMobile,
-                charset: 'euc-kr'
-            });
+                console.log('>>> [Payment] Submitting Mobile Form');
+                form.submit();
+            } else {
+                console.log('>>> [Payment] Launching PC Web Standard Pay:', data.oid);
+                form.removeAttribute('action');
+                form.removeAttribute('target');
+                form.method = "POST";
 
-            // 폼 전송
-            form.submit();
+                // PC 웹 표준 필수 파라미터 매핑
+                form.version.value = "1.0";
+                form.mid.value = data.mid;
+                form.oid.value = data.oid;
+                form.price.value = data.price;
+                form.timestamp.value = data.timestamp;
+                form.signature.value = data.signature;
+                form.mKey.value = data.mKey;
+                form.currency.value = "WON";
+                form.goodname.value = finalGoodName;
+                form.buyername.value = cleanBuyerName;
+                form.buyertel.value = cleanMobile;
+                form.buyeremail.value = data.buyeremail;
+                form.returnUrl.value = `${window.location.origin}/api/payment/return`;
+                form.closeUrl.value = `${window.location.origin}/close-payment`;
+                form.gopaymethod.value = "Card";
+
+                console.log('>>> [Payment] Calling INIStdPay.pay');
+                window.INIStdPay.pay(form);
+            }
 
         } catch (error) {
             console.error('Payment initiation error:', error);

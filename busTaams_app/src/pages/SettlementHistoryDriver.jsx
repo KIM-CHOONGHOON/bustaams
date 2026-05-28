@@ -8,10 +8,25 @@ const SettlementHistoryDriver = () => {
     const [userImage, setUserImage] = useState(null);
     const [imageVersion] = useState(Date.now());
 
+    // 💰 정산 데이터 상태 관리 (한글 주석)
+    const [selectedYear, setSelectedYear] = useState('2026');
+    const [loading, setLoading] = useState(false);
+    const [summary, setSummary] = useState({
+        year: 2026,
+        totalAmount: 0,
+        nextSettlementDate: '2026.06.12',
+        pendingAmount: 0
+    });
+    const [monthlyData, setMonthlyData] = useState([]);
+    const [allDetails, setAllDetails] = useState([]);
+    const [selectedMonthDetails, setSelectedMonthDetails] = useState([]);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [currentDetailMonth, setCurrentDetailMonth] = useState('');
+
+    // 기사 프로필 이미지 로드
     useEffect(() => {
         const fetchProfile = async () => {
             try {
-                // 기사 프로필 이미지를 가져오기 위해 멤버십 정보 API를 활용합니다.
                 const response = await api.get('/app/driver/membership-card-info');
                 if (response.success && response.data.userImage) {
                     setUserImage(response.data.userImage);
@@ -23,12 +38,44 @@ const SettlementHistoryDriver = () => {
         fetchProfile();
     }, []);
 
-    const transactions = [
-        { id: 1, month: '2024년 5월', type: '운행 정산', status: '정산 완료', txn: 'SET-202405-01', amount: '2,450,000' },
-        { id: 2, month: '2024년 4월', type: '운행 정산', status: '정산 완료', txn: 'SET-202404-01', amount: '2,880,000' },
-        { id: 3, month: '2024년 3월', type: '운행 정산', status: '정산 완료', txn: 'SET-202403-01', amount: '3,120,000' },
-        { id: 4, month: '2024년 2월', type: '운행 정산', status: '정산 완료', txn: 'SET-202402-01', amount: '1,950,000' }
-    ];
+    // 💰 정산 데이터 연동 로드 (한글 주석)
+    useEffect(() => {
+        const fetchSettlementData = async () => {
+            setLoading(true);
+            try {
+                const response = await api.get(`/app/driver/settlement-history?year=${selectedYear}`);
+                if (response.success && response.data) {
+                    setSummary(response.data.summary);
+                    setMonthlyData(response.data.monthlyData);
+                    setAllDetails(response.data.details);
+                }
+            } catch (error) {
+                console.error('Failed to fetch settlement history:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchSettlementData();
+    }, [selectedYear]);
+
+    // 연도 필터 버튼 동적 생성 (시작연도 2026년)
+    const startYear = 2026;
+    const currentYear = new Date().getFullYear();
+    const yearButtons = [];
+    for (let y = startYear; y <= Math.max(startYear, currentYear); y++) {
+        yearButtons.push(String(y));
+    }
+
+    // 상세내역 팝업 모달 열기
+    const handleOpenDetails = (monthName) => {
+        const details = allDetails.filter(d => {
+            const mKey = `${d.yyyyyMMdd.substring(0, 4)}년 ${d.yyyyyMMdd.substring(4, 6)}월`;
+            return mKey === monthName;
+        });
+        setSelectedMonthDetails(details);
+        setCurrentDetailMonth(monthName);
+        setIsModalOpen(true);
+    };
 
     return (
         <div className="bg-background text-on-surface min-h-[100dvh] pb-40 font-body text-left">
@@ -75,31 +122,29 @@ const SettlementHistoryDriver = () => {
 
             <main className="pt-48 px-6 max-w-6xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom duration-1000 text-left">
                 {/* Header Information Section */}
-                <section className="flex flex-col md:flex-row md:items-end justify-between gap-10 text-left">
+                <section className="text-left">
                     <div className="max-w-2xl space-y-6 text-left">
                         <span className="text-secondary font-black tracking-[0.4em] uppercase text-[10px] block px-2 italic">수익 및 정산 관리</span>
                         <h2 className="font-headline text-6xl md:text-8xl font-black text-primary leading-[0.85] tracking-tighter italic uppercase text-left">
                             정산 <br/><span className="text-slate-200 underline decoration-slate-200/20 underline-offset-[12px]">내역서.</span>
                         </h2>
                         <p className="text-slate-400 text-lg font-bold italic tracking-tight leading-relaxed text-left border-l-4 border-slate-50 pl-8">
-                            운행에 따른 정산 대금을 확인하고 관리하세요. 모든 수익 내역은 투명하게 기록되며 세무 신고용으로 활용 가능합니다.
+                            {selectedYear}년 총 정산 금액: <span className="text-teal-600 font-black text-3xl not-italic ml-2">₩{summary.totalAmount.toLocaleString()}</span>
                         </p>
-                    </div>
-                    <div className="bg-white rounded-2xl p-10 shadow-2xl shadow-teal-900/5 flex flex-col gap-3 border border-white text-left relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:rotate-12 transition-transform duration-1000">
-                            <span className="material-symbols-outlined text-6xl">account_balance_wallet</span>
-                        </div>
-                        <span className="text-slate-300 text-[9px] font-black uppercase tracking-widest italic">다음 정산 예정일</span>
-                        <span className="font-headline text-3xl font-black text-primary italic uppercase tracking-tighter">2024.06.12</span>
-                        <span className="text-secondary font-black text-xl italic">지급 대기 금액: ₩1,250,000</span>
                     </div>
                 </section>
 
                 {/* Filters */}
                 <nav className="flex flex-wrap items-center gap-6 text-left px-4">
-                    <button className="bg-primary text-white px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest italic shadow-xl shadow-primary/20">전체 정산 내역</button>
-                    <button className="bg-white text-slate-400 px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest italic border border-slate-50 hover:bg-slate-50 transition-all">2023년</button>
-                    <button className="bg-white text-slate-400 px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest italic border border-slate-50 hover:bg-slate-50 transition-all">2024년</button>
+                    {yearButtons.map(year => (
+                        <button 
+                            key={year}
+                            onClick={() => setSelectedYear(year)}
+                            className={`${selectedYear === year ? 'bg-primary text-white shadow-xl shadow-primary/20' : 'bg-white text-slate-400 border border-slate-50 hover:bg-slate-50'} px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest italic transition-all`}
+                        >
+                            {year}년 정산 내역
+                        </button>
+                    ))}
                     <div className="ml-auto flex items-center gap-3 text-slate-300 font-black text-[9px] uppercase tracking-widest italic">
                         <span className="material-symbols-outlined text-sm">filter_list</span>
                         정렬 방식
@@ -107,66 +152,171 @@ const SettlementHistoryDriver = () => {
                 </nav>
 
                 {/* Transactions List */}
-                <div className="space-y-8 text-left uppercase">
-                    {transactions.map(item => (
-                        <div key={item.id} className="grid grid-cols-1 md:grid-cols-12 items-center bg-white p-10 rounded-2xl shadow-xl shadow-teal-900/5 hover:-translate-x-2 transition-all duration-500 border border-slate-50 group text-left">
-                            <div className="md:col-span-2 mb-6 md:mb-0 text-left">
-                                <span className="block font-black text-primary italic text-xl tracking-tighter">{item.month}</span>
-                                <span className="text-slate-300 text-[9px] font-black uppercase tracking-widest italic">{item.type}</span>
-                            </div>
-                            <div className="md:col-span-4 mb-6 md:mb-0 text-left">
-                                <div className="flex items-center gap-6 text-left">
-                                    <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
-                                        <span className="material-symbols-outlined text-2xl" style={{fontVariationSettings: "'FILL' 1"}}>check_circle</span>
-                                    </div>
-                                    <div className="text-left space-y-1">
-                                        <span className="block font-black text-primary text-xs italic tracking-widest">{item.status}</span>
-                                        <span className="text-slate-300 text-[8px] font-bold italic tracking-tighter">{item.txn}</span>
+                {loading ? (
+                    <div className="flex justify-center items-center py-24">
+                        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-primary"></div>
+                    </div>
+                ) : monthlyData.length === 0 ? (
+                    <div className="text-center py-20 bg-white rounded-2xl border border-slate-100 shadow-2xl shadow-teal-900/5">
+                        <span className="material-symbols-outlined text-4xl text-slate-200 mb-2">info</span>
+                        <p className="text-slate-400 text-sm font-bold italic">조회된 정산 내역이 없습니다.</p>
+                    </div>
+                ) : (
+                    <div className="space-y-8 text-left uppercase animate-in fade-in duration-500">
+                        {monthlyData.map((item, idx) => (
+                            <div key={idx} className="grid grid-cols-1 md:grid-cols-12 items-center bg-white p-10 rounded-2xl shadow-xl shadow-teal-900/5 hover:-translate-x-2 transition-all duration-500 border border-slate-50 group text-left">
+                                <div className="md:col-span-3 mb-6 md:mb-0 text-left">
+                                    <span className="block font-black text-primary italic text-xl tracking-tighter">{item.month}</span>
+                                    <span className="text-slate-300 text-[9px] font-black uppercase tracking-widest italic">총 운행/취소 {item.count}건</span>
+                                </div>
+                                <div className="md:col-span-4 mb-6 md:mb-0 text-left">
+                                    <div className="flex items-center gap-6 text-left">
+                                        <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
+                                            <span className="material-symbols-outlined text-2xl" style={{fontVariationSettings: "'FILL' 1"}}>check_circle</span>
+                                        </div>
+                                        <div className="text-left space-y-1">
+                                            <span className="block font-black text-primary text-xs italic tracking-widest">정산 내역서 발행</span>
+                                            <span className="text-slate-300 text-[8px] font-bold italic tracking-tighter">SET-{selectedYear}{String(idx + 1).padStart(2, '0')}</span>
+                                        </div>
                                     </div>
                                 </div>
+                                <div className="md:col-span-3 mb-8 md:mb-0 text-left flex flex-col">
+                                    <span className="text-3xl font-black text-primary italic tracking-tighter leading-none">₩{item.amount.toLocaleString()}</span>
+                                    <span className="text-[8px] text-secondary font-black tracking-widest italic mt-2">정상 집계 완료</span>
+                                </div>
+                                <div className="md:col-span-2 flex justify-end gap-4 text-left">
+                                    <button 
+                                        onClick={() => handleOpenDetails(item.month)}
+                                        className="flex items-center gap-3 bg-slate-50 text-slate-400 px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest italic hover:bg-primary hover:text-white transition-all shadow-sm"
+                                    >
+                                         <span className="material-symbols-outlined text-lg">description</span>
+                                         상세내역
+                                     </button>
+                                </div>
                             </div>
-                            <div className="md:col-span-3 mb-8 md:mb-0 text-left flex flex-col">
-                                <span className="text-3xl font-black text-primary italic tracking-tighter leading-none">₩{item.amount}</span>
-                                {item.note && <span className="text-[8px] text-secondary font-black tracking-widest italic mt-2">{item.note}</span>}
-                            </div>
-                            <div className="md:col-span-3 flex justify-end gap-4 text-left">
-                                <button className="flex items-center gap-3 bg-slate-50 text-slate-400 px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest italic hover:bg-primary hover:text-white transition-all">
-                                     <span className="material-symbols-outlined text-lg">description</span>
-                                     상세내역
-                                 </button>
-                                 <button className="w-12 h-12 flex items-center justify-center bg-primary text-white rounded-xl hover:scale-110 transition-all shadow-lg shadow-primary/20">
-                                     <span className="material-symbols-outlined text-xl">download</span>
-                                 </button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
+                )}
 
-                {/* Support Box */}
-                <section className="mt-32 bg-slate-900 rounded-2xl p-16 relative overflow-hidden text-left flex flex-col md:flex-row gap-16 items-center">
-                    <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
-                        <div className="absolute top-0 right-0 w-96 h-96 bg-primary rounded-full blur-[120px] -translate-y-1/2 translate-x-1/2"></div>
-                    </div>
-                    <div className="relative z-10 flex-1 space-y-8 text-left">
-                        <h3 className="font-headline text-4xl font-black text-white italic uppercase tracking-tighter leading-tight text-left">정산 계좌 정보 & 정산 주기 설정</h3>
-                        <p className="text-slate-400 text-sm font-bold italic leading-relaxed max-w-sm text-left border-l-4 border-slate-800 pl-8">
-                            정산 계좌 정보 변경이 필요하거나 정산 금액에 문의가 있으신가요? busTaams 정산 지원팀이 신속하게 도와드립니다.
-                        </p>
-                        <div className="flex flex-wrap gap-6 text-left">
-                            <button className="bg-primary text-white px-10 py-6 rounded-xl font-black text-[10px] uppercase tracking-[0.3em] shadow-2xl shadow-primary/30 hover:scale-105 active:scale-95 transition-all italic">
-                                계좌 정보 관리
-                            </button>
-                            <button className="bg-white/10 text-white px-10 py-6 rounded-xl font-black text-[10px] uppercase tracking-[0.3em] hover:bg-white/20 transition-all active:scale-95 italic backdrop-blur-xl border border-white/10">
-                                정산 문의하기
-                            </button>
-                        </div>
-                    </div>
-                    <div className="relative z-10 w-full md:w-80 aspect-square rounded-xl overflow-hidden border-8 border-white/5 rotate-3 shadow-2xl">
-                        <img className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCa8RTGumtz11_o9kEsVPpesr2OpNGcZ7tRdwhFmJ7XyGYDX_ntMYryyQ1eg5xmc2rd-tYVb-BMcv3hd08aZMvpaHfi7ckhZ3HTIHQj9RNSw8RxPV2EDRMeIfjjie6ic08kQ5S77p7dz1Z89v_BYJjsgfIl5kONQgZF5OwKzfr3yiJwGgtLdqv-MYBToZnS46tC_vKtrwdLhl4Hi1NsZxkppGLTFhrDjsS3QYp2amkfW-V4OOOEpP3fhg4lY8B2HwipP10XKk36EBQ" />
-                    </div>
-                </section>
+
 
             </main>
+
+            {/* 💰 정산 상세 내역 모달 팝업 (한글 주석) */}
+            {isModalOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+                    <div className="bg-white w-full max-w-4xl max-h-[85vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-slate-100 text-left animate-in zoom-in-95 duration-300">
+                        {/* 모달 헤더 */}
+                        <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                            <div>
+                                <h3 className="font-headline font-black text-2xl text-slate-800 italic uppercase">{currentDetailMonth} 정산 상세서</h3>
+                                <p className="text-slate-400 text-xs mt-1">해당 월의 정산 금액 계산 산식 및 예약 정보를 확인하세요.</p>
+                            </div>
+                            <button 
+                                onClick={() => setIsModalOpen(false)}
+                                className="w-10 h-10 rounded-xl bg-slate-100 text-slate-500 hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center shadow-inner"
+                            >
+                                <span className="material-symbols-outlined text-lg">close</span>
+                            </button>
+                        </div>
+
+                        {/* 모달 바디 */}
+                        <div className="p-8 overflow-y-auto space-y-6 flex-1 bg-slate-50/50">
+                            {selectedMonthDetails.length === 0 ? (
+                                <div className="text-center py-20">
+                                    <span className="material-symbols-outlined text-4xl text-slate-200 mb-2">info</span>
+                                    <p className="text-slate-400 text-sm font-bold italic">조회된 정산 상세 내역이 없습니다.</p>
+                                </div>
+                            ) : (
+                                selectedMonthDetails.map((detail, dIdx) => {
+                                    let statusText = '';
+                                    let statusColor = '';
+                                    if (detail.dataStat === 'DONE') {
+                                        statusText = '운행 완료';
+                                        statusColor = 'bg-emerald-50 text-emerald-600 border-emerald-100';
+                                    } else if (detail.dataStat === 'TRAVELER_CANCEL') {
+                                        statusText = '여행자 취소';
+                                        statusColor = 'bg-amber-50 text-amber-600 border-amber-100';
+                                    } else if (detail.dataStat === 'DRIVER_CANCEL') {
+                                        statusText = '기사 취소';
+                                        statusColor = 'bg-rose-50 text-rose-600 border-rose-100';
+                                    }
+
+                                    // 계산 공식 설명 텍스트
+                                    let formulaText = '';
+                                    if (detail.dataStat === 'DONE') {
+                                        if (detail.isAttribution) {
+                                            formulaText = `입찰 금액 (₩${detail.biddingPrice.toLocaleString()}) - 혜택수수료 (₩${detail.feeAttribution.toLocaleString()}) [회원 등급 혜택 적용 - ${detail.doneSeq}회차]`;
+                                        } else {
+                                            formulaText = `입찰 금액 (₩${detail.biddingPrice.toLocaleString()}) - 기본수수료 (₩${detail.feeTotal.toLocaleString()}) [혜택 횟수 초과 - ${detail.doneSeq}회차]`;
+                                        }
+                                    } else if (detail.dataStat === 'TRAVELER_CANCEL') {
+                                        formulaText = `여행자 취소 위약금 정산 (₩${detail.feeRefund.toLocaleString()})`;
+                                    } else if (detail.dataStat === 'DRIVER_CANCEL') {
+                                        formulaText = '기사 귀책 취소로 인한 정산 금액 미발생';
+                                    }
+
+                                    return (
+                                        <div 
+                                            key={detail.resId} 
+                                            className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between gap-4 hover:border-primary/20 transition-all duration-300 group"
+                                        >
+                                            <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black border uppercase tracking-wider ${statusColor}`}>
+                                                            {statusText}
+                                                        </span>
+                                                        <span className="text-slate-300 text-[9px] font-black uppercase tracking-widest italic">
+                                                            정산일: {detail.yyyyyMMdd.substring(0, 4)}-{detail.yyyyyMMdd.substring(4, 6)}-{detail.yyyyyMMdd.substring(6, 8)}
+                                                        </span>
+                                                    </div>
+                                                    <h4 className="font-headline font-black text-xl text-primary leading-tight italic uppercase">{detail.tripTitle}</h4>
+                                                    <p className="text-slate-400 text-xs font-bold italic leading-relaxed">
+                                                        경로: {detail.startAddr} → {detail.endAddr}
+                                                    </p>
+                                                    <p className="text-slate-400 text-[10px] font-medium leading-relaxed">
+                                                        운행 기간: {detail.startDt} ~ {detail.endDt}
+                                                    </p>
+                                                </div>
+                                                <div className="text-left md:text-right space-y-1">
+                                                    <span className="text-slate-300 text-[8px] font-black tracking-widest block">예약 ID</span>
+                                                    <span className="text-slate-700 text-xs font-mono font-bold">{detail.resId}</span>
+                                                </div>
+                                            </div>
+
+                                            <div className="pt-4 border-t border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+                                                <div className="space-y-1">
+                                                    <span className="text-slate-300 text-[8px] font-black tracking-widest block">정산 계산 산식</span>
+                                                    <p className="text-slate-600 text-xs font-bold italic leading-relaxed pl-3 border-l-2 border-slate-200">
+                                                        {formulaText}
+                                                    </p>
+                                                </div>
+                                                <div className="text-right w-full md:w-auto">
+                                                    <span className="text-slate-300 text-[8px] font-black tracking-widest block">최종 정산금액</span>
+                                                    <span className="text-3xl font-headline font-black text-teal-600 italic tracking-tighter">
+                                                        ₩{detail.settlementAmount.toLocaleString()}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+
+                        {/* 모달 푸터 */}
+                        <div className="px-8 py-5 border-t border-slate-100 flex justify-end bg-slate-50 gap-4">
+                            <button 
+                                onClick={() => setIsModalOpen(false)}
+                                className="bg-primary text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest italic shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
+                            >
+                                확인 완료
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <BottomNavDriver activeTab="settlement" />
         </div>

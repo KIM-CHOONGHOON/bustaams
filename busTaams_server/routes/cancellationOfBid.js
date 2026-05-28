@@ -15,9 +15,21 @@ const {
 } = require('../lib/driverBidCancellation');
 const { fetchLastHistProofFileMetas } = require('../lib/driverCancelProofAccess');
 
+const path = require('path');
+const fs = require('fs');
+
 const SCREEN_ID = 'CancellationOfBid';
 const bucketName = process.env.GCS_BUCKET_NAME || 'bustaams-secure-data';
-const storage = new Storage();
+
+let storageOptions = {};
+const keyPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH 
+    ? path.resolve(process.cwd(), process.env.FIREBASE_SERVICE_ACCOUNT_PATH)
+    : null;
+
+if (keyPath && fs.existsSync(keyPath)) {
+    storageOptions.keyFilename = keyPath;
+}
+const storage = new Storage(storageOptions);
 const gcsBucket = storage.bucket(bucketName);
 
 const ALLOWED_REASON_CODES = new Set([

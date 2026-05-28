@@ -21,6 +21,44 @@ module.exports = function createPaymentRouter(pool, app) {
      * 결제 요청 전 서명 및 필수 데이터 생성
      */
     /**
+     * 💰 기사의 멤버십 정보 및 등급에 따라 저장할 FEE_POLICY를 판별하여 반환하는 헬퍼 함수 (한글 주석)
+     */
+    const determineFeePolicy = async (connection, driverId) => {
+        try {
+            const safeDriverId = String(driverId || '').trim();
+
+            // 1. TB_MOM_MEMBER에서 기사의 현재 월(YYYYMM) 정보 조회
+            const [momRows] = await connection.execute(
+                "SELECT FEE_POLICY, REMAINING_CNT FROM TB_MOM_MEMBER WHERE CUST_ID = ? AND YYYYMM = DATE_FORMAT(NOW(), '%Y%m')",
+                [safeDriverId]
+            );
+            
+            if (momRows.length > 0) {
+                // 2. 해당 월 정보가 존재하고 REMAINING_CNT가 0건이면 'DRIVER' 저장
+                if (parseInt(momRows[0].REMAINING_CNT, 10) === 0) {
+                    return 'DRIVER';
+                }
+                // REMAINING_CNT가 0건이 아니면 TB_MOM_MEMBER의 FEE_POLICY를 반환
+                return momRows[0].FEE_POLICY;
+            }
+            
+            // 3. 만약 TB_MOM_MEMBER의 해당 월 정보가 없으면 TB_DRIVER_DETAIL 테이블의 FEE_POLICY 조회
+            const [driverRows] = await connection.execute(
+                "SELECT FEE_POLICY FROM TB_DRIVER_DETAIL WHERE CUST_ID = ?",
+                [safeDriverId]
+            );
+            if (driverRows.length > 0 && driverRows[0].FEE_POLICY) {
+                return driverRows[0].FEE_POLICY;
+            }
+            
+            return null;
+        } catch (err) {
+            console.error('[determineFeePolicy] Error determining fee policy:', err);
+            return null;
+        }
+    };
+
+    /**
      * 결제 완료 후 공통 DB 업데이트 처리
      */
     const updateDBAfterPayment = async (oid, connection) => {
@@ -32,10 +70,17 @@ module.exports = function createPaymentRouter(pool, app) {
 
         if (type === 'RES') {
             // 단건 승인 로직 (resId)
-            const [bidRows] = await connection.execute('SELECT REQ_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [targetId]);
+            const [bidRows] = await connection.execute('SELECT REQ_ID, REQ_BUS_SEQ, DRIVER_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [targetId]);
             if (bidRows.length > 0) {
-                const { REQ_ID: reqId, REQ_BUS_SEQ: unitSeq } = bidRows[0];
-                await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = "CONFIRM", CONFIRM_DT = NOW() WHERE RES_ID = ?', [targetId]);
+                const { REQ_ID: reqId, REQ_BUS_SEQ: unitSeq, DRIVER_ID: driverId } = bidRows[0];
+                
+                // 기사 등급(FEE_POLICY) 판별
+                const feePolicy = await determineFeePolicy(connection, driverId);
+
+                await connection.execute(
+                    'UPDATE TB_BUS_RESERVATION SET DATA_STAT = "CONFIRM", CONFIRM_DT = NOW(), FEE_POLICY = ? WHERE RES_ID = ?', 
+                    [feePolicy, targetId]
+                );
                 await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = "CONFIRM" WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?', [reqId, unitSeq]);
 
                 // 모든 차량 확정 확인
@@ -50,14 +95,20 @@ module.exports = function createPaymentRouter(pool, app) {
         } else if (type === 'REQ') {
             // 전체 승인 로직 (reqId)
             const [bids] = await connection.execute(`
-                SELECT RES_ID, REQ_BUS_SEQ 
+                SELECT RES_ID, REQ_BUS_SEQ, DRIVER_ID 
                 FROM TB_BUS_RESERVATION 
                 WHERE REQ_ID = ? AND DATA_STAT = 'BIDDING'
                 GROUP BY REQ_BUS_SEQ
             `, [targetId]);
 
             for (const bid of bids) {
-                await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = "CONFIRM", CONFIRM_DT = NOW() WHERE RES_ID = ?', [bid.RES_ID]);
+                // 기사 등급(FEE_POLICY) 판별
+                const feePolicy = await determineFeePolicy(connection, bid.DRIVER_ID);
+
+                await connection.execute(
+                    'UPDATE TB_BUS_RESERVATION SET DATA_STAT = "CONFIRM", CONFIRM_DT = NOW(), FEE_POLICY = ? WHERE RES_ID = ?', 
+                    [feePolicy, bid.RES_ID]
+                );
                 await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = "CONFIRM" WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?', [targetId, bid.REQ_BUS_SEQ]);
             }
             await connection.execute('UPDATE TB_AUCTION_REQ SET DATA_STAT = "CONFIRM" WHERE REQ_ID = ?', [targetId]);
