@@ -8,8 +8,8 @@
 import React, { useState } from 'react';
 import LoginModal from '../components/LoginModal';
 import busLogo from '../assets/BUSTAAMS_IMAGE_LOGO.png';
-import mainLogo from '../assets/bustaams_main_logo.png';
-import textLogo from '../assets/bustaams_text_logo.png';
+
+import textLogo from '../assets/bustaams_header_logo.png';
 import googlePlayLogo from '../assets/Google_Play_logo.png';
 import appInstallLogo from '../assets/버스탐스_앱_설치.png';
 import bgImage from '../assets/bustaams_bg.png';
@@ -91,13 +91,19 @@ const BustaamsAdminScreen = ({ onLoginSuccess }) => {
 
       {/* ── Main Content ───────────────────────────────────── */}
       <main
-        className="flex-grow w-full flex items-center overflow-hidden"
-        style={{ padding: '0 64px', position: 'relative', zIndex: 1 }}
+        className="flex-grow w-full flex overflow-hidden"
+        style={{
+          padding: '0 64px',
+          position: 'relative',
+          zIndex: 1,
+          alignItems: 'flex-start',
+          paddingTop: 'calc((100vh - 64px) / 2 - 160px)',
+        }}
       >
-        {/* 왼쪽: 텍스트 + 앱 설치 버튼 — 중앙에서 3줄(~5rem) 위로, 오른쪽으로 3cm */}
+        {/* 왼쪽: 텍스트 + 앱 설치 버튼 */}
         <div
           className="flex-1 flex flex-col gap-6 pr-8"
-          style={{ marginBottom: '8rem', paddingLeft: '3cm' }}
+          style={{ paddingLeft: '3cm' }}
         >
           <h1
             style={{
@@ -121,7 +127,8 @@ const BustaamsAdminScreen = ({ onLoginSuccess }) => {
               color: '#43474f',
             }}
           >
-            출발지부터 경유지, 그리고 버스 대절 비용까지 맘편히 제안하세요.<br />
+            출발지부터 경유지,<br />
+            그리고 버스 대절 비용까지 맘편히 제안하세요.<br />
             베테랑 기사님이 당신의 제안에 확답을 드립니다.
           </p>
 
@@ -144,19 +151,6 @@ const BustaamsAdminScreen = ({ onLoginSuccess }) => {
           </div>
         </div>
 
-        {/* 오른쪽: 로고 이미지 — 왼쪽으로 3cm */}
-        <img
-          src={mainLogo}
-          alt="버스탐스"
-          style={{
-            maxHeight: '35vh',
-            width: 'auto',
-            display: 'block',
-            flexShrink: 0,
-            mixBlendMode: 'multiply',
-            marginRight: '3cm',
-          }}
-        />
       </main>
 
       {/* ── Corporate Footer — 화면 하단 fixed, hover 시 슬라이드업 ── */}
