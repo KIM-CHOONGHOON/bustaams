@@ -49,6 +49,12 @@ const DriversManagement = () => {
   const [rejectReason, setRejectReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
+  // 추천인 등록용 상태
+  const [selectedDriverForRecom, setSelectedDriverForRecom] = useState(null);
+  const [salesAgents, setSalesAgents] = useState([]);
+  const [recomSearchKeyword, setRecomSearchKeyword] = useState('');
+  const [recomLoading, setRecomLoading] = useState(false);
+
   const formatBytes = (bytes) => {
     if (!bytes) return '0 Bytes';
     const k = 1024;
@@ -186,6 +192,54 @@ const DriversManagement = () => {
     setSelectedCustId(null);
     setDetailData(null);
   };
+
+  const fetchSalesAgents = async (keyword = '') => {
+    setRecomLoading(true);
+    try {
+      const response = await fetch(`/api/admin/sales-agents?searchKeyword=${encodeURIComponent(keyword)}`);
+      if (response.ok) {
+        const data = await response.json();
+        setSalesAgents(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch sales agents:', error);
+    } finally {
+      setRecomLoading(false);
+    }
+  };
+
+  const handleRegisterRecom = async (recomCode) => {
+    if (!selectedDriverForRecom) return;
+    if (!window.confirm(`선택한 영업사원(${recomCode})을 추천인으로 등록하시겠습니까?`)) return;
+    setRecomLoading(true);
+    try {
+      const response = await fetch(`/api/admin/drivers/${selectedDriverForRecom.custId}/recommender`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recomCode })
+      });
+      if (response.ok) {
+        alert('추천인이 성공적으로 등록되었습니다.');
+        setSelectedDriverForRecom(null);
+        setRecomSearchKeyword('');
+        fetchDrivers(); // 리스트 갱신
+      } else {
+        const errorData = await response.json();
+        alert(errorData.error || '추천인 등록 중 오류가 발생했습니다.');
+      }
+    } catch (error) {
+      console.error('Failed to register recommender:', error);
+      alert('추천인 등록 통신 오류가 발생했습니다.');
+    } finally {
+      setRecomLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedDriverForRecom) {
+      fetchSalesAgents(recomSearchKeyword);
+    }
+  }, [selectedDriverForRecom, recomSearchKeyword]);
 
   // 회원 상태 배지 컴포넌트
   const getStatusBadge = (status) => {
@@ -326,7 +380,7 @@ const DriversManagement = () => {
                 <th className="py-4.5 px-6">이름</th>
                 <th className="py-4.5 px-6">아이디</th>
                 <th className="py-4.5 px-6">버스 차량 정보</th>
-                <th className="py-4.5 px-6 text-center">평점 (리뷰수)</th>
+                <th className="py-4.5 px-6 text-center">추천인 아이디</th>
                 <th className="py-4.5 px-6">휴대폰 번호</th>
                 <th className="py-4.5 px-6 text-center">회원 상태</th>
                 <th className="py-4.5 px-6 text-center">가입 일시</th>
@@ -377,19 +431,22 @@ const DriversManagement = () => {
                         <span className="text-slate-400 text-xs italic">등록된 버스 없음</span>
                       )}
                     </td>
-                    {/* 평점 */}
+                    {/* 추천인 아이디 */}
                     <td className="py-4 px-6 text-center">
-                      {driver.ratingAvg !== undefined && driver.ratingAvg !== null ? (
-                        <div className="flex flex-col items-center gap-0.5">
-                          <span className="text-amber-500 font-extrabold text-sm flex items-center gap-0.5 justify-center">
-                            ★ {Number(driver.ratingAvg).toFixed(1)}
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-bold">
-                            ({driver.reviewCnt || 0}건)
-                          </span>
-                        </div>
+                      {driver.recomCode ? (
+                        <span className="px-2.5 py-1 bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold font-mono shadow-sm">
+                          {driver.recomCode}
+                        </span>
                       ) : (
-                        <span className="text-slate-400 text-xs">-</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedDriverForRecom(driver);
+                          }}
+                          className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95"
+                        >
+                          추천인 등록
+                        </button>
                       )}
                     </td>
                     {/* 휴대폰 번호 */}
@@ -1142,6 +1199,88 @@ const DriversManagement = () => {
               >
                 {actionLoading && <RefreshCw size={12} className="animate-spin" />}
                 반려 처리
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. 추천인(영업사원) 등록 모달 */}
+      {selectedDriverForRecom && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-3xl overflow-hidden shadow-2xl border border-slate-100 max-w-md w-full relative animate-scale-in flex flex-col max-h-[80vh]">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
+                <Users size={18} className="text-emerald-500" />
+                추천 영업사원 등록
+              </h3>
+              <button 
+                onClick={() => {
+                  setSelectedDriverForRecom(null);
+                  setRecomSearchKeyword('');
+                }}
+                className="p-2 hover:bg-slate-100 rounded-xl transition-all text-slate-400 hover:text-slate-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-5 bg-slate-50 border-b border-slate-100 shrink-0">
+              <p className="text-xs text-slate-500 font-bold mb-2">
+                기사명: <span className="text-slate-900 font-black">{selectedDriverForRecom.userNm}</span> ({selectedDriverForRecom.userId})
+              </p>
+              <div className="relative">
+                <input 
+                  type="text"
+                  value={recomSearchKeyword}
+                  onChange={(e) => setRecomSearchKeyword(e.target.value)}
+                  placeholder="영업사원 이름 또는 아이디 검색"
+                  className="w-full bg-white border border-slate-200 focus:border-emerald-500 rounded-2xl pl-4 pr-10 py-2.5 text-sm focus:outline-hidden transition-all text-slate-800 placeholder-slate-400 font-medium"
+                />
+                <Search className="absolute right-3.5 top-3 text-slate-400" size={16} />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-2 min-h-[200px]">
+              {recomLoading ? (
+                <div className="flex flex-col items-center justify-center py-10 text-slate-500 text-sm">
+                  <span className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin inline-block mb-2"></span>
+                  <p className="font-semibold">영업사원 목록 검색 중...</p>
+                </div>
+              ) : salesAgents.length === 0 ? (
+                <p className="text-sm text-slate-400 font-medium py-10 text-center">
+                  검색된 영업사원이 없습니다.
+                </p>
+              ) : (
+                salesAgents.map((agent) => (
+                  <div 
+                    key={agent.adminId}
+                    onClick={() => handleRegisterRecom(agent.adminId)}
+                    className="flex items-center justify-between bg-white border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50/10 cursor-pointer rounded-2xl p-4 transition-all shadow-2xs active:scale-98"
+                  >
+                    <div>
+                      <h4 className="text-sm font-black text-slate-800">{agent.adminName}</h4>
+                      <p className="text-xs text-slate-400 font-bold mt-0.5">{agent.deptNm || '소속 부서 없음'} | ID: {agent.adminId}</p>
+                    </div>
+                    <button 
+                      className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-100 rounded-xl text-xs font-black transition-all"
+                    >
+                      선택
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end shrink-0">
+              <button 
+                onClick={() => {
+                  setSelectedDriverForRecom(null);
+                  setRecomSearchKeyword('');
+                }}
+                className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition-all"
+              >
+                닫기
               </button>
             </div>
           </div>

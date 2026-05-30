@@ -7,21 +7,31 @@ module.exports = (pool) => {
     // 1. 대시보드 KPI 현황 API (조회 전용)
     router.get('/dashboard/kpi', async (req, res) => {
         try {
-            const [reqRows] = await pool.execute(
-                `SELECT COUNT(*) as cnt FROM TB_AUCTION_REQ WHERE DATE(REG_DT) = CURDATE()`
+            // 1. 견적 요청 대기 (AUCTION 상태)
+            const [auctionRows] = await pool.execute(
+                `SELECT COUNT(*) as cnt FROM TB_AUCTION_REQ WHERE DATA_STAT = 'AUCTION'`
             );
-            const todayRequests = reqRows[0]?.cnt || 0;
+            const auctionRequests = auctionRows[0]?.cnt || 0;
 
+            // 전체 견적 요청 건수
+            const [totalReqRows] = await pool.execute(
+                `SELECT COUNT(*) as cnt FROM TB_AUCTION_REQ`
+            );
+            const totalRequests = totalReqRows[0]?.cnt || 0;
+
+            // 2. 진행 중인 입찰 (BIDDING 상태)
             const [bidRows] = await pool.execute(
-                `SELECT COUNT(*) as cnt FROM TB_AUCTION_REQ_BUS WHERE DATA_STAT = 'BIDDING'`
+                `SELECT COUNT(*) as cnt FROM TB_AUCTION_REQ WHERE DATA_STAT = 'BIDDING'`
             );
             const activeBids = bidRows[0]?.cnt || 0;
 
+            // 3. 확정된 예약 (CONFIRM 상태만 - 완료된 DONE 제외)
             const [confRows] = await pool.execute(
-                `SELECT COUNT(*) as cnt FROM TB_AUCTION_REQ_BUS WHERE DATA_STAT IN ('CONFIRM', 'COMPLETED')`
+                `SELECT COUNT(*) as cnt FROM TB_AUCTION_REQ WHERE DATA_STAT = 'CONFIRM'`
             );
             const confirmedReservations = confRows[0]?.cnt || 0;
 
+            // 4. 신규 승인 대기 기사
             const [userRows] = await pool.execute(
                 `SELECT COUNT(DISTINCT d.CUST_ID) as cnt
                  FROM TB_DRIVER_DOCS d
@@ -33,7 +43,8 @@ module.exports = (pool) => {
             const pendingDrivers = userRows[0]?.cnt || 0;
             
             res.status(200).json({
-                todayRequests,
+                auctionRequests,
+                totalRequests,
                 activeBids,
                 confirmedReservations,
                 pendingDrivers
@@ -41,11 +52,38 @@ module.exports = (pool) => {
         } catch (error) {
             console.error('Admin Dashboard KPI Error:', error);
             res.status(200).json({
-                todayRequests: 0,
+                auctionRequests: 0,
+                totalRequests: 0,
                 activeBids: 0,
                 confirmedReservations: 0,
                 pendingDrivers: 0
             });
+        }
+    });
+
+    // 1-1. 대시보드 최근 7일간 트렌드 조회 API
+    router.get('/dashboard/trend', async (req, res) => {
+        try {
+            const query = `
+                SELECT 
+                    DATE_FORMAT(d.dt, '%m-%d') as date,
+                    IFNULL((SELECT COUNT(*) FROM TB_AUCTION_REQ WHERE DATE(REG_DT) = d.dt), 0) as requests,
+                    IFNULL((SELECT COUNT(*) FROM TB_AUCTION_REQ_BUS WHERE DATA_STAT = 'CONFIRM' AND DATE(REG_DT) = d.dt), 0) as confirmed
+                FROM (
+                    SELECT CURDATE() - INTERVAL 6 DAY as dt UNION ALL
+                    SELECT CURDATE() - INTERVAL 5 DAY UNION ALL
+                    SELECT CURDATE() - INTERVAL 4 DAY UNION ALL
+                    SELECT CURDATE() - INTERVAL 3 DAY UNION ALL
+                    SELECT CURDATE() - INTERVAL 2 DAY UNION ALL
+                    SELECT CURDATE() - INTERVAL 1 DAY UNION ALL
+                    SELECT CURDATE()
+                ) d
+            `;
+            const [rows] = await pool.execute(query);
+            res.status(200).json(rows);
+        } catch (error) {
+            console.error('Admin Dashboard Trend Error:', error);
+            res.status(500).json({ error: '트렌드 데이터 조회 실패' });
         }
     });
 
@@ -239,6 +277,7 @@ module.exports = (pool) => {
                     r.TRIP_TITLE as tripTitle,
                     r.START_ADDR as startAddr,
                     r.END_ADDR as endAddr,
+                    (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' LIMIT 1) as destAddr,
                     DATE_FORMAT(r.START_DT, '%Y-%m-%d %H:%i') as startDt,
                     DATE_FORMAT(r.END_DT, '%Y-%m-%d %H:%i') as endDt,
                     r.PASSENGER_CNT as passengerCnt,
@@ -357,6 +396,7 @@ module.exports = (pool) => {
                         u.USER_TYPE as userType,
                         u.USER_STAT as userStat,
                         DATE_FORMAT(u.JOIN_DT, '%Y-%m-%d %H:%i') as joinDt,
+                        u.RECOM_CODE as recomCode,
                         (SELECT ROUND(AVG(r.STAR_RATING), 2) FROM TB_TRIP_REVIEW r WHERE r.DRIVER_ID = u.CUST_ID) as ratingAvg,
                         (SELECT COUNT(*) FROM TB_TRIP_REVIEW r WHERE r.DRIVER_ID = u.CUST_ID) as reviewCnt,
                         v.VEHICLE_NO as vehicleNo,
@@ -424,6 +464,7 @@ module.exports = (pool) => {
                     r.TRIP_TITLE as tripTitle,
                     r.START_ADDR as startAddr,
                     r.END_ADDR as endAddr,
+                    (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' LIMIT 1) as destAddr,
                     DATE_FORMAT(r.START_DT, '%Y-%m-%d %H:%i') as startDt,
                     DATE_FORMAT(r.END_DT, '%Y-%m-%d %H:%i') as endDt,
                     r.PASSENGER_CNT as passengerCnt,
@@ -484,7 +525,6 @@ module.exports = (pool) => {
                 return res.status(400).json({ error: '요청 ID(reqId)가 필요합니다.' });
             }
 
-            // 1. 여정 기본 정보 + 여행자 연락처 등 상세 정보 조회
             const [tripRows] = await pool.execute(
                 `SELECT 
                     r.REQ_ID as reqId,
@@ -494,6 +534,7 @@ module.exports = (pool) => {
                     r.TRIP_TITLE as tripTitle,
                     r.START_ADDR as startAddr,
                     r.END_ADDR as endAddr,
+                    (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' LIMIT 1) as destAddr,
                     DATE_FORMAT(r.START_DT, '%Y-%m-%d %H:%i') as startDt,
                     DATE_FORMAT(r.END_DT, '%Y-%m-%d %H:%i') as endDt,
                     r.PASSENGER_CNT as passengerCnt,
@@ -572,6 +613,20 @@ module.exports = (pool) => {
                 restrictEndDt: null
             };
 
+            // 4-2. 요청한 버스 스펙 조회 (TB_AUCTION_REQ_BUS)
+            const [busRows] = await pool.execute(
+                `SELECT 
+                    ab.REQ_BUS_SEQ as reqBusSeq,
+                    ab.BUS_TYPE_CD as busTypeCd,
+                    cc.CD_NM_KO as busTypeNm,
+                    ab.DATA_STAT as dataStat,
+                    ab.RES_BUS_AMT as resBusAmt
+                 FROM TB_AUCTION_REQ_BUS ab
+                 LEFT JOIN TB_COMMON_CODE cc ON cc.GRP_CD = 'BUS_TYPE' AND cc.DTL_CD = ab.BUS_TYPE_CD
+                 WHERE ab.REQ_ID = ?`,
+                [reqId]
+            );
+
             // 5. 해당 여정 관련 SMS 발송 이력 조회
             const [smsRows] = await pool.execute(
                 `SELECT 
@@ -589,6 +644,7 @@ module.exports = (pool) => {
 
             res.status(200).json({
                 trip,
+                buses: busRows,
                 bids: bidRows,
                 inquiries: inquiryRows,
                 cancelManage,
@@ -660,9 +716,11 @@ module.exports = (pool) => {
                     DATE_FORMAT(r.CONFIRM_DT, '%Y-%m-%d %H:%i') as confirmDt,
                     DATE_FORMAT(r.REG_DT, '%Y-%m-%d %H:%i') as regDt,
                     req.START_ADDR as startAddr,
-                    req.END_ADDR as endAddr
+                    req.END_ADDR as endAddr,
+                    dd.FEE_POLICY as feePolicy
                 FROM TB_BUS_RESERVATION r
                 INNER JOIN TB_USER d ON r.DRIVER_ID = d.CUST_ID AND d.USER_TYPE = 'DRIVER'
+                LEFT JOIN TB_DRIVER_DETAIL dd ON d.CUST_ID = dd.CUST_ID
                 INNER JOIN TB_AUCTION_REQ req ON r.REQ_ID = req.REQ_ID
                 LEFT JOIN TB_USER t ON req.TRAVELER_ID = t.CUST_ID
                 WHERE TRIM(d.RECOM_CODE) = TRIM(?) ${ymCondition}
@@ -778,6 +836,7 @@ module.exports = (pool) => {
                     req.TRIP_TITLE                                     as tripTitle,
                     req.START_ADDR                                     as startAddr,
                     req.END_ADDR                                       as endAddr,
+                    (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = req.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' LIMIT 1) as destAddr,
                     DATE_FORMAT(req.START_DT,    '%Y-%m-%d %H:%i')    as startDt,
                     traveler.USER_NM                                   as travelerName,
                     traveler.HP_NO                                     as travelerPhone,
@@ -838,7 +897,17 @@ module.exports = (pool) => {
                     (SELECT COUNT(*) FROM TB_USER WHERE USER_TYPE = 'DRIVER' AND TRIM(RECOM_CODE) = TRIM(a.ADMIN_ID)) as driverCount,
                     (SELECT COUNT(*) FROM TB_BUS_RESERVATION r INNER JOIN TB_USER d ON r.DRIVER_ID = d.CUST_ID AND d.USER_TYPE = 'DRIVER' WHERE TRIM(d.RECOM_CODE) = TRIM(a.ADMIN_ID) ${ymCondition}) as matchCount,
                     (SELECT IFNULL(SUM(r.DRIVER_BIDDING_PRICE), 0) FROM TB_BUS_RESERVATION r INNER JOIN TB_USER d ON r.DRIVER_ID = d.CUST_ID AND d.USER_TYPE = 'DRIVER' WHERE TRIM(d.RECOM_CODE) = TRIM(a.ADMIN_ID) ${ymCondition}) as totalBidding,
-                    (SELECT IFNULL(SUM(r.RES_FEE_TOTAL_AMT), 0) FROM TB_BUS_RESERVATION r INNER JOIN TB_USER d ON r.DRIVER_ID = d.CUST_ID AND d.USER_TYPE = 'DRIVER' WHERE TRIM(d.RECOM_CODE) = TRIM(a.ADMIN_ID) ${ymCondition}) as totalFee
+                    (SELECT IFNULL(SUM(
+                        CASE 
+                            WHEN dd.FEE_POLICY IN ('DRIVER_GENERAL', 'DRIVER_GENNERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH') 
+                            THEN r.DRIVER_BIDDING_PRICE * 0.106
+                            ELSE r.DRIVER_BIDDING_PRICE * 0.066
+                        END
+                     ), 0) 
+                     FROM TB_BUS_RESERVATION r 
+                     INNER JOIN TB_USER d ON r.DRIVER_ID = d.CUST_ID AND d.USER_TYPE = 'DRIVER' 
+                     LEFT JOIN TB_DRIVER_DETAIL dd ON d.CUST_ID = dd.CUST_ID
+                     WHERE TRIM(d.RECOM_CODE) = TRIM(a.ADMIN_ID) ${ymCondition}) as totalFee
                 FROM TB_ADMIN a
                 WHERE a.ADMIN_GRADE = 'SALES'
                 ORDER BY totalFee DESC, driverCount DESC
@@ -1096,6 +1165,54 @@ module.exports = (pool) => {
         } catch (error) {
             console.error('Reject driver document error:', error);
             res.status(500).json({ error: '서류 반려 처리 중 오류가 발생했습니다.' });
+        }
+    });
+
+    // 16. 영업사원(SALES) 목록 조회 API (추천인 등록용)
+    router.get('/sales-agents', async (req, res) => {
+        try {
+            const { searchKeyword } = req.query;
+            let query = `SELECT ADMIN_ID as adminId, ADMIN_NM as adminName, DEPT_NM as deptNm FROM TB_ADMIN WHERE ADMIN_GRADE = 'SALES' AND ADMIN_STAT = 'ACTIVE'`;
+            const params = [];
+            if (searchKeyword && searchKeyword.trim()) {
+                query += ` AND (ADMIN_ID LIKE ? OR ADMIN_NM LIKE ?)`;
+                params.push(`%${searchKeyword.trim()}%`, `%${searchKeyword.trim()}%`);
+            }
+            const [rows] = await pool.execute(query, params);
+            res.status(200).json(rows);
+        } catch (error) {
+            console.error('Fetch sales agents error:', error);
+            res.status(500).json({ error: '영업사원 목록 조회에 실패했습니다.' });
+        }
+    });
+
+    // 17. 버스기사 추천인 등록 API
+    router.patch('/drivers/:custId/recommender', async (req, res) => {
+        try {
+            const { custId } = req.params;
+            const { recomCode } = req.body;
+            if (!recomCode) {
+                return res.status(400).json({ error: '추천인 ID가 누락되었습니다.' });
+            }
+            // Check if the recommender code exists and is a SALES admin
+            const [adminRows] = await pool.execute(
+                `SELECT ADMIN_ID FROM TB_ADMIN WHERE ADMIN_ID = ? AND ADMIN_GRADE = 'SALES' AND ADMIN_STAT = 'ACTIVE'`,
+                [recomCode]
+            );
+            if (adminRows.length === 0) {
+                return res.status(400).json({ error: '유효한 영업사원(SALES) ID가 아닙니다.' });
+            }
+
+            // Update user's recomCode
+            await pool.execute(
+                `UPDATE TB_USER SET RECOM_CODE = ?, MOD_DT = NOW() WHERE CUST_ID = ? AND USER_TYPE = 'DRIVER'`,
+                [recomCode, custId]
+            );
+
+            res.status(200).json({ message: '추천인이 성공적으로 등록되었습니다.' });
+        } catch (error) {
+            console.error('Register recommender error:', error);
+            res.status(500).json({ error: '추천인 등록 중 오류가 발생했습니다.' });
         }
     });
 

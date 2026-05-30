@@ -77,8 +77,10 @@ const SettlementManagement = () => {
 
   const getShortAddr = (addr) => {
     if (!addr) return '-';
-    const parts = addr.split(' ');
-    return parts.length >= 2 ? `${parts[0]} ${parts[1]}` : addr;
+    // 괄호 및 괄호 안의 문자열 제거
+    const cleanAddr = addr.replace(/\s*[\(\[].*?[\)\]]/g, '').trim();
+    const parts = cleanAddr.split(' ');
+    return parts.length >= 2 ? `${parts[0]} ${parts[1]}` : cleanAddr;
   };
 
   return (
@@ -270,7 +272,7 @@ const SettlementManagement = () => {
                         </div>
                         <div className="flex items-center gap-1.5 text-xs">
                           <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0"></span>
-                          <span className="text-slate-700 font-medium truncate max-w-[140px]">{getShortAddr(item.endAddr)}</span>
+                          <span className="text-slate-700 font-medium truncate max-w-[140px]">{getShortAddr(item.destAddr || item.endAddr)}</span>
                         </div>
                       </div>
                     </td>

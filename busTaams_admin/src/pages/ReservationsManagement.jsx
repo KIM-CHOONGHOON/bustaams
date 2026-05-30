@@ -29,25 +29,25 @@ const ReservationsManagement = () => {
     switch (status) {
       case 'CONFIRM':
         return (
-          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-lg text-xs font-black flex items-center gap-1 w-fit">
+          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-lg text-xs font-black flex items-center gap-1 w-fit whitespace-nowrap">
             <CheckCircle size={12} /> CONFIRM (확정)
           </span>
         );
       case 'BIDDING':
         return (
-          <span className="px-2.5 py-1 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-xs font-black flex items-center gap-1 w-fit">
+          <span className="px-2.5 py-1 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-xs font-black flex items-center gap-1 w-fit whitespace-nowrap">
             <Activity size={12} /> BIDDING (입찰중)
           </span>
         );
       case 'AUCTION':
         return (
-          <span className="px-2.5 py-1 bg-amber-50 text-amber-600 border border-amber-100 rounded-lg text-xs font-black flex items-center gap-1 w-fit">
+          <span className="px-2.5 py-1 bg-amber-50 text-amber-600 border border-amber-100 rounded-lg text-xs font-black flex items-center gap-1 w-fit whitespace-nowrap">
             AUCTION (경매대기)
           </span>
         );
       case 'DONE':
         return (
-          <span className="px-2.5 py-1 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-lg text-xs font-black flex items-center gap-1 w-fit">
+          <span className="px-2.5 py-1 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-lg text-xs font-black flex items-center gap-1 w-fit whitespace-nowrap">
             DONE (완료)
           </span>
         );
@@ -55,13 +55,13 @@ const ReservationsManagement = () => {
       case 'DRIVER_CANCEL':
       case 'BUS_CANCEL':
         return (
-          <span className="px-2.5 py-1 bg-rose-50 text-rose-600 border border-rose-100 rounded-lg text-xs font-black flex items-center gap-1 w-fit">
+          <span className="px-2.5 py-1 bg-rose-50 text-rose-600 border border-rose-100 rounded-lg text-xs font-black flex items-center gap-1 w-fit whitespace-nowrap">
             CANCEL (취소)
           </span>
         );
       default:
         return (
-          <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold w-fit">
+          <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold w-fit whitespace-nowrap">
             {status || '미지정'}
           </span>
         );
@@ -76,11 +76,13 @@ const ReservationsManagement = () => {
   // 주소를 '시도 시군구'만 표시하도록 포맷팅하는 헬퍼 함수
   const getShortAddr = (addr) => {
     if (!addr) return '-';
-    const parts = addr.split(' ');
+    // 괄호 및 괄호 안의 문자열 제거
+    const cleanAddr = addr.replace(/\s*[\(\[].*?[\)\]]/g, '').trim();
+    const parts = cleanAddr.split(' ');
     if (parts.length >= 2) {
       return `${parts[0]} ${parts[1]}`;
     }
-    return addr;
+    return cleanAddr;
   };
 
   // 결제처리 버튼 핸들러
@@ -191,7 +193,7 @@ const ReservationsManagement = () => {
                         </div>
                         <div className="flex items-center gap-1.5 text-xs">
                           <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-                          <span className="text-slate-600 font-bold truncate">{getShortAddr(item.endAddr)}</span>
+                          <span className="text-slate-600 font-bold truncate">{getShortAddr(item.destAddr || item.endAddr)}</span>
                         </div>
                       </div>
                     </td>
