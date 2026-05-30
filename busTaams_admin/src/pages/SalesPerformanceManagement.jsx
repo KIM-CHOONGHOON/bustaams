@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, TrendingUp, Users, DollarSign, Award, Clock, ArrowRight, UserCheck, Search, RotateCcw } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, Award, Clock, ArrowRight, UserCheck, Search, RotateCcw, Receipt, Bus, User } from 'lucide-react';
 
 const SalesPerformanceManagement = () => {
   const [salespeople, setSalespeople] = useState([]);
@@ -137,21 +137,52 @@ const SalesPerformanceManagement = () => {
     }
   };
 
+  const selectedCompleted = Array.isArray(details)
+    ? details.filter((item) => item && (item.dataStat === 'CONFIRM' || item.dataStat === 'DONE'))
+    : [];
+
+  const selectedTotalSales = selectedCompleted.reduce(
+    (sum, item) => sum + Number(item?.biddingPrice || 0), 0
+  );
+
+  const selectedTotalFee = selectedCompleted.reduce((sum, item) => {
+    if (!item) return sum;
+    const isRegular = ['DRIVER_GENERAL', 'DRIVER_GENNERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH'].includes(item.feePolicy);
+    const rate = isRegular ? 0.106 : 0.066;
+    return sum + Math.floor(Number(item.biddingPrice || 0) * rate);
+  }, 0);
+
+  const selectedBusinessTax = Math.floor(selectedTotalFee * 0.03);
+  const selectedLocalTax = Math.floor(selectedBusinessTax * 0.1);
+  const selectedNetPayout = selectedTotalFee - selectedBusinessTax - selectedLocalTax;
+
+  const formatAmt = (amt) => {
+    return Number(amt || 0).toLocaleString('ko-KR') + '원';
+  };
+
   return (
     <div className="p-8 max-w-7xl mx-auto flex flex-col gap-8">
       {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-          <BarChart3 className="text-emerald-500" size={26} />
-          영업사원 실적 관리
-        </h1>
-        <p className="text-slate-500 font-medium mt-1">
-          사원별로 추천 가입한 드라이버 수 및 이들이 수행한 배차/입찰 실적 통계를 모니터링합니다.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+            <BarChart3 className="text-emerald-500" size={26} />
+            영업사원 실적 관리
+          </h1>
+          <p className="text-slate-500 font-medium mt-1">
+            사원별로 추천 가입한 드라이버 수 및 이들이 수행한 배차/입찰 실적 통계를 모니터링합니다.
+          </p>
+        </div>
+        {searchPerfYm && (
+          <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-2.5 text-emerald-800 text-sm font-black shadow-xs self-start sm:self-auto">
+            <Clock size={16} className="text-emerald-600 animate-pulse" />
+            <span>조회 기준월: {searchPerfYm.split('-')[0]}년 {searchPerfYm.split('-')[1]}월</span>
+          </div>
+        )}
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
         {/* Card 1: Total Registered Drivers */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 flex items-center justify-between">
           <div className="flex flex-col gap-1">
@@ -180,15 +211,15 @@ const SalesPerformanceManagement = () => {
             <span className="text-sm font-bold text-slate-400">총 플랫폼 수수료 수익</span>
             <span className="text-2xl font-black text-slate-800">{summary.totalRevenue.toLocaleString()} 원</span>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-500">
-            <DollarSign size={24} />
+          <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-500 font-bold text-xl shrink-0">
+            ₩
           </div>
         </div>
       </div>
 
       {/* Middle: Search Panel */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-        <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-4">
+        <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-4 text-left">
           <div className="flex flex-col gap-2 flex-1 min-w-[200px]">
             <label className="text-xs font-bold text-slate-600">사원 아이디</label>
             <input
@@ -331,50 +362,173 @@ const SalesPerformanceManagement = () => {
               이 사원이 매칭 완료한 버스기사 운행 이력이 아직 없습니다.
             </div>
           ) : (
-            <div className="overflow-x-auto animate-fadeIn">
-              <table className="w-full text-center border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-100 text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    <th className="py-4 px-4 text-center">예약 번호</th>
-                    <th className="py-4 px-4 text-center">여행 제목</th>
-                    <th className="py-4 px-4 text-center">버스 기사</th>
-                    <th className="py-4 px-4 text-center">매칭 고객</th>
-                    <th className="py-4 px-4 text-center">이동 경로</th>
-                    <th className="py-4 px-4 text-center">기사 낙찰가</th>
-                    <th className="py-4 px-4 text-center">수수료 수익</th>
-                    <th className="py-4 px-4 text-center">성사일자</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50 text-sm text-slate-700 font-medium">
-                  {details.map((row) => (
-                    <tr key={row.resId} className="hover:bg-slate-50/50">
-                      <td className="py-4 px-4 text-slate-900 font-bold text-center">{row.resId}</td>
-                      <td className="py-4 px-4 text-left font-bold text-slate-800 max-w-[200px] truncate">{row.tripTitle}</td>
-                      <td className="py-4 px-4 text-center">
-                        <div className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-600 px-2 py-1 rounded text-xs font-bold">
-                          {row.driverName} ({row.driverUserId})
-                        </div>
-                      </td>
-                      <td className="py-4 px-4 text-center">{row.travelerName || '-'}</td>
-                      <td className="py-4 px-4 text-left text-xs font-bold text-slate-500 max-w-[220px] truncate">
-                        <div className="flex items-center justify-center gap-1">
-                          <span className="truncate">{row.startAddr?.split(' ')[0]} {row.startAddr?.split(' ')[1]}</span>
-                          <ArrowRight size={10} className="shrink-0 text-slate-400" />
-                          <span className="truncate">{row.endAddr?.split(' ')[0]} {row.endAddr?.split(' ')[1]}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4 text-slate-950 font-bold text-center">{parseInt(row.biddingPrice || 0).toLocaleString()} 원</td>
-                      <td className="py-4 px-4 text-emerald-600 font-bold text-center">{parseInt(row.feeTotalAmt || 0).toLocaleString()} 원</td>
-                      <td className="py-4 px-4 text-slate-400 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <Clock size={13} />
-                          {row.confirmDt ? row.confirmDt.substring(0, 10) : '-'}
-                        </div>
-                      </td>
+            <div className="flex flex-col gap-8 animate-fade-in">
+              {/* KPI Cards Panel */}
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                {/* 당월 운행 완료 */}
+                <div className="bg-white rounded-2xl border border-slate-100 p-6 flex items-center justify-between shadow-sm text-left">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-slate-400">당월 매칭 완료</span>
+                    <span className="text-2xl font-black text-slate-800 mt-1">{selectedCompleted.length}건</span>
+                    <span className="text-xs text-slate-400 mt-2 font-medium">조회 월 매칭 완료 건수</span>
+                  </div>
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-500 shrink-0">
+                    <TrendingUp size={24} />
+                  </div>
+                </div>
+
+                {/* 당월 매출 실적 */}
+                <div className="bg-white rounded-2xl border border-slate-100 p-6 flex items-center justify-between shadow-sm text-left">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-slate-400">당월 총 운행금액</span>
+                    <span className="text-2xl font-black text-emerald-600 mt-1">{formatAmt(selectedTotalSales)}</span>
+                    <span className="text-xs text-slate-400 mt-2 font-medium">완료 건 기준 매출 총액</span>
+                  </div>
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-500 shrink-0 font-bold text-xl">
+                    ₩
+                  </div>
+                </div>
+
+                {/* 당월 총 수당금액 */}
+                <div className="bg-white rounded-2xl border border-slate-100 p-6 flex items-center justify-between shadow-sm text-left">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-slate-400">당월 총 수당액</span>
+                    <span className="text-2xl font-black text-indigo-600 mt-1">{formatAmt(selectedTotalFee)}</span>
+                    <span className="text-xs text-slate-400 mt-2 font-medium">세전 수당 합계 금액</span>
+                  </div>
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-500 shrink-0 font-bold text-xl">
+                    ₩
+                  </div>
+                </div>
+
+                {/* 당월 실지급액 (세후) */}
+                <div className="bg-white rounded-2xl border border-slate-100 p-6 flex items-center justify-between shadow-sm text-left">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-emerald-600 flex items-center gap-1">
+                      실지급액 <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1 rounded">세후</span>
+                    </span>
+                    <span className="text-2xl font-black text-slate-900 mt-1">{formatAmt(selectedNetPayout)}</span>
+                    <span className="text-xs text-slate-400 mt-2 font-medium">원천세 3.3% 공제 후 금액</span>
+                  </div>
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-500 shrink-0 font-bold text-xl">
+                    ₩
+                  </div>
+                </div>
+              </div>
+
+              {/* Tax Withholding & Settlement Statement Panel */}
+              <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-slate-300 rounded-3xl p-6 shadow-md border border-slate-800 text-left">
+                <h3 className="text-base font-black text-white flex items-center gap-2 mb-4">
+                  <Receipt size={18} className="text-emerald-400" />
+                  당월 영업 수당 및 원천세 공제 상세 명세서
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
+                  <div className="bg-slate-800/40 rounded-2xl p-4 border border-slate-700/30">
+                    <p className="text-xs text-slate-400 font-bold">① 총 수당금액 (세전)</p>
+                    <p className="text-lg font-black text-white mt-1.5">{formatAmt(selectedTotalFee)}</p>
+                    <p className="text-[10px] text-slate-500 mt-1">일반(6.6%) / 정회원(10.6%) 적용 합계</p>
+                  </div>
+                  <div className="bg-slate-800/40 rounded-2xl p-4 border border-slate-700/30">
+                    <p className="text-xs text-slate-400 font-bold">② 사업소득세 (3.0%)</p>
+                    <p className="text-lg font-black text-rose-400 mt-1.5">-{formatAmt(selectedBusinessTax)}</p>
+                    <p className="text-[10px] text-slate-500 mt-1">총 수당액 × 0.03</p>
+                  </div>
+                  <div className="bg-slate-800/40 rounded-2xl p-4 border border-slate-700/30">
+                    <p className="text-xs text-slate-400 font-bold">③ 지방소득세 (0.3%)</p>
+                    <p className="text-lg font-black text-rose-400 mt-1.5">-{formatAmt(selectedLocalTax)}</p>
+                    <p className="text-[10px] text-slate-500 mt-1">사업소득세의 10%</p>
+                  </div>
+                  <div className="bg-emerald-500/10 rounded-2xl p-4 border border-emerald-500/20">
+                    <p className="text-xs text-emerald-400 font-bold">④ 실제 총 지급액 (세후)</p>
+                    <p className="text-xl font-black text-emerald-400 mt-1.5">{formatAmt(selectedNetPayout)}</p>
+                    <p className="text-[10px] text-emerald-500/70 mt-1">① - (② + ③) 실제 이체 금액</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Table List */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      <th className="py-4 px-4">기사명</th>
+                      <th className="py-4 px-4">기사 유형</th>
+                      <th className="py-4 px-4">여행 제목</th>
+                      <th className="py-4 px-4">매칭 고객</th>
+                      <th className="py-4 px-4">운행 경로</th>
+                      <th className="py-4 px-4">운행 금액</th>
+                      <th className="py-4 px-4">나의 수당</th>
+                      <th className="py-4 px-4">매칭 일시</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 text-sm text-slate-700 font-medium">
+                    {details.map((row) => {
+                      const isRegular = ['DRIVER_GENERAL', 'DRIVER_GENNERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH'].includes(row.feePolicy);
+                      const rateLabel = isRegular ? '정회원 (10.6%)' : '일반 (6.6%)';
+                      const rateVal = isRegular ? 0.106 : 0.066;
+                      const itemComm = Math.floor(Number(row.biddingPrice || 0) * rateVal);
+
+                      const getShortAddr = (addr) => {
+                        if (!addr) return '-';
+                        const parts = addr.split(' ');
+                        return parts.length >= 2 ? `${parts[0]} ${parts[1]}` : addr;
+                      };
+
+                      return (
+                        <tr key={row.resId} className="hover:bg-slate-50/50">
+                          {/* 기사명 */}
+                          <td className="py-4.5 px-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                                <User size={14} />
+                              </div>
+                              <span className="text-slate-800 font-bold">{row.driverName || '-'}</span>
+                            </div>
+                          </td>
+                          {/* 기사 유형 */}
+                          <td className="py-4.5 px-4">
+                            <span className={`px-2 py-0.5 rounded-lg text-xs font-black border ${
+                              isRegular ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-100 text-slate-600 border-slate-200'
+                            }`}>
+                              {rateLabel}
+                            </span>
+                          </td>
+                          {/* 여행 제목 */}
+                          <td className="py-4.5 px-4 text-slate-800 font-bold">{row.tripTitle || '-'}</td>
+                          {/* 매칭 고객 */}
+                          <td className="py-4.5 px-4 text-slate-900 font-bold">{row.travelerName || '-'}</td>
+                          {/* 운행 경로 */}
+                          <td className="py-4.5 px-4">
+                            <div className="flex flex-col gap-1 text-xs text-left">
+                              <div className="flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                <span className="text-slate-600 font-medium">{getShortAddr(row.startAddr)}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                                <span className="text-slate-600 font-medium">{getShortAddr(row.endAddr)}</span>
+                              </div>
+                            </div>
+                          </td>
+                          {/* 운행 금액 */}
+                          <td className="py-4.5 px-4 text-slate-900 font-black">{formatAmt(row.biddingPrice)}</td>
+                          {/* 나의 수당 */}
+                          <td className="py-4.5 px-4 text-emerald-600 font-extrabold">
+                            {row.dataStat === 'CONFIRM' || row.dataStat === 'DONE' ? formatAmt(itemComm) : '-'}
+                          </td>
+                          {/* 매칭 일시 */}
+                          <td className="py-4.5 px-4 text-slate-400">
+                            <div className="flex items-center gap-1.5 whitespace-nowrap">
+                              <Clock size={14} />
+                              {row.confirmDt || row.regDt}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )
         ) : (

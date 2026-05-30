@@ -30,13 +30,22 @@ const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
   // 3. SALES: '나의 고객관리', '나의 실적관리', '내 정보 관리' 노출
   const getFilteredMenuItems = () => {
     if (role === 'SUPER') {
-      return allMenuItems.filter(item => item.id !== 'my-info');
+      // 관리자는 '나의 고객관리', '나의 실적관리', '내 정보 관리'를 제외하고 전체 노출
+      return allMenuItems.filter(
+        item => item.id !== 'my-customers' && item.id !== 'my-performance' && item.id !== 'my-info'
+      );
     }
     if (role === 'MANAGER') {
-      return allMenuItems.filter(item => item.id !== 'settings' && item.id !== 'my-info');
+      // 일반 관리자는 시스템 설정 및 영업사원 전용 메뉴, 내 정보 관리를 제외하고 노출
+      return allMenuItems.filter(
+        item => item.id !== 'settings' && item.id !== 'my-customers' && item.id !== 'my-performance' && item.id !== 'my-info'
+      );
     }
     if (role === 'SALES') {
-      return allMenuItems.filter(item => item.id === 'my-customers' || item.id === 'my-performance' || item.id === 'my-info');
+      // 영업 담당자는 나의 고객관리, 나의 실적관리, 내 정보 관리만 노출
+      return allMenuItems.filter(
+        item => item.id === 'my-customers' || item.id === 'my-performance' || item.id === 'my-info'
+      );
     }
     return []; // 권한 없거나 정의 안 됨
   };
