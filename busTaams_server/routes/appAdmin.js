@@ -844,11 +844,34 @@ module.exports = (pool) => {
                     v.VEHICLE_NO                                       as vehicleNo,
                     br.DRIVER_BIDDING_PRICE                            as driverBiddingPrice,
                     br.RES_FEE_TOTAL_AMT                               as resFeeTotal,
-                    DATE_FORMAT(br.CONFIRM_DT,   '%Y-%m-%d %H:%i')    as confirmDt
+                    DATE_FORMAT(br.CONFIRM_DT,   '%Y-%m-%d %H:%i')    as confirmDt,
+                    driver.RECOM_CODE                                  as recomCode,
+                    dd.FEE_POLICY                                      as feePolicy,
+                    CASE 
+                        WHEN dd.FEE_POLICY IN ('DRIVER_GENERAL', 'DRIVER_GENNERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH') 
+                        THEN br.DRIVER_BIDDING_PRICE * 0.055
+                        ELSE 0
+                    END as driverPayout,
+                    CASE 
+                        WHEN dd.FEE_POLICY IN ('DRIVER_GENERAL', 'DRIVER_GENNERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH') 
+                        THEN br.DRIVER_BIDDING_PRICE * 0.011
+                        ELSE br.DRIVER_BIDDING_PRICE * 0.066
+                    END as platformFee,
+                    CASE 
+                        WHEN driver.RECOM_CODE IS NOT NULL AND TRIM(driver.RECOM_CODE) != ''
+                        THEN 
+                            CASE 
+                                WHEN dd.FEE_POLICY IN ('DRIVER_GENERAL', 'DRIVER_GENNERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH') 
+                                THEN br.DRIVER_BIDDING_PRICE * 0.106
+                                ELSE br.DRIVER_BIDDING_PRICE * 0.066
+                            END
+                        ELSE 0
+                    END as salesCommission
                 FROM TB_BUS_RESERVATION br
                 INNER JOIN TB_AUCTION_REQ   req      ON br.REQ_ID      = req.REQ_ID
                 LEFT  JOIN TB_USER          traveler ON req.TRAVELER_ID = traveler.CUST_ID
                 LEFT  JOIN TB_USER          driver   ON br.DRIVER_ID   = driver.CUST_ID
+                LEFT  JOIN TB_DRIVER_DETAIL dd       ON br.DRIVER_ID   = dd.CUST_ID
                 LEFT  JOIN TB_BUS_DRIVER_VEHICLE v   ON br.BUS_ID      = v.BUS_ID
                 ${whereClause}
                 ORDER BY br.CONFIRM_DT DESC
@@ -858,21 +881,112 @@ module.exports = (pool) => {
             const summaryQuery = `
                 SELECT
                     COUNT(*)                                        as totalCount,
-                    IFNULL(SUM(req.REQ_AMT),          0)            as totalReqAmt,
-                    IFNULL(SUM(req.REQ_AMT) * 0.06,   0)            as totalFee6pct
+                    IFNULL(SUM(br.DRIVER_BIDDING_PRICE), 0)         as totalBiddingPrice,
+                    IFNULL(SUM(
+                        CASE 
+                            WHEN dd.FEE_POLICY IN ('DRIVER_GENERAL', 'DRIVER_GENNERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH') 
+                            THEN br.DRIVER_BIDDING_PRICE * 0.055
+                            ELSE 0
+                        END
+                    ), 0) as totalDriverPayout,
+                    IFNULL(SUM(
+                        CASE 
+                            WHEN dd.FEE_POLICY IN ('DRIVER_GENERAL', 'DRIVER_GENNERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH') 
+                            THEN br.DRIVER_BIDDING_PRICE * 0.011
+                            ELSE br.DRIVER_BIDDING_PRICE * 0.066
+                        END
+                    ), 0) as totalPlatformFee,
+                    IFNULL(SUM(
+                        CASE 
+                            WHEN driver.RECOM_CODE IS NOT NULL AND TRIM(driver.RECOM_CODE) != ''
+                            THEN 
+                                CASE 
+                                    WHEN dd.FEE_POLICY IN ('DRIVER_GENERAL', 'DRIVER_GENNERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH') 
+                                    THEN br.DRIVER_BIDDING_PRICE * 0.106
+                                    ELSE br.DRIVER_BIDDING_PRICE * 0.066
+                                END
+                            ELSE 0
+                        END
+                    ), 0) as totalSalesCommission
                 FROM TB_BUS_RESERVATION br
                 INNER JOIN TB_AUCTION_REQ   req      ON br.REQ_ID      = req.REQ_ID
                 LEFT  JOIN TB_USER          traveler ON req.TRAVELER_ID = traveler.CUST_ID
                 LEFT  JOIN TB_USER          driver   ON br.DRIVER_ID   = driver.CUST_ID
+                LEFT  JOIN TB_DRIVER_DETAIL dd       ON br.DRIVER_ID   = dd.CUST_ID
                 ${whereClause}
             `;
 
             const [listRows]    = await pool.execute(listQuery,    listParams);
             const [summaryRows] = await pool.execute(summaryQuery, listParams);
 
+            // 기사 정액제 매출 조회 조건 생성
+            const payConditions = [`ph.PAY_STAT = 'SUCCESS'`];
+            const payParams = [];
+
+            if (confirmDtFrom && confirmDtFrom.trim()) {
+                payConditions.push(`DATE(ph.PAY_COMPLETED_DT) >= ?`);
+                payParams.push(confirmDtFrom.trim());
+            }
+            if (confirmDtTo && confirmDtTo.trim()) {
+                payConditions.push(`DATE(ph.PAY_COMPLETED_DT) <= ?`);
+                payParams.push(confirmDtTo.trim());
+            }
+
+            if (searchKeyword && searchKeyword.trim()) {
+                const keyword = `%${searchKeyword.trim()}%`;
+                if (searchType === 'driverName') {
+                    payConditions.push(`d.USER_NM LIKE ?`);
+                    payParams.push(keyword);
+                } else if (searchType === 'travelerName' || searchType === 'tripTitle') {
+                    // 이 카테고리는 기사 정액제 매출에 매칭되지 않으므로 결과를 리턴하지 않게 만듬
+                    payConditions.push(`1 = 0`);
+                } else {
+                    payConditions.push(`d.USER_NM LIKE ?`);
+                    payParams.push(keyword);
+                }
+            }
+
+            const payWhereClause = `WHERE ` + payConditions.join(` AND `);
+            const payListQuery = `
+                SELECT
+                    ph.PAY_HIST_SEQ as payHistSeq,
+                    ph.DRIVER_ID as driverId,
+                    d.USER_NM as driverName,
+                    d.HP_NO as driverPhone,
+                    ph.BILLING_YYYYMM as billingYyyymm,
+                    ph.PAY_AMT as payAmt,
+                    ph.PAY_STAT as payStat,
+                    DATE_FORMAT(ph.PAY_COMPLETED_DT, '%Y-%m-%d %H:%i') as payCompletedDt,
+                    ph.CARD_NICKNAME_SNAPSHOT as cardNickname,
+                    ph.CARD_LAST_FOUR_SNAPSHOT as cardLastFour,
+                    dd.FEE_POLICY as feePolicy,
+                    cc.CD_NM_KO as feePolicyLabel
+                FROM TB_DRIVER_PAYMENT_HIST ph
+                INNER JOIN TB_USER d ON ph.DRIVER_ID = d.CUST_ID AND d.USER_TYPE = 'DRIVER'
+                LEFT JOIN TB_DRIVER_DETAIL dd ON d.CUST_ID = dd.CUST_ID
+                LEFT JOIN TB_COMMON_CODE cc ON cc.GRP_CD = 'FEE_POLICY' AND cc.DTL_CD = dd.FEE_POLICY
+                ${payWhereClause}
+                ORDER BY ph.PAY_COMPLETED_DT DESC
+            `;
+
+            const paySummaryQuery = `
+                SELECT
+                    COUNT(*) as totalCount,
+                    IFNULL(SUM(ph.PAY_AMT), 0) as totalAmt
+                FROM TB_DRIVER_PAYMENT_HIST ph
+                INNER JOIN TB_USER d ON ph.DRIVER_ID = d.CUST_ID AND d.USER_TYPE = 'DRIVER'
+                LEFT JOIN TB_DRIVER_DETAIL dd ON d.CUST_ID = dd.CUST_ID
+                ${payWhereClause}
+            `;
+
+            const [payListRows] = await pool.execute(payListQuery, payParams);
+            const [paySummaryRows] = await pool.execute(paySummaryQuery, payParams);
+
             res.status(200).json({
                 list:    listRows,
-                summary: summaryRows[0] || { totalCount: 0, totalReqAmt: 0, totalFee6pct: 0 },
+                summary: summaryRows[0] || { totalCount: 0, totalBiddingPrice: 0, totalDriverPayout: 0, totalPlatformFee: 0, totalSalesCommission: 0 },
+                subscriptionList: payListRows,
+                subscriptionSummary: paySummaryRows[0] || { totalCount: 0, totalAmt: 0 }
             });
         } catch (error) {
             console.error('Settlement API Error:', error);

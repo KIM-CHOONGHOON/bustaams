@@ -186,7 +186,7 @@
 | **ZIPCODE** | varchar(10) | YES |  | NULL |  | 우편번호 |
 | **ADDRESS** | varchar(255) | YES |  | NULL |  | 기본 주소 |
 | **DETAIL_ADDRESS** | varchar(255) | YES |  | NULL |  | 상세 주소 |
-| **FEE_POLICY** | varchar(30) | YES |  | NULL |  | 기사회원등급코드 |
+| **FEE_POLICY** | varchar(30) | YES |  | NULL |  | 기사회원 등급 코드 (DRIVER: 일반 회원, DRIVER_GENERAL / DRIVER_GENNERAL: 정회원(일반), DRIVER_MIDDLE: 정회원(중급), DRIVER_HIGH: 정회원(고급)) |
 | **SELF_INTRO** | varchar(500) | YES |  | NULL |  | 기사 자기소개 |
 | **REG_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 등록 일시 |
 | **REG_ID** | varchar(30) | YES |  | NULL |  | 등록자 ID |
@@ -395,7 +395,7 @@
 | **SIGNATURE_FILE_ID** | varchar(20) | YES |  | NULL |  | 서명 파일 ID |
 | **PROFILE_FILE_ID** | varchar(20) | YES |  | NULL |  | 프로필 사진 `TB_FILE_MASTER.FILE_ID` |
 | **SMS_AUTH_YN** | enum('Y','N') | YES |  | N |  | SMS 인증 여부 |
-| **RECOM_CODE** | varchar(20) | YES |  | NULL |  | 추천인 코드(영업파트너 `CUST_ID` 등) |
+| **RECOM_CODE** | varchar(20) | YES |  | NULL |  | 추천인 코드 (영업파트너 CUST_ID 또는 영업사원(SALES)의 ADMIN_ID 등) |
 | **JOIN_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 가입 일시 |
 | **USER_STAT** | enum('ACTIVE','LEAVE','BANNED','TEMPORARY') | YES |  | ACTIVE |  | 계정 상태 |
 | **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED | 수정 일시 |
@@ -674,3 +674,14 @@
 - **관련 테이블**: `TB_USER_CANCEL_MANAGE`
     - 여행자: `CANCEL_TRAVELER_ALL_CNT` 기록 및 날짜 체크.
     - 버스기사: `CANCEL_BUS_DRIVER_CNT` 기록 및 날짜 체크. 청약 취소 **10회 누적 시** 종료일 **`9999-12-31`** 등록·관리자 해제 전까지 거래 불가(위 `TB_USER_CANCEL_MANAGE` 정책 참고).
+
+### 3. 영업 담당자(SALES) 수수료 정산 및 원천징수 규칙 (Sales Commission & Tax Rules)
+- **추천 기사 매핑**: 버스 기사(`TB_USER`)가 회원 가입 시 혹은 상세에서 영업 담당자(`TB_ADMIN` 중 `ADMIN_GRADE = 'SALES'`)의 `ADMIN_ID`를 추천인 코드(`RECOM_CODE`)로 등록한 경우 매핑이 형성됩니다.
+- **기사 등급(`TB_DRIVER_DETAIL.FEE_POLICY`)별 수당 요율**:
+  - **일반 회원 (`FEE_POLICY = 'DRIVER'`)**: 가입비/월회비가 없는 회원(입찰 한도 9회 제한). 수당 요율은 낙찰 금액(`TB_BUS_RESERVATION.DRIVER_BIDDING_PRICE`)의 **6.6%** 입니다.
+  - **정회원 (`FEE_POLICY` $\in$ `['DRIVER_GENERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH']`)**: 월 정액 회비를 납부하는 회원. 수당 요율은 낙찰 금액의 **10.6%** (기본 수당 10% + 추가 성사금 0.6%) 입니다.
+- **세금 원천징수(3.3%) 및 최종 실지급액 산출 공식**:
+  1. **총 수당금액 (세전)** = $\sum (\text{매칭 성공한 운행금액} \times \text{등급별 요율(6.6\% \text{ 또는 } 10.6\%)})$
+  2. **사업소득세 (3%)** = $\text{총 수당금액} \times 0.03$ (원 단위 절사)
+  3. **지방소득세 (0.3%)** = $\text{사업소득세} \times 0.1$ (원 단위 절사)
+  4. **실제 지급 총액 (세후)** = $\text{총 수당금액} - \text{사업소득세} - \text{지방소득세} = \text{총 수당금액} \times 0.967$
