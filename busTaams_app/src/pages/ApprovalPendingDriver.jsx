@@ -117,10 +117,6 @@ const ApprovalPendingDriver = () => {
                                 </div>
                                 
                                 <div className="relative z-10">
-                                    <div className="flex justify-end items-start mb-8">
-                                        <span className="material-symbols-outlined text-slate-300">more_vert</span>
-                                    </div>
-                                    
                                     <h3 className="text-2xl font-black text-[#004e47] mb-4 italic tracking-tight">{bid.title}</h3>
                                     
                                     {/* 운행 일정 추가 */}
