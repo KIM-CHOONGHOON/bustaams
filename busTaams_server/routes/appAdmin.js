@@ -796,7 +796,7 @@ module.exports = (pool) => {
             const { confirmDtFrom, confirmDtTo, searchType, searchKeyword } = req.query;
 
             const listParams = [];
-            const conditions = [`br.DATA_STAT = 'CONFIRM'`];
+            const conditions = [`req.DATA_STAT = 'DONE'`];
 
             // 확정일자 기간 필터 (TB_BUS_RESERVATION.CONFIRM_DT 기준)
             if (confirmDtFrom && confirmDtFrom.trim()) {
@@ -1327,6 +1327,263 @@ module.exports = (pool) => {
         } catch (error) {
             console.error('Register recommender error:', error);
             res.status(500).json({ error: '추천인 등록 중 오류가 발생했습니다.' });
+        }
+    });
+
+    // 18. 공통 코드 그룹 목록 조회 API
+    router.get('/common-codes/groups', async (req, res) => {
+        try {
+            const query = `
+                SELECT 
+                    GRP_CD as grpCd,
+                    MAX(CD_NM_KO) as grpNm,
+                    COUNT(*) as codeCount
+                FROM TB_COMMON_CODE
+                GROUP BY GRP_CD
+                ORDER BY GRP_CD ASC
+            `;
+            const [rows] = await pool.execute(query);
+            res.status(200).json(rows);
+        } catch (error) {
+            console.error('Fetch common code groups error:', error);
+            res.status(500).json({ error: '공통 코드 그룹 목록 조회에 실패했습니다.' });
+        }
+    });
+
+    // 18-2. 공통 코드 목록 조회 API
+    router.get('/common-codes', async (req, res) => {
+        try {
+            const { searchType, searchKeyword, grpCd } = req.query;
+            let query = `
+                SELECT 
+                    GRP_CD as grpCd,
+                    DTL_CD as dtlCd,
+                    CD_NM_KO as cdNmKo,
+                    CD_NM_EN as cdNmEn,
+                    CD_FNUM as cdFnum,
+                    CD_TNUM as cdTnum,
+                    USE_YN as useYn,
+                    DISP_ORD as dispOrd,
+                    CD_DESC as cdDesc,
+                    DATE_FORMAT(REG_DT, '%Y-%m-%d %H:%i') as regDt,
+                    REG_ID as regId,
+                    DATE_FORMAT(MOD_DT, '%Y-%m-%d %H:%i') as modDt,
+                    MOD_ID as modId
+                FROM TB_COMMON_CODE
+            `;
+            const params = [];
+            const conditions = [];
+
+            if (grpCd && grpCd.trim()) {
+                conditions.push('GRP_CD = ?');
+                params.push(grpCd.trim());
+            }
+
+            if (searchKeyword && searchKeyword.trim()) {
+                const keyword = `%${searchKeyword.trim()}%`;
+                if (searchType === 'grpCd') {
+                    conditions.push('GRP_CD LIKE ?');
+                    params.push(keyword);
+                } else if (searchType === 'cdNmKo') {
+                    conditions.push('CD_NM_KO LIKE ?');
+                    params.push(keyword);
+                } else {
+                    conditions.push('(GRP_CD LIKE ? OR DTL_CD LIKE ? OR CD_NM_KO LIKE ?)');
+                    params.push(keyword, keyword, keyword);
+                }
+            }
+
+            if (conditions.length > 0) {
+                query += ' WHERE ' + conditions.join(' AND ');
+            }
+
+            query += ' ORDER BY GRP_CD ASC, DISP_ORD ASC, DTL_CD ASC';
+
+            const [rows] = await pool.execute(query, params);
+            res.status(200).json(rows);
+        } catch (error) {
+            console.error('Fetch common codes error:', error);
+            res.status(500).json({ error: '공통 코드 목록 조회에 실패했습니다.' });
+        }
+    });
+
+    // 18-3. 공통 코드 일괄(그룹-하위코드 세트) 등록 API
+    router.post('/common-codes/bulk', async (req, res) => {
+        const connection = await pool.getConnection();
+        try {
+            const { grpCd, grpDesc, codes, regId } = req.body;
+
+            if (!grpCd || !grpCd.trim() || !codes || !Array.isArray(codes) || codes.length === 0) {
+                return res.status(400).json({ error: '그룹 코드와 최소 1개 이상의 하위 코드 정보가 필요합니다.' });
+            }
+
+            await connection.beginTransaction();
+
+            const creator = regId || 'ADMIN';
+            const grp = grpCd.toUpperCase().trim();
+
+            for (const item of codes) {
+                const { dtlCd, cdNmKo, cdNmEn, cdFnum, cdTnum, useYn, dispOrd, cdDesc } = item;
+                if (!dtlCd || !dtlCd.trim() || !cdNmKo || !cdNmKo.trim()) {
+                    throw new Error('하위 코드의 상세코드와 한글명은 필수 입력 항목입니다.');
+                }
+
+                const dtl = dtlCd.toUpperCase().trim();
+
+                // 중복 검사
+                const [existRows] = await connection.execute(
+                    'SELECT 1 FROM TB_COMMON_CODE WHERE GRP_CD = ? AND DTL_CD = ?',
+                    [grp, dtl]
+                );
+
+                if (existRows.length > 0) {
+                    throw new Error(`이미 존재하는 코드 조합입니다. (그룹: ${grp}, 상세: ${dtl})`);
+                }
+
+                const insertQuery = `
+                    INSERT INTO TB_COMMON_CODE (
+                        GRP_CD, DTL_CD, CD_NM_KO, CD_NM_EN, CD_FNUM, CD_TNUM, USE_YN, DISP_ORD, CD_DESC, REG_DT, REG_ID, MOD_DT, MOD_ID
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)
+                `;
+
+                await connection.execute(insertQuery, [
+                    grp,
+                    dtl,
+                    cdNmKo.trim(),
+                    cdNmEn ? cdNmEn.trim() : null,
+                    cdFnum || 0,
+                    cdTnum || 0,
+                    useYn || 'Y',
+                    dispOrd || 0,
+                    cdDesc || grpDesc || null,
+                    creator,
+                    creator
+                ]);
+            }
+
+            await connection.commit();
+            res.status(200).json({ success: true, message: '공통 코드 그룹 및 하위 코드 세트가 성공적으로 등록되었습니다.' });
+        } catch (error) {
+            await connection.rollback();
+            console.error('Insert bulk common codes error:', error);
+            res.status(500).json({ error: error.message || '공통 코드 일괄 등록 중 오류가 발생했습니다.' });
+        } finally {
+            connection.release();
+        }
+    });
+
+    // 19. 공통 코드 추가 API
+    router.post('/common-codes', async (req, res) => {
+        try {
+            const { grpCd, dtlCd, cdNmKo, cdNmEn, cdFnum, cdTnum, useYn, dispOrd, cdDesc, regId } = req.body;
+
+            if (!grpCd || !dtlCd || !cdNmKo) {
+                return res.status(400).json({ error: '그룹 코드, 상세 코드, 코드 한글명은 필수 입력 항목입니다.' });
+            }
+
+            // 중복 검사
+            const [existRows] = await pool.execute(
+                'SELECT 1 FROM TB_COMMON_CODE WHERE GRP_CD = ? AND DTL_CD = ?',
+                [grpCd, dtlCd]
+            );
+
+            if (existRows.length > 0) {
+                return res.status(400).json({ error: '이미 존재하는 그룹 코드와 상세 코드의 조합입니다.' });
+            }
+
+            const query = `
+                INSERT INTO TB_COMMON_CODE (
+                    GRP_CD, DTL_CD, CD_NM_KO, CD_NM_EN, CD_FNUM, CD_TNUM, USE_YN, DISP_ORD, CD_DESC, REG_DT, REG_ID, MOD_DT, MOD_ID
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)
+            `;
+
+            await pool.execute(query, [
+                grpCd.trim(),
+                dtlCd.trim(),
+                cdNmKo.trim(),
+                cdNmEn ? cdNmEn.trim() : null,
+                cdFnum || 0,
+                cdTnum || 0,
+                useYn || 'Y',
+                dispOrd || 0,
+                cdDesc || null,
+                regId || 'ADMIN',
+                regId || 'ADMIN'
+            ]);
+
+            res.status(200).json({ success: true, message: '공통 코드가 성공적으로 등록되었습니다.' });
+        } catch (error) {
+            console.error('Insert common code error:', error);
+            res.status(500).json({ error: '공통 코드 등록 중 오류가 발생했습니다.' });
+        }
+    });
+
+    // 20. 공통 코드 수정 API
+    router.put('/common-codes/:grpCd/:dtlCd', async (req, res) => {
+        try {
+            const { grpCd, dtlCd } = req.params;
+            const { cdNmKo, cdNmEn, cdFnum, cdTnum, useYn, dispOrd, cdDesc, modId } = req.body;
+
+            if (!cdNmKo) {
+                return res.status(400).json({ error: '코드 한글명은 필수 입력 항목입니다.' });
+            }
+
+            const query = `
+                UPDATE TB_COMMON_CODE SET
+                    CD_NM_KO = ?,
+                    CD_NM_EN = ?,
+                    CD_FNUM = ?,
+                    CD_TNUM = ?,
+                    USE_YN = ?,
+                    DISP_ORD = ?,
+                    CD_DESC = ?,
+                    MOD_DT = NOW(),
+                    MOD_ID = ?
+                WHERE GRP_CD = ? AND DTL_CD = ?
+            `;
+
+            const [result] = await pool.execute(query, [
+                cdNmKo.trim(),
+                cdNmEn ? cdNmEn.trim() : null,
+                cdFnum || 0,
+                cdTnum || 0,
+                useYn || 'Y',
+                dispOrd || 0,
+                cdDesc || null,
+                modId || 'ADMIN',
+                grpCd,
+                dtlCd
+            ]);
+
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ error: '해당 공통 코드를 찾을 수 없습니다.' });
+            }
+
+            res.status(200).json({ success: true, message: '공통 코드가 성공적으로 수정되었습니다.' });
+        } catch (error) {
+            console.error('Update common code error:', error);
+            res.status(500).json({ error: '공통 코드 수정 중 오류가 발생했습니다.' });
+        }
+    });
+
+    // 21. 공통 코드 삭제 API
+    router.delete('/common-codes/:grpCd/:dtlCd', async (req, res) => {
+        try {
+            const { grpCd, dtlCd } = req.params;
+
+            const [result] = await pool.execute(
+                'DELETE FROM TB_COMMON_CODE WHERE GRP_CD = ? AND DTL_CD = ?',
+                [grpCd, dtlCd]
+            );
+
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ error: '해당 공통 코드를 찾을 수 없습니다.' });
+            }
+
+            res.status(200).json({ success: true, message: '공통 코드가 성공적으로 삭제되었습니다.' });
+        } catch (error) {
+            console.error('Delete common code error:', error);
+            res.status(500).json({ error: '공통 코드 삭제 중 오류가 발생했습니다.' });
         }
     });
 

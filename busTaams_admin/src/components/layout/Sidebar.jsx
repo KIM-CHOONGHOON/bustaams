@@ -1,7 +1,9 @@
-import React from 'react';
-import { LayoutDashboard, Users, Bus, Settings, Compass, HeartHandshake, TrendingUp, BarChart3, UserCheck, Receipt, Newspaper, User } from 'lucide-react';
+import React, { useState } from 'react';
+import { LayoutDashboard, Users, Bus, Settings, Compass, HeartHandshake, TrendingUp, BarChart3, UserCheck, Receipt, Newspaper, User, ChevronDown, ChevronUp } from 'lucide-react';
 
 const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
+  const [isSettingsOpen, setIsSettingsOpen] = useState(currentMenu.startsWith('settings'));
+
   // 로컬스토리지에서 로그인된 관리자 정보 획득
   const adminUserStr = localStorage.getItem('adminUser');
   const adminUser = adminUserStr ? JSON.parse(adminUserStr) : null;
@@ -21,7 +23,7 @@ const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
     { id: 'sales-performance', label: '영업사원 실적', icon: <BarChart3 size={20} /> },
     { id: 'my-info', label: '내 정보 관리', icon: <User size={20} /> },
     { id: 'BatchDashBoard', label: 'BATCH JOB 모니터링', icon: <Newspaper size={20} />, isModal: true },
-    { id: 'settings', label: '시스템 설정', icon: <Settings size={20} /> },
+    { id: 'settings', label: '시스템 설정', icon: <Settings size={20} />, hasSubmenu: true },
   ];
 
   // 권한별 메뉴 필터링 로직
@@ -72,26 +74,63 @@ const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
       </div>
 
       <nav className="flex-1 px-4 py-6 space-y-2">
-        {menuItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => {
-              if (item.isModal) {
-                onBatchClick();
-              } else {
-                setCurrentMenu(item.id);
-              }
-            }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-              currentMenu === item.id 
-                ? 'bg-emerald-500/10 text-emerald-400 font-bold' 
-                : 'hover:bg-slate-800 hover:text-white font-medium'
-            }`}
-          >
-            {item.icon}
-            {item.label}
-          </button>
-        ))}
+        {menuItems.map((item) => {
+          const isSelected = currentMenu === item.id || (item.hasSubmenu && currentMenu.startsWith(item.id));
+          return (
+            <div key={item.id} className="flex flex-col">
+              <button
+                onClick={() => {
+                  if (item.isModal) {
+                    onBatchClick();
+                  } else if (item.hasSubmenu) {
+                    setIsSettingsOpen(!isSettingsOpen);
+                  } else {
+                    setCurrentMenu(item.id);
+                  }
+                }}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${
+                  isSelected 
+                    ? 'bg-emerald-500/10 text-emerald-400 font-bold' 
+                    : 'hover:bg-slate-800 hover:text-white font-medium'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  {item.icon}
+                  <span>{item.label}</span>
+                </div>
+                {item.hasSubmenu && (
+                  isSettingsOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />
+                )}
+              </button>
+
+              {/* 하위 메뉴 렌더링 */}
+              {item.hasSubmenu && isSettingsOpen && (
+                <div className="flex flex-col pl-9 mt-1.5 space-y-1">
+                  <button
+                    onClick={() => setCurrentMenu('settings-products')}
+                    className={`w-full text-left py-2 px-3 rounded-lg text-sm transition-all ${
+                      currentMenu === 'settings-products'
+                        ? 'text-emerald-400 font-bold bg-emerald-500/5'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                    }`}
+                  >
+                    • 상품 목록
+                  </button>
+                  <button
+                    onClick={() => setCurrentMenu('settings-codes')}
+                    className={`w-full text-left py-2 px-3 rounded-lg text-sm transition-all ${
+                      currentMenu === 'settings-codes'
+                        ? 'text-emerald-400 font-bold bg-emerald-500/5'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                    }`}
+                  >
+                    • 코드 관리
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </nav>
 
       <div className="p-4 border-t border-slate-800">
