@@ -129,16 +129,16 @@ const UpcomingTripsDriver = () => {
                         })}
                     </div>
                 ) : (
-                    <div className="bg-white rounded-2xl p-24 text-center border-2 border-dashed border-slate-100 shadow-inner">
+                    <div className="bg-white rounded-2xl px-4 py-16 sm:p-24 text-center border-2 border-dashed border-slate-100 shadow-inner">
                         <div className="w-24 h-24 bg-slate-50 rounded-xl mx-auto flex items-center justify-center mb-8">
                             <span className="material-symbols-outlined text-5xl text-slate-200">event_busy</span>
                         </div>
                         <div className="space-y-4">
-                            <h3 className="text-2xl font-black text-primary italic uppercase tracking-tighter">예정된 운행이 없습니다.</h3>
-                            <p className="text-slate-400 font-bold italic text-lg">새로운 운행 계약을 맺어보세요.</p>
+                            <h3 className="text-2xl font-black text-primary italic uppercase tracking-tighter whitespace-nowrap">예정된 운행이 없습니다.</h3>
+                            <p className="text-slate-400 font-bold italic text-lg whitespace-nowrap">새로운 운행 계약을 맺어보세요.</p>
                             <button 
                                 onClick={() => navigate('/estimate-list-driver')}
-                                className="mt-8 bg-primary text-white px-12 py-4 rounded-xl font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
+                                className="mt-8 bg-primary text-white px-8 py-4 sm:px-12 rounded-xl font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all whitespace-nowrap"
                             >
                                 청약목록보러가기
                             </button>
