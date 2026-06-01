@@ -121,7 +121,26 @@ const ApprovalPendingDriver = () => {
                                         <span className="material-symbols-outlined text-slate-300">more_vert</span>
                                     </div>
                                     
-                                    <h3 className="text-2xl font-black text-[#004e47] mb-1 italic tracking-tight">{bid.title}</h3>
+                                    <h3 className="text-2xl font-black text-[#004e47] mb-4 italic tracking-tight">{bid.title}</h3>
+                                    
+                                    {/* 운행 일정 추가 */}
+                                    <div className="flex items-center gap-3 border border-orange-100 bg-orange-50/50 rounded-2xl p-4 text-left mb-6">
+                                        <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center shadow-sm flex-shrink-0">
+                                            <span className="material-symbols-outlined text-orange-600 text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>calendar_today</span>
+                                        </div>
+                                        <div className="flex flex-col text-left">
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 italic mb-0.5">
+                                                운행 일정
+                                            </p>
+                                            <p className="text-sm font-black text-[#1E293B] leading-none">
+                                                {bid.startDt ? bid.startDt.replace(/-/g, '.') : ''} ~
+                                            </p>
+                                            <p className="text-sm font-black text-[#1E293B] leading-none mt-1">
+                                                {bid.endDt ? bid.endDt.replace(/-/g, '.') : ''}
+                                            </p>
+                                        </div>
+                                    </div>
+
                                     {/* 전체 운행 경로 타임라인 표시 (한글 주석) */}
                                     <div className="mt-8 space-y-10 relative">
                                         <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-100"></div>
@@ -164,10 +183,6 @@ const ApprovalPendingDriver = () => {
                                     </div>
                                     
                                     <div className="space-y-4 mb-8">
-                                        <div className="flex justify-between items-center text-sm border-b border-slate-50 pb-3">
-                                            <span className="text-slate-400 font-bold uppercase tracking-tighter text-[11px]">운행 기간</span>
-                                            <span className="font-black text-[#004e47] italic">{bid.startDt} ~ {bid.endDt}</span>
-                                        </div>
                                         <div className="flex justify-between items-center text-sm border-b border-slate-50 pb-3">
                                             <span className="text-slate-400 font-bold uppercase tracking-tighter text-[11px]">입찰 금액</span>
                                             <span className="font-black text-[#004e47] text-lg">₩{Number(bid.price).toLocaleString()}</span>
