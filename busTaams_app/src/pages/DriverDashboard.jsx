@@ -88,7 +88,7 @@ const DriverDashboard = () => {
     // 빠른 메뉴 버튼 배열 순서 변경 (등록 관련 메뉴를 사용성 개선을 위해 맨 뒤로 이동)
     const quickMenus = [
         { icon: 'format_list_bulleted', label: '청약 리스트', path: '/estimate-list-driver' },
-        { icon: 'pending_actions', label: '승인 진행 리스트', path: '/approval-pending-driver' },
+        { icon: 'pending_actions', label: '승인 대기 목록', path: '/approval-pending-driver' },
         { icon: 'calendar_month', label: '운행 예정 리스트', path: '/upcoming-trips-driver' },
         { icon: 'task_alt', label: '운행 완료 리스트', path: '/completed-trips-driver' },
         { icon: 'chat', label: '실시간 채팅', path: '/chat-list-driver' },

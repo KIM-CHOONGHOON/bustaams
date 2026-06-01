@@ -93,26 +93,15 @@ const ApprovalPendingDriver = () => {
                 {/* Editorial Header Section */}
                 <section className="mb-12">
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
-                        <div className="md:col-span-7">
-                            <span className="text-[#9d4300] font-bold tracking-widest uppercase text-[10px] mb-4 block">운행 관리</span>
-                            <h1 className="text-4xl font-extrabold text-[#004e47] leading-[1.1] tracking-tighter italic uppercase">
-                                승인 대기 중인 입찰
-                            </h1>
-                        </div>
-                        <div className="md:col-span-5 md:pl-8 text-left">
+                        <div className="md:col-span-12 text-left">
                             <p className="text-[#3e4947] text-sm font-medium leading-relaxed">
-                                현재 고객의 승인을 기다리고 있는 입찰 내역입니다. 승인이 완료되면 즉시 알림으로 안내해 드립니다.
+                                여행 승인을 기다리는 청약 입니다.<br/>승인 완료시 실시간 알림 문자 드립니다.
                             </p>
                         </div>
                     </div>
                 </section>
 
-                {/* Dynamic Tabs / Filters */}
-                <nav className="flex gap-8 mb-12 pb-4 border-b border-slate-200 overflow-x-auto no-scrollbar">
-                    <button className="text-[#004e47] font-black border-b-4 border-[#004e47] pb-2 whitespace-nowrap text-sm uppercase tracking-widest">
-                        승인 대기 중 ({bids.length})
-                    </button>
-                </nav>
+
 
                 {/* Pending Items List */}
                 {loading ? (
@@ -128,10 +117,7 @@ const ApprovalPendingDriver = () => {
                                 </div>
                                 
                                 <div className="relative z-10">
-                                    <div className="flex justify-between items-start mb-8">
-                                        <span className="bg-[#ffdbca] text-[#783200] px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-[#ffb690]/20">
-                                            승인 대기
-                                        </span>
+                                    <div className="flex justify-end items-start mb-8">
                                         <span className="material-symbols-outlined text-slate-300">more_vert</span>
                                     </div>
                                     
