@@ -214,9 +214,11 @@ const EstimateDetailDriver = () => {
                                         <span className="text-[10px] font-black text-secondary uppercase tracking-[0.3em]">KRW</span>
                                     </div>
                                     <div className="relative text-left">
-                                        <span className="absolute left-8 top-1/2 -translate-y-1/2 font-black text-slate-300 text-3xl italic">₩</span>
+                                        {/* 한글 주석: 원화 기호 색상을 진한 파란색(text-blue-900)으로 조율 */}
+                                        <span className="absolute left-8 top-1/2 -translate-y-1/2 font-black text-blue-900 text-3xl italic">₩</span>
+                                        {/* 한글 주석: 금액 텍스트 색상을 진한 파란색(text-blue-900)으로 조율 */}
                                         <input 
-                                            className="w-full bg-slate-50 border-4 border-slate-100 rounded-xl py-8 pl-16 pr-8 font-headline text-4xl font-black text-slate-500 focus:outline-none transition-all shadow-inner italic cursor-not-allowed" 
+                                            className="w-full bg-slate-50 border-4 border-slate-100 rounded-xl py-8 pl-16 pr-8 font-headline text-4xl font-black text-blue-900 focus:outline-none transition-all shadow-inner italic cursor-not-allowed" 
                                             value={Number(auction.price).toLocaleString()} 
                                             readOnly 
                                         />
