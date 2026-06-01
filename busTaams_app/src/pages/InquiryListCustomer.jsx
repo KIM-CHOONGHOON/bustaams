@@ -23,6 +23,13 @@ const InquiryListCustomer = () => {
     useEffect(() => {
         fetchInquiries();
         fetchProfile();
+
+        // 10초 주기로 문의 내역 백그라운드 갱신 (한글 주석)
+        const interval = setInterval(() => {
+            fetchInquiriesSilent();
+        }, 10000);
+
+        return () => clearInterval(interval);
     }, []);
 
     const fetchProfile = async () => {
@@ -48,6 +55,18 @@ const InquiryListCustomer = () => {
             console.error('Fetch inquiries error:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // 로딩바 없이 조용히 데이터를 다시 불러오는 함수 (한글 주석)
+    const fetchInquiriesSilent = async () => {
+        try {
+            const response = await api.get('/app/customer/inquiries');
+            if (response.success) {
+                setInquiries(response.data);
+            }
+        } catch (error) {
+            console.error('Silent fetch inquiries error:', error);
         }
     };
 

@@ -124,8 +124,8 @@ const EstimateDetailDriver = () => {
                 {/* Header Section */}
                 <div className="space-y-2 text-left">
                     <span className="text-secondary font-black tracking-[0.4em] uppercase text-[11px] block px-1 italic">청약 ID: #BT-{auction.id}</span>
-                    <h2 className="font-headline text-5xl md:text-7xl font-black text-[#004e47] tracking-tighter italic uppercase">
-                        청약 상세 확인
+                    <h2 className="font-headline text-2xl font-black text-[#004e47] tracking-tight italic uppercase">
+                        {auction.title}
                     </h2>
                 </div>
 
@@ -133,32 +133,47 @@ const EstimateDetailDriver = () => {
                     {/* Left: Trip Info (Matching Design) */}
                     <aside className="lg:col-span-5 text-left">
                         <div className="bg-white rounded-2xl p-10 space-y-10 shadow-xl shadow-teal-900/5 text-left border border-slate-100">
-                            <h3 className="font-headline font-black text-2xl text-[#004e47] italic border-l-4 border-secondary pl-4 text-left uppercase">운행 정보</h3>
+                            {/* [삭제] 운행 정보 헤더 텍스트 라인 삭제 (한글 주석) */}
                             
                             <div className="space-y-10 text-left">
                                 {/* Route sequence in strict order */}
-                                <div className="space-y-8">
-                                    {auction.fullPath.map((item, idx) => (
-                                        <div key={idx} className="flex items-start gap-6 text-left relative">
-                                            {/* Vertical line between icons */}
-                                            {idx < auction.fullPath.length - 1 && (
-                                                <div className="absolute left-[19px] top-10 bottom-[-32px] w-0.5 bg-slate-100 dashed"></div>
-                                            )}
-                                            <div className="min-w-[40px] h-10 rounded-xl flex items-center justify-center border bg-slate-50 text-slate-400 border-slate-100">
-                                                <span className="material-symbols-outlined text-xl">
-                                                    {item.label === '출발지' ? 'location_on' : 
-                                                     item.label === '최종 도착지' ? 'flag' : 
-                                                     item.label === '목적지' ? 'sync_alt' : 'route'}
-                                                </span>
+                                <div className="mt-8 space-y-10 relative">
+                                    <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-100"></div>
+                                    {auction.fullPath.map((item, idx) => {
+                                        const isStart = item.label === '출발지';
+                                        const isEnd = item.label === '최종 도착지';
+                                        const isDest = item.label === '목적지';
+                                        const pointType = isStart ? 'START' : isEnd ? 'END' : isDest ? 'DEST' : 'WAYPOINT';
+
+                                        return (
+                                            <div key={idx} className="relative pl-12">
+                                                <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center ${
+                                                    pointType === 'START' ? 'bg-teal-600 text-white shadow-teal-200' : 
+                                                    pointType === 'END' ? 'bg-rose-500 text-white shadow-rose-200' : 
+                                                    pointType === 'DEST' ? 'bg-indigo-600 text-white shadow-indigo-100' :
+                                                    'bg-amber-400 text-white shadow-amber-100'
+                                                }`}>
+                                                    <span className="material-symbols-outlined text-[16px] font-black">
+                                                        {pointType === 'START' ? 'location_on' : 
+                                                         pointType === 'END' ? 'flag' : 
+                                                         pointType === 'DEST' ? 'near_me' : 'more_horiz'}
+                                                    </span>
+                                                </div>
+                                                <div className="flex flex-col text-left">
+                                                    <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${
+                                                        pointType === 'START' ? 'text-teal-600' : 
+                                                        pointType === 'END' ? 'text-rose-500' : 
+                                                        pointType === 'DEST' ? 'text-indigo-500' : 'text-amber-500'
+                                                    }`}>
+                                                        {item.label}
+                                                    </p>
+                                                    <h4 className="text-lg font-black tracking-tight text-[#191c1e] text-left">
+                                                        {item.addr}
+                                                    </h4>
+                                                </div>
                                             </div>
-                                            <div className="text-left">
-                                                <p className={`text-[10px] font-black uppercase tracking-[0.3em] mb-1 italic ${item.label === '목적지' ? 'text-orange-500' : 'text-slate-300'}`}>
-                                                    {item.label} {item.label === '목적지' && '★'}
-                                                </p>
-                                                <p className={`font-black text-xl leading-tight tracking-tight ${item.label === '목적지' ? 'text-orange-700' : 'text-[#191c1e]'}`}>{item.addr}</p>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
 
                                 <div className="pt-8 border-t border-slate-50 space-y-8">
@@ -167,8 +182,8 @@ const EstimateDetailDriver = () => {
                                             <span className="material-symbols-outlined text-xl">calendar_month</span>
                                         </div>
                                         <div className="text-left">
-                                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300 mb-1 italic">출발 일시</p>
-                                            <p className="font-black text-[#191c1e] text-xl leading-tight">{auction.startDate}</p>
+                                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 mb-1 italic">출발 일시</p>
+                                            <p className="font-black text-[#191c1e] text-lg leading-tight">{auction.startDate}</p>
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-6 text-left">
@@ -176,8 +191,8 @@ const EstimateDetailDriver = () => {
                                             <span className="material-symbols-outlined text-xl">calendar_month</span>
                                         </div>
                                         <div className="text-left">
-                                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300 mb-1 italic">도착 일시</p>
-                                            <p className="font-black text-[#191c1e] text-xl leading-tight">{auction.endDate}</p>
+                                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 mb-1 italic">도착 일시</p>
+                                            <p className="font-black text-[#191c1e] text-lg leading-tight">{auction.endDate}</p>
                                         </div>
                                     </div>
                                 </div>

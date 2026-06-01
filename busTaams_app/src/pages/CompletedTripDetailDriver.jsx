@@ -96,28 +96,55 @@ const CompletedTripDetailDriver = () => {
                     </div>
                 </section>
 
-                {/* 운행 경로 타임라인 */}
-                <section className="space-y-6 text-left">
-                    <h3 className="text-2xl font-black italic uppercase tracking-tighter text-primary flex items-center gap-4 text-left">
-                        <span className="material-symbols-outlined text-secondary">route</span> 운행 타임라인
-                    </h3>
-                    
-                    <div className="bg-white p-10 rounded-2xl shadow-2xl shadow-teal-900/5 relative text-left border border-white">
-                        <div className="absolute left-14 top-20 bottom-20 w-0.5 bg-slate-100"></div>
-                        <div className="space-y-10 text-left">
-                            {trip.waypoints?.map((wp, idx) => (
-                                <div key={idx} className="relative pl-16 text-left">
-                                    <div className={`absolute left-0 top-1 w-6 h-6 rounded-full ${wp.type === 'START' ? 'bg-primary' : wp.type === 'END' ? 'bg-primary' : 'bg-secondary'} ring-8 ${wp.type === 'START' || wp.type === 'END' ? 'ring-primary/10' : 'ring-secondary/10'} z-10`}></div>
-                                    <div className="text-left space-y-1">
-                                        <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest italic">
-                                            {wp.type === 'START' ? '출발 지점' : wp.type === 'END' ? '최종 목적지' : '경유지'}
+                {/* 한글 주석: ReservationDetailCustomer 스타일을 적용한 운행 타임라인 */}
+                <section className="bg-white rounded-[3.5rem] p-12 shadow-2xl shadow-teal-900/[0.03] border border-slate-50 text-left">
+                    <div className="text-xl font-black tracking-tight border-b border-slate-50 pb-6 italic text-teal-700 flex items-center gap-2">
+                        <span className="material-symbols-outlined">route</span>
+                        전체 운행 경로
+                    </div>
+                    <div className="mt-8 space-y-10 relative">
+                        <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-100"></div>
+                        {trip.waypoints?.map((wp, idx) => {
+                            const isStart = wp.type === 'START';
+                            const isEnd = wp.type === 'END';
+                            const isDest = wp.type === 'ROUND' || wp.type === 'ROUND_TRIP';
+                            const title = isStart ? '출발지' : isEnd ? '도착지' : isDest ? '목적지' : '경유지';
+                            const pointType = isStart ? 'START' : isEnd ? 'END' : isDest ? 'DEST' : 'WAYPOINT';
+
+                            return (
+                                <div key={idx} className="relative pl-12">
+                                    <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center ${
+                                        pointType === 'START' ? 'bg-teal-600 text-white shadow-teal-200' : 
+                                        pointType === 'END' ? 'bg-rose-500 text-white shadow-rose-200' : 
+                                        pointType === 'DEST' ? 'bg-indigo-600 text-white shadow-indigo-100' :
+                                        'bg-amber-400 text-white shadow-amber-100'
+                                    }`}>
+                                        <span className="material-symbols-outlined text-[16px] font-black">
+                                            {pointType === 'START' ? 'location_on' : 
+                                             pointType === 'END' ? 'flag' : 
+                                             pointType === 'DEST' ? 'near_me' : 'more_horiz'}
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-col text-left">
+                                        <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${
+                                            pointType === 'START' ? 'text-teal-600' : 
+                                            pointType === 'END' ? 'text-rose-500' : 
+                                            pointType === 'DEST' ? 'text-indigo-500' : 'text-amber-500'
+                                        }`}>
+                                            {title}
                                         </p>
-                                        <h4 className="text-xl font-black text-primary italic uppercase tracking-tight text-left">{wp.addr}</h4>
-                                        <p className="text-slate-400 text-xs font-bold italic tracking-tighter">{wp.time}</p>
+                                        <h4 className="text-lg font-black tracking-tight text-on-surface text-left">
+                                            {wp.addr}
+                                        </h4>
+                                        {wp.time && (
+                                            <p className="text-xs text-slate-400 font-bold mt-1 opacity-70 italic text-left">
+                                                {wp.time}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
-                            ))}
-                        </div>
+                            );
+                        })}
                     </div>
                 </section>
 

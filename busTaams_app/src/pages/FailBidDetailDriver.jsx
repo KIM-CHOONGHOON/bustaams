@@ -37,20 +37,35 @@ const FailBidDetailDriver = () => {
                     <div className="absolute top-0 right-0 p-12 opacity-5 group-hover:rotate-12 transition-transform duration-1000">
                         <span className="material-symbols-outlined text-[8rem]">history</span>
                     </div>
-                    <div className="flex items-start gap-8 text-left relative z-10">
-                        <div className="flex flex-col items-center gap-2 pt-2">
-                            <div className="w-4 h-4 rounded-full bg-primary ring-8 ring-primary/5"></div>
-                            <div className="w-1 h-20 bg-slate-50"></div>
-                            <div className="w-4 h-4 rounded-full border-4 border-primary bg-white"></div>
-                        </div>
-                        <div className="flex-1 space-y-10 text-left">
-                            <div className="space-y-1 text-left">
-                                <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest italic">Departure Execution</p>
-                                <p className="text-2xl font-black text-primary italic uppercase tracking-tight text-left">서울역 (1호선)</p>
+                    {/* 한글 주석: ReservationDetailCustomer 스타일을 적용한 유찰 경로 요약 */}
+                    <div className="mt-8 space-y-10 relative text-left">
+                        <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-100"></div>
+                        
+                        <div className="relative pl-12 text-left">
+                            <div className="absolute left-0 top-1.5 w-8 h-8 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center bg-teal-600 text-white shadow-teal-200">
+                                <span className="material-symbols-outlined text-[16px] font-black">location_on</span>
                             </div>
-                            <div className="space-y-1 text-left">
-                                <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest italic">Target Destination</p>
-                                <p className="text-2xl font-black text-primary italic uppercase tracking-tight text-left">가평 남이섬 선착장</p>
+                            <div className="flex flex-col text-left">
+                                <p className="text-[10px] font-black uppercase tracking-widest mb-1 text-teal-600 text-left">
+                                    출발지 (Departure Execution)
+                                </p>
+                                <h4 className="text-lg font-black tracking-tight text-on-surface text-left">
+                                    서울역 (1호선)
+                                </h4>
+                            </div>
+                        </div>
+
+                        <div className="relative pl-12 text-left">
+                            <div className="absolute left-0 top-1.5 w-8 h-8 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center bg-rose-500 text-white shadow-rose-200">
+                                <span className="material-symbols-outlined text-[16px] font-black">flag</span>
+                            </div>
+                            <div className="flex flex-col text-left">
+                                <p className="text-[10px] font-black uppercase tracking-widest mb-1 text-rose-500 text-left">
+                                    도착지 (Target Destination)
+                                </p>
+                                <h4 className="text-lg font-black tracking-tight text-on-surface text-left">
+                                    가평 남이섬 선착장
+                                </h4>
                             </div>
                         </div>
                     </div>

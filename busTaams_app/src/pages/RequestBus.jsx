@@ -107,15 +107,20 @@ const RequestBus = () => {
                             setArrDateTime(formatInputDt(data.END_DT));
 
                             const initialCounts = {};
+                            const typeCounters = {};
                             if (response.data) {
                                 response.data.forEach(bus => initialCounts[bus.code] = 0);
                             }
 
                             const initialQuotes = {};
                             if (data.buses && Array.isArray(data.buses)) {
-                                data.buses.forEach((b, idx) => {
-                                    initialCounts[b.BUS_TYPE_CD] = (initialCounts[b.BUS_TYPE_CD] || 0) + 1;
-                                    initialQuotes[idx] = b.reqAmt;
+                                data.buses.forEach((b) => {
+                                    const code = b.BUS_TYPE_CD;
+                                    initialCounts[code] = (initialCounts[code] || 0) + 1;
+                                    
+                                    const unitIdx = typeCounters[code] || 0;
+                                    initialQuotes[`${code}_${unitIdx}`] = b.reqAmt;
+                                    typeCounters[code] = unitIdx + 1;
                                 });
                             }
                             setBusCounts(initialCounts);
@@ -151,16 +156,17 @@ const RequestBus = () => {
     }, [id]);
 
 
-    const handleQuoteChange = (index, value) => {
+    const handleQuoteChange = (key, value) => {
         const numStr = value.replace(/[^0-9]/g, '');
         const num = numStr ? parseInt(numStr, 10) : 0;
-        setQuoteAmounts(prev => ({ ...prev, [index]: num }));
+        setQuoteAmounts(prev => ({ ...prev, [key]: num }));
     };
 
     const updateBusCount = (key, delta) => {
         setBusCounts(prev => {
-            const newVal = Math.max(0, (prev[key] || 0) + delta);
-            return { ...prev, [key]: newVal };
+            const currentCount = prev[key] || 0;
+            const newCount = Math.max(0, currentCount + delta);
+            return { ...prev, [key]: newCount };
         });
     };
 
@@ -335,8 +341,13 @@ const RequestBus = () => {
         }
     });
 
-    const grandTotal = selectedBuses.reduce((acc, bus, idx) => {
-        return acc + (quoteAmounts[idx] || 0);
+    const grandTotal = Object.keys(busCounts).reduce((acc, code) => {
+        const count = busCounts[code] || 0;
+        let sum = 0;
+        for (let i = 0; i < count; i++) {
+            sum += (quoteAmounts[`${code}_${i}`] || 0);
+        }
+        return acc + sum;
     }, 0);
 
     const handleRequestSubmit = async (e) => {
@@ -411,12 +422,21 @@ const RequestBus = () => {
                 endDt: arrDateTime,
                 tripTitle: tripName || `${depAddress.split(' ')[0]} 여행`,
                 passengerCnt: 1,
-                buses: selectedBuses.map((bus, idx) => ({
-                    busTypeCd: bus.code,
-                    tollsAmt: 100000,
-                    fuelCost: 150000,
-                    reqAmt: quoteAmounts[idx] || 0
-                })),
+                buses: (() => {
+                    const busesPayload = [];
+                    busTypes.forEach(bus => {
+                        const count = busCounts[bus.code] || 0;
+                        for (let i = 0; i < count; i++) {
+                            busesPayload.push({
+                                busTypeCd: bus.code,
+                                tollsAmt: 0,
+                                fuelCost: 0,
+                                reqAmt: quoteAmounts[`${bus.code}_${i}`] || 0
+                            });
+                        }
+                    });
+                    return busesPayload;
+                })(),
                 vias
             };
 
@@ -670,7 +690,7 @@ const RequestBus = () => {
                     {/* Right Side: The Form Canvas */}
                     <div className="col-span-12 lg:col-span-7">
                         <div className="bg-white rounded-2xl p-8 lg:p-12 shadow-2xl relative border border-slate-100">
-                            <form className="space-y-10 text-left">
+                            <form onSubmit={(e) => e.preventDefault()} className="space-y-10 text-left">
                                 <section>
                                     <div className="flex items-center gap-4 mb-8">
                                         <div className="w-1.5 h-8 bg-red-600 rounded-full"></div>
@@ -786,115 +806,89 @@ const RequestBus = () => {
 
                                     <div className="space-y-4">
                                         <h3 className="font-headline font-black text-[15px] text-teal-950/70 uppercase tracking-widest ml-2">버스 구분 표준화 (차종 선택)</h3>
-                                        <div className="grid grid-cols-1 gap-3">
-                                            {busTypes.map((bus) => (
-                                                <div key={bus.code} className="flex items-center justify-between p-5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-teal-600/30 hover:shadow-md transition-all duration-300">
-                                                    <div>
-                                                        <p className="font-headline font-bold text-teal-900">{bus.name}</p>
-                                                        <p className="text-[11px] text-slate-500 font-medium">{bus.description}</p>
+                                        <div className="grid grid-cols-1 gap-4">
+                                            {busTypes.map((bus) => {
+                                                const count = busCounts[bus.code] || 0;
+                                                return (
+                                                    <div key={bus.code} className="space-y-3">
+                                                        <div className="flex items-center justify-between p-5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-teal-600/30 hover:shadow-md transition-all duration-300">
+                                                            <div>
+                                                                <p className="font-headline font-bold text-teal-900">{bus.name}</p>
+                                                                <p className="text-[11px] text-slate-500 font-medium">{bus.description}</p>
+                                                            </div>
+                                                            <div className="flex items-center gap-3 bg-white border border-slate-100 rounded-xl p-1 shadow-sm">
+                                                                <button onClick={(e) => { e.preventDefault(); updateBusCount(bus.code, -1); }} className="w-8 h-8 flex items-center justify-center text-teal-700 hover:bg-slate-50 rounded-lg transition-colors" type="button"><span className="material-symbols-outlined text-lg">remove</span></button>
+                                                                <span className="w-6 text-center font-bold text-teal-900">{count}</span>
+                                                                <button onClick={(e) => { e.preventDefault(); updateBusCount(bus.code, 1); }} className="w-8 h-8 flex items-center justify-center text-teal-700 hover:bg-slate-50 rounded-lg transition-colors" type="button"><span className="material-symbols-outlined text-lg">add</span></button>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        {/* +,- 선택시 하단에 생성되는 기수별 고객 요청 금액 입력부 */}
+                                                        {count > 0 && (
+                                                            <div className="pl-6 border-l-2 border-teal-600/30 space-y-3 ml-4 animate-fade-in text-left">
+                                                                {Array.from({ length: count }).map((_, i) => {
+                                                                    const key = `${bus.code}_${i}`;
+                                                                    return (
+                                                                        <div key={key} className="bg-slate-50/50 rounded-xl p-4 border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span className="w-6 h-6 rounded-full bg-teal-800/10 flex items-center justify-center text-teal-800 font-bold text-xs">{String(i + 1).padStart(2, '0')}</span>
+                                                                                <span className="text-xs font-black text-slate-700">{bus.name} - {i + 1}호차</span>
+                                                                            </div>
+                                                                            <div className="flex-1 max-w-xs space-y-1">
+                                                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">고객 요청 금액</span>
+                                                                                <div className="flex items-center bg-white rounded-xl px-3 py-2 border border-slate-200 shadow-inner overflow-hidden">
+                                                                                    <span className="shrink-0 font-black text-sm text-teal-800 mr-1.5">₩</span>
+                                                                                    <input
+                                                                                        type="text"
+                                                                                        inputMode="numeric"
+                                                                                        value={quoteAmounts[key] !== undefined && quoteAmounts[key] !== 0 ? quoteAmounts[key].toLocaleString() : ''}
+                                                                                        onChange={(e) => handleQuoteChange(key, e.target.value)}
+                                                                                        onKeyDown={(e) => {
+                                                                                            if (e.key === 'Enter') {
+                                                                                                e.preventDefault();
+                                                                                                // 화면에 활성화된 모든 요금 인풋들을 순서대로 가져옴 (한글 주석)
+                                                                                                const inputs = Array.from(document.querySelectorAll('.quote-amount-input'));
+                                                                                                const index = inputs.indexOf(e.target);
+                                                                                                if (index !== -1 && index < inputs.length - 1) {
+                                                                                                    // 다음 인풋으로 포커스 이동 (한글 주석)
+                                                                                                    inputs[index + 1].focus();
+                                                                                                } else {
+                                                                                                    // 마지막 인풋이면 키보드를 내림 (한글 주석)
+                                                                                                    e.target.blur();
+                                                                                                }
+                                                                                            }
+                                                                                        }}
+                                                                                        className="quote-amount-input flex-1 min-w-0 w-full bg-transparent border-none focus:ring-0 text-teal-950 font-black text-right outline-none p-0 text-sm"
+                                                                                        placeholder="0"
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    <div className="flex items-center gap-3 bg-white border border-slate-100 rounded-xl p-1 shadow-sm">
-                                                        <button onClick={(e) => { e.preventDefault(); updateBusCount(bus.code, -1); }} className="w-8 h-8 flex items-center justify-center text-teal-700 hover:bg-slate-50 rounded-lg transition-colors" type="button"><span className="material-symbols-outlined text-lg">remove</span></button>
-                                                        <span className="w-6 text-center font-bold text-teal-900">{busCounts[bus.code] || 0}</span>
-                                                        <button onClick={(e) => { e.preventDefault(); updateBusCount(bus.code, 1); }} className="w-8 h-8 flex items-center justify-center text-teal-700 hover:bg-slate-50 rounded-lg transition-colors" type="button"><span className="material-symbols-outlined text-lg">add</span></button>
-                                                    </div>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 </section>
 
-                                {selectedBuses.length > 0 && (
-                                    <section className="bg-slate-50/50 rounded-2xl p-6 md:p-10 space-y-10 border border-slate-100">
-                                        <div className="flex items-center justify-between">
-                                            <div className="space-y-1">
-                                                <h3 className="font-headline font-black text-2xl text-teal-950">계산된 예상 청약 상세</h3>
-                                            </div>
-                                            <span className="px-4 py-2 rounded-full bg-white text-teal-800 text-[10px] font-extrabold uppercase tracking-widest border border-teal-800/10 shadow-sm">실시간 자동 업데이트</span>
-                                        </div>
-                                        <div className="space-y-6">
-                                            {selectedBuses.map((bus, idx) => (
-                                                <div key={`quote-${bus.id}-${idx}`} className="bg-white rounded-2xl p-8 shadow-sm border border-slate-100 space-y-8 animate-fade-in">
-                                                    <div className="flex justify-between items-center border-b border-slate-50 pb-6">
-                                                        <div className="flex items-center gap-4">
-                                                            <span className="w-10 h-10 rounded-full bg-teal-800/10 flex items-center justify-center text-teal-800 font-bold text-sm">{String(idx + 1).padStart(2, '0')}</span>
-                                                            <div>
-                                                                <p className="font-headline font-bold text-xl text-teal-950">{bus.name}</p>
-                                                                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Selected x 1 unit</p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="space-y-5 px-1 text-left">
-                                                        <div className="flex justify-between items-center text-[13px] text-slate-600 font-medium">
-                                                            <span>톨비 / 주차</span>
-                                                            <span className="font-bold text-teal-900">₩ 100,000</span>
-                                                        </div>
-                                                        <div className="flex justify-between items-center text-[13px] text-slate-600 font-medium">
-                                                            <span>유류비</span>
-                                                            <span className="font-bold text-teal-900">₩ 150,000</span>
-                                                        </div>
-                                                        <div className="flex justify-between items-center pt-5 border-t border-dashed border-slate-100">
-                                                            <span className="text-sm font-black text-teal-900 uppercase">총 예상 경비</span>
-                                                            <span className="font-black text-teal-900">₩ 250,000</span>
-                                                        </div>
-
-                                                        <div className="pt-6 space-y-3 border-t border-dashed border-slate-100">
-                                                            <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest block">
-                                                                고객 요청 금액
-                                                            </span>
-
-                                                            <div className="flex items-center bg-teal-50/50 rounded-2xl px-3 py-4 border border-teal-100 overflow-hidden">
-                                                                <span className="shrink-0 font-black text-lg sm:text-xl mr-2 text-teal-800">
-                                                                    ₩
-                                                                </span>
-
-                                                                <input
-                                                                    type="text"
-                                                                    inputMode="numeric"
-                                                                    value={quoteAmounts[idx] !== undefined && quoteAmounts[idx] !== 0 ? quoteAmounts[idx].toLocaleString() : ''}
-                                                                    onChange={(e) => handleQuoteChange(idx, e.target.value)}
-                                                                    className="
-                                                                        flex-1
-                                                                        min-w-0
-                                                                        w-full
-                                                                        bg-transparent
-                                                                        border-none
-                                                                        focus:ring-0
-                                                                        text-teal-950
-                                                                        font-black
-                                                                        text-[18px]
-                                                                        sm:text-[22px]
-                                                                        md:text-[28px]
-                                                                        leading-none
-                                                                        tracking-[-0.08em]
-                                                                        text-right
-                                                                        placeholder-teal-200
-                                                                        outline-none
-                                                                    "
-                                                                    placeholder="0"
-                                                                />
-                                                            </div>
-                                                        </div>
-
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        {/* Grand Total Section */}
-                                        <div className="pt-8 border-t border-teal-800/10">
-                                            <div className="flex flex-col gap-1 px-4">
-                                                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">총 예약 금액</p>
-                                                <div className="flex flex-wrap items-baseline gap-1.5">
-                                                    <span className="text-lg font-black text-teal-900/60">₩</span>
-                                                    <h4 className="font-headline font-black text-2xl sm:text-3xl tracking-tight text-teal-900">
-                                                        {grandTotal.toLocaleString()}
-                                                    </h4>
-                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-auto self-center">부가가치세 포함</span>
-                                                </div>
+                                {/* 총 예약 금액 표시 */}
+                                {grandTotal > 0 && (
+                                    <div className="pt-8 border-t border-teal-800/10">
+                                        <div className="flex flex-col gap-1 px-4 text-left">
+                                            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">총 예약 금액</p>
+                                            <div className="flex flex-wrap items-baseline gap-1.5">
+                                                <span className="text-lg font-black text-teal-900/60">₩</span>
+                                                <h4 className="font-headline font-black text-2xl sm:text-3xl tracking-tight text-teal-900">
+                                                    {grandTotal.toLocaleString()}
+                                                </h4>
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-auto self-center">부가가치세 포함</span>
                                             </div>
                                         </div>
-                                    </section>
+                                    </div>
                                 )}
 
                                 <div className="pt-8">

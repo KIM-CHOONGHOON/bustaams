@@ -74,6 +74,49 @@ const PastTripDetailCustomer = () => {
     
     const endNode = { type: 'END', addr: detail.waypoints?.find(w => w.type === 'END_NODE')?.addr || detail.endAddrMaster, time: detail.endDt };
 
+    // 한글 주석: 각 노드 데이터를 통합하여 순차적으로 렌더링하기 위한 routeData 배열 구성
+    const routeData = [];
+    routeData.push({
+        type: 'START',
+        title: '출발지',
+        addr: detail.startAddr,
+        time: `출발일시 ${detail.startDt}`
+    });
+
+    viaBeforeRound.forEach((via) => {
+        routeData.push({
+            type: 'WAYPOINT',
+            title: '경유지 (갈 때)',
+            addr: via.addr,
+            time: via.time
+        });
+    });
+
+    if (roundNode) {
+        routeData.push({
+            type: 'DEST',
+            title: '목적지',
+            addr: roundNode.addr,
+            time: roundNode.time
+        });
+    }
+
+    viaAfterRound.forEach((via) => {
+        routeData.push({
+            type: 'WAYPOINT',
+            title: '경유지 (올 때)',
+            addr: via.addr,
+            time: via.time
+        });
+    });
+
+    routeData.push({
+        type: 'END',
+        title: '도착지',
+        addr: endNode.addr,
+        time: `도착일시 ${detail.endDt}`
+    });
+
     // 결제 총액 (데이터가 없을 경우 0으로 처리)
     const totalPrice = Number(detail.price || 0);
 
@@ -170,66 +213,44 @@ const PastTripDetailCustomer = () => {
                         <span className="px-4 py-1.5 rounded-xl bg-[#E2E8F0] text-[#64748B] text-[11px] font-black uppercase tracking-wider">여행 완료</span>
                     </div>
                     
-                    <div className="bg-white rounded-2xl p-10 shadow-sm border border-slate-100 space-y-10 relative overflow-hidden">
-                        <div className="relative pl-10 space-y-12">
-                            {/* Vertical Line */}
-                            <div className="absolute left-[11px] top-2 bottom-2 w-[1px] bg-slate-100"></div>
-
-                            {/* START */}
-                            <div className="relative">
-                                <div className="absolute -left-[30px] top-1.5 w-4 h-4 rounded-full bg-[#0F766E] border-4 border-white shadow-md z-10"></div>
-                                <div className="space-y-1">
-                                    <p className="text-[11px] font-bold text-[#94A3B8]">출발지</p>
-                                    <p className="text-[17px] font-black tracking-tight">{detail.startAddr}</p>
-                                    <p className="text-[12px] text-[#94A3B8] font-medium">출발일시 {detail.startDt}</p>
-                                </div>
-                            </div>
-
-                            {/* 출발 경유지 */}
-                            {viaBeforeRound.map((via, idx) => (
-                                <div key={`via-before-${idx}`} className="relative">
-                                    <div className="absolute -left-[30px] top-1.5 w-3 h-3 rounded-full border-2 border-slate-200 bg-white z-10"></div>
-                                    <div className="space-y-1">
-                                        <p className="text-[11px] font-bold text-[#94A3B8]">경유지 (갈 때)</p>
-                                        <p className="text-[17px] font-black tracking-tight">{via.addr}</p>
-                                    </div>
-                                </div>
-                            ))}
-
-                            {/* ROUND TRIP */}
-                            {roundNode && (
-                                <div className="relative">
-                                    <div className="absolute -left-[30px] top-1.5 w-4 h-4 rounded-full border-2 border-slate-900 bg-white z-10"></div>
-                                    <div className="space-y-1">
-                                        <p className="text-[11px] font-bold text-[#94A3B8]">목적지</p>
-                                        <p className="text-[17px] font-black tracking-tight">{roundNode.addr}</p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* 도착 경유지 */}
-                            {viaAfterRound.map((via, idx) => (
-                                <div key={`via-after-${idx}`} className="relative">
-                                    <div className="absolute -left-[30px] top-1.5 w-3 h-3 rounded-full border-2 border-slate-200 bg-white z-10"></div>
-                                    <div className="space-y-1">
-                                        <p className="text-[11px] font-bold text-[#94A3B8]">경유지 (올 때)</p>
-                                        <p className="text-[17px] font-black tracking-tight">{via.addr}</p>
-                                    </div>
-                                </div>
-                            ))}
-
-                            {/* END */}
-                            <div className="relative">
-                                <div className="absolute -left-[30px] top-1.5 w-4 h-4 rounded-full border-2 border-[#0F766E] bg-white z-10"></div>
-                                <div className="space-y-1">
-                                    <p className="text-[11px] font-bold text-[#94A3B8]">도착지</p>
-                                    <p className="text-[17px] font-black tracking-tight">{endNode.addr}</p>
-                                    <p className="text-[12px] text-[#94A3B8] font-medium">도착일시 {detail.endDt}</p>
-                                </div>
-                            </div>
+                    {/* 한글 주석: ReservationDetailCustomer 스타일을 적용한 타임라인 카드 */}
+                    <div className="bg-white rounded-[3.5rem] p-12 shadow-2xl shadow-teal-900/[0.03] border border-slate-50 text-left">
+                        <div className="text-xl font-black tracking-tight border-b border-slate-50 pb-6 italic text-teal-700 flex items-center gap-2">
+                            <span className="material-symbols-outlined">route</span>
+                            전체 운행 경로
                         </div>
-
-
+                        <div className="mt-8 space-y-10 relative">
+                            <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-100"></div>
+                            {routeData.map((point, idx) => (
+                                <div key={idx} className="relative pl-12">
+                                    <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center ${
+                                        point.type === 'START' ? 'bg-teal-600 text-white shadow-teal-200' : 
+                                        point.type === 'END' ? 'bg-rose-500 text-white shadow-rose-200' : 
+                                        point.type === 'DEST' ? 'bg-indigo-600 text-white shadow-indigo-100' :
+                                        'bg-amber-400 text-white shadow-amber-100'
+                                    }`}>
+                                        <span className="material-symbols-outlined text-[16px] font-black">
+                                            {point.type === 'START' ? 'location_on' : 
+                                             point.type === 'END' ? 'flag' : 
+                                             point.type === 'DEST' ? 'near_me' : 'more_horiz'}
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-col text-left">
+                                        <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${
+                                            point.type === 'START' ? 'text-teal-600' : 
+                                            point.type === 'END' ? 'text-rose-500' : 
+                                            point.type === 'DEST' ? 'text-indigo-500' : 'text-amber-500'
+                                        }`}>
+                                            {point.title}
+                                        </p>
+                                        <h4 className="text-lg font-black tracking-tight text-on-surface text-left">
+                                            {point.addr}
+                                        </h4>
+                                        {point.time && <p className="text-xs text-slate-400 font-bold mt-1 opacity-70 italic text-left">{point.time}</p>}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </section>
 

@@ -222,7 +222,7 @@ const EstimateListCustomer = () => {
                 <section className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
                     <div className="md:col-span-8">
                         <p className="text-secondary font-bold tracking-[0.2em] text-xs mb-3 uppercase">Detailed Subscription</p>
-                        <h1 className="text-4xl md:text-6xl font-extrabold tracking-tighter text-on-surface leading-tight italic">
+                        <h1 className="text-3xl md:text-5xl font-extrabold tracking-tighter text-on-surface leading-tight italic">
                             <span className="text-primary">{tripSummary.title}</span> 여행
                         </h1>
                     </div>
@@ -246,35 +246,36 @@ const EstimateListCustomer = () => {
                                 <span className="material-symbols-outlined text-primary" style={{fontVariationSettings: "'FILL' 1"}}>route</span>
                                 여행 경로
                             </h2>
-                            <div className="space-y-0 relative">
-                                <div className="absolute left-[11px] top-4 bottom-4 w-0.5 bg-slate-100"></div>
+                            <div className="mt-8 space-y-10 relative">
+                                <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-100"></div>
                                 
                                 {tripSummary.fullRoute && tripSummary.fullRoute.map((step, idx) => (
-                                    <div key={idx} className="relative pl-12 pb-10 last:pb-0 group">
-                                        <div className={`absolute left-0 top-1 w-6 h-6 rounded-full border-4 border-white z-10 shadow-md transition-all group-hover:scale-125 flex items-center justify-center ${
-                                            step.type === 'START' ? 'bg-primary w-8 h-8 -left-1 -top-0' : 
-                                            step.type === 'END' ? 'bg-secondary w-8 h-8 -left-1 -top-0' : 
-                                            step.type === 'ROUND_TRIP' ? 'bg-teal-600 w-7 h-7 -left-0.5 top-0.5' : 'bg-slate-200'
+                                    <div key={idx} className="relative pl-12">
+                                        <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center ${
+                                            step.type === 'START' ? 'bg-teal-600 text-white shadow-teal-200' : 
+                                            step.type === 'END' ? 'bg-rose-500 text-white shadow-rose-200' : 
+                                            step.type === 'ROUND_TRIP' ? 'bg-indigo-600 text-white shadow-indigo-100' :
+                                            'bg-amber-400 text-white shadow-amber-100'
                                         }`}>
-                                            {(step.type === 'START' || step.type === 'END' || step.type === 'ROUND_TRIP') && (
-                                                <span className="material-symbols-outlined text-white text-[14px]">
-                                                    {step.type === 'START' ? 'location_on' : step.type === 'END' ? 'flag' : 'autorenew'}
-                                                </span>
-                                            )}
+                                            <span className="material-symbols-outlined text-[16px] font-black">
+                                                {step.type === 'START' ? 'location_on' : 
+                                                 step.type === 'END' ? 'flag' : 
+                                                 step.type === 'ROUND_TRIP' ? 'near_me' : 'more_horiz'}
+                                            </span>
                                         </div>
-                                        <div className="text-left">
-                                            <p className={`text-[10px] font-black uppercase tracking-widest mb-1 leading-none ${
-                                                step.type === 'START' ? 'text-primary' : 
-                                                step.type === 'END' ? 'text-secondary' : 
-                                                step.type === 'ROUND_TRIP' ? 'text-teal-600' : 'text-slate-300'
+                                        <div className="flex flex-col text-left">
+                                            <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${
+                                                step.type === 'START' ? 'text-teal-600' : 
+                                                step.type === 'END' ? 'text-rose-500' : 
+                                                step.type === 'ROUND_TRIP' ? 'text-indigo-500' : 'text-amber-500'
                                             }`}>
                                                 {step.title}
                                             </p>
-                                            <h3 className={`font-black tracking-tight ${
-                                                (step.type === 'START' || step.type === 'END' || step.type === 'ROUND_TRIP') ? 'text-xl text-slate-900' : 'text-lg text-slate-500'
-                                            }`}>{step.addr}</h3>
+                                            <h4 className="text-lg font-black tracking-tight text-on-surface text-left">
+                                                {step.addr}
+                                            </h4>
                                             {step.time && (
-                                                <p className="text-xs text-on-surface-variant font-bold mt-2 bg-slate-50 inline-block px-3 py-1 rounded-xl italic">
+                                                <p className="text-xs text-slate-400 font-bold mt-1 opacity-70 italic text-left">
                                                     {step.time}
                                                 </p>
                                             )}

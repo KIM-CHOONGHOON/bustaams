@@ -296,59 +296,53 @@ const UpcomingTripDetailDriver = () => {
                     </div>
                 </div>
 
-                <section className="mb-12">
-                    <h3 className="text-2xl font-black text-[#1D3557] mb-8">상세 여행 안내</h3>
-                    <div className="space-y-6 relative ml-4 border-l border-gray-100 pl-8">
-                        {trip.waypoints.map((wp, i, arr) => {
-                            const roundIdx = arr.findIndex(w => w.type === 'ROUND');
-
-                            let label = '경유';
-                            let badgeColor = 'bg-[#FFF4E5] text-[#FFA000]';
-
-                            if (wp.type === 'START') {
-                                label = '출발';
-                                badgeColor = 'bg-[#D1F7EC] text-[#004D40]';
-                            } else if (wp.type === 'START_WAY') {
-                                label = '출발 경유지';
-                                badgeColor = 'bg-gray-100 text-gray-600';
-                            } else if (wp.type === 'ROUND') {
-                                label = '목적지';
-                                badgeColor = 'bg-[#E3F2FD] text-[#1976D2]';
-                            } else if (wp.type === 'END_WAY') {
-                                label = '도착 경유지';
-                                badgeColor = 'bg-gray-100 text-gray-600';
-                            } else if (wp.type === 'END') {
-                                label = '도착지';
-                                badgeColor = 'bg-[#FFE2D9] text-[#E64A19]';
-                            }
+                {/* 한글 주석: ReservationDetailCustomer 스타일을 따르는 기사용 상세 경로 타임라인 */}
+                <section className="bg-white rounded-[3.5rem] p-12 shadow-2xl shadow-teal-900/[0.03] border border-slate-50 text-left mb-12">
+                    <div className="text-xl font-black tracking-tight border-b border-slate-50 pb-6 italic text-teal-700 flex items-center gap-2">
+                        <span className="material-symbols-outlined">route</span>
+                        전체 운행 경로
+                    </div>
+                    <div className="mt-8 space-y-10 relative">
+                        <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-100"></div>
+                        {trip.waypoints.map((wp, idx) => {
+                            const isStart = wp.type === 'START';
+                            const isEnd = wp.type === 'END';
+                            const isDest = wp.type === 'ROUND';
+                            const title = isStart ? '출발지' : isEnd ? '도착지' : isDest ? '목적지' : (wp.type === 'START_WAY' ? '출발 경유지' : '도착 경유지');
+                            const pointType = isStart ? 'START' : isEnd ? 'END' : isDest ? 'DEST' : 'WAYPOINT';
 
                             return (
-                                <div key={i} className="relative mb-10">
-                                    {/* 날짜 라벨 (왼쪽 바깥쪽) */}
-                                    <div className="absolute -left-[7.5rem] top-0 w-24 text-right">
-                                        <p className="text-[10px] font-bold text-gray-300 italic">{trip.startDate.split(' ')[0].substring(5)}</p>
+                                <div key={idx} className="relative pl-12">
+                                    <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center ${
+                                        pointType === 'START' ? 'bg-teal-600 text-white shadow-teal-200' : 
+                                        pointType === 'END' ? 'bg-rose-500 text-white shadow-rose-200' : 
+                                        pointType === 'DEST' ? 'bg-indigo-600 text-white shadow-indigo-100' :
+                                        'bg-amber-400 text-white shadow-amber-100'
+                                    }`}>
+                                        <span className="material-symbols-outlined text-[16px] font-black">
+                                            {pointType === 'START' ? 'location_on' : 
+                                             pointType === 'END' ? 'flag' : 
+                                             pointType === 'DEST' ? 'near_me' : 'more_horiz'}
+                                        </span>
                                     </div>
-
-                                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-55">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <span className={`px-3 py-1 rounded-xl text-[10px] font-bold ${badgeColor}`}>
-                                                {label}
-                                            </span>
-                                            <span className="text-[10px] font-bold text-gray-300">
-                                                {wp.type === 'START' ? '운행 시작' : wp.type === 'END' ? '운행 종료' : '경로 확인'}
-                                            </span>
-                                        </div>
-                                        <h4 className="text-lg font-black text-[#1D3557] mb-2">{wp.addr}</h4>
-                                        <p className="text-xs text-gray-400 leading-relaxed font-medium">
-                                            {wp.type === 'START' ? '승객 명단 확인 및 수하물 적재를 위해 최소 20분 전 대기 권장합니다.' :
-                                                wp.type === 'END' ? '최종 목적지 하차 및 차량 내부 유실물 확인 후 운행 종료 보고 바랍니다.' :
-                                                    wp.type === 'ROUND' ? '목적지에서의 대기 시간 및 집결 시간을 다시 한번 확인해 주세요.' :
-                                                        '안전한 승하차를 위해 주변 환경을 확인하고 정차해 주세요.'}
+                                    <div className="flex flex-col text-left">
+                                        <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${
+                                            pointType === 'START' ? 'text-teal-600' : 
+                                            pointType === 'END' ? 'text-rose-500' : 
+                                            pointType === 'DEST' ? 'text-indigo-500' : 'text-amber-500'
+                                        }`}>
+                                            {title}
+                                        </p>
+                                        <h4 className="text-lg font-black tracking-tight text-on-surface text-left">
+                                            {wp.addr}
+                                        </h4>
+                                        <p className="text-xs text-slate-400 font-bold mt-1 opacity-70 italic text-left">
+                                            {isStart ? '승객 명단 확인 및 수하물 적재를 위해 최소 20분 전 대기 권장합니다.' :
+                                             isEnd ? '최종 목적지 하차 및 차량 내부 유실물 확인 후 운행 종료 보고 바랍니다.' :
+                                             isDest ? '목적지에서의 대기 시간 및 집결 시간을 다시 한번 확인해 주세요.' :
+                                             '안전한 승하차를 위해 주변 환경을 확인하고 정차해 주세요.'}
                                         </p>
                                     </div>
-
-                                    {/* 타임라인 점 */}
-                                    <div className={`absolute -left-[2.35rem] top-8 w-3 h-3 rounded-full border-2 bg-white ${wp.type === 'START' ? 'border-[#004D40]' : wp.type === 'END' ? 'border-[#E64A19]' : wp.type === 'ROUND' ? 'border-[#1976D2]' : 'border-gray-200'}`}></div>
                                 </div>
                             );
                         })}

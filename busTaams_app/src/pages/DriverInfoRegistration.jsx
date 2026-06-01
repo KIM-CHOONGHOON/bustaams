@@ -16,11 +16,32 @@ const TERMS_CONTENTS = {
     marketing: `본 동의서는 (주)청솔테크(이하 “회사”)가 운영하는 플랫폼 “버스타암스(BUSTAAMS)”에서 제공하는 서비스의 홍보, 이벤트, 맞춤형 정보 제공을 위해 이용자의 개인정보를 수집 및 활용하는 것에 대한 동의를 구하는 내용입니다.\n\n1. 수집 및 이용 목적\n회사는 수집한 개인정보를 다음의 목적을 위해 활용합니다.\n• 공통: 신규 서비스 홍보 및 이벤트 정보 안내, 맞춤형 혜택 제공, 마케팅 전략 수립 및 통계 분석\n• 기사 회원: 운행 관련 프로모션, 차량 관리 서비스 안내, 제휴 서비스 홍보\n• 여행 회원: 여행 상품 추천, 할인 쿠폰 제공, 지역 축제 및 행사 정보 안내\n\n2. 수집 항목\n• 이름, 휴대전화번호, 이메일, 주소, 서비스 이용 기록, 접속 로그\n\n3. 보유 및 이용 기간\n• 회원 탈퇴 시 또는 동의 철회 시까지\n(단, 관련 법령에 의해 보존이 필요한 경우 해당 기간까지 보관)\n\n4. 동의 거부 권리 및 불이익\n• 귀하는 본 마케팅 정보 활용 동의를 거부할 권리가 있습니다.\n• 거부 시에도 버스타암스의 기본 서비스(예약, 운행 등) 이용에는 제한이 없으나, 이벤트 참여 및 맞춤형 혜택 안내를 받지 못할 수 있습니다.`
 };
 
+// 한글 주석: 운전면허증 번호 자동 포맷팅 헬퍼 함수 (00-00-000000-00)
+const formatLicenseNo = (value) => {
+    if (!value) return '';
+    const clean = value.replace(/[^0-9]/g, '').slice(0, 12);
+    let formatted = '';
+    if (clean.length > 0) {
+        formatted += clean.substring(0, 2);
+    }
+    if (clean.length > 2) {
+        formatted += '-' + clean.substring(2, 4);
+    }
+    if (clean.length > 4) {
+        formatted += '-' + clean.substring(4, 10);
+    }
+    if (clean.length > 10) {
+        formatted += '-' + clean.substring(10, 12);
+    }
+    return formatted;
+};
+
 const DriverInfoRegistration = () => {
     const navigate = useNavigate();
     // 공용 업로드용 Ref 및 상태 선언
     const commonAlbumInputRef = useRef(null); // 공용 앨범 선택 Ref
     const commonCameraInputRef = useRef(null); // 공용 카메라 촬영 Ref
+    const residentNoBackRef = useRef(null); // 주민등록번호 뒷자리 Ref
     const [showPhotoBottomSheet, setShowPhotoBottomSheet] = useState(false); // 바텀 시트 노출 상태
     const [activeUploadType, setActiveUploadType] = useState(null); // 현재 업로드 중인 항목 ('profileImg' | 'licenseImg' | 'busLicenseImg' | 'careerCertImg')
 
@@ -32,7 +53,8 @@ const DriverInfoRegistration = () => {
     const [formData, setFormData] = useState({
         userNm: '',
         hpNo: '',
-        residentNo: '',
+        residentNoFront: '',
+        residentNoBack: '',
         zipcode: '',
         address: '',
         detailAddress: '',
@@ -108,11 +130,32 @@ const DriverInfoRegistration = () => {
                 const res = await getDriverProfile();
                 if (res?.success && res.data) {
                     const { user, driver } = res.data;
+                    const rawRrn = driver?.residentNo || '';
+                    let rFront = '';
+                    let rBack = '';
+                    if (rawRrn) {
+                        const cleaned = rawRrn.replace(/[^0-9*]/g, '');
+                        if (cleaned.length >= 13) {
+                            rFront = cleaned.substring(0, 6);
+                            rBack = cleaned.substring(6, 13);
+                        } else if (rawRrn.includes('-')) {
+                            const parts = rawRrn.split('-');
+                            if (parts[0] && parts[1]) {
+                                rFront = parts[0];
+                                rBack = parts[1];
+                            }
+                        } else {
+                            rFront = rawRrn.substring(0, 6);
+                            rBack = rawRrn.substring(6);
+                        }
+                    }
+
                     setFormData(prev => ({
                         ...prev,
                         userNm: user?.name || '',
                         hpNo: user?.phone || '',
-                        residentNo: driver?.residentNo || '',
+                        residentNoFront: rFront,
+                        residentNoBack: rBack,
                         zipcode: driver?.zipcode || '',
                         address: driver?.address || '',
                         detailAddress: driver?.detailAddress || '',
@@ -280,7 +323,8 @@ const DriverInfoRegistration = () => {
     };
 
     const handleSubmit = async () => {
-        if (!validateRRN(formData.residentNo)) {
+        const combinedRrn = `${formData.residentNoFront}-${formData.residentNoBack}`;
+        if (!validateRRN(combinedRrn)) {
             notify.error('입력 오류', '유효하지 않은 주민등록번호입니다.');
             return;
         }
@@ -325,7 +369,7 @@ const DriverInfoRegistration = () => {
             if (formData.hpNo !== originalPhone) {
                 data.append('firebaseToken', idToken);
             }
-            data.append('residentNo', formData.residentNo);
+            data.append('residentNo', `${formData.residentNoFront}-${formData.residentNoBack}`);
             data.append('zipcode', formData.zipcode);
             data.append('address', formData.address);
             data.append('detailAddress', formData.detailAddress);
@@ -348,7 +392,47 @@ const DriverInfoRegistration = () => {
 
             const res = await updateDriverProfile(data);
             if (res.success) {
-                notify.success('저장 완료', '기사 정보 등록이 완료되었습니다.');
+                if (res.warning) {
+                    await Swal.fire({
+                        title: `<div class="text-left"><p class="text-[10px] text-teal-600 font-bold uppercase tracking-widest mb-1">자격 확인 안내</p><h2 class="text-xl font-black text-teal-900">자격 정보 검증 안내</h2></div>`,
+                        html: `
+                            <div class="text-left mt-4 font-body">
+                                <div class="bg-amber-50 p-4 rounded-xl border border-amber-200">
+                                    <p class="text-sm text-amber-900 leading-relaxed font-semibold">
+                                        ${res.warning}
+                                    </p>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-3 ml-1 font-medium">
+                                    * 입력하신 면허 및 자격 정보는 정상 저장되었습니다. 운영팀이 수동으로 최종 승인을 진행할 예정입니다.
+                                </p>
+                            </div>
+                        `,
+                        showConfirmButton: true,
+                        confirmButtonText: '확인',
+                        confirmButtonColor: '#004e47',
+                        customClass: {
+                            popup: 'rounded-[2rem] p-6 sm:p-8 border-none shadow-2xl',
+                            actions: 'w-full flex justify-center mt-6',
+                            confirmButton: `
+                                !w-[200px]
+                                !h-12
+                                rounded-xl
+                                font-bold
+                                text-base
+                                bg-teal-700
+                                text-white
+                                flex
+                                items-center
+                                justify-center
+                                shadow-lg
+                                border-0
+                            `
+                        },
+                        buttonsStyling: false
+                    });
+                } else {
+                    notify.success('저장 완료', '기사 정보 등록이 완료되었습니다.');
+                }
                 navigate('/driver-dashboard');
             }
         } catch (err) {
@@ -462,7 +546,37 @@ const DriverInfoRegistration = () => {
                                 </div>
                                 <div className="space-y-2">
                                     <label className="font-headline font-bold text-sm text-[#191c1e] ml-1">주민등록번호</label>
-                                    <input name="residentNo" value={formData.residentNo} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-6 py-4 focus:ring-2 focus:ring-[#004e47]/20 transition-all text-[#191c1e] placeholder:text-[#6e7977]" placeholder="YYMMDD-*******" />
+                                    <div className="flex items-center gap-3">
+                                        <input 
+                                            name="residentNoFront" 
+                                            value={formData.residentNoFront} 
+                                            onChange={(e) => {
+                                                const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
+                                                setFormData(prev => ({ ...prev, residentNoFront: val }));
+                                                if (val.length === 6 && residentNoBackRef.current) {
+                                                    residentNoBackRef.current.focus();
+                                                }
+                                            }} 
+                                            maxLength="6"
+                                            pattern="[0-9]*"
+                                            inputMode="numeric"
+                                            className="w-1/2 bg-[#e6e8ea] border-none rounded-xl px-6 py-4 focus:ring-2 focus:ring-[#004e47]/20 transition-all text-[#191c1e] placeholder:text-[#6e7977] text-center" 
+                                            placeholder="YYMMDD" 
+                                        />
+                                        <span className="text-[#3e4947] font-bold">-</span>
+                                        <input 
+                                            ref={residentNoBackRef}
+                                            name="residentNoBack" 
+                                            value={formData.residentNoBack} 
+                                            onChange={(e) => {
+                                                const val = e.target.value.replace(/[^0-9*]/g, '').slice(0, 7);
+                                                setFormData(prev => ({ ...prev, residentNoBack: val }));
+                                            }} 
+                                            maxLength="7"
+                                            className="w-1/2 bg-[#e6e8ea] border-none rounded-xl px-6 py-4 focus:ring-2 focus:ring-[#004e47]/20 transition-all text-[#191c1e] placeholder:text-[#6e7977] text-center" 
+                                            placeholder="C******" 
+                                        />
+                                    </div>
                                 </div>
                                 <div className="space-y-4 md:col-span-2">
                                     <label className="font-headline font-bold text-sm text-[#191c1e] ml-1">성별 구분</label>
@@ -558,7 +672,17 @@ const DriverInfoRegistration = () => {
                                 </div>
                                 <div className="space-y-2">
                                     <label className="font-headline font-bold text-sm text-[#191c1e] ml-1">면허번호</label>
-                                    <input name="licenseNo" value={formData.licenseNo} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-6 py-4 text-[#191c1e]" placeholder="00-00-000000-00" />
+                                    <input 
+                                        name="licenseNo" 
+                                        value={formData.licenseNo} 
+                                        onChange={(e) => {
+                                            const formatted = formatLicenseNo(e.target.value);
+                                            setFormData(prev => ({ ...prev, licenseNo: formatted }));
+                                        }} 
+                                        maxLength="15"
+                                        className="w-full bg-[#e6e8ea] border-none rounded-xl px-6 py-4 text-[#191c1e]" 
+                                        placeholder="00-00-000000-00" 
+                                    />
                                 </div>
                                 <div className="space-y-2">
                                     <label className="font-headline font-bold text-sm text-[#191c1e] ml-1">면허 발급일</label>

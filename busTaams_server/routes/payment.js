@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const axios = require('axios');
 const iconv = require('iconv-lite');
+const { getCurrentYyyyMm } = require('../lib/loginPayload');
 const router = express.Router();
 
 // 이니시스 설정 (.env에서 가져옴)
@@ -91,6 +92,44 @@ module.exports = function createPaymentRouter(pool, app) {
                 if (busStats[0].total > 0 && busStats[0].total === busStats[0].confirmed) {
                     await connection.execute('UPDATE TB_AUCTION_REQ SET DATA_STAT = "CONFIRM", MOD_DT = NOW() WHERE REQ_ID = ?', [reqId]);
                 }
+
+                // [추가] 기사의 월 사용건수(USE_CNT)를 1 증가시키고 잔여 건수(REMAINING_CNT)는 9999로 설정/유지 (한글 주석)
+                const yyyyMM = getCurrentYyyyMm();
+                await connection.execute(
+                    `INSERT INTO TB_MOM_MEMBER (
+                        CUST_ID, YYYYMM, FEE_POLICY, BASIC_CNT, USE_CNT, REMAINING_CNT, REG_DT, REG_ID, MOD_DT, MOD_ID
+                     ) VALUES (?, ?, ?, 9999, 1, 9999, NOW(), ?, NOW(), ?)
+                     ON DUPLICATE KEY UPDATE
+                        USE_CNT = USE_CNT + 1,
+                        REMAINING_CNT = 9999,
+                        MOD_DT = NOW(),
+                        MOD_ID = ?`,
+                    [driverId, yyyyMM, feePolicy || 'DRIVER', driverId, driverId, driverId]
+                );
+
+                // [알림 발송] 비동기 처리 (한글 주석)
+                (async () => {
+                    try {
+                        const [reqInfo] = await pool.execute('SELECT TRIP_TITLE FROM TB_AUCTION_REQ WHERE REQ_ID = ?', [reqId]);
+                        if (reqInfo.length > 0) {
+                            const tripTitle = reqInfo[0].TRIP_TITLE;
+                            const { sendNotification } = require('../services/notificationService');
+                            const title = '[예약 확정] 결제가 완료되어 예약이 확정되었습니다.';
+                            const body = `여정: ${tripTitle}\n고객의 결제가 완료되어 최종 예약 확정되었습니다. 일정을 확인해 주세요.`;
+                            const link = `/estimate-detail-driver/${reqId}`;
+
+                            await sendNotification(pool, {
+                                custId: driverId,
+                                title,
+                                body,
+                                link,
+                                type: 'SYSTEM'
+                            });
+                        }
+                    } catch (err) {
+                        console.error(`[Notification] 결제 완료 알림 발송 실패 (기사 ID: ${driverId}):`, err);
+                    }
+                })();
             }
         } else if (type === 'REQ') {
             // 전체 승인 로직 (reqId)
@@ -110,6 +149,44 @@ module.exports = function createPaymentRouter(pool, app) {
                     [feePolicy, bid.RES_ID]
                 );
                 await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = "CONFIRM" WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?', [targetId, bid.REQ_BUS_SEQ]);
+
+                // [추가] 각 기사의 월 사용건수(USE_CNT)를 1 증가시키고 잔여 건수(REMAINING_CNT)는 9999로 설정/유지 (한글 주석)
+                const yyyyMM = getCurrentYyyyMm();
+                await connection.execute(
+                    `INSERT INTO TB_MOM_MEMBER (
+                        CUST_ID, YYYYMM, FEE_POLICY, BASIC_CNT, USE_CNT, REMAINING_CNT, REG_DT, REG_ID, MOD_DT, MOD_ID
+                     ) VALUES (?, ?, ?, 9999, 1, 9999, NOW(), ?, NOW(), ?)
+                     ON DUPLICATE KEY UPDATE
+                        USE_CNT = USE_CNT + 1,
+                        REMAINING_CNT = 9999,
+                        MOD_DT = NOW(),
+                        MOD_ID = ?`,
+                    [bid.DRIVER_ID, yyyyMM, feePolicy || 'DRIVER', bid.DRIVER_ID, bid.DRIVER_ID, bid.DRIVER_ID]
+                );
+
+                // [알림 발송] 비동기 처리 (한글 주석)
+                (async () => {
+                    try {
+                        const [reqInfo] = await pool.execute('SELECT TRIP_TITLE FROM TB_AUCTION_REQ WHERE REQ_ID = ?', [targetId]);
+                        if (reqInfo.length > 0) {
+                            const tripTitle = reqInfo[0].TRIP_TITLE;
+                            const { sendNotification } = require('../services/notificationService');
+                            const title = '[예약 확정] 결제가 완료되어 예약이 확정되었습니다.';
+                            const body = `여정: ${tripTitle}\n고객의 결제가 완료되어 최종 예약 확정되었습니다. 일정을 확인해 주세요.`;
+                            const link = `/estimate-detail-driver/${targetId}`;
+
+                            await sendNotification(pool, {
+                                custId: bid.DRIVER_ID,
+                                title,
+                                body,
+                                link,
+                                type: 'SYSTEM'
+                            });
+                        }
+                    } catch (err) {
+                        console.error(`[Notification] 결제 완료 알림 발송 실패 (기사 ID: ${bid.DRIVER_ID}):`, err);
+                    }
+                })();
             }
             await connection.execute('UPDATE TB_AUCTION_REQ SET DATA_STAT = "CONFIRM" WHERE REQ_ID = ?', [targetId]);
         }
@@ -119,14 +196,20 @@ module.exports = function createPaymentRouter(pool, app) {
         console.log('>>> [Payment Ready] Requested:', req.body);
         try {
             let { price, goodname, buyername, buyertel, buyeremail, resId, reqId } = req.body;
-            // price = 1000; // 실제 금액 사용을 위해 하드코딩 주석 처리 또는 제거
 
             if (!price) {
                 console.warn('>>> [Payment Ready] Missing price');
                 return res.status(400).json({ error: '결제 금액(price)이 필요합니다.' });
             }
 
-            const timestamp = new Date().getTime();
+            // [안전장치] 테스트 모드일 경우 결제 금액을 1,000원으로 강제 고정 (한글 주석)
+            let cleanAmount = String(price).replace(/[^0-9]/g, '');
+            if (MID === 'INIpayTest') {
+                console.log(`[PAY_SAFETY_V2] Test mode detected. Forcing amount from ${cleanAmount} to 1000 KRW.`);
+                cleanAmount = '1000';
+            }
+
+            const timestamp = String(new Date().getTime());
             
             // 주문번호(oid) 생성: 결제 대상 정보를 포함하여 생성
             let oid = '';
@@ -138,18 +221,20 @@ module.exports = function createPaymentRouter(pool, app) {
                 oid = `BUS_PAY_${timestamp}`;
             }
 
-            console.log(`>>> [Payment Ready] Generated OID: ${oid}, Price: ${price}`);
+            console.log(`>>> [Payment Ready] Generated OID: ${oid}, Price: ${cleanAmount}`);
 
             // Signature 생성: SHA256(oid=...&price=...&timestamp=...)
-            const signatureStr = `oid=${oid}&price=${price}&timestamp=${timestamp}`;
+            const signatureStr = `oid=${oid}&price=${cleanAmount}&timestamp=${timestamp}`;
             const signature = crypto.createHash('sha256')
-                .update(signatureStr)
-                .digest('hex');
+                .update(signatureStr, 'utf8')
+                .digest('hex')
+                .toUpperCase(); // 대문자 변환 (한글 주석)
 
             // verification용 mKey 생성: SHA256(signKey)
             const mKey = crypto.createHash('sha256')
-                .update(SIGN_KEY)
-                .digest('hex');
+                .update(SIGN_KEY, 'utf8')
+                .digest('hex')
+                .toUpperCase(); // 대문자 변환 (한글 주석)
 
             const host = req.get('x-forwarded-host') || req.get('host');
             const protocol = req.get('x-forwarded-proto') || req.protocol;
@@ -159,7 +244,8 @@ module.exports = function createPaymentRouter(pool, app) {
             const responseData = {
                 mid: MID,
                 oid,
-                price,
+                price: cleanAmount,
+                amount: cleanAmount,
                 timestamp,
                 signature,
                 mKey,
@@ -178,11 +264,7 @@ module.exports = function createPaymentRouter(pool, app) {
         }
     });
 
-    /**
-     * POST /api/payment/mobile-return
-     * 이니시스 인증 완료 후 POST 방식으로 리다이렉트되는 경로 (P_NEXT_URL)
-     */
-    router.post('/mobile-return', async (req, res) => {
+    const returnHandler = async (req, res) => {
         console.log('>>> [Payment Return] Body:', req.body);
         
         // 헬퍼: HTML 응답 생성 (프론트엔드로 리다이렉트)
@@ -279,7 +361,7 @@ module.exports = function createPaymentRouter(pool, app) {
                         let redirectPath = '/customer-dashboard';
                         
                         if (type === 'REQ') {
-                            redirectPath = `/customer/approval-list?reqId=${targetId}&payResult=success`;
+                            redirectPath = `/approval-list?reqId=${targetId}&payResult=success`; // 404 수정 (한글 주석)
                         } else if (type === 'RES') {
                             // 단건의 경우 해당 reqId를 찾아야 하므로 일단 대시보드로 보내거나 상세로 보냄
                             redirectPath = `/customer-dashboard?payResult=success&resId=${targetId}`;
@@ -341,7 +423,7 @@ module.exports = function createPaymentRouter(pool, app) {
                     const parts = oid.split('_');
                     const targetId = parts[2];
                     const redirectPath = parts[1] === 'REQ' 
-                        ? `/customer/approval-list?reqId=${targetId}&payResult=success`
+                        ? `/approval-list?reqId=${targetId}&payResult=success` // 404 수정 (한글 주석)
                         : `/customer-dashboard?payResult=success`;
 
                     sendHtmlResponse('결제가 성공적으로 완료되었습니다.', redirectPath);
@@ -359,7 +441,10 @@ module.exports = function createPaymentRouter(pool, app) {
             console.error('PC Approval Critical Error:', err);
             res.status(500).send('결제 승인 처리 중 오류가 발생했습니다.');
         }
-    });
+    };
+
+    router.post('/mobile-return', returnHandler);
+    router.post('/return', returnHandler);
 
     return router;
 };

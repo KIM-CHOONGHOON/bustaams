@@ -9,6 +9,7 @@ const path = require('path');
 const fs = require('fs');
 const { registerBusDriverPaymentCard } = require('../lib/busDriverCreditCardRegistration');
 const { sendNotification } = require('../services/notificationService');
+const { runDriverVerificationsForProfileSetup } = require('../driverVerification');
 
 const JWT_SECRET_KEY = process.env.JWT_SECRET || 'bustaams-dev-secret-key-2026';
 
@@ -414,12 +415,28 @@ router.get('/profile', authenticateToken, async (req, res) => {
         // DB의 DRIVER_GENERAL 스펠링을 프론트엔드의 DRIVER_GENNERAL과 매핑 (한글 주석)
         const pendingPolicy = pendingPolicyRaw === 'DRIVER_GENERAL' ? 'DRIVER_GENNERAL' : pendingPolicyRaw;
 
+        const plainRrn = userData.RESIDENT_NO_ENC ? decrypt(userData.RESIDENT_NO_ENC) : '';
+        let residentNoDisplay = '';
+        if (plainRrn) {
+            const cleaned = plainRrn.replace(/[^0-9]/g, '');
+            if (cleaned.length === 13) {
+                residentNoDisplay = `${cleaned.substring(0, 6)}-${cleaned.substring(6, 7)}******`;
+            } else if (plainRrn.includes('-')) {
+                const parts = plainRrn.split('-');
+                if (parts[0].length === 6 && parts[1].length >= 1) {
+                    residentNoDisplay = `${parts[0]}-${parts[1].charAt(0)}******`;
+                }
+            } else {
+                residentNoDisplay = plainRrn;
+            }
+        }
+
         const driverData = {
             sex: 'M',
             addrType: 'HOME',
             selfIntro: '',
             ...(detailRows.length > 0 ? detailRows[0] : {}),
-            residentNo: userData.RESIDENT_NO_ENC ? decrypt(userData.RESIDENT_NO_ENC) : '',
+            residentNo: residentNoDisplay,
             profileImg: userData.userImage,
             pendingPolicy: pendingPolicy // 다음달 변경 신청된 요금제 (없으면 null)
         };
@@ -549,6 +566,12 @@ router.get('/profile', authenticateToken, async (req, res) => {
 // 주민등록번호 유효성 검증 함수
 const validateRRN = (rrn) => {
     if (!rrn) return false;
+    
+    // 한글 주석: 마스킹된 주민등록번호는 바로 통과시킴
+    if (/^\d{6}-?[0-9]\*{6}$/.test(rrn)) {
+        return true;
+    }
+    
     const clean = rrn.replace(/[^0-9]/g, '');
     if (clean.length !== 13) return false;
     const digits = clean.split('').map(Number);
@@ -580,33 +603,71 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
             sex, addrType, selfIntro, firebaseToken, marketing
         } = req.body;
 
+        let verifyWarning = null;
+
         // 주민등록번호 유효성 검증
         if (!validateRRN(residentNo)) {
             throw new Error('유효하지 않은 주민등록번호입니다.');
         }
 
-        // 공백 및 하이픈 제거
-        const cleanResidentNo = residentNo.replace(/[^0-9]/g, '');
+        const userId = req.user.userId;
 
-        // 0. 중복 체크 (암호화된 컬럼이므로 전체 기사를 조회하여 복호화 비교)
-        // 본인(userId)은 제외하고 검색
-        const [allDrivers] = await connection.execute(
-            'SELECT USER_ID, RESIDENT_NO_ENC FROM TB_USER WHERE USER_TYPE = "DRIVER" AND RESIDENT_NO_ENC IS NOT NULL AND USER_ID != ?',
-            [req.user.userId]
-        );
+        // 0. CUST_ID, 기존 프로필 파일 ID 및 기존 주민번호 조회
+        const [uRows] = await connection.execute('SELECT CUST_ID, PROFILE_FILE_ID, HP_NO, RESIDENT_NO_ENC FROM TB_USER WHERE USER_ID = ?', [userId]);
+        if (uRows.length === 0) throw new Error('사용자를 찾을 수 없습니다.');
+        const { CUST_ID: custId, PROFILE_FILE_ID: existingProfileFileId, HP_NO: existingPhone, RESIDENT_NO_ENC: existingResidentNoEnc } = uRows[0];
 
-        for (const driver of allDrivers) {
-            try {
-                const decrypted = decrypt(driver.RESIDENT_NO_ENC);
-                if (decrypted && decrypted.replace(/[^0-9]/g, '') === cleanResidentNo) {
-                    throw new Error(`이미 다른 계정에서 사용 중인 주민등록번호입니다. (ID: ${driver.USER_ID})`);
+        let finalResidentNoEnc = existingResidentNoEnc;
+
+        // 한글 주석: 만약 전달받은 주민등록번호가 마스킹된 것이 아니라면(새로 수정했다면) 중복 체크 수행 및 암호화 대상 업데이트
+        if (!/^\d{6}-?[0-9]\*{6}$/.test(residentNo)) {
+            const cleanResidentNo = residentNo.replace(/[^0-9]/g, '');
+
+            // 중복 체크 (암호화된 컬럼이므로 전체 기사를 조회하여 복호화 비교)
+            // 본인(userId)은 제외하고 검색
+            const [allDrivers] = await connection.execute(
+                'SELECT USER_ID, RESIDENT_NO_ENC FROM TB_USER WHERE USER_TYPE = "DRIVER" AND RESIDENT_NO_ENC IS NOT NULL AND USER_ID != ?',
+                [userId]
+            );
+
+            for (const driver of allDrivers) {
+                try {
+                    const decrypted = decrypt(driver.RESIDENT_NO_ENC);
+                    if (decrypted && decrypted.replace(/[^0-9]/g, '') === cleanResidentNo) {
+                        throw new Error(`이미 다른 계정에서 사용 중인 주민등록번호입니다. (ID: ${driver.USER_ID})`);
+                    }
+                } catch (err) {
+                    console.error(`[Profile Update] RRN Decrypt Error for user ${driver.USER_ID}:`, err);
                 }
-            } catch (err) {
-                console.error(`[Profile Update] RRN Decrypt Error for user ${driver.USER_ID}:`, err);
             }
+
+            finalResidentNoEnc = encrypt(residentNo);
         }
 
-        // 필수 필드 검증 (면허 발급일 및 자격 취득일)
+        // 한글 주석: 운수종사자 자격증 및 면허증 진위여부 검증 호출 (실패 시에도 저장은 허용)
+        try {
+            const extVerify = await runDriverVerificationsForProfileSetup({
+                driverName: name,
+                rrn: residentNo,
+                licenseNo: licenseNo,
+                licenseSerialNo: '',
+                qualCertNo: busLicenseNo,
+                licenseType: licenseType,
+                licenseIssueDt: licenseIssueDt,
+                licenseExpiryDt: null,
+                existingRow: null
+            });
+
+            if (!extVerify.ok) {
+                verifyWarning = extVerify.message || '운수종사자 자격증 진위 확인에 실패했습니다.';
+                console.warn('[Driver Profile Update] TS Verify Failed but storage continues:', verifyWarning);
+            }
+        } catch (verifyErr) {
+            console.error('[Driver Profile Update] TS Verify Exception:', verifyErr);
+            verifyWarning = '자격증 진위 조회 API 통신 중 오류가 발생했습니다.';
+        }
+
+        // 한글 주석: 필수 필드 검증 (면허 발급일 및 자격 취득일)
         if (!licenseIssueDt || !licenseIssueDt.trim()) {
             throw new Error('면허 발급일을 입력해주세요.');
         }
@@ -614,7 +675,7 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
             throw new Error('자격 취득일을 입력해주세요.');
         }
 
-        // 날짜 유효성 검증 (과거여야 함)
+        // 한글 주석: 날짜 유효성 검증 (과거여야 함)
         const today = new Date().toISOString().split('T')[0];
         if (licenseIssueDt && licenseIssueDt > today) {
             throw new Error('면허 발급일은 오늘 이전 날짜여야 합니다.');
@@ -622,13 +683,6 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
         if (qualAcquisitionDt && qualAcquisitionDt > today) {
             throw new Error('자격 취득일은 오늘 이전 날짜여야 합니다.');
         }
-
-        const userId = req.user.userId;
-
-        // 0. CUST_ID 및 기존 프로필 파일 ID 조회
-        const [uRows] = await connection.execute('SELECT CUST_ID, PROFILE_FILE_ID, HP_NO FROM TB_USER WHERE USER_ID = ?', [userId]);
-        if (uRows.length === 0) throw new Error('사용자를 찾을 수 없습니다.');
-        const { CUST_ID: custId, PROFILE_FILE_ID: existingProfileFileId, HP_NO: existingPhone } = uRows[0];
 
         // 휴대폰 번호가 변경된 경우 Firebase 토큰 검증
         if (phone && phone !== existingPhone) {
@@ -674,7 +728,7 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
 
         await connection.execute(
             'UPDATE TB_USER SET USER_NM = ?, HP_NO = ?, RESIDENT_NO_ENC = ?, PROFILE_FILE_ID = ?, MOD_ID = ?, MOD_DT = NOW() WHERE USER_ID = ?',
-            [name, phone, encrypt(residentNo), profileFileId, custId, userId]
+            [name, phone, finalResidentNoEnc, profileFileId, custId, userId]
         );
 
         // 2. TB_DRIVER_DETAIL 업데이트 (주소, 성별, 자기소개, 생년월일 등)
@@ -797,7 +851,11 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
         }
 
         await connection.commit();
-        res.json({ success: true, message: '기사 정보 등록이 완료되었습니다.' });
+        res.json({ 
+            success: true, 
+            message: '기사 정보 등록이 완료되었습니다.',
+            warning: verifyWarning
+        });
     } catch (err) {
         if (connection) await connection.rollback();
         console.error('[App Profile Update] Error:', err);

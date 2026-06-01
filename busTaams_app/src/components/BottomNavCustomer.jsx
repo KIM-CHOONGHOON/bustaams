@@ -8,7 +8,7 @@ const BottomNavCustomer = () => {
   const navItems = [
     { id: 'home', icon: 'home', path: '/customer-dashboard', name: '홈' },
     { id: 'request', icon: 'add_task', path: '/request-bus', name: '요청등록' },
-    { id: 'reservations', icon: 'confirmation_number', path: '/reservation-list', name: '예약' },
+    { id: 'reservations', icon: 'confirmation_number', path: '/reservation-list', name: '예약목록' },
     { id: 'reviews', icon: 'star', path: '/review-pending-list', name: '평점' },
     { id: 'inquiry', icon: 'support_agent', path: '/inquiry-list', name: '문의' },
     { id: 'profile', icon: 'person', path: '/user-profile', name: '내 정보' }

@@ -191,6 +191,12 @@ const ApprovalListCustomer = () => {
 
     const initiatePayment = async (payData) => {
         try {
+            // 0. 결제 금액 유효성 검증
+            if (!payData.price || Number(payData.price) <= 0) {
+                notify.error('결제 오류', '결제 금액이 0원 이하입니다. 관리자에게 문의해 주세요.');
+                return;
+            }
+
             // 1. 서버에서 결제 준비 데이터 가져오기
             const res = await api.post('/payment/ready', payData);
             const data = res;
@@ -202,16 +208,12 @@ const ApprovalListCustomer = () => {
                 return;
             }
 
-            // 1. 상품명 정제: 특수문자 제거 및 13자 제한 (UTF-8 기준 약 40바이트 이내)
-            const cleanGoodName = data.goodname.replace(/[^\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\uA960-\uA97F\uD7B0-\uD7FF0-9a-zA-Z\s]/g, '');
-            // 한글 1자=3바이트이므로 13자까지만 허용하여 40바이트 제한 준수
-            const finalGoodName = cleanGoodName.length > 13 ? cleanGoodName.substring(0, 12) + '..' : cleanGoodName;
-
-            // 2. 구매자명 정제: 특수문자 제거
-            const cleanBuyerName = data.buyername.replace(/[^\uAC00-\uD7AF0-9a-zA-Z\s]/g, '');
+            // 이니시스 EUC-KR 인코딩 오류(인증 실패 01)를 방지하기 위해 상품명과 구매자명을 안전한 영문으로 대체하여 전송합니다. (한글 주석)
+            const finalGoodName = `BusTaams_Trip`;
+            const cleanBuyerName = `Customer`;
 
             // 3. 전화번호 정제: 하이픈 제거 (이니시스 모바일 필수)
-            const cleanMobile = data.buyertel.replace(/[^0-9]/g, '');
+            const cleanMobile = (data.buyertel || '').replace(/[^0-9]/g, '');
 
             // 모바일과 PC 기기 구분 분기 처리 (한글 주석)
             const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -403,7 +405,7 @@ const ApprovalListCustomer = () => {
                     <div className="md:col-span-8">
                         <p className="text-orange-600 font-bold tracking-[0.2em] text-xs mb-3 uppercase italic">Approval Pending</p>
                         <h1 className="text-4xl md:text-6xl font-extrabold tracking-tighter text-on-surface leading-tight italic">
-                            <span className="text-primary">{tripSummary.title}</span> 승인 대기
+                            <span className="text-primary">{tripSummary.title}</span>
                         </h1>
                     </div>
                     <div className="md:col-span-4 text-right">
@@ -464,26 +466,65 @@ const ApprovalListCustomer = () => {
                                 <span className="text-sm text-slate-400 font-bold">{units.length}대 요청됨</span>
                             </div>
 
-                            {units.map((unit) => (
+                            {units.map((unit) => {
+                                const selectedEst = unit.estimates && unit.estimates.length > 0 ? unit.estimates[0] : null;
+                                return (
                                 <div key={unit.unitSeq} className="bg-white rounded-2xl p-8 shadow-xl shadow-teal-900/5 border border-slate-50 space-y-8 animate-in fade-in slide-in-from-bottom duration-500">
-                                    <div className="flex flex-col sm:flex-row justify-between items-start gap-6 border-b border-slate-50 pb-6">
+                                    {/* 기사 정보와 차량 정보 통합 헤더 */}
+                                    <div className="flex flex-col sm:flex-row justify-between items-start gap-6 border-b border-slate-50 pb-6 w-full">
                                         <div className="flex items-center gap-5">
-                                            <div className="w-16 h-16 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 shadow-inner">
-                                                <span className="material-symbols-outlined text-4xl">directions_bus</span>
+                                            {/* 기사 이미지 및 하단 버스 타입 */}
+                                            <div className="flex flex-col items-center shrink-0">
+                                                <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-100 flex items-center justify-center border border-slate-100 shadow-inner">
+                                                    {selectedEst && selectedEst.image ? (
+                                                        <img
+                                                            src={getImageUrl(selectedEst.image)}
+                                                            alt={selectedEst.driverName}
+                                                            className="w-full h-full object-cover"
+                                                            onError={(e) => {
+                                                                e.target.onerror = null;
+                                                                e.target.src = '';
+                                                                e.target.className = 'hidden';
+                                                                if (e.target.nextSibling) e.target.nextSibling.classList.remove('hidden');
+                                                            }}
+                                                        />
+                                                    ) : null}
+                                                    <span className={`material-symbols-outlined text-4xl text-orange-600 ${selectedEst && selectedEst.image ? 'hidden' : ''}`}>directions_bus</span>
+                                                </div>
+                                                {/* 버스의 타입 정보를 기사의 이미지 밑으로 이동 */}
+                                                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-2 text-center">{unit.busType}</p>
                                             </div>
+
+                                            {/* 기사명, 평점, 연식 및 모델명 (1줄씩 표시), 요청금액 */}
                                             <div className="text-left">
-                                                <h4 className="font-black text-xl tracking-tighter leading-tight italic">차량 #{unit.unitSeq}</h4>
-                                                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">{unit.busType}</p>
+                                                <div className="flex items-center gap-3">
+                                                    <h4 className="font-black text-xl tracking-tighter leading-tight italic">
+                                                        {selectedEst ? selectedEst.driverName : `차량 #${unit.unitSeq}`}
+                                                    </h4>
+                                                    {selectedEst && (
+                                                        <span className="flex items-center bg-secondary/10 px-2 py-0.5 rounded-xl text-secondary text-[11px] font-black">
+                                                            <span className="material-symbols-outlined text-[12px] mr-1" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                                                            {selectedEst.rating}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {/* 차량의 연식과 모델명을 1줄씩 표시 */}
+                                                {selectedEst && (
+                                                    <div className="mt-1.5 space-y-0.5">
+                                                        {selectedEst.busYear && (
+                                                            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{selectedEst.busYear}년형</p>
+                                                        )}
+                                                        {selectedEst.busModel && (
+                                                            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{selectedEst.busModel}</p>
+                                                        )}
+                                                    </div>
+                                                )}
                                                 <p className="text-sm font-black text-orange-600 mt-2">요청금액: {Number(unit.unitReqAmt || 0).toLocaleString()}원</p>
                                             </div>
                                         </div>
-                                        <div className="flex flex-col items-end gap-3 w-full sm:w-auto">
-                                            <span className={`px-5 py-1.5 rounded-xl text-[10px] font-black tracking-widest uppercase shadow-sm ${getBusStatusDisplay(unit.unitStat).color}`}>
-                                                {getBusStatusDisplay(unit.unitStat).label}
-                                            </span>
-                                        </div>
                                     </div>
 
+                                    {/* 상세 정보 영역 */}
                                     <div className="space-y-4">
                                         {unit.estimates.length === 0 ? (
                                             <div className="py-12 bg-slate-50/50 rounded-2xl text-center border-2 border-dashed border-slate-100 flex flex-col items-center gap-6">
@@ -508,42 +549,8 @@ const ApprovalListCustomer = () => {
                                             </div>
                                         ) : (
                                             unit.estimates.map((est) => (
-                                                <div key={est.id} className={`p-8 rounded-2xl border transition-all duration-500 group ${est.isSelected ? 'bg-secondary/5 border-secondary shadow-lg shadow-secondary/5' : 'bg-white border-slate-100 hover:border-orange-200'}`}>
+                                                <div key={est.id} className="space-y-8 animate-in fade-in duration-300">
                                                     <div className="flex flex-col gap-8">
-                                                        {/* 기사 및 차량 헤더 */}
-                                                        <div className="flex flex-col sm:flex-row items-center gap-8 border-b border-slate-50 pb-6">
-                                                            <div className="w-24 h-24 rounded-2xl overflow-hidden shadow-xl border-4 border-white group-hover:rotate-3 transition-transform shrink-0 bg-slate-100 flex items-center justify-center">
-                                                                {est.image ? (
-                                                                    <img
-                                                                        src={getImageUrl(est.image)}
-                                                                        alt={est.driverName}
-                                                                        className="w-full h-full object-cover"
-                                                                        onError={(e) => {
-                                                                            e.target.onerror = null;
-                                                                            e.target.src = ''; // Clear source to show background icon
-                                                                            e.target.className = 'hidden';
-                                                                            if (e.target.nextSibling) e.target.nextSibling.classList.remove('hidden');
-                                                                        }}
-                                                                    />
-                                                                ) : null}
-                                                                <span className={`material-symbols-outlined text-4xl text-slate-300 ${est.image ? 'hidden' : ''}`}>person</span>
-                                                            </div>
-                                                            <div className="flex-grow text-left">
-                                                                <div className="flex flex-wrap items-center gap-3 mb-3">
-                                                                    <h5 className="font-black text-xl tracking-tighter italic">{est.driverName} 기사님</h5>
-                                                                    <span className="flex items-center bg-secondary/10 px-3 py-1 rounded-xl text-secondary text-[11px] font-black">
-                                                                        <span className="material-symbols-outlined text-[12px] mr-1" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                                                                        {est.rating}
-                                                                    </span>
-                                                                </div>
-                                                                <p className="text-[14px] font-black text-slate-800 italic">{est.busInfo}</p>
-                                                            </div>
-                                                            <div className="text-right shrink-0">
-                                                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">응찰 금액</p>
-                                                                <p className="text-3xl font-black text-orange-600 tracking-tighter italic">₩{Number(est.price).toLocaleString()}</p>
-                                                            </div>
-                                                        </div>
-
                                                         {/* 차량 사진 리스트 */}
                                                         {est.busImages && est.busImages.length > 0 && (
                                                             <div className="space-y-4">
@@ -577,13 +584,13 @@ const ApprovalListCustomer = () => {
                                                         )}
 
                                                         {/* 차량 상세 스펙 */}
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div className="flex flex-col gap-4">
                                                             <div className="bg-slate-50/80 p-6 rounded-2xl space-y-4">
                                                                 <h6 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] italic flex items-center gap-2">
                                                                     <span className="material-symbols-outlined text-[14px]">ac_unit</span>
                                                                     편의시설 및 서비스
                                                                 </h6>
-                                                                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                                                                <div className="grid grid-cols-2 gap-2">
                                                                     {[
                                                                         { key: '테이블', icon: 'table_restaurant' },
                                                                         { key: '와이파이', icon: 'wifi' },
@@ -596,15 +603,20 @@ const ApprovalListCustomer = () => {
                                                                         const isActive = est.tags && est.tags.includes(item.key);
                                                                         if (!isActive) return null;
                                                                         return (
-                                                                            <div key={idx} className="flex flex-col items-center justify-center p-3 rounded-2xl bg-white shadow-sm border border-teal-100/30 group/item hover:scale-105 transition-transform">
+                                                                            <div key={idx} className="flex flex-col items-center justify-center p-3 rounded-xl bg-white shadow-sm border border-teal-100/30 group/item hover:scale-105 transition-transform text-center gap-1.5">
                                                                                 <span className="material-symbols-outlined text-teal-600 text-xl group-hover/item:rotate-12 transition-transform">{item.icon}</span>
-                                                                                <span className="text-[10px] font-black text-slate-600 mt-2 tracking-tighter">{item.key}</span>
+                                                                                <span className="text-xs font-black text-slate-700 tracking-tighter">{item.key}</span>
                                                                             </div>
                                                                         );
                                                                     })}
                                                                     {(!est.tags || est.tags.length === 0) && (
-                                                                        <div className="col-span-full text-center py-4 text-slate-300 font-bold text-xs italic">등록된 편의시설이 없습니다.</div>
+                                                                        <div className="col-span-2 text-center py-4 text-slate-300 font-bold text-xs italic">등록된 편의시설이 없습니다.</div>
                                                                     )}
+                                                                    {/* 편의시설 목록 맨 밑에 ABES(ADAS) 정보 노출 (2열 영역 모두 채우기) */}
+                                                                    <div className="col-span-2 flex items-center gap-3 p-3 rounded-xl bg-white shadow-sm border border-teal-100/30 group/item hover:translate-x-1 transition-transform text-left">
+                                                                        <span className="material-symbols-outlined text-teal-600 text-lg">verified_user</span>
+                                                                        <span className="text-xs font-black text-slate-700 tracking-tighter">ABES (ADAS): {est.hasAdas === 'Y' ? '장착 완료' : '미장착'}</span>
+                                                                    </div>
                                                                 </div>
                                                             </div>
 
@@ -615,17 +627,11 @@ const ApprovalListCustomer = () => {
                                                                 </h6>
                                                                 <div className="grid grid-cols-2 gap-y-3">
                                                                     <div>
-                                                                        <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">ABES (ADAS)</p>
-                                                                        <span className={`text-[11px] font-black px-2 py-0.5 rounded-xl ${est.hasAdas === 'Y' ? 'text-teal-600 bg-teal-50' : 'text-slate-400 bg-slate-100'}`}>
-                                                                            {est.hasAdas === 'Y' ? '장착 완료' : '미장착'}
-                                                                        </span>
-                                                                    </div>
-                                                                    <div>
                                                                         <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">보험 만료일</p>
                                                                         <p className="text-[11px] font-black text-slate-800">{est.insuranceExpDt}</p>
                                                                     </div>
-                                                                    <div className="col-span-2">
-                                                                        <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">정기검사 유효일자</p>
+                                                                    <div>
+                                                                        <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">정기검사만료일</p>
                                                                         <p className="text-[11px] font-black text-slate-800">{est.lastInspectDt}</p>
                                                                     </div>
                                                                 </div>
@@ -657,11 +663,10 @@ const ApprovalListCustomer = () => {
                                                 </div>
                                             ))
                                          )}
-
-
                                     </div>
                                 </div>
-                            ))}
+                            );
+                            })}
                         </div>
                     </div>
 
@@ -670,17 +675,22 @@ const ApprovalListCustomer = () => {
                             <h2 className="text-2xl font-black mb-8 italic tracking-tighter">최종 승인 요약</h2>
 
                             <div className="space-y-6 mb-10">
-                                {units.map((unit) => (
+                                {units.map((unit) => {
+                                    const selectedEst = unit.estimates && unit.estimates.length > 0 ? unit.estimates[0] : null;
+                                    return (
                                     <div key={unit.unitSeq} className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/10 group hover:bg-white/10 transition-all">
                                         <div className="text-left">
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">차량 #{unit.unitSeq}</p>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                                                {selectedEst ? selectedEst.driverName : `차량 #${unit.unitSeq}`}
+                                            </p>
                                             <p className="text-sm font-bold text-slate-200">{unit.busType}</p>
                                         </div>
                                         <div className="text-right">
                                             <p className="text-lg font-black text-secondary italic">₩{Number(unit.unitReqAmt || 0).toLocaleString()}</p>
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
 
                             <div className="pt-8 border-t border-white/10 space-y-4">

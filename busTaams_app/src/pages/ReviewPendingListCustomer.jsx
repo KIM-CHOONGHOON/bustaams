@@ -166,7 +166,7 @@ const ReviewPendingListCustomer = () => {
                 <div className="pt-10 pb-20 text-center space-y-6">
                     <span className="material-symbols-outlined text-[#CBD5E1] text-[40px]" style={{fontVariationSettings: "'FILL' 1"}}>format_quote</span>
                     <p className="text-[13px] text-[#94A3B8] font-bold italic leading-relaxed max-w-[280px] mx-auto">
-                        "우리는 단순한 이동이 아닌, 당신의 소중한 시간을 연결합니다."
+                        "우리는 단순한 이동이 아닌,<br />당신의 소중한 시간을 연결합니다."
                     </p>
                 </div>
             </main>

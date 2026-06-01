@@ -504,33 +504,25 @@ router.post('/profile/upload-image', authenticateToken, memoryUpload.single('pro
         }
         const custId = uRows[0].CUST_ID;
 
-        // GCS 업로드 설정
+        // 로컬 업로드 설정 (GCS 대체 - Cafe24 로컬 저장) (한글 주석)
         const ext = path.extname(file.originalname).replace('.', '') || 'png';
         const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20);
-        const gcsPath = `profiles/${fileId}.${ext}`;
-        const bucket = getBucket();
-        const gcsFile = bucket.file(gcsPath);
+        const dbSavePath = `profiles/${fileId}.${ext}`;
 
-        // GCS에 파일 저장
-        await gcsFile.save(file.buffer, {
-            metadata: { contentType: file.mimetype }
-        });
-
-        // 공개 접근 권한 설정
-        try {
-            await gcsFile.makePublic();
-        } catch (e) {
-            console.log('GCS makePublic failed:', e.message);
+        // 📂 로컬 uploads 디렉토리에 저장
+        const localPath = path.join(__dirname, '..', 'uploads', 'profiles', `${fileId}.${ext}`);
+        const localDir = path.dirname(localPath);
+        if (!fs.existsSync(localDir)) {
+            fs.mkdirSync(localDir, { recursive: true });
         }
+        fs.writeFileSync(localPath, file.buffer);
 
         // DB 저장 (사용자 요구사항에 따라 프로필 이미지는 상대 경로 'profiles/...'로 저장)
         // signatures 등 다른 카테고리는 전체 URL을 저장할 수 있으나, 프로필은 상대 경로 유지
-        const dbSavePath = gcsPath;
-
         await pool.execute(
             `INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_ID, MOD_ID) 
-             VALUES (?, 'USER_PROFILE', ?, ?, ?, ?, ?, ?, ?)`,
-            [fileId, bucketName, dbSavePath, file.originalname, ext, file.size, custId, custId]
+             VALUES (?, 'USER_PROFILE', 'uploads', ?, ?, ?, ?, ?, ?)`,
+            [fileId, dbSavePath, file.originalname, ext, file.size, custId, custId]
         );
 
         await pool.execute(
@@ -742,14 +734,16 @@ router.get('/pending-requests', authenticateToken, async (req, res) => {
 
         // 각 요청에 대한 차량(buses) 정보 추가
         for (let row of rows) {
+            // 차량 종류 코드(BUS_TYPE_CD)를 공통코드(TB_COMMON_CODE)의 한글명(CD_NM_KO)으로 매핑하여 조회
             const [busRows] = await pool.execute(`
                 SELECT 
-                    rb.BUS_TYPE_CD as busType,
+                    COALESCE(cc.CD_NM_KO, rb.BUS_TYPE_CD) as busType,
                     rb.RES_BUS_AMT as reqAmt,
                     rb.DATA_STAT as busStatus,
                     u.USER_NM as driverName,
                     db.VEHICLE_NO as busNo
                 FROM TB_AUCTION_REQ_BUS rb
+                LEFT JOIN TB_COMMON_CODE cc ON cc.GRP_CD = 'BUS_TYPE' AND cc.DTL_CD = rb.BUS_TYPE_CD
                 LEFT JOIN TB_BUS_RESERVATION res ON rb.REQ_ID = res.REQ_ID 
                     AND res.DATA_STAT = 'CONFIRM'
                 LEFT JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID
@@ -860,11 +854,11 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
         }
         tripInfo.fullRoute = fullRoute;
 
-        // 2. 차량별 입찰 정보 조회
+        // 2. 차량별 입찰 정보 조회 (차량 종류 코드를 한글 명칭으로 매핑하여 조회)
         const [bidRows] = await pool.execute(`
             SELECT 
                 rb.REQ_BUS_SEQ as unitSeq,
-                rb.BUS_TYPE_CD as busType,
+                COALESCE(cc.CD_NM_KO, rb.BUS_TYPE_CD) as busType,
                 rb.DATA_STAT as unitStat,
                 rb.RES_BUS_AMT as unitReqAmt,
                 rb.RES_FEE_TOTAL_AMT as unitResFee,
@@ -884,6 +878,7 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
                 db.VEHICLE_PHOTOS_JSON as busPhotos,
                 f.GCS_PATH as driverImageRaw
             FROM TB_AUCTION_REQ_BUS rb
+            LEFT JOIN TB_COMMON_CODE cc ON cc.GRP_CD = 'BUS_TYPE' AND cc.DTL_CD = rb.BUS_TYPE_CD
             LEFT JOIN TB_BUS_RESERVATION res ON rb.REQ_ID = res.REQ_ID AND rb.REQ_BUS_SEQ = res.REQ_BUS_SEQ AND res.DATA_STAT IN ('AUCTION','BIDDING','CONFIRM','DONE')
             LEFT JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID
             LEFT JOIN TB_FILE_MASTER f ON u.PROFILE_FILE_ID = f.FILE_ID
@@ -981,6 +976,8 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
                     driverName: row.driverName,
                     rating: row.rating || '0.0',
                     busInfo: `${row.busYear || ''}년형 ${row.busModel || ''} (${row.busNo || ''})`,
+                    busYear: row.busYear,
+                    busModel: row.busModel,
                     experience: row.joinDt ? Math.max(1, new Date().getFullYear() - new Date(row.joinDt).getFullYear()) : 1,
                     price: row.price,
                     tags: tags,

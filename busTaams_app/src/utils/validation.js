@@ -6,6 +6,11 @@
 export const validateRRN = (rrn) => {
     if (!rrn) return false;
     
+    // 한글 주석: 이미 마스킹된 주민등록번호(예: 950123-1******)는 유효성 검사를 바로 통과시킴
+    if (/^\d{6}-?[0-9]\*{6}$/.test(rrn)) {
+        return true;
+    }
+    
     // 특수문자 제거
     const cleanRRN = rrn.replace(/[^0-9]/g, '');
     

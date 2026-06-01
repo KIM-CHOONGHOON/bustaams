@@ -117,8 +117,8 @@ const BidDetailDriver = () => {
                         <div className="absolute left-0 top-0 bottom-0 w-2 bg-secondary"></div>
                         <div className="space-y-8 text-left">
                             <div>
-                                <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em] mb-2 italic">운행 제목</p>
-                                <h3 className="font-headline font-black text-2xl text-primary italic leading-tight text-left">{bidData.title}</h3>
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mb-2 italic">운행 제목</p>
+                                <h3 className="font-headline font-black text-2xl text-slate-800 italic leading-tight text-left">{bidData.title}</h3>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
@@ -128,11 +128,19 @@ const BidDetailDriver = () => {
                                             <span className="material-symbols-outlined text-secondary text-xl">route</span>
                                         </div>
                                         <div className="text-left">
-                                            <p className="text-[10px] font-black uppercase text-slate-300 mb-1 italic">운행 경로</p>
-                                            <div className="flex flex-wrap items-center gap-2 font-black text-on-surface text-sm italic">
-                                                <span>{bidData.startAddr.split(' ').slice(0, 2).join(' ')}</span>
-                                                <span className="material-symbols-outlined text-xs text-slate-200">arrow_forward</span>
-                                                <span>{bidData.endAddr.split(' ').slice(0, 2).join(' ')}</span>
+                                            <p className="text-[10px] font-black uppercase text-slate-500 mb-1 italic">운행 경로</p>
+                                            <div className="flex flex-wrap items-center gap-3 font-black text-[#1D3557] text-base italic">
+                                                {/* 한글 주석: 출발지 스타일 조율 */}
+                                                <span className="flex items-center gap-1 text-teal-600">
+                                                    <span className="material-symbols-outlined text-[16px]">location_on</span>
+                                                    {bidData.startAddr.split(' ').slice(0, 2).join(' ')}
+                                                </span>
+                                                <span className="material-symbols-outlined text-sm text-slate-300">arrow_forward</span>
+                                                {/* 한글 주석: 도착지 스타일 조율 */}
+                                                <span className="flex items-center gap-1 text-rose-500">
+                                                    <span className="material-symbols-outlined text-[16px]">flag</span>
+                                                    {bidData.endAddr.split(' ').slice(0, 2).join(' ')}
+                                                </span>
                                             </div>
                                         </div>
                                     </div>
@@ -141,8 +149,8 @@ const BidDetailDriver = () => {
                                             <span className="material-symbols-outlined text-secondary text-xl">event</span>
                                         </div>
                                         <div className="text-left">
-                                            <p className="text-[10px] font-black uppercase text-slate-300 mb-1 italic">운행 일정</p>
-                                            <p className="font-black text-on-surface text-sm italic">{bidData.startDate} — {bidData.endDate}</p>
+                                            <p className="text-[10px] font-black uppercase text-slate-500 mb-1 italic">운행 일정</p>
+                                            <p className="font-black text-slate-800 text-sm italic">{bidData.startDate} — {bidData.endDate}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -152,8 +160,8 @@ const BidDetailDriver = () => {
                                             <span className="material-symbols-outlined text-secondary text-xl">bus_alert</span>
                                         </div>
                                         <div className="text-left">
-                                            <p className="text-[10px] font-black uppercase text-slate-300 mb-1 italic">차량 정보</p>
-                                            <p className="font-black text-on-surface text-sm italic">{bidData.busTypeNm || '차종 정보 없음'}</p>
+                                            <p className="text-[10px] font-black uppercase text-slate-500 mb-1 italic">차량 정보</p>
+                                            <p className="font-black text-slate-800 text-sm italic">{bidData.busTypeNm || '차종 정보 없음'}</p>
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-4 text-left">
@@ -161,8 +169,8 @@ const BidDetailDriver = () => {
                                             <span className="material-symbols-outlined text-secondary text-xl">payments</span>
                                         </div>
                                         <div className="text-left">
-                                            <p className="text-[10px] font-black uppercase text-slate-300 mb-1 italic">고객 희망 예산</p>
-                                            <p className="font-black text-on-surface text-sm italic">₩{Number(bidData.targetPrice || 0).toLocaleString()} (Target)</p>
+                                            <p className="text-[10px] font-black uppercase text-slate-500 mb-1 italic">고객 희망 예산</p>
+                                            <p className="font-black text-slate-800 text-sm italic">₩{Number(bidData.targetPrice || 0).toLocaleString()}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -177,7 +185,7 @@ const BidDetailDriver = () => {
                     
                     <div className="bg-white rounded-2xl p-8 shadow-2xl shadow-teal-900/5 space-y-8 border border-white text-left">
                         <div className="space-y-4 text-left group">
-                            <label className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-300 px-4 block italic">현재 입찰 금액</label>
+                            <label className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500 px-4 block italic">현재 입찰 금액</label>
                             <div className="relative text-left">
                                 <span className="absolute left-8 top-1/2 -translate-y-1/2 font-black text-slate-200 text-3xl italic">₩</span>
                                 <input 

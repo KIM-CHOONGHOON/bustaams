@@ -117,8 +117,21 @@ router.get('/room/:resId', authenticateToken, async (req, res) => {
 // 2. 채팅 내역 조회
 router.get('/history/:chatSeq', authenticateToken, async (req, res) => {
     const { chatSeq } = req.params;
+    const { custId } = req.user;
 
     try {
+        // 내역 조회 시 해당 방의 로그인한 사용자 LAST_READ_DT를 현재 시간으로 즉시 업데이트 (한글 주석)
+        try {
+            await pool.execute(
+                `UPDATE TB_CHAT_LOG_PART 
+                 SET LAST_READ_DT = NOW() 
+                 WHERE CHAT_LOG_SEQ = ? AND CUST_ID = ?`,
+                [chatSeq, custId]
+            );
+        } catch (updateErr) {
+            console.error('[Chat API] LAST_READ_DT 업데이트 오류:', updateErr);
+        }
+
         const [rows] = await pool.execute(
             `SELECT HIST_SEQ, CHAT_LOG_SEQ as chatSeq, SENDER_CUST_ID, SENDER_ROLE, MSG_KIND, MSG_BODY, FILE_ID, 
                     DATE_FORMAT(REG_DT, '%Y-%m-%d %H:%i:%s') as regDt
@@ -164,6 +177,14 @@ router.post('/send', authenticateToken, async (req, res) => {
                  MSG_KIND = ?
              WHERE CHAT_LOG_SEQ = ?`,
             [msgBody, userType, msgKind, chatSeq]
+        );
+
+        // 3. 보낸 사람 본인의 LAST_READ_DT도 즉시 업데이트 (한글 주석)
+        await connection.execute(
+            `UPDATE TB_CHAT_LOG_PART 
+             SET LAST_READ_DT = NOW() 
+             WHERE CHAT_LOG_SEQ = ? AND CUST_ID = ?`,
+            [chatSeq, custId]
         );
 
         await connection.commit();
@@ -240,7 +261,16 @@ router.get('/list', authenticateToken, async (req, res) => {
                         'CHAT' as sourceType,
                         NULL as otherCustId,
                         req.TRIP_TITLE as tripTitle,
-                        DATE_FORMAT(req.START_DT, '%Y-%m-%d') as tripDate
+                        DATE_FORMAT(req.START_DT, '%Y-%m-%d') as tripDate,
+                        (
+                            SELECT COUNT(*) 
+                            FROM TB_CHAT_LOG_HIST h
+                            JOIN TB_CHAT_LOG_PART p2 ON h.CHAT_LOG_SEQ = p2.CHAT_LOG_SEQ
+                            WHERE h.CHAT_LOG_SEQ = l.CHAT_LOG_SEQ 
+                              AND p2.CUST_ID = p.CUST_ID
+                              AND h.SENDER_CUST_ID != p.CUST_ID
+                              AND (p2.LAST_READ_DT IS NULL OR h.REG_DT > p2.LAST_READ_DT)
+                        ) as unreadCount
                  FROM TB_CHAT_LOG l
                  JOIN TB_CHAT_LOG_PART p ON l.CHAT_LOG_SEQ = p.CHAT_LOG_SEQ
                  LEFT JOIN TB_BUS_RESERVATION res ON l.RES_ID = res.RES_ID
@@ -255,7 +285,8 @@ router.get('/list', authenticateToken, async (req, res) => {
                         'RESERVATION' as sourceType,
                         CASE WHEN r.DRIVER_ID = ? THEN r.TRAVELER_ID ELSE r.DRIVER_ID END as otherCustId,
                         req.TRIP_TITLE as tripTitle,
-                        DATE_FORMAT(req.START_DT, '%Y-%m-%d') as tripDate
+                        DATE_FORMAT(req.START_DT, '%Y-%m-%d') as tripDate,
+                        0 as unreadCount
                 FROM TB_BUS_RESERVATION r
                 LEFT JOIN TB_AUCTION_REQ req ON r.REQ_ID = req.REQ_ID
                 WHERE (r.DRIVER_ID = ? OR r.TRAVELER_ID = ?)

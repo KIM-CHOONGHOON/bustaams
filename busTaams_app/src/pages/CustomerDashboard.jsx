@@ -176,47 +176,23 @@ const CustomerDashboard = () => {
                         <img alt="Bus" className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDGum5KlJoZ1QYpw5IUtpBjkmHm85WskANrUTCg5K2pp6oBoHGfm904xF0Sha_OV2yNjGAHuI_C5we-RplZzy8FNTllgSB3jrLud6xKDIt-Yn1sUdijX3D970Qn4JoiC3v5tfqVRs4VFH5cP0XqOp47pfFy5EjuwG7xK79EZy2twkr6P2kJi5Pb6AtubxOcGzAlSiIl5ew5i1lqDMgmBcs_lw4egfP7RyHxYkREFQYcVBJXOIo4hSks6H2AOFsHQmbzkLX3Ckbqzmg" />
                     </div>
                     <div className="relative z-10 space-y-8">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20">
-                                <p className="text-white/70 text-[12px] font-bold uppercase tracking-wider mb-1">진행 중</p>
-                                <div className="flex items-end gap-2">
-                                    <span className="text-3xl font-black">{stats.progressing}</span>
-                                    <span className="text-sm font-medium mb-1 opacity-80">건</span>
-                                </div>
-                            </div>
-                            <div className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20">
-                                <p className="text-white/70 text-[12px] font-bold uppercase tracking-wider mb-1">승인 대기 중</p>
-                                <div className="flex items-end gap-2">
-                                    <span className="text-3xl font-black">{stats.waiting}</span>
-                                    <span className="text-sm font-medium mb-1 opacity-80">건</span>
-                                </div>
-                            </div>
-                        </div>
 
+
+                        {/* 버튼 내부 텍스트에 건수를 표시하고 0건일 때도 클릭 가능하도록 비활성화 가드 제거 (한글 주석) */}
                         <div className="flex flex-wrap gap-4">
                             <button 
                                 onClick={() => navigate('/estimate-request-list?type=progress')} 
-                                disabled={stats.progressing === 0}
-                                className={`flex-1 px-6 py-4 rounded-xl font-bold transition-all text-[13px] shadow-lg flex flex-col items-center justify-center gap-1.5 ${
-                                    stats.progressing === 0 
-                                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200 shadow-none' 
-                                    : 'bg-white text-primary hover:bg-slate-50 hover:translate-y-[-2px] active:scale-95'
-                                }`}
+                                className="flex-1 px-6 py-4 rounded-xl font-bold transition-all text-[13px] shadow-lg flex flex-col items-center justify-center gap-1.5 bg-white text-primary hover:bg-slate-50 hover:translate-y-[-2px] active:scale-95"
                             >
                                 <span className="material-symbols-outlined text-[20px]">near_me</span>
-                                <span>청약진행중</span>
+                                <span>{stats.progressing}건 청약진행중</span>
                             </button>
                             <button 
                                 onClick={() => navigate('/estimate-request-list?type=waiting')} 
-                                disabled={stats.waiting === 0}
-                                className={`flex-1 px-6 py-4 rounded-xl font-bold transition-all text-[13px] shadow-lg flex flex-col items-center justify-center gap-1.5 ${
-                                    stats.waiting === 0 
-                                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200 shadow-none' 
-                                    : 'bg-secondary text-white hover:opacity-90 hover:translate-y-[-2px] active:scale-95'
-                                }`}
+                                className="flex-1 px-6 py-4 rounded-xl font-bold transition-all text-[13px] shadow-lg flex flex-col items-center justify-center gap-1.5 bg-secondary text-white hover:opacity-90 hover:translate-y-[-2px] active:scale-95"
                             >
                                 <span className="material-symbols-outlined text-[20px]">pending_actions</span>
-                                <span>승인대기중</span>
+                                <span>{stats.waiting}건 승인대기중</span>
                             </button>
                         </div>
                     </div>

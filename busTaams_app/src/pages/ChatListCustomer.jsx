@@ -150,6 +150,12 @@ const ChatListCustomer = () => {
                                         <div className="absolute -bottom-1 -right-1 bg-[#9d4300] text-white text-[9px] font-bold px-2 py-0.5 rounded-lg uppercase tracking-tight">
                                             {chat.otherUser?.PART_TYPE === 'DRIVER' ? '기사님' : '고객'}
                                         </div>
+                                        {/* 안 읽은 메시지 수 뱃지 표시 (한글 주석) */}
+                                        {chat.unreadCount > 0 && (
+                                            <div className="absolute -top-2 -right-2 bg-rose-500 text-white text-[11px] font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow-md animate-pulse">
+                                                {chat.unreadCount}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* 본문 정보 */}
