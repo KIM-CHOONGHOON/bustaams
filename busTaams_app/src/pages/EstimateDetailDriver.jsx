@@ -123,7 +123,7 @@ const EstimateDetailDriver = () => {
             <main className="pt-28 px-6 max-w-7xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom duration-700 text-left">
                 {/* Header Section */}
                 <div className="space-y-2 text-left">
-                    <span className="text-secondary font-black tracking-[0.4em] uppercase text-[11px] block px-1 italic">청약 ID: #BT-{auction.id}</span>
+                    {/* 한글 주석: 청약 ID 숨김 처리 */}
                     <h2 className="font-headline text-2xl font-black text-[#004e47] tracking-tight italic uppercase">
                         {auction.title}
                     </h2>
@@ -133,7 +133,11 @@ const EstimateDetailDriver = () => {
                     {/* Left: Trip Info (Matching Design) */}
                     <aside className="lg:col-span-5 text-left">
                         <div className="bg-white rounded-2xl p-10 space-y-10 shadow-xl shadow-teal-900/5 text-left border border-slate-100">
-                            {/* [삭제] 운행 정보 헤더 텍스트 라인 삭제 (한글 주석) */}
+                            {/* 한글 주석: 여행 경로 타이틀 추가 */}
+                            <h2 className="text-2xl font-black mb-10 flex items-center gap-3 italic text-teal-800 border-b border-slate-50 pb-6">
+                                <span className="material-symbols-outlined text-primary" style={{fontVariationSettings: "'FILL' 1"}}>route</span>
+                                여행 경로
+                            </h2>
                             
                             <div className="space-y-10 text-left">
                                 {/* Route sequence in strict order */}
@@ -217,18 +221,19 @@ const EstimateDetailDriver = () => {
                                             readOnly 
                                         />
                                     </div>
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest px-4">
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest px-4 mb-4">
                                         고객이 제시한 고정 금액으로 청약이 진행됩니다.
                                     </p>
-                                </div>
-
-                                <div className="p-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-6 text-left cursor-pointer hover:bg-white transition-colors group" onClick={() => setAgreed(!agreed)}>
-                                    <div className={`w-10 h-10 rounded-xl border-2 flex items-center justify-center transition-all ${agreed ? 'bg-secondary border-secondary' : 'bg-white border-slate-200'}`}>
-                                        {agreed && <span className="material-symbols-outlined text-white text-2xl">check</span>}
+                                    
+                                    {/* 한글 주석: 청약 금액 섹션 내부로 통합된 디지털 서명 영역 */}
+                                    <div className="p-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-6 text-left cursor-pointer hover:bg-white transition-colors group" onClick={() => setAgreed(!agreed)}>
+                                        <div className={`w-10 h-10 rounded-xl border-2 flex items-center justify-center transition-all ${agreed ? 'bg-secondary border-secondary' : 'bg-white border-slate-200'}`}>
+                                            {agreed && <span className="material-symbols-outlined text-white text-2xl">check</span>}
+                                        </div>
+                                        <label className="flex-1 text-[13px] font-bold text-slate-500 italic leading-snug text-left uppercase tracking-tight">
+                                            선택한 차량이 모든 안전 요구 사항을 충족하며 이 노선에 대한 보험이 최신 상태임을 <span className="text-secondary underline underline-offset-4">디지털 서명</span>으로 인증합니다.
+                                        </label>
                                     </div>
-                                    <label className="flex-1 text-[13px] font-bold text-slate-500 italic leading-snug text-left uppercase tracking-tight">
-                                        선택한 차량이 모든 안전 요구 사항을 충족하며 이 노선에 대한 보험이 최신 상태임을 <span className="text-secondary underline underline-offset-4">디지털 서명</span>으로 인증합니다.
-                                    </label>
                                 </div>
 
                                 <div className="pt-8 flex justify-center">
