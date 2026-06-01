@@ -14,6 +14,7 @@ import MyCustomersManagement from '../../pages/MyCustomersManagement';
 import MyPerformanceManagement from '../../pages/MyPerformanceManagement';
 import SalesPerformanceManagement from '../../pages/SalesPerformanceManagement';
 import SystemSettings from '../../pages/SystemSettings';
+import CodeManagement from '../../pages/CodeManagement';
 import MyInfo from '../../pages/MyInfo';
 
 const AdminLayout = ({ onLogout }) => {
@@ -52,7 +53,10 @@ const AdminLayout = ({ onLogout }) => {
       case 'sales-performance':
         return <SalesPerformanceManagement />;
       case 'settings':
+      case 'settings-products':
         return <SystemSettings />;
+      case 'settings-codes':
+        return <CodeManagement />;
       case 'my-info':
         return <MyInfo />;
       default:
