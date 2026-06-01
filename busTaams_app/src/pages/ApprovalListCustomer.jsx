@@ -109,14 +109,14 @@ const ApprovalListCustomer = () => {
     //
     //    if (!confirmed) return;
     //
-        // 무통장 입금 안내 노출
+    // 무통장 입금 안내 노출
     //    await notify.info(
     //        '예약금 입금 안내',
     //        `은행명 : IBK기업은행\n계좌번호 : 088-038608-04-011\n예금주 : (주)청솔테크\n입금금액 : ${totalResFee.toLocaleString()}원\n* 입금 확인 후 예약이 승인됩니다.`
     //    );
     // 
     //    try {
-            // 백엔드 API를 호출하여 결제 상태 업데이트 (PAYMENT_STS = '1')
+    // 백엔드 API를 호출하여 결제 상태 업데이트 (PAYMENT_STS = '1')
     //        const res = await api.post('/app/customer/payment-bank', { reqId });
     //        if (res.success) {
     //            notify.success('승인 요청 완료', '무통장 입금 안내 및 결제 대기 상태가 반영되었습니다.');
@@ -137,7 +137,7 @@ const ApprovalListCustomer = () => {
         );
 
         const today = new Date();
-        const bankEndDate = new Date('2026-05-23T23:59:59');
+        const bankEndDate = new Date('2026-06-02T23:59:59');
 
         // 2026년 5월 23일까지는 무통장 입금
         if (today <= bankEndDate) {
@@ -344,7 +344,7 @@ const ApprovalListCustomer = () => {
                 </div>
             </div>
         );
-     }
+    }
 
     if (!tripSummary) {
         return (
@@ -430,24 +430,22 @@ const ApprovalListCustomer = () => {
 
                                 {tripSummary.fullRoute && tripSummary.fullRoute.map((step, idx) => (
                                     <div key={idx} className="relative pl-12">
-                                        <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center ${
-                                            step.type === 'START' ? 'bg-teal-600 text-white shadow-teal-200' : 
-                                            step.type === 'END' ? 'bg-rose-500 text-white shadow-rose-200' : 
-                                            step.type === 'ROUND_TRIP' ? 'bg-indigo-600 text-white shadow-indigo-100' :
-                                            'bg-amber-400 text-white shadow-amber-100'
-                                        }`}>
+                                        <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center ${step.type === 'START' ? 'bg-teal-600 text-white shadow-teal-200' :
+                                                step.type === 'END' ? 'bg-rose-500 text-white shadow-rose-200' :
+                                                    step.type === 'ROUND_TRIP' ? 'bg-indigo-600 text-white shadow-indigo-100' :
+                                                        'bg-amber-400 text-white shadow-amber-100'
+                                            }`}>
                                             <span className="material-symbols-outlined text-[16px] font-black">
-                                                {step.type === 'START' ? 'location_on' : 
-                                                 step.type === 'END' ? 'flag' : 
-                                                 step.type === 'ROUND_TRIP' ? 'near_me' : 'more_horiz'}
+                                                {step.type === 'START' ? 'location_on' :
+                                                    step.type === 'END' ? 'flag' :
+                                                        step.type === 'ROUND_TRIP' ? 'near_me' : 'more_horiz'}
                                             </span>
                                         </div>
                                         <div className="flex flex-col text-left">
-                                            <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${
-                                                step.type === 'START' ? 'text-teal-600' : 
-                                                step.type === 'END' ? 'text-rose-500' : 
-                                                step.type === 'ROUND_TRIP' ? 'text-indigo-500' : 'text-amber-500'
-                                            }`}>
+                                            <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${step.type === 'START' ? 'text-teal-600' :
+                                                    step.type === 'END' ? 'text-rose-500' :
+                                                        step.type === 'ROUND_TRIP' ? 'text-indigo-500' : 'text-amber-500'
+                                                }`}>
                                                 {step.title}
                                             </p>
                                             <h4 className="text-lg font-black tracking-tight text-on-surface text-left">
@@ -473,203 +471,203 @@ const ApprovalListCustomer = () => {
                             {units.map((unit) => {
                                 const selectedEst = unit.estimates && unit.estimates.length > 0 ? unit.estimates[0] : null;
                                 return (
-                                <div key={unit.unitSeq} className="bg-white rounded-2xl p-8 shadow-xl shadow-teal-900/5 border border-slate-50 space-y-8 animate-in fade-in slide-in-from-bottom duration-500">
-                                    {/* 기사 정보와 차량 정보 통합 헤더 */}
-                                    <div className="flex flex-col sm:flex-row justify-between items-start gap-6 border-b border-slate-50 pb-6 w-full">
-                                        <div className="flex items-center gap-5">
-                                            {/* 기사 이미지 및 하단 버스 타입 */}
-                                            <div className="flex flex-col items-center shrink-0">
-                                                <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-100 flex items-center justify-center border border-slate-100 shadow-inner">
-                                                    {selectedEst && selectedEst.image ? (
-                                                        <img
-                                                            src={getImageUrl(selectedEst.image)}
-                                                            alt={selectedEst.driverName}
-                                                            className="w-full h-full object-cover"
-                                                            onError={(e) => {
-                                                                e.target.onerror = null;
-                                                                e.target.src = '';
-                                                                e.target.className = 'hidden';
-                                                                if (e.target.nextSibling) e.target.nextSibling.classList.remove('hidden');
-                                                            }}
-                                                        />
-                                                    ) : null}
-                                                    <span className={`material-symbols-outlined text-4xl text-orange-600 ${selectedEst && selectedEst.image ? 'hidden' : ''}`}>directions_bus</span>
+                                    <div key={unit.unitSeq} className="bg-white rounded-2xl p-8 shadow-xl shadow-teal-900/5 border border-slate-50 space-y-8 animate-in fade-in slide-in-from-bottom duration-500">
+                                        {/* 기사 정보와 차량 정보 통합 헤더 */}
+                                        <div className="flex flex-col sm:flex-row justify-between items-start gap-6 border-b border-slate-50 pb-6 w-full">
+                                            <div className="flex items-center gap-5">
+                                                {/* 기사 이미지 및 하단 버스 타입 */}
+                                                <div className="flex flex-col items-center shrink-0">
+                                                    <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-100 flex items-center justify-center border border-slate-100 shadow-inner">
+                                                        {selectedEst && selectedEst.image ? (
+                                                            <img
+                                                                src={getImageUrl(selectedEst.image)}
+                                                                alt={selectedEst.driverName}
+                                                                className="w-full h-full object-cover"
+                                                                onError={(e) => {
+                                                                    e.target.onerror = null;
+                                                                    e.target.src = '';
+                                                                    e.target.className = 'hidden';
+                                                                    if (e.target.nextSibling) e.target.nextSibling.classList.remove('hidden');
+                                                                }}
+                                                            />
+                                                        ) : null}
+                                                        <span className={`material-symbols-outlined text-4xl text-orange-600 ${selectedEst && selectedEst.image ? 'hidden' : ''}`}>directions_bus</span>
+                                                    </div>
+                                                    {/* 버스의 타입 정보를 기사의 이미지 밑으로 이동 */}
+                                                    <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-2 text-center">{unit.busType}</p>
                                                 </div>
-                                                {/* 버스의 타입 정보를 기사의 이미지 밑으로 이동 */}
-                                                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-2 text-center">{unit.busType}</p>
-                                            </div>
 
-                                            {/* 기사명, 평점, 연식 및 모델명 (1줄씩 표시), 요청금액 */}
-                                            <div className="text-left">
-                                                <div className="flex items-center gap-3">
-                                                    <h4 className="font-black text-xl tracking-tighter leading-tight italic">
-                                                        {selectedEst ? selectedEst.driverName : `차량 #${unit.unitSeq}`}
-                                                    </h4>
-                                                    {selectedEst && (
-                                                        <span className="flex items-center bg-secondary/10 px-2 py-0.5 rounded-xl text-secondary text-[11px] font-black">
-                                                            <span className="material-symbols-outlined text-[12px] mr-1" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                                                            {selectedEst.rating}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                {/* 차량의 연식과 모델명을 1줄씩 표시 */}
-                                                {selectedEst && (
-                                                    <div className="mt-1.5 space-y-0.5">
-                                                        {selectedEst.busYear && (
-                                                            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{selectedEst.busYear}년형</p>
-                                                        )}
-                                                        {selectedEst.busModel && (
-                                                            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{selectedEst.busModel}</p>
+                                                {/* 기사명, 평점, 연식 및 모델명 (1줄씩 표시), 요청금액 */}
+                                                <div className="text-left">
+                                                    <div className="flex items-center gap-3">
+                                                        <h4 className="font-black text-xl tracking-tighter leading-tight italic">
+                                                            {selectedEst ? selectedEst.driverName : `차량 #${unit.unitSeq}`}
+                                                        </h4>
+                                                        {selectedEst && (
+                                                            <span className="flex items-center bg-secondary/10 px-2 py-0.5 rounded-xl text-secondary text-[11px] font-black">
+                                                                <span className="material-symbols-outlined text-[12px] mr-1" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                                                                {selectedEst.rating}
+                                                            </span>
                                                         )}
                                                     </div>
-                                                )}
-                                                <p className="text-sm font-black text-orange-600 mt-2">요청금액: {Number(unit.unitReqAmt || 0).toLocaleString()}원</p>
+                                                    {/* 차량의 연식과 모델명을 1줄씩 표시 */}
+                                                    {selectedEst && (
+                                                        <div className="mt-1.5 space-y-0.5">
+                                                            {selectedEst.busYear && (
+                                                                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{selectedEst.busYear}년형</p>
+                                                            )}
+                                                            {selectedEst.busModel && (
+                                                                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{selectedEst.busModel}</p>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    <p className="text-sm font-black text-orange-600 mt-2">요청금액: {Number(unit.unitReqAmt || 0).toLocaleString()}원</p>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    {/* 상세 정보 영역 */}
-                                    <div className="space-y-4">
-                                        {unit.estimates.length === 0 ? (
-                                            <div className="py-12 bg-slate-50/50 rounded-2xl text-center border-2 border-dashed border-slate-100 flex flex-col items-center gap-6">
-                                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest italic">현재 응찰 내역이 없습니다.</p>
-                                                <div className="w-full max-w-xs space-y-3">
-                                                    <button
-                                                        onClick={() => handleRequestBusChange(unit.unitSeq)}
-                                                        className="w-full py-4 rounded-xl font-black text-xs tracking-widest uppercase transition-all flex items-center justify-center gap-2 active:scale-95 bg-purple-600 text-white shadow-lg shadow-purple-900/10 btn-primary"
-                                                    >
-                                                        <span className="material-symbols-outlined text-sm">published_with_changes</span>
-                                                        차량 변경요청
-                                                    </button>
-                                                    {unit.unitStat !== 'TRAVELER_CANCEL' && unit.unitStat !== 'CONFIRM' && (
+                                        {/* 상세 정보 영역 */}
+                                        <div className="space-y-4">
+                                            {unit.estimates.length === 0 ? (
+                                                <div className="py-12 bg-slate-50/50 rounded-2xl text-center border-2 border-dashed border-slate-100 flex flex-col items-center gap-6">
+                                                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest italic">현재 응찰 내역이 없습니다.</p>
+                                                    <div className="w-full max-w-xs space-y-3">
                                                         <button
-                                                            onClick={() => handleCancelBus(unit.unitSeq)}
-                                                            className="w-full py-2 text-[10px] font-black text-error border border-error/10 rounded-xl hover:bg-error/5 transition-all active:scale-95 uppercase tracking-widest btn-secondary"
+                                                            onClick={() => handleRequestBusChange(unit.unitSeq)}
+                                                            className="w-full py-4 rounded-xl font-black text-xs tracking-widest uppercase transition-all flex items-center justify-center gap-2 active:scale-95 bg-purple-600 text-white shadow-lg shadow-purple-900/10 btn-primary"
                                                         >
-                                                            이 차량 청약 요청 취소
+                                                            <span className="material-symbols-outlined text-sm">published_with_changes</span>
+                                                            차량 변경요청
                                                         </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            unit.estimates.map((est) => (
-                                                <div key={est.id} className="space-y-8 animate-in fade-in duration-300">
-                                                    <div className="flex flex-col gap-8">
-                                                        {/* 차량 사진 리스트 */}
-                                                        {est.busImages && est.busImages.length > 0 && (
-                                                            <div className="space-y-4">
-                                                                <div className="flex justify-between items-center px-2">
-                                                                    <h6 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] italic flex items-center gap-2">
-                                                                        <span className="material-symbols-outlined text-[14px]">gallery_thumbnail</span>
-                                                                        차량 사진 ({est.busImages.length})
-                                                                    </h6>
-                                                                </div>
-                                                                <div className="grid grid-cols-1 gap-6">
-                                                                    {est.busImages.map((img, iIdx) => (
-                                                                        <div key={iIdx} className="relative w-full aspect-[16/9] rounded-2xl overflow-hidden shadow-2xl border-8 border-white group/photo bg-slate-100 flex items-center justify-center">
-                                                                            <img
-                                                                                src={getImageUrl(img)}
-                                                                                alt={`차량 사진 ${iIdx + 1}`}
-                                                                                className="w-full h-full object-cover transition-transform duration-700 group-hover/photo:scale-110"
-                                                                                onError={(e) => {
-                                                                                    e.target.onerror = null;
-                                                                                    e.target.className = 'hidden';
-                                                                                    if (e.target.nextSibling) e.target.nextSibling.classList.remove('hidden');
-                                                                                }}
-                                                                            />
-                                                                            <span className="material-symbols-outlined text-5xl text-slate-200 hidden">directions_bus</span>
-                                                                            <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-end p-8">
-                                                                                <span className="text-white text-xs font-black uppercase tracking-[0.3em] bg-white/20 backdrop-blur-md px-4 py-2 rounded-xl border border-white/30">Vehicle Photo {iIdx + 1}</span>
-                                                                            </div>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
+                                                        {unit.unitStat !== 'TRAVELER_CANCEL' && unit.unitStat !== 'CONFIRM' && (
+                                                            <button
+                                                                onClick={() => handleCancelBus(unit.unitSeq)}
+                                                                className="w-full py-2 text-[10px] font-black text-error border border-error/10 rounded-xl hover:bg-error/5 transition-all active:scale-95 uppercase tracking-widest btn-secondary"
+                                                            >
+                                                                이 차량 청약 요청 취소
+                                                            </button>
                                                         )}
-
-                                                        {/* 차량 상세 스펙 */}
-                                                        <div className="flex flex-col gap-4">
-                                                            <div className="bg-slate-50/80 p-6 rounded-2xl space-y-4">
-                                                                <h6 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] italic flex items-center gap-2">
-                                                                    <span className="material-symbols-outlined text-[14px]">ac_unit</span>
-                                                                    편의시설 및 서비스
-                                                                </h6>
-                                                                <div className="grid grid-cols-2 gap-2">
-                                                                    {[
-                                                                        { key: '테이블', icon: 'table_restaurant' },
-                                                                        { key: '와이파이', icon: 'wifi' },
-                                                                        { key: 'USB충전', icon: 'usb' },
-                                                                        { key: '냉장고', icon: 'kitchen' },
-                                                                        { key: '개인모니터', icon: 'monitor' },
-                                                                        { key: '생수제공', icon: 'water_drop' },
-                                                                        { key: '간식제공', icon: 'icecream' }
-                                                                    ].map((item, idx) => {
-                                                                        const isActive = est.tags && est.tags.includes(item.key);
-                                                                        if (!isActive) return null;
-                                                                        return (
-                                                                            <div key={idx} className="flex flex-col items-center justify-center p-3 rounded-xl bg-white shadow-sm border border-teal-100/30 group/item hover:scale-105 transition-transform text-center gap-1.5">
-                                                                                <span className="material-symbols-outlined text-teal-600 text-xl group-hover/item:rotate-12 transition-transform">{item.icon}</span>
-                                                                                <span className="text-xs font-black text-slate-700 tracking-tighter">{item.key}</span>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                unit.estimates.map((est) => (
+                                                    <div key={est.id} className="space-y-8 animate-in fade-in duration-300">
+                                                        <div className="flex flex-col gap-8">
+                                                            {/* 차량 사진 리스트 */}
+                                                            {est.busImages && est.busImages.length > 0 && (
+                                                                <div className="space-y-4">
+                                                                    <div className="flex justify-between items-center px-2">
+                                                                        <h6 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] italic flex items-center gap-2">
+                                                                            <span className="material-symbols-outlined text-[14px]">gallery_thumbnail</span>
+                                                                            차량 사진 ({est.busImages.length})
+                                                                        </h6>
+                                                                    </div>
+                                                                    <div className="grid grid-cols-1 gap-6">
+                                                                        {est.busImages.map((img, iIdx) => (
+                                                                            <div key={iIdx} className="relative w-full aspect-[16/9] rounded-2xl overflow-hidden shadow-2xl border-8 border-white group/photo bg-slate-100 flex items-center justify-center">
+                                                                                <img
+                                                                                    src={getImageUrl(img)}
+                                                                                    alt={`차량 사진 ${iIdx + 1}`}
+                                                                                    className="w-full h-full object-cover transition-transform duration-700 group-hover/photo:scale-110"
+                                                                                    onError={(e) => {
+                                                                                        e.target.onerror = null;
+                                                                                        e.target.className = 'hidden';
+                                                                                        if (e.target.nextSibling) e.target.nextSibling.classList.remove('hidden');
+                                                                                    }}
+                                                                                />
+                                                                                <span className="material-symbols-outlined text-5xl text-slate-200 hidden">directions_bus</span>
+                                                                                <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-end p-8">
+                                                                                    <span className="text-white text-xs font-black uppercase tracking-[0.3em] bg-white/20 backdrop-blur-md px-4 py-2 rounded-xl border border-white/30">Vehicle Photo {iIdx + 1}</span>
+                                                                                </div>
                                                                             </div>
-                                                                        );
-                                                                    })}
-                                                                    {(!est.tags || est.tags.length === 0) && (
-                                                                        <div className="col-span-2 text-center py-4 text-slate-300 font-bold text-xs italic">등록된 편의시설이 없습니다.</div>
-                                                                    )}
-                                                                    {/* 편의시설 목록 맨 밑에 ABES(ADAS) 정보 노출 (2열 영역 모두 채우기) */}
-                                                                    <div className="col-span-2 flex items-center gap-3 p-3 rounded-xl bg-white shadow-sm border border-teal-100/30 group/item hover:translate-x-1 transition-transform text-left">
-                                                                        <span className="material-symbols-outlined text-teal-600 text-lg">verified_user</span>
-                                                                        <span className="text-xs font-black text-slate-700 tracking-tighter">ABES (ADAS): {est.hasAdas === 'Y' ? '장착 완료' : '미장착'}</span>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* 차량 상세 스펙 */}
+                                                            <div className="flex flex-col gap-4">
+                                                                <div className="bg-slate-50/80 p-6 rounded-2xl space-y-4">
+                                                                    <h6 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] italic flex items-center gap-2">
+                                                                        <span className="material-symbols-outlined text-[14px]">ac_unit</span>
+                                                                        편의시설 및 서비스
+                                                                    </h6>
+                                                                    <div className="grid grid-cols-2 gap-2">
+                                                                        {[
+                                                                            { key: '테이블', icon: 'table_restaurant' },
+                                                                            { key: '와이파이', icon: 'wifi' },
+                                                                            { key: 'USB충전', icon: 'usb' },
+                                                                            { key: '냉장고', icon: 'kitchen' },
+                                                                            { key: '개인모니터', icon: 'monitor' },
+                                                                            { key: '생수제공', icon: 'water_drop' },
+                                                                            { key: '간식제공', icon: 'icecream' }
+                                                                        ].map((item, idx) => {
+                                                                            const isActive = est.tags && est.tags.includes(item.key);
+                                                                            if (!isActive) return null;
+                                                                            return (
+                                                                                <div key={idx} className="flex flex-col items-center justify-center p-3 rounded-xl bg-white shadow-sm border border-teal-100/30 group/item hover:scale-105 transition-transform text-center gap-1.5">
+                                                                                    <span className="material-symbols-outlined text-teal-600 text-xl group-hover/item:rotate-12 transition-transform">{item.icon}</span>
+                                                                                    <span className="text-xs font-black text-slate-700 tracking-tighter">{item.key}</span>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                        {(!est.tags || est.tags.length === 0) && (
+                                                                            <div className="col-span-2 text-center py-4 text-slate-300 font-bold text-xs italic">등록된 편의시설이 없습니다.</div>
+                                                                        )}
+                                                                        {/* 편의시설 목록 맨 밑에 ABES(ADAS) 정보 노출 (2열 영역 모두 채우기) */}
+                                                                        <div className="col-span-2 flex items-center gap-3 p-3 rounded-xl bg-white shadow-sm border border-teal-100/30 group/item hover:translate-x-1 transition-transform text-left">
+                                                                            <span className="material-symbols-outlined text-teal-600 text-lg">verified_user</span>
+                                                                            <span className="text-xs font-black text-slate-700 tracking-tighter">ABES (ADAS): {est.hasAdas === 'Y' ? '장착 완료' : '미장착'}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="bg-slate-50/80 p-6 rounded-2xl space-y-4 text-left">
+                                                                    <h6 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] italic flex items-center gap-2">
+                                                                        <span className="material-symbols-outlined text-[14px]">verified_user</span>
+                                                                        안전 및 인증 정보
+                                                                    </h6>
+                                                                    <div className="grid grid-cols-2 gap-y-3">
+                                                                        <div>
+                                                                            <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">보험 만료일</p>
+                                                                            <p className="text-[11px] font-black text-slate-800">{est.insuranceExpDt}</p>
+                                                                        </div>
+                                                                        <div>
+                                                                            <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">정기검사만료일</p>
+                                                                            <p className="text-[11px] font-black text-slate-800">{est.lastInspectDt}</p>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </div>
 
-                                                            <div className="bg-slate-50/80 p-6 rounded-2xl space-y-4 text-left">
-                                                                <h6 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] italic flex items-center gap-2">
-                                                                    <span className="material-symbols-outlined text-[14px]">verified_user</span>
-                                                                    안전 및 인증 정보
-                                                                </h6>
-                                                                <div className="grid grid-cols-2 gap-y-3">
-                                                                    <div>
-                                                                        <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">보험 만료일</p>
-                                                                        <p className="text-[11px] font-black text-slate-800">{est.insuranceExpDt}</p>
-                                                                    </div>
-                                                                    <div>
-                                                                        <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">정기검사만료일</p>
-                                                                        <p className="text-[11px] font-black text-slate-800">{est.lastInspectDt}</p>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* 차량 관리 버튼 */}
-                                                        <div className="pt-4">
-                                                            <div className="grid grid-cols-1 gap-3">
-                                                                <button
-                                                                    onClick={() => handleRequestBusChange(unit.unitSeq)}
-                                                                    className="w-full py-4 rounded-xl font-black text-[11px] tracking-widest uppercase transition-all flex items-center justify-center gap-2 active:scale-95 bg-slate-100 text-slate-600 hover:bg-purple-50 hover:text-purple-700 btn-secondary"
-                                                                >
-                                                                    <span className="material-symbols-outlined text-sm">published_with_changes</span>
-                                                                    차량 변경요청
-                                                                </button>
-
-                                                                {unit.unitStat !== 'TRAVELER_CANCEL' && unit.unitStat !== 'CONFIRM' && (
+                                                            {/* 차량 관리 버튼 */}
+                                                            <div className="pt-4">
+                                                                <div className="grid grid-cols-1 gap-3">
                                                                     <button
-                                                                        onClick={() => handleCancelBus(unit.unitSeq)}
-                                                                        className="w-full py-2 text-[10px] font-black text-slate-400 hover:text-error transition-all active:scale-95 uppercase tracking-widest"
+                                                                        onClick={() => handleRequestBusChange(unit.unitSeq)}
+                                                                        className="w-full py-4 rounded-xl font-black text-[11px] tracking-widest uppercase transition-all flex items-center justify-center gap-2 active:scale-95 bg-slate-100 text-slate-600 hover:bg-purple-50 hover:text-purple-700 btn-secondary"
                                                                     >
-                                                                        이 차량 청약 요청 취소
+                                                                        <span className="material-symbols-outlined text-sm">published_with_changes</span>
+                                                                        차량 변경요청
                                                                     </button>
-                                                                )}
+
+                                                                    {unit.unitStat !== 'TRAVELER_CANCEL' && unit.unitStat !== 'CONFIRM' && (
+                                                                        <button
+                                                                            onClick={() => handleCancelBus(unit.unitSeq)}
+                                                                            className="w-full py-2 text-[10px] font-black text-slate-400 hover:text-error transition-all active:scale-95 uppercase tracking-widest"
+                                                                        >
+                                                                            이 차량 청약 요청 취소
+                                                                        </button>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            ))
-                                         )}
+                                                ))
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            );
+                                );
                             })}
                         </div>
                     </div>
@@ -682,17 +680,17 @@ const ApprovalListCustomer = () => {
                                 {units.map((unit) => {
                                     const selectedEst = unit.estimates && unit.estimates.length > 0 ? unit.estimates[0] : null;
                                     return (
-                                    <div key={unit.unitSeq} className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/10 group hover:bg-white/10 transition-all">
-                                        <div className="text-left">
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                                                {selectedEst ? selectedEst.driverName : `차량 #${unit.unitSeq}`}
-                                            </p>
-                                            <p className="text-sm font-bold text-slate-200">{unit.busType}</p>
+                                        <div key={unit.unitSeq} className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/10 group hover:bg-white/10 transition-all">
+                                            <div className="text-left">
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                                                    {selectedEst ? selectedEst.driverName : `차량 #${unit.unitSeq}`}
+                                                </p>
+                                                <p className="text-sm font-bold text-slate-200">{unit.busType}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-lg font-black text-secondary italic">₩{Number(unit.unitReqAmt || 0).toLocaleString()}</p>
+                                            </div>
                                         </div>
-                                        <div className="text-right">
-                                            <p className="text-lg font-black text-secondary italic">₩{Number(unit.unitReqAmt || 0).toLocaleString()}</p>
-                                        </div>
-                                    </div>
                                     );
                                 })}
                             </div>
