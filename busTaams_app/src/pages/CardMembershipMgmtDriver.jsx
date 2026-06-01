@@ -180,7 +180,7 @@ const CardMembershipMgmtDriver = () => {
                     <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col gap-2">
                         <span className="text-secondary text-[10px] font-bold uppercase tracking-wider">예정 금액</span>
                         <span className="text-lg font-black text-secondary">
-                            {data.nextPaymentAmount > 0 ? `₩${formatPrice(data.nextPaymentAmount)}` : '-'}
+                            {data.nextPaymentAmount >= 0 ? `₩${formatPrice(data.nextPaymentAmount)}` : '-'}
                         </span>
                     </div>
                 </div>

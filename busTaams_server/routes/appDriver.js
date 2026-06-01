@@ -1794,15 +1794,31 @@ router.get('/membership-card-info', authenticateToken, async (req, res) => {
         if (policyPrices['DRIVER_GENNERAL'] === undefined) policyPrices['DRIVER_GENNERAL'] = 0;
         if (policyPrices['DRIVER'] === undefined) policyPrices['DRIVER'] = 0;
 
-        let nextPaymentDate = null;
-        let nextPaymentAmount = policyPrices[currentPolicy] || 0;
+        // 오늘 기준 다음 달 1일 정보 계산 (한글 주석)
+        const now = new Date();
+        const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const nextYyyymm = nextMonth.getFullYear().toString() + String(nextMonth.getMonth() + 1).padStart(2, '0');
 
-        // 예정금액이 존재하는 유료 멤버십인 경우에 다음 결제일 정보를 함께 생성 (한글 주석)
-        if (nextPaymentAmount > 0) {
-            const now = new Date();
-            const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-            nextPaymentDate = `${nextMonth.getMonth() + 1}월 ${nextMonth.getDate()}일`;
+        // 4. 다음 달 신청 요금제(TB_MOM_MEMBER_REQ) 조회 (신청 대기 상태인 APPLY_YN = 'N') (한글 주석)
+        const [reqRows] = await pool.execute(
+            `SELECT FEE_POLICY FROM TB_MOM_MEMBER_REQ 
+             WHERE CUST_ID = ? AND YYYYMM = ? AND APPLY_YN = 'N' 
+             ORDER BY REG_DT DESC LIMIT 1`,
+            [custId, nextYyyymm]
+        );
+
+        let nextPaymentAmount = 0;
+        if (reqRows.length > 0) {
+            // 다음 달 예약 등급이 있으면 해당 등급 단가 적용 (한글 주석)
+            const nextPolicy = reqRows[0].FEE_POLICY;
+            nextPaymentAmount = policyPrices[nextPolicy] !== undefined ? policyPrices[nextPolicy] : 0;
+        } else {
+            // 다음 달 등급이 없는데 현재 등급이 요금제이면 해당 요금제 단가 적용 (0원이거나 없으면 0원) (한글 주석)
+            nextPaymentAmount = policyPrices[currentPolicy] !== undefined ? policyPrices[currentPolicy] : 0;
         }
+
+        // 결제 예정일은 금액과 무관하게 항상 다음 달 1일로 설정 (한글 주석)
+        const nextPaymentDate = `${nextMonth.getMonth() + 1}월 ${nextMonth.getDate()}일`;
 
         const formattedHistory = history.map(item => ({
             ...item,

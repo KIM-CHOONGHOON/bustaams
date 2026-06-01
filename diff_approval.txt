@@ -1,0 +1,233 @@
+﻿diff --git a/busTaams_app/src/pages/ApprovalListCustomer.jsx b/busTaams_app/src/pages/ApprovalListCustomer.jsx
+index 90f5439..62ffe0d 100644
+--- a/busTaams_app/src/pages/ApprovalListCustomer.jsx
++++ b/busTaams_app/src/pages/ApprovalListCustomer.jsx
+@@ -403,7 +403,7 @@ const ApprovalListCustomer = () => {
+                     <div className="md:col-span-8">
+                         <p className="text-orange-600 font-bold tracking-[0.2em] text-xs mb-3 uppercase italic">Approval Pending</p>
+                         <h1 className="text-4xl md:text-6xl font-extrabold tracking-tighter text-on-surface leading-tight italic">
+-                            <span className="text-primary">{tripSummary.title}</span> ?뱀씤 ?湲?+                            <span className="text-primary">{tripSummary.title}</span>
+                         </h1>
+                     </div>
+                     <div className="md:col-span-4 text-right">
+@@ -464,26 +464,65 @@ const ApprovalListCustomer = () => {
+                                 <span className="text-sm text-slate-400 font-bold">{units.length}? ?붿껌??/span>
+                             </div>
+ 
+-                            {units.map((unit) => (
++                            {units.map((unit) => {
++                                const selectedEst = unit.estimates && unit.estimates.length > 0 ? unit.estimates[0] : null;
++                                return (
+                                 <div key={unit.unitSeq} className="bg-white rounded-2xl p-8 shadow-xl shadow-teal-900/5 border border-slate-50 space-y-8 animate-in fade-in slide-in-from-bottom duration-500">
+-                                    <div className="flex flex-col sm:flex-row justify-between items-start gap-6 border-b border-slate-50 pb-6">
++                                    {/* 湲곗궗 ?뺣낫? 李⑤웾 ?뺣낫 ?듯빀 ?ㅻ뜑 */}
++                                    <div className="flex flex-col sm:flex-row justify-between items-start gap-6 border-b border-slate-50 pb-6 w-full">
+                                         <div className="flex items-center gap-5">
+-                                            <div className="w-16 h-16 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 shadow-inner">
+-                                                <span className="material-symbols-outlined text-4xl">directions_bus</span>
++                                            {/* 湲곗궗 ?대?吏 諛??섎떒 踰꾩뒪 ???*/}
++                                            <div className="flex flex-col items-center shrink-0">
++                                                <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-100 flex items-center justify-center border border-slate-100 shadow-inner">
++                                                    {selectedEst && selectedEst.image ? (
++                                                        <img
++                                                            src={getImageUrl(selectedEst.image)}
++                                                            alt={selectedEst.driverName}
++                                                            className="w-full h-full object-cover"
++                                                            onError={(e) => {
++                                                                e.target.onerror = null;
++                                                                e.target.src = '';
++                                                                e.target.className = 'hidden';
++                                                                if (e.target.nextSibling) e.target.nextSibling.classList.remove('hidden');
++                                                            }}
++                                                        />
++                                                    ) : null}
++                                                    <span className={`material-symbols-outlined text-4xl text-orange-600 ${selectedEst && selectedEst.image ? 'hidden' : ''}`}>directions_bus</span>
++                                                </div>
++                                                {/* 踰꾩뒪??????뺣낫瑜?湲곗궗???대?吏 諛묒쑝濡??대룞 */}
++                                                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-2 text-center">{unit.busType}</p>
+                                             </div>
++
++                                            {/* 湲곗궗紐? ?됱젏, ?곗떇 諛?紐⑤뜽紐?(1以꾩뵫 ?쒖떆), ?붿껌湲덉븸 */}
+                                             <div className="text-left">
+-                                                <h4 className="font-black text-xl tracking-tighter leading-tight italic">李⑤웾 #{unit.unitSeq}</h4>
+-                                                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">{unit.busType}</p>
++                                                <div className="flex items-center gap-3">
++                                                    <h4 className="font-black text-xl tracking-tighter leading-tight italic">
++                                                        {selectedEst ? selectedEst.driverName : `李⑤웾 #${unit.unitSeq}`}
++                                                    </h4>
++                                                    {selectedEst && (
++                                                        <span className="flex items-center bg-secondary/10 px-2 py-0.5 rounded-xl text-secondary text-[11px] font-black">
++                                                            <span className="material-symbols-outlined text-[12px] mr-1" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
++                                                            {selectedEst.rating}
++                                                        </span>
++                                                    )}
++                                                </div>
++                                                {/* 李⑤웾???곗떇怨?紐⑤뜽紐낆쓣 1以꾩뵫 ?쒖떆 */}
++                                                {selectedEst && (
++                                                    <div className="mt-1.5 space-y-0.5">
++                                                        {selectedEst.busYear && (
++                                                            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">?곗떇: {selectedEst.busYear}?꾪삎</p>
++                                                        )}
++                                                        {selectedEst.busModel && (
++                                                            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">紐⑤뜽紐? {selectedEst.busModel}</p>
++                                                        )}
++                                                    </div>
++                                                )}
+                                                 <p className="text-sm font-black text-orange-600 mt-2">?붿껌湲덉븸: {Number(unit.unitReqAmt || 0).toLocaleString()}??/p>
+                                             </div>
+                                         </div>
+-                                        <div className="flex flex-col items-end gap-3 w-full sm:w-auto">
+-                                            <span className={`px-5 py-1.5 rounded-xl text-[10px] font-black tracking-widest uppercase shadow-sm ${getBusStatusDisplay(unit.unitStat).color}`}>
+-                                                {getBusStatusDisplay(unit.unitStat).label}
+-                                            </span>
+-                                        </div>
+                                     </div>
+ 
++                                    {/* ?곸꽭 ?뺣낫 ?곸뿭 */}
+                                     <div className="space-y-4">
+                                         {unit.estimates.length === 0 ? (
+                                             <div className="py-12 bg-slate-50/50 rounded-2xl text-center border-2 border-dashed border-slate-100 flex flex-col items-center gap-6">
+@@ -508,42 +547,8 @@ const ApprovalListCustomer = () => {
+                                             </div>
+                                         ) : (
+                                             unit.estimates.map((est) => (
+-                                                <div key={est.id} className={`p-8 rounded-2xl border transition-all duration-500 group ${est.isSelected ? 'bg-secondary/5 border-secondary shadow-lg shadow-secondary/5' : 'bg-white border-slate-100 hover:border-orange-200'}`}>
++                                                <div key={est.id} className="space-y-8 animate-in fade-in duration-300">
+                                                     <div className="flex flex-col gap-8">
+-                                                        {/* 湲곗궗 諛?李⑤웾 ?ㅻ뜑 */}
+-                                                        <div className="flex flex-col sm:flex-row items-center gap-8 border-b border-slate-50 pb-6">
+-                                                            <div className="w-24 h-24 rounded-2xl overflow-hidden shadow-xl border-4 border-white group-hover:rotate-3 transition-transform shrink-0 bg-slate-100 flex items-center justify-center">
+-                                                                {est.image ? (
+-                                                                    <img
+-                                                                        src={getImageUrl(est.image)}
+-                                                                        alt={est.driverName}
+-                                                                        className="w-full h-full object-cover"
+-                                                                        onError={(e) => {
+-                                                                            e.target.onerror = null;
+-                                                                            e.target.src = ''; // Clear source to show background icon
+-                                                                            e.target.className = 'hidden';
+-                                                                            if (e.target.nextSibling) e.target.nextSibling.classList.remove('hidden');
+-                                                                        }}
+-                                                                    />
+-                                                                ) : null}
+-                                                                <span className={`material-symbols-outlined text-4xl text-slate-300 ${est.image ? 'hidden' : ''}`}>person</span>
+-                                                            </div>
+-                                                            <div className="flex-grow text-left">
+-                                                                <div className="flex flex-wrap items-center gap-3 mb-3">
+-                                                                    <h5 className="font-black text-xl tracking-tighter italic">{est.driverName} 湲곗궗??/h5>
+-                                                                    <span className="flex items-center bg-secondary/10 px-3 py-1 rounded-xl text-secondary text-[11px] font-black">
+-                                                                        <span className="material-symbols-outlined text-[12px] mr-1" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+-                                                                        {est.rating}
+-                                                                    </span>
+-                                                                </div>
+-                                                                <p className="text-[14px] font-black text-slate-800 italic">{est.busInfo}</p>
+-                                                            </div>
+-                                                            <div className="text-right shrink-0">
+-                                                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">?묒같 湲덉븸</p>
+-                                                                <p className="text-3xl font-black text-orange-600 tracking-tighter italic">??Number(est.price).toLocaleString()}</p>
+-                                                            </div>
+-                                                        </div>
+-
+                                                         {/* 李⑤웾 ?ъ쭊 由ъ뒪??*/}
+                                                         {est.busImages && est.busImages.length > 0 && (
+                                                             <div className="space-y-4">
+@@ -577,13 +582,13 @@ const ApprovalListCustomer = () => {
+                                                         )}
+ 
+                                                         {/* 李⑤웾 ?곸꽭 ?ㅽ럺 */}
+-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
++                                                        <div className="flex flex-col gap-4">
+                                                             <div className="bg-slate-50/80 p-6 rounded-2xl space-y-4">
+                                                                 <h6 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] italic flex items-center gap-2">
+                                                                     <span className="material-symbols-outlined text-[14px]">ac_unit</span>
+                                                                     ?몄쓽?쒖꽕 諛??쒕퉬??                                                                 </h6>
+-                                                                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
++                                                                <div className="grid grid-cols-2 gap-2">
+                                                                     {[
+                                                                         { key: '?뚯씠釉?, icon: 'table_restaurant' },
+                                                                         { key: '??댄뙆??, icon: 'wifi' },
+@@ -596,15 +601,20 @@ const ApprovalListCustomer = () => {
+                                                                         const isActive = est.tags && est.tags.includes(item.key);
+                                                                         if (!isActive) return null;
+                                                                         return (
+-                                                                            <div key={idx} className="flex flex-col items-center justify-center p-3 rounded-2xl bg-white shadow-sm border border-teal-100/30 group/item hover:scale-105 transition-transform">
++                                                                            <div key={idx} className="flex flex-col items-center justify-center p-3 rounded-xl bg-white shadow-sm border border-teal-100/30 group/item hover:scale-105 transition-transform text-center gap-1.5">
+                                                                                 <span className="material-symbols-outlined text-teal-600 text-xl group-hover/item:rotate-12 transition-transform">{item.icon}</span>
+-                                                                                <span className="text-[10px] font-black text-slate-600 mt-2 tracking-tighter">{item.key}</span>
++                                                                                <span className="text-xs font-black text-slate-700 tracking-tighter">{item.key}</span>
+                                                                             </div>
+                                                                         );
+                                                                     })}
+                                                                     {(!est.tags || est.tags.length === 0) && (
+-                                                                        <div className="col-span-full text-center py-4 text-slate-300 font-bold text-xs italic">?깅줉???몄쓽?쒖꽕???놁뒿?덈떎.</div>
++                                                                        <div className="col-span-2 text-center py-4 text-slate-300 font-bold text-xs italic">?깅줉???몄쓽?쒖꽕???놁뒿?덈떎.</div>
+                                                                     )}
++                                                                    {/* ?몄쓽?쒖꽕 紐⑸줉 留?諛묒뿉 ABES(ADAS) ?뺣낫 ?몄텧 (2???곸뿭 紐⑤몢 梨꾩슦湲? */}
++                                                                    <div className="col-span-2 flex items-center gap-3 p-3 rounded-xl bg-white shadow-sm border border-teal-100/30 group/item hover:translate-x-1 transition-transform text-left">
++                                                                        <span className="material-symbols-outlined text-teal-600 text-lg">verified_user</span>
++                                                                        <span className="text-xs font-black text-slate-700 tracking-tighter">ABES (ADAS): {est.hasAdas === 'Y' ? '?μ갑 ?꾨즺' : '誘몄옣李?}</span>
++                                                                    </div>
+                                                                 </div>
+                                                             </div>
+ 
+@@ -614,18 +624,12 @@ const ApprovalListCustomer = () => {
+                                                                     ?덉쟾 諛??몄쬆 ?뺣낫
+                                                                 </h6>
+                                                                 <div className="grid grid-cols-2 gap-y-3">
+-                                                                    <div>
+-                                                                        <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">ABES (ADAS)</p>
+-                                                                        <span className={`text-[11px] font-black px-2 py-0.5 rounded-xl ${est.hasAdas === 'Y' ? 'text-teal-600 bg-teal-50' : 'text-slate-400 bg-slate-100'}`}>
+-                                                                            {est.hasAdas === 'Y' ? '?μ갑 ?꾨즺' : '誘몄옣李?}
+-                                                                        </span>
+-                                                                    </div>
+                                                                     <div>
+                                                                         <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">蹂댄뿕 留뚮즺??/p>
+                                                                         <p className="text-[11px] font-black text-slate-800">{est.insuranceExpDt}</p>
+                                                                     </div>
+-                                                                    <div className="col-span-2">
+-                                                                        <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">?뺢린寃???좏슚?쇱옄</p>
++                                                                    <div>
++                                                                        <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">?뺢린寃?щ쭔猷뚯씪</p>
+                                                                         <p className="text-[11px] font-black text-slate-800">{est.lastInspectDt}</p>
+                                                                     </div>
+                                                                 </div>
+@@ -657,11 +661,10 @@ const ApprovalListCustomer = () => {
+                                                 </div>
+                                             ))
+                                          )}
+-
+-
+                                     </div>
+                                 </div>
+-                            ))}
++                            );
++                            })}
+                         </div>
+                     </div>
+ 
+@@ -670,17 +673,22 @@ const ApprovalListCustomer = () => {
+                             <h2 className="text-2xl font-black mb-8 italic tracking-tighter">理쒖쥌 ?뱀씤 ?붿빟</h2>
+ 
+                             <div className="space-y-6 mb-10">
+-                                {units.map((unit) => (
++                                {units.map((unit) => {
++                                    const selectedEst = unit.estimates && unit.estimates.length > 0 ? unit.estimates[0] : null;
++                                    return (
+                                     <div key={unit.unitSeq} className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/10 group hover:bg-white/10 transition-all">
+                                         <div className="text-left">
+-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">李⑤웾 #{unit.unitSeq}</p>
++                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
++                                                {selectedEst ? selectedEst.driverName : `李⑤웾 #${unit.unitSeq}`}
++                                            </p>
+                                             <p className="text-sm font-bold text-slate-200">{unit.busType}</p>
+                                         </div>
+                                         <div className="text-right">
+                                             <p className="text-lg font-black text-secondary italic">??Number(unit.unitReqAmt || 0).toLocaleString()}</p>
+                                         </div>
+                                     </div>
+-                                ))}
++                                    );
++                                })}
+                             </div>
+ 
+                             <div className="pt-8 border-t border-white/10 space-y-4">
