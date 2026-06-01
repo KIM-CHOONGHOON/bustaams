@@ -6,6 +6,7 @@ const ApprovalDetailCustomer = () => {
     const navigate = useNavigate();
     const { id } = useParams();
     const [bid, setBid] = useState(null);
+    const [reservation, setReservation] = useState(null); // 예약 정보 상태 추가
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -37,6 +38,17 @@ const ApprovalDetailCustomer = () => {
                 const res = await api.get(`/app/customer/bid-detail/${id}`);
                 if (res && res.success) {
                     setBid(res.data);
+                    // 견적 요청 ID가 존재하면 원래의 예약/경로 정보도 순차적으로 조회
+                    if (res.data.reqId) {
+                        try {
+                            const resvRes = await api.get(`/app/customer/reservation/${res.data.reqId}`);
+                            if (resvRes && resvRes.success) {
+                                setReservation(resvRes.data);
+                            }
+                        } catch (resvErr) {
+                            console.error('Failed to fetch reservation detail for bid:', resvErr);
+                        }
+                    }
                 } else {
                     setError(res?.error || '데이터를 불러오지 못했습니다.');
                 }
@@ -121,6 +133,9 @@ const ApprovalDetailCustomer = () => {
         );
     }
 
+    // 경로 정보 데이터 추출
+    const routeData = reservation?.route || [];
+
     return (
         <div className="bg-background text-on-surface min-h-screen pb-32 font-body text-left">
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-slate-50 shadow-sm">
@@ -203,6 +218,77 @@ const ApprovalDetailCustomer = () => {
                                 </div>
                             </div>
                         </section>
+
+                        {/* Route Summary (운행 일정과 전체 운행 경로를 1개의 섹션으로 통합) */}
+                        {reservation && (
+                            <section className="bg-white rounded-[3.5rem] p-12 shadow-2xl shadow-teal-900/[0.03] border border-slate-50 text-left space-y-10">
+                                
+                                {/* 운행 일정 */}
+                                <div className="flex items-center gap-4 border-b border-slate-100 pb-8 text-left">
+                                    <div className="w-12 h-12 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center shadow-sm">
+                                        <span className="material-symbols-outlined text-orange-600 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>calendar_today</span>
+                                    </div>
+                                    <div className="flex flex-col text-left">
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic mb-1">
+                                            운행 일정
+                                        </p>
+                                        <p className="text-lg font-black text-[#1E293B] leading-snug">
+                                            {reservation.start_date ? reservation.start_date.replace(/-/g, '.') : ''} -
+                                        </p>
+                                        <p className="text-lg font-black text-[#1E293B] leading-snug">
+                                            {reservation.end_date ? reservation.end_date.replace(/-/g, '.') : ''}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* 전체 운행 경로 */}
+                                <div className="space-y-8">
+                                    <div className="text-xl font-black tracking-tight border-b border-slate-50 pb-6 italic text-teal-700 flex items-center gap-2">
+                                        <span className="material-symbols-outlined">route</span>
+                                        전체 운행 경로
+                                    </div>
+                                    <div className="mt-8 space-y-10 relative">
+                                        <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-100"></div>
+                                        {routeData.map((point, idx) => {
+                                            const isRoundTrip = point.type === 'ROUND_TRIP' || point.type === 'DEST';
+                                            return (
+                                                <div key={idx} className="relative pl-12">
+                                                    <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center ${
+                                                        point.type === 'START' ? 'bg-teal-600 text-white shadow-teal-200' : 
+                                                        point.type === 'END' ? 'bg-rose-500 text-white shadow-rose-200' : 
+                                                        isRoundTrip ? 'bg-indigo-600 text-white shadow-indigo-100' :
+                                                        'bg-amber-400 text-white shadow-amber-100'
+                                                    }`}>
+                                                        <span className="material-symbols-outlined text-[16px] font-black">
+                                                            {point.type === 'START' ? 'location_on' : 
+                                                             point.type === 'END' ? 'flag' : 
+                                                             isRoundTrip ? 'near_me' : 'more_horiz'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex flex-col text-left">
+                                                        <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${
+                                                            point.type === 'START' ? 'text-teal-600' : 
+                                                            point.type === 'END' ? 'text-rose-500' : 
+                                                            isRoundTrip ? 'text-indigo-500' : 'text-amber-500'
+                                                        }`}>
+                                                            {point.title}
+                                                        </p>
+                                                        <h4 className="text-lg font-black tracking-tight text-on-surface text-left">
+                                                            {point.addr}
+                                                        </h4>
+                                                        {point.time && (
+                                                            <p className="text-xs text-slate-400 font-bold mt-1 opacity-70 italic text-left">
+                                                                {point.time}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </section>
+                        )}
 
                         <section className="bg-white rounded-2xl p-12 shadow-2xl shadow-orange-900/[0.03] border border-slate-50 space-y-10 text-left">
                             <h4 className="text-xl font-black tracking-tight border-b border-slate-50 pb-6 italic text-orange-600">차량 및 보험 상세 정보</h4>
