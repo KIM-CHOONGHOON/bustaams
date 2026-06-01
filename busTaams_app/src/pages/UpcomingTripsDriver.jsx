@@ -41,7 +41,7 @@ const UpcomingTripsDriver = () => {
                     <button onClick={() => navigate(-1)} className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 transition-colors">
                         <span className="material-symbols-outlined text-slate-600">arrow_back</span>
                     </button>
-                    <h1 className="text-lg font-bold text-slate-800">운행 일정</h1>
+                    <h1 className="text-lg font-bold text-slate-800">운행 예정 목록</h1>
                 </div>
                 <div className="w-10 h-10 rounded-xl bg-[#eceef0] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
                     {userProfileImg ? (
@@ -54,17 +54,13 @@ const UpcomingTripsDriver = () => {
 
             <main className="pt-24 px-6 max-w-7xl mx-auto space-y-20 animate-in fade-in slide-in-from-bottom duration-1000 text-left">
                 {/* Editorial Header Section */}
-                <section className="grid grid-cols-1 md:grid-cols-12 gap-8 items-end text-left">
-                    <div className="md:col-span-7 space-y-6 text-left">
-                        <span className="text-secondary font-black tracking-[0.4em] uppercase text-[10px] block px-2 italic">운행 정보 관리</span>
-                        <h2 className="font-headline text-6xl md:text-8xl font-black text-primary leading-[0.85] tracking-tighter italic uppercase text-left">
-                            예정된 <br/><span className="text-secondary">운행 일정</span>
-                        </h2>
-                    </div>
-                    <div className="md:col-span-5 md:pl-12 text-left border-l-4 border-slate-50">
-                        <p className="text-slate-400 text-lg font-bold italic tracking-tight leading-relaxed text-left">
-                            확정된 향후 운행 일정을 확인하고 관리하세요. 각 계약의 상세 정보와 배차팀 프로토콜을 제공합니다.
-                        </p>
+                <section className="mb-12">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
+                        <div className="md:col-span-12 text-left">
+                            <p className="text-[#3e4947] text-sm font-medium leading-relaxed">
+                                운행 예정 목록으로 운행 일정 확인하세요.
+                            </p>
+                        </div>
                     </div>
                 </section>
 
@@ -138,13 +134,13 @@ const UpcomingTripsDriver = () => {
                             <span className="material-symbols-outlined text-5xl text-slate-200">event_busy</span>
                         </div>
                         <div className="space-y-4">
-                            <h3 className="text-3xl font-black text-primary italic uppercase tracking-tighter">예정된 운행이 없습니다.</h3>
+                            <h3 className="text-2xl font-black text-primary italic uppercase tracking-tighter">예정된 운행이 없습니다.</h3>
                             <p className="text-slate-400 font-bold italic text-lg">새로운 운행 계약을 맺어보세요.</p>
                             <button 
                                 onClick={() => navigate('/estimate-list-driver')}
                                 className="mt-8 bg-primary text-white px-12 py-4 rounded-xl font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
                             >
-                                경매 보러가기
+                                청약목록보러가기
                             </button>
                         </div>
                     </div>

@@ -11,7 +11,7 @@ const BottomNavDriver = ({ activeTab }) => {
         { id: 'estimate', icon: 'request_quote', path: '/estimate-list-driver', name: '청약 리스트' },
         { id: 'approval', icon: 'pending_actions', path: '/approval-pending-driver', name: '승인 대기 목록' },
         { id: 'chat', icon: 'chat', path: '/chat-list-driver', name: '메시지' },
-        { id: 'trips', icon: 'directions_bus', path: '/upcoming-trips-driver', name: '운행 내역' },
+        { id: 'trips', icon: 'directions_bus', path: '/upcoming-trips-driver', name: '운행 예정 목록' },
         { id: 'settlement', icon: 'account_balance_wallet', path: '/payment-history-driver', name: '정산 내역' }
     ];
 
