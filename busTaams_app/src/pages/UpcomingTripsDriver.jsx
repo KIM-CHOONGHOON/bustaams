@@ -52,9 +52,9 @@ const UpcomingTripsDriver = () => {
                 </div>
             </header>
 
-            <main className="pt-24 px-6 max-w-7xl mx-auto space-y-20 animate-in fade-in slide-in-from-bottom duration-1000 text-left">
+            <main className="pt-24 px-6 max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom duration-1000 text-left">
                 {/* Editorial Header Section */}
-                <section className="mb-12">
+                <section className="mb-2">
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
                         <div className="md:col-span-12 text-left">
                             <p className="text-[#3e4947] text-sm font-medium leading-relaxed">
