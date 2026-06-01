@@ -208,27 +208,27 @@ const EstimateDetailDriver = () => {
                     <section className="lg:col-span-7 text-left">
                         <div className="bg-white p-8 md:p-12 rounded-2xl shadow-xl shadow-teal-900/5 border border-slate-50 text-left h-full">
                             <form onSubmit={handleSubmit} className="space-y-12 text-left">
-                                <div className="space-y-4 text-left group">
+                                {/* 한글 주석: 금액 표시와 디지털 서명을 하나의 카드 섹션으로 통합 */}
+                                <div className="space-y-6 text-left group bg-slate-50 border border-slate-100 rounded-3xl p-8">
                                     <div className="flex justify-between items-center px-2 text-left">
                                         <label className="text-[11px] font-black uppercase tracking-[0.4em] text-slate-400 italic">확정 청약 금액</label>
                                         <span className="text-[10px] font-black text-secondary uppercase tracking-[0.3em]">KRW</span>
                                     </div>
                                     <div className="relative text-left">
-                                        {/* 한글 주석: 원화 기호 색상을 진한 녹색(text-[#004e47])으로 조율 */}
-                                        <span className="absolute left-8 top-1/2 -translate-y-1/2 font-black text-[#004e47] text-3xl italic">₩</span>
-                                        {/* 한글 주석: 금액 텍스트 색상을 진한 녹색(text-[#004e47])으로 조율 */}
+                                        {/* 한글 주석: 원화 기호와 금액의 폰트 및 간격 조율 */}
+                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 font-black text-[#004e47] text-4xl italic">₩</span>
                                         <input 
-                                            className="w-full bg-slate-50 border-4 border-slate-100 rounded-xl py-8 pl-16 pr-8 font-headline text-4xl font-black text-[#004e47] focus:outline-none transition-all shadow-inner italic cursor-not-allowed" 
+                                            className="w-full bg-transparent border-none py-2 pl-12 pr-2 font-headline text-5xl font-black text-[#004e47] focus:outline-none italic cursor-not-allowed" 
                                             value={Number(auction.price).toLocaleString()} 
                                             readOnly 
                                         />
                                     </div>
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest px-4 mb-4">
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest px-2 mb-2">
                                         고객이 제시한 고정 금액으로 청약이 진행됩니다.
                                     </p>
                                     
-                                    {/* 한글 주석: 청약 금액 섹션 내부로 통합된 디지털 서명 영역 */}
-                                    <div className="p-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-6 text-left cursor-pointer hover:bg-white transition-colors group" onClick={() => setAgreed(!agreed)}>
+                                    {/* 한글 주석: 단일 박스로 통합하며 중간 구분용 border-t 적용 */}
+                                    <div className="pt-6 border-t border-slate-200/80 flex items-center gap-6 text-left cursor-pointer group" onClick={() => setAgreed(!agreed)}>
                                         <div className={`w-10 h-10 rounded-xl border-2 flex items-center justify-center transition-all ${agreed ? 'bg-secondary border-secondary' : 'bg-white border-slate-200'}`}>
                                             {agreed && <span className="material-symbols-outlined text-white text-2xl">check</span>}
                                         </div>
