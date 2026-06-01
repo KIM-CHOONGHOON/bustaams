@@ -23,6 +23,20 @@ const EstimateDetailDriver = () => {
 
                 const res = await request(`/app/driver/auctions/${id}`);
                 if (res.success) {
+                    // [추가] 해당 청약이 'AUCTION' 또는 'BUS_CHANGE' 상태가 아닌 경우(예: BIDDING, CONFIRM, DONE 등) 진입을 원천 차단합니다.
+                    const allowedStatuses = ['AUCTION', 'BUS_CHANGE'];
+                    if (!allowedStatuses.includes(res.data.reqStatus)) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: '청약 완료',
+                            text: '이미 완료된 청약 입니다.',
+                            confirmButtonColor: '#004e47'
+                        }).then(() => {
+                            navigate('/driver-dashboard');
+                        });
+                        return;
+                    }
+
                     // [추가] 해당 건이 차량 변경 요청 상태인 경우, 청약 상세 진입 차단 (한글 주석)
                     if (res.data.driverReservationStatus === 'BUS_CHANGE') {
                         Swal.fire({

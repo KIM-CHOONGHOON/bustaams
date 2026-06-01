@@ -223,35 +223,42 @@ const ReservationDetailCustomer = () => {
                             </div>
                             <div className="mt-8 space-y-10 relative">
                                 <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-100"></div>
-                                {routeData.map((point, idx) => (
-                                    <div key={idx} className="relative pl-12">
-                                        <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center ${
-                                            point.type === 'START' ? 'bg-teal-600 text-white shadow-teal-200' : 
-                                            point.type === 'END' ? 'bg-rose-500 text-white shadow-rose-200' : 
-                                            point.type === 'DEST' ? 'bg-indigo-600 text-white shadow-indigo-100' :
-                                            'bg-amber-400 text-white shadow-amber-100'
-                                        }`}>
-                                            <span className="material-symbols-outlined text-[16px] font-black">
-                                                {point.type === 'START' ? 'location_on' : 
-                                                 point.type === 'END' ? 'flag' : 
-                                                 point.type === 'DEST' ? 'near_me' : 'more_horiz'}
-                                            </span>
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${
-                                                point.type === 'START' ? 'text-teal-600' : 
-                                                point.type === 'END' ? 'text-rose-500' : 
-                                                point.type === 'DEST' ? 'text-indigo-500' : 'text-amber-500'
+                                {routeData.map((point, idx) => {
+                                    const isRoundTrip = point.type === 'ROUND_TRIP' || point.type === 'DEST';
+                                    return (
+                                        <div key={idx} className="relative pl-12">
+                                            <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center ${
+                                                point.type === 'START' ? 'bg-teal-600 text-white shadow-teal-200' : 
+                                                point.type === 'END' ? 'bg-rose-500 text-white shadow-rose-200' : 
+                                                isRoundTrip ? 'bg-indigo-600 text-white shadow-indigo-100' :
+                                                'bg-amber-400 text-white shadow-amber-100'
                                             }`}>
-                                                {point.title}
-                                            </p>
-                                            <h4 className="text-lg font-black tracking-tight text-on-surface">
-                                                {point.addr}
-                                            </h4>
-                                            {point.time && <p className="text-xs text-slate-400 font-bold mt-1 opacity-70 italic">{point.time}</p>}
+                                                <span className="material-symbols-outlined text-[16px] font-black">
+                                                    {point.type === 'START' ? 'location_on' : 
+                                                     point.type === 'END' ? 'flag' : 
+                                                     isRoundTrip ? 'near_me' : 'more_horiz'}
+                                                </span>
+                                            </div>
+                                            <div className="flex flex-col text-left">
+                                                <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${
+                                                    point.type === 'START' ? 'text-teal-600' : 
+                                                    point.type === 'END' ? 'text-rose-500' : 
+                                                    isRoundTrip ? 'text-indigo-500' : 'text-amber-500'
+                                                }`}>
+                                                    {point.title}
+                                                </p>
+                                                <h4 className="text-lg font-black tracking-tight text-on-surface text-left">
+                                                    {point.addr}
+                                                </h4>
+                                                {point.time && (
+                                                    <p className="text-xs text-slate-400 font-bold mt-1 opacity-70 italic text-left">
+                                                        {point.time}
+                                                    </p>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </section>
 

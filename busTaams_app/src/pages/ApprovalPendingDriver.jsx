@@ -2,12 +2,47 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { request, getDriverProfile } from '../api';
 import BottomNavDriver from '../components/BottomNavDriver';
+import { notify } from '../utils/toast';
 
 const ApprovalPendingDriver = () => {
     const navigate = useNavigate();
     const [bids, setBids] = useState([]);
     const [loading, setLoading] = useState(true);
     const [userImage, setUserImage] = useState('');
+
+    // 입찰 취소 처리 함수 (한글 주석)
+    const handleCancelBid = async (id) => {
+        const confirmed = await notify.confirm(
+            '입찰을 취소하시겠습니까?',
+            '취소된 입찰은 되돌릴 수 없으며 다시 경매 입찰에 참여할 수 있게 됩니다.',
+            '입찰 취소',
+            '뒤로가기'
+        );
+
+        if (!confirmed) return;
+
+        try {
+            const token = localStorage.getItem('accessToken');
+            if (!token) {
+                navigate('/login');
+                return;
+            }
+
+            const result = await request(`/app/driver/cancel-bid/${id}`, {
+                method: 'POST'
+            });
+
+            if (result.success) {
+                await notify.success('입찰 취소 완료', '입찰이 성공적으로 취소되었습니다.');
+                navigate('/driver-dashboard');
+            } else {
+                await notify.error('입찰 취소 실패', result.error || '오류가 발생했습니다.');
+            }
+        } catch (err) {
+            console.error('Cancel bid error:', err);
+            await notify.error('입찰 취소 실패', err.message || '서버 통신 오류가 발생했습니다.');
+        }
+    };
 
     useEffect(() => {
         const fetchData = async () => {
@@ -101,9 +136,46 @@ const ApprovalPendingDriver = () => {
                                     </div>
                                     
                                     <h3 className="text-2xl font-black text-[#004e47] mb-1 italic tracking-tight">{bid.title}</h3>
-                                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-8">
-                                        {bid.startAddr.split(' ')[1] || bid.startAddr.split(' ')[0]} → {bid.endAddr.split(' ')[1] || bid.endAddr.split(' ')[0]}
-                                    </p>
+                                    {/* 전체 운행 경로 타임라인 표시 (한글 주석) */}
+                                    <div className="mt-8 space-y-10 relative">
+                                        <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-100"></div>
+                                        {bid.fullPath && bid.fullPath.map((path, idx) => {
+                                            const isStart = idx === 0;
+                                            const isEnd = idx === bid.fullPath.length - 1;
+                                            const isDest = path.label === '목적지';
+                                            const pointType = isStart ? 'START' : isEnd ? 'END' : isDest ? 'ROUND_TRIP' : 'WAYPOINT';
+                                            
+                                            return (
+                                                <div key={idx} className="relative pl-12 text-left">
+                                                    {/* 타임라인 둥근 배지 포인트 */}
+                                                    <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center ${
+                                                        pointType === 'START' ? 'bg-teal-600 text-white shadow-teal-200' : 
+                                                        pointType === 'END' ? 'bg-rose-500 text-white shadow-rose-200' : 
+                                                        pointType === 'ROUND_TRIP' ? 'bg-indigo-600 text-white shadow-indigo-100' :
+                                                        'bg-amber-400 text-white shadow-amber-100'
+                                                    }`}>
+                                                        <span className="material-symbols-outlined text-[16px] font-black">
+                                                            {pointType === 'START' ? 'location_on' : 
+                                                             pointType === 'END' ? 'flag' : 
+                                                             pointType === 'ROUND_TRIP' ? 'near_me' : 'more_horiz'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex flex-col text-left">
+                                                        <span className={`text-[10px] font-black uppercase tracking-widest mb-1 ${
+                                                            pointType === 'START' ? 'text-teal-600' : 
+                                                            pointType === 'END' ? 'text-rose-500' : 
+                                                            pointType === 'ROUND_TRIP' ? 'text-indigo-500' : 'text-amber-500'
+                                                        }`}>
+                                                            {path.label}
+                                                        </span>
+                                                        <span className="text-lg font-black tracking-tight text-on-surface text-left">
+                                                            {path.addr}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                     
                                     <div className="space-y-4 mb-8">
                                         <div className="flex justify-between items-center text-sm border-b border-slate-50 pb-3">
@@ -123,10 +195,11 @@ const ApprovalPendingDriver = () => {
 
                                 <div className="relative z-10 flex flex-col gap-3">
                                     <button 
-                                        onClick={() => navigate(`/bid-detail-driver/${bid.id}`)}
-                                        className="w-full bg-gradient-to-br from-[#004e47] to-[#00685f] text-white py-4 rounded-xl font-black italic uppercase tracking-[0.2em] shadow-xl shadow-teal-900/10 hover:shadow-teal-900/30 hover:scale-[1.02] active:scale-95 transition-all duration-300"
+                                        onClick={() => handleCancelBid(bid.id)}
+                                        className="w-full bg-red-50 text-red-600 py-4 rounded-xl font-black text-sm italic uppercase tracking-[0.1em] shadow-xl shadow-red-900/5 hover:bg-red-100 hover:text-red-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2 border border-red-100"
                                     >
-                                        상세 보기
+                                        <span className="material-symbols-outlined text-lg">cancel</span>
+                                        입찰 취소
                                     </button>
                                 </div>
                             </div>

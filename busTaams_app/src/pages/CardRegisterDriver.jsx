@@ -58,7 +58,7 @@ const CardRegisterDriver = () => {
     const handleStartInicis = async (e) => {
         e.preventDefault();
         if (!cardNickname.trim()) {
-            return Swal.fire('알림', '카드 식별을 위해 카드 별칭을 입력해주세요.', 'warning');
+            return Swal.fire('알림', '카드 식별을 위해 카드 별명을 입력해주세요.', 'warning');
         }
 
         setLoading(true);
@@ -128,8 +128,8 @@ const CardRegisterDriver = () => {
                         결제 카드 등록
                     </h2>
                     <p className="text-on-surface-variant text-sm leading-relaxed">
-                        매월 멤버십 이용료가 자동으로 결제될 카드를 등록합니다. <br/>
-                        인증 완료 시 해당 카드의 빌링키가 발급되며, 카드 정보는 KG이니시스를 통해 안전하게 처리됩니다.
+                        매월 멤버십 이용료 결제 카드를 등록합니다. <br/>
+                        인증 완료된 카드는 KG이니시스와 약속된 암호화된 정보로 관리되며, 카드번호, 유효일자, CVC정보는 보관하지 않습니다.
                     </p>
                 </header>
 
@@ -169,13 +169,12 @@ const CardRegisterDriver = () => {
 
                     {/* Nickname Input */}
                     <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-primary dark:text-teal-400 uppercase tracking-widest px-1">카드 별칭 (예: 개인 현대카드, 회사 국민카드)</label>
                         <input 
                             type="text"
                             value={cardNickname}
                             onChange={(e) => setCardNickname(e.target.value)}
-                            placeholder="카드를 식별할 별칭을 입력하세요"
-                            className="w-full bg-slate-50 dark:bg-slate-900 rounded-xl p-5 border border-slate-100 dark:border-slate-800 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-bold shadow-sm dark:text-white"
+                            placeholder="카드 별명 (예 : 개인 현대카드, 회사 국민카드)"
+                            className="w-full bg-slate-50 dark:bg-slate-900 rounded-xl p-5 border border-slate-100 dark:border-slate-800 focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-sm font-bold shadow-sm dark:text-white placeholder:text-rose-600 dark:placeholder:text-rose-400"
                             required
                             disabled={loading}
                         />
@@ -185,13 +184,13 @@ const CardRegisterDriver = () => {
                         <button 
                             onClick={handleStartInicis}
                             disabled={loading}
-                            className="w-full bg-primary text-white py-5 rounded-xl font-bold text-sm uppercase tracking-[0.2em] shadow-xl shadow-primary/30 active:scale-95 transition-all flex items-center justify-center gap-2"
+                            className="w-full bg-primary text-white py-5 rounded-xl font-bold text-xs uppercase tracking-[0.08em] shadow-xl shadow-primary/30 active:scale-95 transition-all flex items-center justify-center gap-2"
                         >
                             {loading ? (
                                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                             ) : (
                                 <>
-                                    <span className="material-symbols-outlined text-lg">lock</span>
+                                    <span className="material-symbols-outlined text-base">lock</span>
                                     안전한 이니시스 카드 등록 시작
                                 </>
                             )}

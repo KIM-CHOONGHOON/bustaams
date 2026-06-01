@@ -179,7 +179,7 @@ const PassSelectDriver = () => {
                         <button onClick={() => navigate(-1)} className="text-teal-800 dark:text-teal-400 active:scale-95 transition-all">
                             <span className="material-symbols-outlined text-2xl">arrow_back</span>
                         </button>
-                        <h1 className="font-headline font-bold tracking-tight text-xl text-teal-900 dark:text-teal-100">Membership</h1>
+                        <h1 className="font-headline font-bold tracking-tight text-xl text-teal-900 dark:text-teal-100">요금제 선택</h1>
                     </div>
 
                     <div className="flex items-center gap-3">

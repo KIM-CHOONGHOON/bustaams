@@ -1327,9 +1327,14 @@ router.get('/bids/waiting', authenticateToken, async (req, res) => {
         const [rows] = await pool.execute(`
             SELECT 
                 b.RES_ID as id,
+                r.REQ_ID as reqId,
                 r.TRIP_TITLE as title,
                 r.START_ADDR as startAddr,
                 r.END_ADDR as endAddrMaster,
+                (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'START_NODE' LIMIT 1) as startAddrVia,
+                (SELECT GROUP_CONCAT(VIA_ADDR ORDER BY VIA_SEQ ASC) FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'START_WAY') as startVia,
+                (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' LIMIT 1) as roundTrip,
+                (SELECT GROUP_CONCAT(VIA_ADDR ORDER BY VIA_SEQ ASC) FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'END_WAY') as endVia,
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'END_NODE' LIMIT 1) as endAddrVia,
                 DATE_FORMAT(r.START_DT, '%Y.%m.%d') as startDt,
                 DATE_FORMAT(r.END_DT, '%Y.%m.%d') as endDt,
@@ -1346,10 +1351,21 @@ router.get('/bids/waiting', authenticateToken, async (req, res) => {
             ORDER BY b.REG_DT DESC
         `, [custId]);
 
-        const processedRows = rows.map(row => ({
-            ...row,
-            endAddr: row.endAddrVia || row.endAddrMaster
-        }));
+        const processedRows = rows.map(row => {
+            const endAddr = row.endAddrVia || row.endAddrMaster;
+            const fullPath = [
+                { label: '출발지', addr: row.startAddrVia || row.startAddr },
+                ...(row.startVia ? row.startVia.split(',').map(v => ({ label: '출발 경유지', addr: v })) : []),
+                ...(row.roundTrip ? [{ label: '목적지', addr: row.roundTrip }] : []),
+                ...(row.endVia ? row.endVia.split(',').map(v => ({ label: '도착 경유지', addr: v })) : []),
+                { label: '최종 도착지', addr: endAddr }
+            ];
+            return {
+                ...row,
+                endAddr,
+                fullPath
+            };
+        });
 
         res.json({ success: true, data: processedRows });
     } catch (err) {

@@ -307,29 +307,29 @@ const UpcomingTripDetailDriver = () => {
                         {trip.waypoints.map((wp, idx) => {
                             const isStart = wp.type === 'START';
                             const isEnd = wp.type === 'END';
-                            const isDest = wp.type === 'ROUND';
+                            const isDest = wp.type === 'ROUND' || wp.type === 'ROUND_TRIP';
                             const title = isStart ? '출발지' : isEnd ? '도착지' : isDest ? '목적지' : (wp.type === 'START_WAY' ? '출발 경유지' : '도착 경유지');
-                            const pointType = isStart ? 'START' : isEnd ? 'END' : isDest ? 'DEST' : 'WAYPOINT';
+                            const pointType = isStart ? 'START' : isEnd ? 'END' : isDest ? 'ROUND_TRIP' : 'WAYPOINT';
 
                             return (
                                 <div key={idx} className="relative pl-12">
                                     <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center ${
                                         pointType === 'START' ? 'bg-teal-600 text-white shadow-teal-200' : 
                                         pointType === 'END' ? 'bg-rose-500 text-white shadow-rose-200' : 
-                                        pointType === 'DEST' ? 'bg-indigo-600 text-white shadow-indigo-100' :
+                                        pointType === 'ROUND_TRIP' ? 'bg-indigo-600 text-white shadow-indigo-100' :
                                         'bg-amber-400 text-white shadow-amber-100'
                                     }`}>
                                         <span className="material-symbols-outlined text-[16px] font-black">
                                             {pointType === 'START' ? 'location_on' : 
                                              pointType === 'END' ? 'flag' : 
-                                             pointType === 'DEST' ? 'near_me' : 'more_horiz'}
+                                             pointType === 'ROUND_TRIP' ? 'near_me' : 'more_horiz'}
                                         </span>
                                     </div>
                                     <div className="flex flex-col text-left">
                                         <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${
                                             pointType === 'START' ? 'text-teal-600' : 
                                             pointType === 'END' ? 'text-rose-500' : 
-                                            pointType === 'DEST' ? 'text-indigo-500' : 'text-amber-500'
+                                            pointType === 'ROUND_TRIP' ? 'text-indigo-500' : 'text-amber-500'
                                         }`}>
                                             {title}
                                         </p>
