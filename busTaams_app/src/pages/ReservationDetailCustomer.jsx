@@ -210,10 +210,27 @@ const ReservationDetailCustomer = () => {
                                     <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${getBusStatusDisplay(reservation.status).color}`}>
                                         {reservation.statusText}
                                     </span>
-                                    <span className="text-slate-400 text-sm font-bold">{reservation.start_date} ~ {reservation.end_date}</span>
                                 </div>
                             </div>
                         </section>
+
+                        {/* 운행 일정 (오렌지색 달력 아이콘 배지와 2줄 날짜 포맷팅) */}
+                        <div className="flex items-center gap-4 bg-white rounded-2xl p-6 shadow-sm border border-slate-50 text-left">
+                            <div className="w-12 h-12 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center shadow-sm">
+                                <span className="material-symbols-outlined text-orange-600 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>calendar_today</span>
+                            </div>
+                            <div className="flex flex-col text-left">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic mb-1">
+                                    운행 일정
+                                </p>
+                                <p className="text-lg font-black text-[#1E293B] leading-snug">
+                                    {reservation.start_date ? reservation.start_date.replace(/-/g, '.') : ''} -
+                                </p>
+                                <p className="text-lg font-black text-[#1E293B] leading-snug">
+                                    {reservation.end_date ? reservation.end_date.replace(/-/g, '.') : ''}
+                                </p>
+                            </div>
+                        </div>
 
                         {/* Route Summary */}
                         <section className="bg-white rounded-[3.5rem] p-12 shadow-2xl shadow-teal-900/[0.03] border border-slate-50 text-left">
