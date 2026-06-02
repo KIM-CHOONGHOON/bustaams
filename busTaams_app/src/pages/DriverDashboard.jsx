@@ -14,7 +14,8 @@ const DriverDashboard = () => {
         countAuctions: 0, 
         totalProfit: 0,
         monthlyProfit: 0,
-        pendingProfit: 0
+        pendingProfit: 0,
+        feePolicyNm: '미가입'
     });
     const [userName, setUserName] = useState('기사님');
     const [userImage, setUserImage] = useState(null);
@@ -23,7 +24,7 @@ const DriverDashboard = () => {
     const [todayTrip, setTodayTrip] = useState(null);
     const [loading, setLoading] = useState(true);
     const [unreadCount, setUnreadCount] = useState(0);
-
+ 
     useEffect(() => {
         const fetchDashboardData = async () => {
             setLoading(true);
@@ -37,7 +38,8 @@ const DriverDashboard = () => {
                         countAuctions: res.data.countAuctions || 0,
                         totalProfit: res.data.totalProfit || 0,
                         monthlyProfit: res.data.monthlyProfit || 0,
-                        pendingProfit: res.data.pendingProfit || 0
+                        pendingProfit: res.data.pendingProfit || 0,
+                        feePolicyNm: res.data.feePolicyNm || '미가입'
                     });
                     setUserName(res.data.userName);
                     setUserImage(res.data.userImage);
@@ -299,17 +301,23 @@ const DriverDashboard = () => {
                                     ₩{Number(stats.monthlyProfit || 0).toLocaleString()}
                                 </p>
                             </div>
-                            <div className="mt-10 grid grid-cols-2 gap-6 text-left border-t border-slate-50 pt-8">
+                            <div className="mt-10 grid grid-cols-3 gap-4 text-left border-t border-slate-50 pt-8">
                                 <div className="space-y-1 text-left">
                                     <span className="text-slate-300 font-black uppercase tracking-widest text-[9px] block">정산 예정</span>
-                                    <span className="font-black text-on-surface tracking-tight block text-base">
+                                    <span className="font-black text-on-surface tracking-tight block text-[13px] sm:text-base truncate">
                                         ₩{Number(stats.pendingProfit || 0).toLocaleString()}
                                     </span>
                                 </div>
-                                <div className="space-y-1 text-left border-l border-slate-50 pl-6">
+                                <div className="space-y-1 text-left border-l border-slate-50 pl-4">
                                     <span className="text-slate-300 font-black uppercase tracking-widest text-[9px] block">완료된 운행</span>
-                                    <span className="font-black text-on-surface tracking-tight block text-base">
+                                    <span className="font-black text-on-surface tracking-tight block text-[13px] sm:text-base">
                                         {stats.countDone || 0}건
+                                    </span>
+                                </div>
+                                <div className="space-y-1 text-left border-l border-slate-50 pl-4">
+                                    <span className="text-slate-300 font-black uppercase tracking-widest text-[9px] block">현재 요금제</span>
+                                    <span className="font-black text-primary tracking-tight block text-[13px] sm:text-base truncate">
+                                        {stats.feePolicyNm || '미가입'}
                                     </span>
                                 </div>
                             </div>

@@ -73,12 +73,17 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
         if (uRows.length === 0) return res.status(404).json({ success: false, error: '사용자 정보를 찾을 수 없습니다.' });
         const { CUST_ID: custId, USER_NM: userName, userImage } = uRows[0];
 
-        // 2. 기사 상세 정보 등록 여부 확인 (TB_DRIVER_DETAIL)
+        // 2. 기사 상세 정보 및 요금 정책 조회 (TB_DRIVER_DETAIL + TB_COMMON_CODE)
         const [detailRows] = await pool.execute(
-            'SELECT 1 FROM TB_DRIVER_DETAIL WHERE CUST_ID = ?',
+            `SELECT d.FEE_POLICY, c.CD_NM_KO as feePolicyNm 
+             FROM TB_DRIVER_DETAIL d 
+             LEFT JOIN TB_COMMON_CODE c ON c.GRP_CD = 'FEE_POLICY' AND c.DTL_CD = d.FEE_POLICY 
+             WHERE d.CUST_ID = ?`,
             [custId]
         );
         const isDriverInfoRegistered = detailRows.length > 0;
+        const feePolicy = isDriverInfoRegistered ? detailRows[0].FEE_POLICY : null;
+        const feePolicyNm = isDriverInfoRegistered ? detailRows[0].feePolicyNm : '미가입';
 
         // 3. 버스 정보 등록 여부 확인 및 버스 타입 조회 (TB_BUS_DRIVER_VEHICLE)
         const [busRows] = await pool.execute(
@@ -215,7 +220,9 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
                 todayTrip: todayRows.length > 0 ? todayRows[0] : null,
                 countAuctions,
                 auctionList,
-                restriction
+                restriction,
+                feePolicy,
+                feePolicyNm
             }
         });
     } catch (error) {
