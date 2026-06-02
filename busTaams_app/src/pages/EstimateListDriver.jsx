@@ -151,13 +151,7 @@ const EstimateListDriver = () => {
                     )}
                 </div>
 
-                {/* Editorial Footer Quote */}
-                <div className="pt-24 pb-12 text-left border-t border-slate-100">
-                    <div className="h-1.5 w-16 bg-secondary rounded-xl mb-10"></div>
-                    <p className="font-headline text-3xl md:text-5xl font-black text-[#004e47] leading-[1.1] tracking-tighter max-w-4xl italic text-left uppercase">
-                        "단체 여행의 가치는 <span className="text-secondary underline decoration-secondary/20 underline-offset-8">정확한 청약</span>과 <br/>신뢰할 수 있는 기사님으로부터 시작됩니다."
-                    </p>
-                </div>
+
             </main>
 
             {/* Bottom Nav */}
