@@ -144,7 +144,6 @@ const DriverDashboard = () => {
                 <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-end text-left">
                     <div className="lg:col-span-4 space-y-4">
                         <h2 className="text-4xl font-extrabold font-headline tracking-tighter text-on-surface leading-none italic uppercase">실시간 청약 기회</h2>
-                        <p className="text-on-surface-variant text-sm max-w-xs font-medium">현재 {stats.countAuctions}개의 새로운 운행 요청이 기사님의 제안을 기다리고 있습니다.</p>
                         <div className="flex gap-2 items-center text-secondary font-black text-sm">
                             <span className="relative flex h-3 w-3">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary opacity-75"></span>
