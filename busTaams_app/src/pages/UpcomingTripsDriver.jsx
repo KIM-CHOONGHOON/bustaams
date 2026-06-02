@@ -130,8 +130,8 @@ const UpcomingTripsDriver = () => {
                     </div>
                 ) : (
                     <div className="bg-white rounded-2xl px-4 py-16 sm:p-24 text-center border-2 border-dashed border-slate-100 shadow-inner">
-                        <div className="w-24 h-24 bg-slate-50 rounded-xl mx-auto flex items-center justify-center mb-8">
-                            <span className="material-symbols-outlined text-5xl text-slate-200">event_busy</span>
+                        <div className="w-24 h-24 bg-primary/5 rounded-xl mx-auto flex items-center justify-center mb-8">
+                            <span className="material-symbols-outlined text-5xl text-primary/60">event_busy</span>
                         </div>
                         <div className="space-y-4">
                             <h3 className="text-2xl font-black text-primary italic uppercase tracking-tighter whitespace-nowrap">예정된 운행이 없습니다.</h3>
