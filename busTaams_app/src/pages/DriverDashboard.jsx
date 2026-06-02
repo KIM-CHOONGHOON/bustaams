@@ -317,18 +317,7 @@ const DriverDashboard = () => {
                     </div>
                 </section>
 
-                {/* Membership Banner */}
-                <section className="relative h-56 rounded-2xl overflow-hidden bg-slate-900 flex items-center px-12 group cursor-pointer text-left shadow-2xl shadow-slate-900/30">
-                    <div className="absolute inset-0 z-0 overflow-hidden">
-                        <img alt="Luxury bus" className="w-full h-full object-cover opacity-40 group-hover:scale-105 transition-transform duration-[2000ms]" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDd1cmwWadGqEVtV-xNJu4CT-nzdrjTfWs5mnHZWthPLlGqXJvDM6-zdHdIOEfxl-33alvQ51u0CWgtmCwN0I5ZHQu44L0FpRakK5R7wFj8quXWJUvAMas6cHKI5jbsD6lqeZxRbjoFfi38ifujiNRcITlXAxtpv8j5FIO9E2z_W0hPP0xxi7GBetNBEvvO5w6RnBmgNyTkxMEC74CkkLdNfnJqFjlQYAI7nkmLce_5YITHZZyErTimyYQuayN6dI6S6w8xBqchskI" />
-                        <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/70 to-transparent"></div>
-                    </div>
-                    <div className="relative z-10 max-w-xl space-y-6 text-left">
-                        <h3 className="text-white text-2xl md:text-4xl font-black font-headline leading-[0.9] italic uppercase tracking-tighter">마스터 멤버 <br/><span className="text-secondary">전용 혜택.</span></h3>
-                        <p className="text-slate-400 text-xs font-bold tracking-tight italic opacity-80 text-left">전국 정비 데스크 할인 및 연방 유류비 환급 서비스를 즉시 잠금 해제하세요.</p>
-                        <button className="bg-secondary text-white px-8 py-3 rounded-xl font-black text-[9px] uppercase tracking-[0.3em] shadow-2xl shadow-secondary/30 active:scale-95 transition-all">혜택 확인하기</button>
-                    </div>
-                </section>
+
             </main>
 
             <BottomNavDriver activeTab="home" />
