@@ -299,16 +299,12 @@ const PastTripDetailCustomer = () => {
                             <span className="text-[20px] font-black text-[#1E293B]">₩ {totalPrice.toLocaleString()}</span>
                         </div>
 
-                        <div className="bg-[#0D6B5E] p-10 rounded-2xl shadow-xl shadow-teal-900/10 flex items-center justify-between text-white relative overflow-hidden">
+                        <div className="bg-[#0D6B5E] p-8 rounded-2xl shadow-xl shadow-teal-900/10 flex items-center justify-between text-white relative overflow-hidden">
                             <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl"></div>
-                            <div className="space-y-1">
-                                <p className="text-[10px] font-black text-white/50 uppercase tracking-[0.2em]">Final Total Payment</p>
-                                <p className="text-[14px] font-bold">결제 완료</p>
-                            </div>
-                            <div className="text-right">
-                                <span className="text-[40px] font-black tracking-tighter leading-none flex items-start justify-end gap-2">
-                                    <span className="text-[24px] mt-2">₩</span>
-                                    {totalPrice.toLocaleString()}
+                            <div className="flex items-baseline gap-3">
+                                <span className="text-[16px] font-black opacity-90">결제 완료</span>
+                                <span className="text-[24px] font-black tracking-tighter">
+                                    ₩ {totalPrice.toLocaleString()}
                                 </span>
                             </div>
                         </div>

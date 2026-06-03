@@ -466,6 +466,9 @@ router.get('/profile', authenticateToken, async (req, res) => {
             } else if (doc.DOC_TYPE === 'CAREER_CERT' && !driverData.careerCertImg) {
                 driverData.careerCertImg = doc.filePath;
                 driverData.careerCertApproveStat = doc.approveStat;
+            } else if (doc.DOC_TYPE === 'BANKBOOK' && !driverData.bankBookImg) {
+                driverData.bankBookImg = doc.filePath;
+                driverData.bankBookApproveStat = doc.approveStat;
             }
         }
 
@@ -597,7 +600,8 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
     { name: 'profileImg', maxCount: 1 },
     { name: 'licenseImg', maxCount: 1 },
     { name: 'busLicenseImg', maxCount: 1 },
-    { name: 'careerCertImg', maxCount: 1 }
+    { name: 'careerCertImg', maxCount: 1 },
+    { name: 'bankBookImg', maxCount: 1 }
 ]), async (req, res) => {
     const connection = await pool.getConnection();
 
@@ -795,8 +799,9 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
                 params.push(custId, type, seq);
                 await connection.execute(updateSql, params);
             } else {
-                // 신규 등록 시 파일 필수 체크
+                // 신규 등록 시 파일 필수 체크 (통장 사본은 예외)
                 if (!file) {
+                    if (type === 'BANKBOOK') return; // 통장 사본은 신규 등록 시 파일 없으면 진행 안 함 (선택)
                     const typeNm = type === 'LICENSE' ? '운전면허증' : type === 'QUALIFICATION' ? '버스운전자격증' : '운전경력증명서';
                     throw new Error(`${typeNm} 파일을 업로드해주세요.`);
                 }
@@ -812,6 +817,7 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
         await upsertDoc('LICENSE', licenseNo, licenseIssueDt, 'licenseImg', licenseType, licenseValidity === 'Y' ? 'VALID' : 'EXPIRED');
         await upsertDoc('QUALIFICATION', busLicenseNo, qualAcquisitionDt, 'busLicenseImg', null, qualStatus || 'ACTIVE');
         await upsertDoc('CAREER_CERT', 'CAREER-' + custId, today, 'careerCertImg', null, 'VALID');
+        await upsertDoc('BANKBOOK', 'BANKBOOK-' + custId, today, 'bankBookImg', null, 'VALID');
 
         // 마케팅 알림 동의 이력 저장 (TB_USER_TERMS_HIST)
         if (marketing) {

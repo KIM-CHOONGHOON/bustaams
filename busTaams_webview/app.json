@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "busTaams",
+    "slug": "bustaams",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bustaams.app"
+    },
+    "android": {
+      "package": "com.bustaams.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "c1c70574-ee4a-4b03-84ff-82f3be4e522d"
+      }
+    },
+    "owner": "dohuni"
+  }
+}

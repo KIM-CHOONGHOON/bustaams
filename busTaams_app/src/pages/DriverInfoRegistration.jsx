@@ -70,7 +70,8 @@ const DriverInfoRegistration = () => {
         qualAcquisitionDt: '',
         qualStatus: 'ACTIVE',
         qualApproveStat: '',
-        careerCertApproveStat: ''
+        careerCertApproveStat: '',
+        bankBookApproveStat: ''
     });
 
     const [verificationSent, setVerificationSent] = useState(false);
@@ -98,13 +99,15 @@ const DriverInfoRegistration = () => {
         profileImg: '',
         licenseImg: '',
         busLicenseImg: '',
-        careerCertImg: '' // 추가
+        careerCertImg: '',
+        bankBookImg: ''
     });
     const [files, setFiles] = useState({
         profileImg: null,
         licenseImg: null,
         busLicenseImg: null,
-        careerCertImg: null // 추가
+        careerCertImg: null,
+        bankBookImg: null
     });
 
     useEffect(() => {
@@ -171,7 +174,8 @@ const DriverInfoRegistration = () => {
                         qualAcquisitionDt: driver?.qualAcquisitionDt || '',
                         qualStatus: driver?.qualStatus || 'ACTIVE',
                         qualApproveStat: driver?.qualApproveStat || '',
-                        careerCertApproveStat: driver?.careerCertApproveStat || ''
+                        careerCertApproveStat: driver?.careerCertApproveStat || '',
+                        bankBookApproveStat: driver?.bankBookApproveStat || ''
                     }));
                     setOriginalPhone(user?.phone || '');
                     if (user?.phone) setIsVerified(true); // 이미 번호가 있으면 인증된 것으로 간주 (변경 시 재인증 필요)
@@ -179,7 +183,8 @@ const DriverInfoRegistration = () => {
                         profileImg: driver?.profileImg || '',
                         licenseImg: driver?.licenseImg || '',
                         busLicenseImg: driver?.busLicenseImg || '',
-                        careerCertImg: driver?.careerCertImg || '' // 추가
+                        careerCertImg: driver?.careerCertImg || '',
+                        bankBookImg: driver?.bankBookImg || ''
                     });
 
                     // 마케팅 동의 데이터 로드
@@ -388,7 +393,8 @@ const DriverInfoRegistration = () => {
             if (files.profileImg) data.append('profileImg', files.profileImg);
             if (files.licenseImg) data.append('licenseImg', files.licenseImg);
             if (files.busLicenseImg) data.append('busLicenseImg', files.busLicenseImg);
-            if (files.careerCertImg) data.append('careerCertImg', files.careerCertImg); // 추가
+            if (files.careerCertImg) data.append('careerCertImg', files.careerCertImg);
+            if (files.bankBookImg) data.append('bankBookImg', files.bankBookImg);
 
             const res = await updateDriverProfile(data);
             if (res.success) {
@@ -811,6 +817,28 @@ const DriverInfoRegistration = () => {
                                         <div className="flex-1">
                                             <p className="text-sm font-bold text-[#191c1e]">경력증명서</p>
                                             <p className="text-xs text-[#3e4947]">이미지를 업로드하세요</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                {/* Bankbook Copy Card - Added (Optional) */}
+                                <div onClick={() => {
+                                    setActiveUploadType('bankBookImg');
+                                    setShowPhotoBottomSheet(true);
+                                }} className="p-6 rounded-xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6e7977]">통장 사본 <span className="text-slate-400 font-normal">(선택)</span></span>
+                                        <span className={`flex items-center gap-1 text-[10px] font-bold ${formData.bankBookApproveStat === 'APPROVE' ? 'text-[#00685f]' : formData.bankBookApproveStat === 'WAIT' ? 'text-[#9d4300]' : 'text-[#ba1a1a]'}`}>
+                                            <span className={`w-1.5 h-1.5 rounded-full ${formData.bankBookApproveStat === 'APPROVE' ? 'bg-[#00685f]' : formData.bankBookApproveStat === 'WAIT' ? 'bg-[#9d4300]' : 'bg-[#ba1a1a]'}`}></span>
+                                            {!formData.bankBookApproveStat ? '미등록' : formData.bankBookApproveStat === 'WAIT' ? '확인 중' : formData.bankBookApproveStat === 'APPROVE' ? '승인됨' : '반려됨'}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-lg bg-[#eceef0] flex items-center justify-center text-[#6e7977] group-hover:text-[#004e47] transition-colors overflow-hidden">
+                                            {previews.bankBookImg ? <img src={previews.bankBookImg} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-3xl">account_balance_wallet</span>}
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-sm font-bold text-[#191c1e]">통장 사본</p>
+                                            <p className="text-xs text-[#3e4947]">입금받으실 통장 입니다.</p>
                                         </div>
                                     </div>
                                 </div>
