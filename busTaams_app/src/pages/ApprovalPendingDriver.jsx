@@ -119,26 +119,32 @@ const ApprovalPendingDriver = () => {
                                 <div className="relative z-10">
                                     <h3 className="text-2xl font-black text-[#004e47] mb-4 italic tracking-tight">{bid.title}</h3>
                                     
-                                    {/* 운행 일정 추가 */}
-                                    <div className="flex items-center gap-3 border border-orange-100 bg-orange-50/50 rounded-2xl p-4 text-left mb-6">
-                                        <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center shadow-sm flex-shrink-0">
-                                            <span className="material-symbols-outlined text-orange-600 text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>calendar_today</span>
+                                    {/* 운행 일정 */}
+                                    <div className="flex items-center gap-4 border-b border-slate-100 pb-6 text-left mb-6">
+                                        <div className="w-12 h-12 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center shadow-sm flex-shrink-0">
+                                            <span className="material-symbols-outlined text-orange-600 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>calendar_today</span>
                                         </div>
                                         <div className="flex flex-col text-left">
-                                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 italic mb-0.5">
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic mb-1">
                                                 운행 일정
                                             </p>
-                                            <p className="text-sm font-black text-[#1E293B] leading-none">
-                                                {bid.startDt ? bid.startDt.replace(/-/g, '.') : ''} ~
+                                            <p className="text-lg font-black text-[#1E293B] leading-snug">
+                                                {bid.startDt ? bid.startDt.split(' ')[0].replace(/[-/]/g, '.') : ''} -
                                             </p>
-                                            <p className="text-sm font-black text-[#1E293B] leading-none mt-1">
-                                                {bid.endDt ? bid.endDt.replace(/-/g, '.') : ''}
+                                            <p className="text-lg font-black text-[#1E293B] leading-snug">
+                                                {bid.endDt ? bid.endDt.split(' ')[0].replace(/[-/]/g, '.') : ''}
                                             </p>
                                         </div>
                                     </div>
 
+                                    {/* 여행 경로 타이틀 */}
+                                    <h4 className="text-base font-black pb-3 border-b border-slate-50 flex items-center gap-2 italic text-teal-800 mb-6">
+                                        <span className="material-symbols-outlined text-primary text-lg" style={{fontVariationSettings: "'FILL' 1"}}>route</span>
+                                        여행 경로
+                                    </h4>
+
                                     {/* 전체 운행 경로 타임라인 표시 (한글 주석) */}
-                                    <div className="mt-8 space-y-10 relative">
+                                    <div className="mt-6 space-y-8 relative">
                                         <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-100"></div>
                                         {bid.fullPath && bid.fullPath.map((path, idx) => {
                                             const isStart = idx === 0;

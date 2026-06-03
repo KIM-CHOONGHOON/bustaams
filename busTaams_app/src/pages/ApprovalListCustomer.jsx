@@ -137,7 +137,7 @@ const ApprovalListCustomer = () => {
         );
 
         const today = new Date();
-        const bankEndDate = new Date('2026-06-02T23:59:59');
+        const bankEndDate = new Date('2026-06-03T23:59:59');
 
         // 2026년 5월 23일까지는 무통장 입금
         if (today <= bankEndDate) {
@@ -159,7 +159,7 @@ const ApprovalListCustomer = () => {
 
                 if (res.success) {
                     notify.success('승인 요청 완료', '무통장 입금 안내 및 결제 대기 상태가 반영되었습니다.');
-                    fetchEstimates();
+                    navigate('/customer-dashboard');
                 } else {
                     notify.error('업데이트 실패', res.error || '결제 상태 업데이트 중 오류가 발생했습니다.');
                 }
@@ -216,7 +216,10 @@ const ApprovalListCustomer = () => {
             const cleanMobile = (data.buyertel || '').replace(/[^0-9]/g, '');
 
             // 모바일과 PC 기기 구분 분기 처리 (한글 주석)
-            const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            // userAgent, 터치 포인트 지원 유무, 화면 가로 폭(1024px 미만)을 종합적으로 고려하여 모바일 결제창 로드 보장
+            const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+                (navigator.maxTouchPoints && navigator.maxTouchPoints > 1) ||
+                window.innerWidth < 1024;
 
             if (isMobile) {
                 console.log('>>> [Payment] Launching Mobile Payment Page:', data.oid);
@@ -419,46 +422,67 @@ const ApprovalListCustomer = () => {
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                     <div className="lg:col-span-7 space-y-8">
-                        <div className="bg-white rounded-2xl p-8 shadow-[0_40px_60px_rgba(0,0,0,0.03)] border border-slate-50 relative overflow-hidden">
+                        <div className="bg-white rounded-2xl p-8 shadow-[0_40px_60px_rgba(0,0,0,0.03)] border border-slate-50 relative overflow-hidden space-y-8">
                             <div className="absolute top-0 left-0 w-2 h-full bg-primary/20"></div>
-                            <h2 className="text-2xl font-black mb-10 flex items-center gap-3 italic text-teal-800">
-                                <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>route</span>
-                                여행 경로
-                            </h2>
-                            <div className="mt-8 space-y-10 relative">
-                                <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-100"></div>
 
-                                {tripSummary.fullRoute && tripSummary.fullRoute.map((step, idx) => (
-                                    <div key={idx} className="relative pl-12">
-                                        <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center ${step.type === 'START' ? 'bg-teal-600 text-white shadow-teal-200' :
+                            {/* 운행 일정 */}
+                            <div className="flex items-center gap-4 border-b border-slate-100 pb-8 text-left">
+                                <div className="w-12 h-12 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center shadow-sm">
+                                    <span className="material-symbols-outlined text-orange-600 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>calendar_today</span>
+                                </div>
+                                <div className="flex flex-col text-left">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic mb-1">
+                                        운행 일정
+                                    </p>
+                                    <p className="text-lg font-black text-[#1E293B] leading-snug">
+                                        {tripSummary.startDt ? tripSummary.startDt.split(' ')[0].replace(/[-/]/g, '.') : ''} -
+                                    </p>
+                                    <p className="text-lg font-black text-[#1E293B] leading-snug">
+                                        {tripSummary.endDt ? tripSummary.endDt.split(' ')[0].replace(/[-/]/g, '.') : ''}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-8">
+                                <h2 className="text-2xl font-black pb-4 border-b border-slate-50 flex items-center gap-3 italic text-teal-800">
+                                    <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>route</span>
+                                    여행 경로
+                                </h2>
+                                <div className="mt-8 space-y-10 relative">
+                                    <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-100"></div>
+
+                                    {tripSummary.fullRoute && tripSummary.fullRoute.map((step, idx) => (
+                                        <div key={idx} className="relative pl-12">
+                                            <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center ${step.type === 'START' ? 'bg-teal-600 text-white shadow-teal-200' :
                                                 step.type === 'END' ? 'bg-rose-500 text-white shadow-rose-200' :
                                                     step.type === 'ROUND_TRIP' ? 'bg-indigo-600 text-white shadow-indigo-100' :
                                                         'bg-amber-400 text-white shadow-amber-100'
-                                            }`}>
-                                            <span className="material-symbols-outlined text-[16px] font-black">
-                                                {step.type === 'START' ? 'location_on' :
-                                                    step.type === 'END' ? 'flag' :
-                                                        step.type === 'ROUND_TRIP' ? 'near_me' : 'more_horiz'}
-                                            </span>
-                                        </div>
-                                        <div className="flex flex-col text-left">
-                                            <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${step.type === 'START' ? 'text-teal-600' :
+                                                }`}>
+                                                <span className="material-symbols-outlined text-[16px] font-black">
+                                                    {step.type === 'START' ? 'location_on' :
+                                                        step.type === 'END' ? 'flag' :
+                                                            step.type === 'ROUND_TRIP' ? 'near_me' : 'more_horiz'}
+                                                </span>
+                                            </div>
+                                            <div className="flex flex-col text-left">
+                                                <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${step.type === 'START' ? 'text-teal-600' :
                                                     step.type === 'END' ? 'text-rose-500' :
                                                         step.type === 'ROUND_TRIP' ? 'text-indigo-500' : 'text-amber-500'
-                                                }`}>
-                                                {step.title}
-                                            </p>
-                                            <h4 className="text-lg font-black tracking-tight text-on-surface text-left">
-                                                {step.addr}
-                                            </h4>
-                                            {step.time && (
-                                                <p className="text-xs text-slate-400 font-bold mt-1 opacity-70 italic text-left">
-                                                    {step.time}
+                                                    }`}>
+                                                    {step.title}
                                                 </p>
-                                            )}
+                                                <h4 className="text-lg font-black tracking-tight text-on-surface text-left">
+                                                    {step.addr}
+                                                </h4>
+                                                {step.time && (
+                                                    <p className="text-xs text-slate-400 font-bold mt-1 opacity-70 italic text-left">
+                                                        {step.time}
+                                                    </p>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
                             </div>
                         </div>
 

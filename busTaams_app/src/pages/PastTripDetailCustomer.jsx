@@ -64,15 +64,18 @@ const PastTripDetailCustomer = () => {
     // 여행 필터링 로직 (출발 -> 출발경유지 -> 목적지 -> 도착경유지 -> 도착지)
     const startNode = { type: 'START', addr: detail.startAddr, time: detail.startDt };
     
-    // 경유지들을 순서대로 분류
+    // 경유지들을 순서대로 분류 (한글 주석)
     const waypoints = detail.waypoints || [];
-    const roundIdx = waypoints.findIndex(w => w.type === 'ROUND_TRIP');
     
-    const viaBeforeRound = roundIdx === -1 ? waypoints.filter(w => w.type === 'VIA') : waypoints.slice(0, roundIdx).filter(w => w.type === 'VIA');
-    const roundNode = roundIdx !== -1 ? waypoints[roundIdx] : null;
-    const viaAfterRound = roundIdx !== -1 ? waypoints.slice(roundIdx + 1).filter(w => w.type === 'VIA') : [];
+    // 갈 때 경유지 (START_WAY)
+    const viaBeforeRound = waypoints.filter(w => w.type === 'START_WAY');
+    // 목적지 (ROUND_TRIP)
+    const roundNode = waypoints.find(w => w.type === 'ROUND_TRIP');
+    // 올 때 경유지 (END_WAY)
+    const viaAfterRound = waypoints.filter(w => w.type === 'END_WAY');
     
-    const endNode = { type: 'END', addr: detail.waypoints?.find(w => w.type === 'END_NODE')?.addr || detail.endAddrMaster, time: detail.endDt };
+    // 도착지 (END_NODE)
+    const endNode = { type: 'END', addr: waypoints.find(w => w.type === 'END_NODE')?.addr || detail.endAddrMaster, time: detail.endDt };
 
     // 한글 주석: 각 노드 데이터를 통합하여 순차적으로 렌더링하기 위한 routeData 배열 구성
     const routeData = [];
@@ -158,68 +161,46 @@ const PastTripDetailCustomer = () => {
             </header>
 
             <main className="max-w-4xl mx-auto px-6 pt-24 space-y-12">
-                {/* 제목 및 여행 경로 표시 */}
+                {/* 제목 표시 */}
                 <section className="px-2 space-y-2">
                     <h2 className="text-[24px] font-black text-[#1E293B] tracking-tight leading-tight">
                         {detail.title}
                     </h2>
-                    <div className="flex items-center flex-wrap gap-2 text-[14px] font-bold text-[#64748B]">
-                        <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-xl">
-                            <span className="material-symbols-outlined text-[16px] text-[#0F766E]">location_on</span>
-                            <span className="text-[#1E293B]">{detail.startAddr?.split(' ').slice(0, 2).join(' ')}</span>
-                        </div>
-                        
-                        <span className="material-symbols-outlined text-slate-300 text-[18px]">arrow_forward</span>
-
-                        {viaBeforeRound.map((v, i) => (
-                            <React.Fragment key={`via-b-${i}`}>
-                                <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
-                                    <span className="text-slate-600">{v.addr?.split(' ').slice(0, 2).join(' ')}</span>
-                                </div>
-                                <span className="material-symbols-outlined text-slate-300 text-[18px]">arrow_forward</span>
-                            </React.Fragment>
-                        ))}
-
-                        {roundNode && (
-                            <>
-                                <div className="flex items-center gap-1.5 bg-teal-50 px-3 py-1.5 rounded-xl border border-teal-100">
-                                    <span className="material-symbols-outlined text-[16px] text-[#0F766E]">rebase_edit</span>
-                                    <span className="text-[#0F766E] font-black">{roundNode.addr?.split(' ').slice(0, 2).join(' ')}</span>
-                                </div>
-                                <span className="material-symbols-outlined text-slate-300 text-[18px]">arrow_forward</span>
-                            </>
-                        )}
-
-                        {viaAfterRound.map((v, i) => (
-                            <React.Fragment key={`via-a-${i}`}>
-                                <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
-                                    <span className="text-slate-600">{v.addr?.split(' ').slice(0, 2).join(' ')}</span>
-                                </div>
-                                <span className="material-symbols-outlined text-slate-300 text-[18px]">arrow_forward</span>
-                            </React.Fragment>
-                        ))}
-
-                        <div className="flex items-center gap-1.5 bg-[#1E293B] px-3 py-1.5 rounded-xl shadow-sm">
-                            <span className="material-symbols-outlined text-[16px] text-white">flag</span>
-                            <span className="text-white font-black">{endNode.addr?.split(' ').slice(0, 2).join(' ')}</span>
-                        </div>
-                    </div>
                 </section>
 
                 {/* Section 1: 요청정보 요약 */}
                 <section className="space-y-6">
-                    <div className="flex justify-between items-center px-2">
-                        <h2 className="text-xl font-black text-[#1E293B] tracking-tight">여행 정보 요약</h2>
+                    <div className="flex justify-end items-center px-2">
                         <span className="px-4 py-1.5 rounded-xl bg-[#E2E8F0] text-[#64748B] text-[11px] font-black uppercase tracking-wider">여행 완료</span>
                     </div>
                     
                     {/* 한글 주석: ReservationDetailCustomer 스타일을 적용한 타임라인 카드 */}
-                    <div className="bg-white rounded-[3.5rem] p-12 shadow-2xl shadow-teal-900/[0.03] border border-slate-50 text-left">
-                        <div className="text-xl font-black tracking-tight border-b border-slate-50 pb-6 italic text-teal-700 flex items-center gap-2">
-                            <span className="material-symbols-outlined">route</span>
-                            전체 운행 경로
+                    <div className="bg-white rounded-[3.5rem] p-12 shadow-2xl shadow-teal-900/[0.03] border border-slate-50 text-left space-y-10">
+                        {/* 운행 일정 */}
+                        <div className="flex items-center gap-4 border-b border-slate-100 pb-8 text-left">
+                            <div className="w-12 h-12 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center shadow-sm">
+                                <span className="material-symbols-outlined text-orange-600 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>calendar_today</span>
+                            </div>
+                            <div className="flex flex-col text-left">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic mb-1">
+                                    운행 일정
+                                </p>
+                                <p className="text-lg font-black text-[#1E293B] leading-snug">
+                                    {detail.startDt ? detail.startDt.split(' ')[0].replace(/[-/]/g, '.') : ''} -
+                                </p>
+                                <p className="text-lg font-black text-[#1E293B] leading-snug">
+                                    {detail.endDt ? detail.endDt.split(' ')[0].replace(/[-/]/g, '.') : ''}
+                                </p>
+                            </div>
                         </div>
-                        <div className="mt-8 space-y-10 relative">
+
+                        {/* 전체 운행 경로 */}
+                        <div className="space-y-8">
+                            <h2 className="text-2xl font-black pb-4 border-b border-slate-50 flex items-center gap-3 italic text-teal-700">
+                                <span className="material-symbols-outlined text-primary" style={{fontVariationSettings: "'FILL' 1"}}>route</span>
+                                여행 경로
+                            </h2>
+                            <div className="mt-8 space-y-10 relative">
                             <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-100"></div>
                             {routeData.map((point, idx) => {
                                 const isRoundTrip = point.type === 'ROUND_TRIP' || point.type === 'DEST';
@@ -259,7 +240,8 @@ const PastTripDetailCustomer = () => {
                             })}
                         </div>
                     </div>
-                </section>
+                </div>
+            </section>
 
                 {/* Section 2: 배차 및 운전자 정보 */}
                 <section className="space-y-6">

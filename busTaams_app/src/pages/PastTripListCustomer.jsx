@@ -106,17 +106,60 @@ const PastTripListCustomer = () => {
                             >
                                 <div className={`lg:col-span-1 w-2 bg-primary opacity-20 group-hover:opacity-100 transition-opacity`}></div>
                                 <div className="lg:col-span-11 p-8 md:p-12 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
-                                    <div className="space-y-4">
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-[11px] font-black text-secondary bg-secondary/10 px-3 py-1 rounded-xl uppercase tracking-wider">{trip.date}</span>
-                                            <span className="text-[11px] font-black text-slate-300 uppercase tracking-widest">ID: {trip.id}</span>
-                                        </div>
-                                        <h3 className="font-headline font-black text-3xl text-primary tracking-tight group-hover:text-secondary transition-colors">{trip.title}</h3>
-                                        <div className="flex items-start gap-3 text-on-surface-variant font-bold opacity-60">
-                                            <span className="material-symbols-outlined text-xl mt-1">route</span>
-                                            <span className="text-lg tracking-tight leading-tight">{trip.route}</span>
-                                        </div>
-                                    </div>
+                                     <div className="space-y-4">
+                                         {/* 제목 */}
+                                         <h3 className="font-headline font-black text-3xl text-primary tracking-tight group-hover:text-secondary transition-colors">{trip.title}</h3>
+                                         
+                                         {/* 여행 일정 */}
+                                         <div className="flex items-start gap-2 mt-4 mb-4">
+                                             <span className="material-symbols-outlined text-teal-600 text-sm mt-0.5">event</span>
+                                             <div className="flex flex-col text-left">
+                                                 <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">{trip.startDate} ~</p>
+                                                 <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none">{trip.endDate}</p>
+                                             </div>
+                                         </div>
+
+                                         {/* 여행 경로 Bento 스타일 */}
+                                         {(() => {
+                                             const formatAddr = (addr) => {
+                                                 if (!addr) return '';
+                                                 const parts = addr.split(' ');
+                                                 if (parts.length >= 3 && (parts[2].endsWith('구') || parts[2].endsWith('군'))) {
+                                                     return parts.slice(0, 3).join(' ');
+                                                 }
+                                                 return parts.slice(0, 2).join(' ');
+                                             };
+
+                                             return (
+                                                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100/50 space-y-4 mb-6">
+                                                     <div className="flex items-center justify-between">
+                                                         <div className="flex-1 text-left">
+                                                             <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">출발</p>
+                                                             <p className="font-bold text-xs text-slate-700">{formatAddr(trip.startAddr)}</p>
+                                                         </div>
+                                                         <div className="px-4 text-slate-200">
+                                                             <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                                                         </div>
+                                                         {trip.roundTrip ? (
+                                                             <>
+                                                                 <div className="flex-1 text-center">
+                                                                     <p className="text-[8px] font-black text-teal-500 uppercase tracking-tighter mb-0.5">목적지</p>
+                                                                     <p className="font-bold text-xs text-slate-700">{formatAddr(trip.roundTrip)}</p>
+                                                                 </div>
+                                                                 <div className="px-4 text-slate-200">
+                                                                     <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                                                                 </div>
+                                                             </>
+                                                         ) : null}
+                                                         <div className="flex-1 text-right">
+                                                             <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">도착</p>
+                                                             <p className="font-bold text-xs text-slate-700">{formatAddr(trip.endAddr)}</p>
+                                                         </div>
+                                                     </div>
+                                                 </div>
+                                             );
+                                         })()}
+                                     </div>
 
                                     <div className="flex flex-wrap items-center gap-10">
                                         <div className="flex items-center gap-4 bg-slate-50 px-6 py-3 rounded-2xl border border-slate-100">

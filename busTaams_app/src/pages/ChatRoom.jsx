@@ -6,6 +6,37 @@ import BottomNavCustomer from '../components/BottomNavCustomer';
 import BottomNavDriver from '../components/BottomNavDriver';
 
 /**
+ * JWT 토큰 또는 로컬스토리지에서 로그인된 사용자의 고객 ID를 가져오는 함수 (한글 주석)
+ */
+const getLoggedCustId = () => {
+    try {
+        const token = localStorage.getItem('accessToken');
+        if (token) {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            const decoded = JSON.parse(jsonPayload);
+            if (decoded && decoded.custId) {
+                return decoded.custId;
+            }
+        }
+    } catch (e) {
+        console.error('JWT parse error:', e);
+    }
+    try {
+        const user = JSON.parse(localStorage.getItem('user'));
+        if (user && user.custId) {
+            return user.custId;
+        }
+    } catch (e) {
+        console.error('Localstorage user parse error:', e);
+    }
+    return '';
+};
+
+/**
  * busTaams Talk - 실시간 채팅 화면
  * 기사와 여행자 간의 소통을 담당
  */
@@ -20,6 +51,7 @@ const ChatRoom = () => {
     const [profileImage, setProfileImage] = useState(null);
     const [imageVersion, setImageVersion] = useState(Date.now());
     const scrollRef = useRef(null);
+    const myCustId = getLoggedCustId();
 
     // 사용자 정보 로드
     useEffect(() => {
@@ -218,25 +250,27 @@ const ChatRoom = () => {
                 </div>
 
                 {history.map((msg, idx) => {
-                    // 내가 보낸 메시지인지 확인
-                    const isMe = msg.SENDER_CUST_ID === currentUser?.custId;
+                    // 내가 보낸 메시지인지 확인 (대소문자 및 다양한 키 이름 대응) (한글 주석)
+                    const isMe = String(msg.SENDER_CUST_ID || msg.senderCustId || msg.sender_cust_id || '').trim().toLowerCase() === String(myCustId || '').trim().toLowerCase();
                     
                     return (
-                        <div key={idx} className={`flex flex-col gap-2 ${isMe ? 'items-end' : 'items-start'}`}>
-                            <div className={`max-w-[85%] p-4 rounded-2xl shadow-sm ${
-                                isMe 
-                                ? 'bg-[#004D40] text-white rounded-tr-none' 
-                                : 'bg-white text-[#1D3557] rounded-tl-none border border-gray-50'
-                            }`}>
-                                <p className="text-[14px] leading-relaxed font-medium">{msg.MSG_BODY}</p>
-                            </div>
-                            <div className={`flex items-center gap-2 ${isMe ? 'mr-1' : 'ml-1'}`}>
-                                <span className="text-[9px] font-bold text-gray-300 uppercase">
-                                    {msg.regDt.split(' ')[1].substring(0, 5)}
-                                </span>
-                                {isMe && (
-                                    <span className="material-symbols-outlined text-[12px] text-[#004D40]" style={{fontVariationSettings: "'FILL' 1"}}>done_all</span>
-                                )}
+                        <div key={idx} className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`flex flex-col gap-2 ${isMe ? 'items-end' : 'items-start'} max-w-[85%]`}>
+                                <div className={`p-4 rounded-2xl shadow-sm ${
+                                    isMe 
+                                    ? 'bg-[#004D40] text-white rounded-tr-none' 
+                                    : 'bg-white text-[#1D3557] rounded-tl-none border border-gray-50'
+                                }`}>
+                                    <p className="text-[14px] leading-relaxed font-medium">{msg.MSG_BODY}</p>
+                                </div>
+                                <div className={`flex items-center gap-2 ${isMe ? 'mr-1' : 'ml-1'}`}>
+                                    <span className="text-[9px] font-bold text-gray-300 uppercase">
+                                        {msg.regDt.split(' ')[1].substring(0, 5)}
+                                    </span>
+                                    {isMe && (
+                                        <span className="material-symbols-outlined text-[12px] text-[#004D40]" style={{fontVariationSettings: "'FILL' 1"}}>done_all</span>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     );

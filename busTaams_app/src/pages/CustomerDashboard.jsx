@@ -120,7 +120,7 @@ const CustomerDashboard = () => {
             {/* TopAppBar */}
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl shadow-[0px_40px_60px_rgba(0,104,95,0.06)] h-16 flex items-center justify-between px-6">
                 <div className="flex items-center gap-3">
-                    <img src="/assets/BUSTAAMS_IMAGE_LOGO.png" alt="BUSTAAMS Logo" className="w-8 h-8 object-contain rounded-xl" />
+                    <img src="/app/assets/BUSTAAMS_IMAGE_LOGO.png" alt="BUSTAAMS Logo" className="w-8 h-8 object-contain rounded-xl" />
                     <h1 className="text-2xl font-black text-teal-800 italic font-headline tracking-tight text-[22px]">BUSTAAMS</h1>
                 </div>
                 <div className="flex items-center gap-4">

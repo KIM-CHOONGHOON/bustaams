@@ -132,7 +132,7 @@ function App() {
   }, []);
 
   return (
-    <Router>
+    <Router basename="/app">
       <ScrollToTop />
       <NotificationToast />
       <Routes>

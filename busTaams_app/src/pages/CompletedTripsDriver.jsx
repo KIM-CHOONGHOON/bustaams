@@ -93,22 +93,67 @@ const CompletedTripsDriver = () => {
                                         <span className="material-symbols-outlined text-slate-100 group-hover:text-[#004E47]/20 transition-colors duration-500 text-4xl">verified</span>
                                     </div>
 
-                                    <div className="space-y-2 text-left">
+                                    <div className="space-y-4 text-left">
                                         <h3 className="font-headline text-2xl font-black text-[#004E47] italic uppercase tracking-tighter text-left group-hover:text-[#9D4300] transition-colors duration-500 leading-tight line-clamp-1">
                                             {trip.title}
                                         </h3>
-                                        <p className="text-slate-400 font-bold italic text-xs leading-tight uppercase tracking-widest line-clamp-1">
-                                            경로: {getShortAddr(trip.startAddr)}(출발)
-                                            {trip.roundTrip && ` → ${getShortAddr(trip.roundTrip)}(목적지)`}
-                                            → {getShortAddr(trip.endAddr)}(도착지)
-                                        </p>
+                                        
+                                        {/* 운행 일정 */}
+                                        <div className="flex items-start gap-2">
+                                            <span className="material-symbols-outlined text-teal-600 text-sm mt-0.5">event</span>
+                                            <div className="flex flex-col text-left">
+                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">
+                                                    {trip.startDate ? trip.startDate.replace(/[-/]/g, '.') : ''} ~
+                                                </p>
+                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+                                                    {trip.endDate ? trip.endDate.replace(/[-/]/g, '.') : ''}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* 운행 경로 Bento 스타일 */}
+                                        {(() => {
+                                            const formatAddr = (addr) => {
+                                                if (!addr) return '';
+                                                const parts = addr.split(' ');
+                                                if (parts.length >= 3 && (parts[2].endsWith('구') || parts[2].endsWith('군'))) {
+                                                    return parts.slice(0, 3).join(' ');
+                                                }
+                                                return parts.slice(0, 2).join(' ');
+                                            };
+
+                                            return (
+                                                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100/50 space-y-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex-1">
+                                                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">출발</p>
+                                                            <p className="font-bold text-xs text-slate-700">{formatAddr(trip.startAddr)}</p>
+                                                        </div>
+                                                        <div className="px-4 text-slate-200">
+                                                            <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                                                        </div>
+                                                        {trip.roundTrip ? (
+                                                            <>
+                                                                <div className="flex-1 text-center">
+                                                                    <p className="text-[8px] font-black text-teal-500 uppercase tracking-tighter mb-0.5">목적지</p>
+                                                                    <p className="font-bold text-xs text-slate-700">{formatAddr(trip.roundTrip)}</p>
+                                                                </div>
+                                                                <div className="px-4 text-slate-200">
+                                                                    <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                                                                </div>
+                                                            </>
+                                                        ) : null}
+                                                        <div className="flex-1 text-right">
+                                                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">도착</p>
+                                                            <p className="font-bold text-xs text-slate-700">{formatAddr(trip.endAddr)}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
 
                                     <div className="space-y-4 text-left">
-                                        <div className="flex justify-between items-center text-left border-b border-slate-50 pb-4">
-                                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-300 italic">운행 일정</span>
-                                            <span className="font-black text-[#004E47] text-xs italic">{trip.startDate} ~ {trip.endDate}</span>
-                                        </div>
                                         <div className="flex justify-between items-center text-left border-b border-slate-50 pb-4">
                                             <span className="text-[8px] font-black uppercase tracking-widest text-slate-300 italic">운행 차량</span>
                                             <span className="font-black text-[#004E47] text-xs italic">{trip.model || '기본 정보 없음'}</span>
@@ -121,7 +166,7 @@ const CompletedTripsDriver = () => {
 
                                     <button 
                                         onClick={() => navigate(`/completed-trip-detail-driver/${trip.id}`)} 
-                                        className="w-full py-4 rounded-xl bg-slate-50 text-[#004E47] font-black text-[10px] uppercase tracking-[0.3em] hover:bg-[#004E47] hover:text-white transition-all active:scale-95 italic"
+                                        className="w-full py-4 rounded-xl bg-slate-900 text-white font-black text-[10px] uppercase tracking-[0.3em] hover:bg-primary transition-all active:scale-95 shadow-2xl shadow-slate-900/30 italic"
                                     >
                                         상세보기
                                     </button>

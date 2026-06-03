@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api, { getImageUrl } from '../api';
 import BottomNavCustomer from '../components/BottomNavCustomer';
+import { notify } from '../utils/toast';
 
 const ReservationDetailCustomer = () => {
     const navigate = useNavigate();
@@ -101,19 +102,23 @@ const ReservationDetailCustomer = () => {
     }
 
     const handleComplete = async () => {
-        if (!window.confirm('여행이 완료되었습니까? 확인을 누르시면 상태가 운행 종료로 변경됩니다.')) return;
+        const confirmed = await notify.confirm(
+            '여행 완료',
+            '여행이 완료되었습니까? 확인을 누르시면 상태가 운행 종료로 변경됩니다.'
+        );
+        if (!confirmed) return;
 
         try {
             const res = await api.post('/app/customer/reservation/complete', { reqId: id });
             if (res.success) {
-                alert('여행이 완료 처리되었습니다. 이용해 주셔서 감사합니다!');
-                window.location.reload(); // 페이지 새로고침하여 상태 반영
+                await notify.success('여행 완료', '여행이 완료 처리되었습니다. 이용해 주셔서 감사합니다!');
+                navigate('/customer-dashboard');
             } else {
-                alert(res.error || '처리 중 오류가 발생했습니다.');
+                notify.error('처리 실패', res.error || '처리 중 오류가 발생했습니다.');
             }
         } catch (err) {
             console.error('Failed to complete trip:', err);
-            alert('서버와 통신 중 오류가 발생했습니다.');
+            notify.error('오류', '서버와 통신 중 오류가 발생했습니다.');
         }
     };
 
@@ -121,7 +126,7 @@ const ReservationDetailCustomer = () => {
 
     const handleCancel = async () => {
         if (!cancelReasonText.trim()) {
-            alert('상세 취소 사유를 입력해주세요.');
+            notify.warn('경고', '상세 취소 사유를 입력해주세요.');
             return;
         }
 
@@ -140,14 +145,14 @@ const ReservationDetailCustomer = () => {
             });
 
             if (res.success) {
-                alert('여행이 성공적으로 취소되었습니다.');
-                navigate('/reservation-list');
+                await notify.success('취소 성공', '여행이 성공적으로 취소되었습니다.');
+                navigate('/customer-dashboard');
             } else {
-                alert(res.error || '취소 처리 중 오류가 발생했습니다.');
+                notify.error('취소 실패', res.error || '취소 처리 중 오류가 발생했습니다.');
             }
         } catch (err) {
             console.error('Failed to cancel request:', err);
-            alert('서ver와 통신 중 오류가 발생했습니다.');
+            notify.error('오류', '서버와 통신 중 오류가 발생했습니다.');
         } finally {
             setIsCancelling(false);
             setShowCancelModal(false);
@@ -336,10 +341,27 @@ const ReservationDetailCustomer = () => {
                                                             {bus.busType} 등급 • {bus.busNo}
                                                         </p>
                                                     </div>
-                                                    <div className="bg-slate-50 px-6 py-3 rounded-2xl border border-slate-100">
-                                                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">최종 예약 금액</p>
-                                                        <p className="text-2xl font-black text-teal-600">₩ {Number(bus.confirmedPrice || 0).toLocaleString()}</p>
-                                                    </div>
+                                                    {(() => {
+                                                        const confirmedPrice = Number(bus.confirmedPrice || 0);
+                                                        const deposit = Math.round(confirmedPrice * 0.066);
+                                                        const balance = confirmedPrice - deposit;
+                                                        return (
+                                                            <div className="bg-slate-50 px-6 py-4 rounded-2xl border border-slate-100 space-y-2.5 text-left w-full sm:w-auto min-w-[200px]">
+                                                                <div className="flex justify-between items-center text-xs gap-4">
+                                                                    <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">최종 예약 금액</span>
+                                                                    <span className="font-bold text-slate-700">₩ {confirmedPrice.toLocaleString()}</span>
+                                                                </div>
+                                                                <div className="flex justify-between items-center text-xs gap-4">
+                                                                    <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">예약금 (6.6%)</span>
+                                                                    <span className="font-bold text-slate-600">₩ {deposit.toLocaleString()}</span>
+                                                                </div>
+                                                                <div className="flex justify-between items-center pt-2 border-t border-slate-200/60 gap-4">
+                                                                    <span className="text-slate-500 font-black uppercase tracking-widest text-[10px]">결제 예정 금액</span>
+                                                                    <span className="text-lg font-black text-teal-600">₩ {balance.toLocaleString()}</span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </div>
                                                 
                                                 {/* 차량 이미지 복구 및 렌더링 */}
@@ -416,20 +438,38 @@ const ReservationDetailCustomer = () => {
 
                     {/* Right Column Sticky Payment */}
                     <div className="lg:col-span-4">
-                        <aside className="sticky top-28 bg-slate-900 p-12 rounded-[3.5rem] shadow-2xl shadow-slate-900/40 border border-white/5 space-y-10 text-left">
+                        <aside className="sticky top-28 bg-slate-900 p-12 rounded-[3.5rem] shadow-2xl shadow-slate-900/40 border border-white/5 space-y-8 text-left">
                             <div className="space-y-2">
                                 <h4 className="text-xs font-black text-slate-500 uppercase tracking-[0.3em]">총 예약 정보</h4>
                                 <h3 className="text-2xl font-black tracking-tight text-white italic">최종 결제 금액</h3>
                             </div>
-                            <div className="pt-8 border-t border-white/10">
-                                <div className="flex justify-between items-baseline mb-6">
-                                    <span className="text-5xl font-black tracking-tighter text-white">₩ {Number(reservation.total_price || 0).toLocaleString()}</span>
-                                    <span className="material-symbols-outlined text-primary text-3xl">verified</span>
-                                </div>
-                                <p className="text-[10px] text-slate-500 font-bold leading-relaxed italic">
-                                    * 모든 세금 및 봉사료가 포함된 최종 금액입니다.
-                                </p>
-                            </div>
+                            {(() => {
+                                const totalPrice = Number(reservation.total_price || 0);
+                                const totalDeposit = Math.round(totalPrice * 0.066);
+                                const totalBalance = totalPrice - totalDeposit;
+                                return (
+                                    <div className="pt-8 border-t border-white/10 space-y-4">
+                                        <div className="flex justify-between items-center text-xs font-semibold text-slate-400">
+                                            <span>최종 예약 금액</span>
+                                            <span className="text-white">₩ {totalPrice.toLocaleString()}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-xs font-semibold text-slate-400">
+                                            <span>예약금 (6.6%)</span>
+                                            <span className="text-white/80">₩ {totalDeposit.toLocaleString()}</span>
+                                        </div>
+                                        <div className="pt-4 border-t border-white/5 space-y-2">
+                                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">결제 예정 금액</p>
+                                            <div className="flex justify-between items-baseline">
+                                                <span className="text-4xl font-black tracking-tighter text-teal-400">₩ {totalBalance.toLocaleString()}</span>
+                                                <span className="material-symbols-outlined text-teal-400 text-3xl">verified</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                            <p className="text-[10px] text-slate-500 font-bold leading-relaxed italic">
+                                * 모든 세금 및 봉사료가 포함된 최종 금액입니다.
+                            </p>
                             <div className="space-y-4">
                                 {reservation.status === 'CONFIRM' && (
                                     <button 

@@ -1108,6 +1108,34 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
         const custId = uRows[0].CUST_ID;
         const driverName = uRows[0].USER_NM || '기사';
 
+        // 1-1. 기사의 멤버십 잔여 횟수 및 FEE_POLICY 정보 조회 (한글 주석)
+        const [momRows] = await connection.execute(
+            "SELECT REMAINING_CNT, FEE_POLICY FROM TB_MOM_MEMBER WHERE CUST_ID = ? AND YYYYMM = DATE_FORMAT(NOW(), '%Y%m')",
+            [custId]
+        );
+
+        if (momRows.length > 0) {
+            const remainingCnt = parseInt(momRows[0].REMAINING_CNT, 10);
+            if (remainingCnt <= 0) {
+                throw new Error('잔여 청약 횟수가 부족하여 청약 승인을 진행할 수 없습니다. 멤버십을 충전해주세요.');
+            }
+        }
+
+        let feePolicy = null;
+        if (momRows.length > 0) {
+            // 기사의 멤버십 잔여 횟수가 남아있는 경우 해당 멤버십 등급 정책 사용
+            feePolicy = momRows[0].FEE_POLICY;
+        } else {
+            // 멤버십이 없으면 기사의 상세 테이블에서 기본 수수료 정책 조회
+            const [driverRows] = await connection.execute(
+                "SELECT FEE_POLICY FROM TB_DRIVER_DETAIL WHERE CUST_ID = ?",
+                [custId]
+            );
+            if (driverRows.length > 0) {
+                feePolicy = driverRows[0].FEE_POLICY;
+            }
+        }
+
         // 1-2. 경매 마스터 정보 조회 (푸시 알림 및 일정 중복 체크용)
         const [reqRows] = await connection.execute(
             'SELECT TRAVELER_ID, TRIP_TITLE, START_DT, END_DT FROM TB_AUCTION_REQ WHERE REQ_ID = ?',
@@ -1191,9 +1219,9 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
             `INSERT INTO TB_BUS_RESERVATION (
                 RES_ID, REQ_ID, REQ_BUS_SEQ, TRAVELER_ID, DRIVER_ID, BUS_ID, 
                 DRIVER_BIDDING_PRICE, RES_FEE_TOTAL_AMT, RES_FEE_REFUND_AMT, RES_FEE_ATTRIBUTION_AMT,
-                DATA_STAT, REG_ID, MOD_ID
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'BIDDING', ?, ?)`,
-            [resId, reqId, reqBusSeq, travelerId, custId, busId, busAmt, feeTotal, feeRefund, feeAttribution, custId, custId]
+                DATA_STAT, REG_ID, MOD_ID, FEE_POLICY
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'BIDDING', ?, ?, ?)`,
+            [resId, reqId, reqBusSeq, travelerId, custId, busId, busAmt, feeTotal, feeRefund, feeAttribution, custId, custId, feePolicy]
         );
         console.log(`[BID_PROCESS] Reservation inserted successfully for resId: ${resId}`);
 

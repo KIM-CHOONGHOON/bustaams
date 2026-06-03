@@ -171,7 +171,7 @@ const ReservationList = () => {
                                                     <p className="text-on-surface font-semibold text-sm">{res.date}</p>
                                                 </div>
                                                 <div className="text-left">
-                                                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">총 예약 금액</p>
+                                                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">청약요금</p>
                                                     <p className="text-primary font-black text-sm">₩{Number(res.totalOfferPrice).toLocaleString()}</p>
                                                 </div>
                                             </div>

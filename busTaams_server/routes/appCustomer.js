@@ -724,6 +724,7 @@ router.get('/pending-requests', authenticateToken, async (req, res) => {
                 END_ADDR as endAddr, 
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' LIMIT 1) as roundAddr,
                 DATE_FORMAT(START_DT, '%Y-%m-%d') as startDt, 
+                DATE_FORMAT(END_DT, '%Y-%m-%d') as endDt, 
                 DATA_STAT as reqStat
             FROM TB_AUCTION_REQ r
             WHERE (TRIM(r.TRAVELER_ID) = ? OR TRIM(r.TRAVELER_ID) = ?) AND ${statusFilter}
@@ -1761,6 +1762,23 @@ router.post('/reservation/complete', authenticateToken, async (req, res) => {
 
         await connection.beginTransaction();
 
+        // 💰 위약금/정산 관리 테이블에 완료 정보 적재 (예약 상태 변경 전에 수행, 한글 주석)
+        const [confirmedResRows] = await connection.execute(
+            `SELECT R.RES_ID, R.DRIVER_ID, D.FEE_POLICY 
+             FROM TB_BUS_RESERVATION R
+             LEFT JOIN TB_DRIVER_DETAIL D ON R.DRIVER_ID = D.CUST_ID
+             WHERE R.REQ_ID = ? AND R.DATA_STAT = 'CONFIRM'`,
+            [reqId]
+        );
+        for (const resRow of confirmedResRows) {
+            await connection.execute(
+                `INSERT INTO TB_BUS_PENALTY_DEPOSIT (YYYYMMDD, RES_ID, DATA_STAT, PENALTY_DEPOSIT_YN, FEE_POLICY, REG_ID, MOD_ID)
+                 VALUES (DATE_FORMAT(NOW(), '%Y%m%d'), ?, 'DONE', 'N', ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE DATA_STAT = 'DONE', FEE_POLICY = ?, MOD_DT = NOW(), MOD_ID = ?`,
+                [resRow.RES_ID, resRow.FEE_POLICY, custId, custId, resRow.FEE_POLICY, custId]
+            );
+        }
+
         // 2. 상태 변경 (TB_AUCTION_REQ -> DONE)
         await connection.execute(
             'UPDATE TB_AUCTION_REQ SET DATA_STAT = "DONE" WHERE REQ_ID = ?',
@@ -2547,6 +2565,8 @@ router.get('/reservations', authenticateToken, async (req, res) => {
                 r.START_ADDR as startAddr,
                 r.END_ADDR as endAddr,
                 DATE_FORMAT(r.START_DT, '%Y/%m/%d') as date,
+                DATE_FORMAT(r.START_DT, '%Y.%m.%d %H:%i') as startDt,
+                DATE_FORMAT(r.END_DT, '%Y.%m.%d %H:%i') as endDt,
                 r.TRIP_TITLE as title,
                 MIN(res.RES_ID) as firstResId,
                 COUNT(res.RES_ID) as busCount,
@@ -2846,15 +2866,15 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
         await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?', [custId, reqId]);
         await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND DATA_STAT NOT IN (\'CONFIRM\', \'DONE\')', [custId, reqId]);
 
-        // 💰 위약금/정산 관리 테이블에 여행자 취소 정보 적재 (예약 확정 'CONFIRM' 상태였던 경우에만, 한글 주석)
-        if (currentReqStat === 'CONFIRM') {
-            const [confirmedResRows] = await connection.execute(
-                `SELECT R.RES_ID, R.DRIVER_ID, D.FEE_POLICY 
-                 FROM TB_BUS_RESERVATION R
-                 LEFT JOIN TB_DRIVER_DETAIL D ON R.DRIVER_ID = D.CUST_ID
-                 WHERE R.REQ_ID = ? AND R.DATA_STAT = 'CONFIRM'`,
-                [reqId]
-            );
+        // 💰 위약금/정산 관리 테이블에 여행자 취소 정보 적재 (확정된 예약 건이 존재하는 경우 무조건 적재, 한글 주석)
+        const [confirmedResRows] = await connection.execute(
+            `SELECT R.RES_ID, R.DRIVER_ID, D.FEE_POLICY 
+             FROM TB_BUS_RESERVATION R
+             LEFT JOIN TB_DRIVER_DETAIL D ON R.DRIVER_ID = D.CUST_ID
+             WHERE R.REQ_ID = ? AND R.DATA_STAT = 'CONFIRM'`,
+            [reqId]
+        );
+        if (confirmedResRows.length > 0) {
             for (const resRow of confirmedResRows) {
                 await connection.execute(
                     `INSERT INTO TB_BUS_PENALTY_DEPOSIT (YYYYMMDD, RES_ID, DATA_STAT, PENALTY_DEPOSIT_YN, FEE_POLICY, REG_ID, MOD_ID)
@@ -3051,6 +3071,8 @@ router.get('/review-pending-missions', authenticateToken, async (req, res) => {
                 r.END_ADDR as endAddrMaster,
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' LIMIT 1) as viaAddr,
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'END_NODE' LIMIT 1) as endAddrVia,
+                DATE_FORMAT(r.START_DT, '%Y.%m.%d') as startDt,
+                DATE_FORMAT(r.END_DT, '%Y.%m.%d') as endDt,
                 DATE_FORMAT(r.END_DT, '%Y/%m/%d') as date,
                 db.MODEL_NM as busModel,
                 (SELECT COUNT(*) FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID) as busCnt,

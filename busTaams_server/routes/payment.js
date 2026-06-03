@@ -361,7 +361,7 @@ module.exports = function createPaymentRouter(pool, app) {
                         let redirectPath = '/customer-dashboard';
                         
                         if (type === 'REQ') {
-                            redirectPath = `/approval-list?reqId=${targetId}&payResult=success`; // 404 수정 (한글 주석)
+                            redirectPath = `/customer-dashboard?payResult=success`; // 404 수정 (한글 주석)
                         } else if (type === 'RES') {
                             // 단건의 경우 해당 reqId를 찾아야 하므로 일단 대시보드로 보내거나 상세로 보냄
                             redirectPath = `/customer-dashboard?payResult=success&resId=${targetId}`;
@@ -423,7 +423,7 @@ module.exports = function createPaymentRouter(pool, app) {
                     const parts = oid.split('_');
                     const targetId = parts[2];
                     const redirectPath = parts[1] === 'REQ' 
-                        ? `/approval-list?reqId=${targetId}&payResult=success` // 404 수정 (한글 주석)
+                        ? `/customer-dashboard?payResult=success` // 404 수정 (한글 주석)
                         : `/customer-dashboard?payResult=success`;
 
                     sendHtmlResponse('결제가 성공적으로 완료되었습니다.', redirectPath);

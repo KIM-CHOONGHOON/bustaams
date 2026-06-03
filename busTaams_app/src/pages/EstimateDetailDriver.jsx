@@ -147,6 +147,24 @@ const EstimateDetailDriver = () => {
                     {/* Left: Trip Info (Matching Design) */}
                     <aside className="lg:col-span-5 text-left">
                         <div className="bg-white rounded-2xl p-10 space-y-10 shadow-xl shadow-teal-900/5 text-left border border-slate-100">
+                            {/* 운행 일정 */}
+                            <div className="flex items-center gap-4 border-b border-slate-100 pb-8 text-left">
+                                <div className="w-12 h-12 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center shadow-sm">
+                                    <span className="material-symbols-outlined text-orange-600 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>calendar_today</span>
+                                </div>
+                                <div className="flex flex-col text-left">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic mb-1">
+                                        운행 일정
+                                    </p>
+                                    <p className="text-lg font-black text-[#1E293B] leading-snug">
+                                        {auction.startDate ? auction.startDate.split(' ')[0].replace(/[-/]/g, '.') : ''} -
+                                    </p>
+                                    <p className="text-lg font-black text-[#1E293B] leading-snug">
+                                        {auction.endDate ? auction.endDate.split(' ')[0].replace(/[-/]/g, '.') : ''}
+                                    </p>
+                                </div>
+                            </div>
+
                             {/* 한글 주석: 여행 경로 타이틀 추가 */}
                             <h2 className="text-2xl font-black mb-10 flex items-center gap-3 italic text-teal-800 border-b border-slate-50 pb-6">
                                 <span className="material-symbols-outlined text-primary" style={{fontVariationSettings: "'FILL' 1"}}>route</span>
@@ -193,27 +211,6 @@ const EstimateDetailDriver = () => {
                                         );
                                     })}
                                 </div>
-
-                                <div className="pt-8 border-t border-slate-50 space-y-8">
-                                    <div className="flex items-start gap-6 text-left">
-                                        <div className="min-w-[40px] h-10 rounded-xl bg-slate-50 text-slate-400 border border-slate-100 flex items-center justify-center">
-                                            <span className="material-symbols-outlined text-xl">calendar_month</span>
-                                        </div>
-                                        <div className="text-left">
-                                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 mb-1 italic">출발 일시</p>
-                                            <p className="font-black text-[#191c1e] text-lg leading-tight">{auction.startDate}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-start gap-6 text-left">
-                                        <div className="min-w-[40px] h-10 rounded-xl bg-slate-50 text-slate-400 border border-slate-100 flex items-center justify-center">
-                                            <span className="material-symbols-outlined text-xl">calendar_month</span>
-                                        </div>
-                                        <div className="text-left">
-                                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 mb-1 italic">도착 일시</p>
-                                            <p className="font-black text-[#191c1e] text-lg leading-tight">{auction.endDate}</p>
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     </aside>
@@ -223,21 +220,21 @@ const EstimateDetailDriver = () => {
                         <div className="bg-white p-8 md:p-12 rounded-2xl shadow-xl shadow-teal-900/5 border border-slate-50 text-left h-full">
                             <form onSubmit={handleSubmit} className="space-y-12 text-left">
                                 {/* 한글 주석: 금액 표시와 디지털 서명을 하나의 카드 섹션으로 통합 */}
-                                <div className="space-y-6 text-left group bg-slate-50 border border-slate-100 rounded-3xl p-8">
-                                    <div className="flex justify-between items-center px-2 text-left">
+                                <div className="space-y-6 text-left">
+                                    <div className="flex justify-between items-center text-left">
                                         <label className="text-[11px] font-black uppercase tracking-[0.4em] text-slate-400 italic">확정 청약 금액</label>
                                         <span className="text-[10px] font-black text-secondary uppercase tracking-[0.3em]">KRW</span>
                                     </div>
                                     <div className="relative text-left">
-                                        {/* 한글 주석: 원화 기호와 금액의 폰트 및 간격 조율 */}
-                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 font-black text-[#004e47] text-4xl italic">₩</span>
+                                        {/* 한글 주석: 원화 기호와 금액의 정렬 맞춤 */}
+                                        <span className="absolute left-0 top-1/2 -translate-y-1/2 font-black text-[#004e47] text-4xl italic">₩</span>
                                         <input 
-                                            className="w-full bg-transparent border-none py-2 pl-12 pr-2 font-headline text-5xl font-black text-[#004e47] focus:outline-none italic cursor-not-allowed" 
+                                            className="w-full bg-transparent border-none py-2 pl-11 pr-2 font-headline text-5xl font-black text-[#004e47] focus:outline-none italic cursor-not-allowed" 
                                             value={Number(auction.price).toLocaleString()} 
                                             readOnly 
                                         />
                                     </div>
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest px-2 mb-2">
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2">
                                         고객이 제시한 고정 금액으로 청약이 진행됩니다.
                                     </p>
                                     

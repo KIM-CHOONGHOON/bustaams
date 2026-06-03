@@ -73,78 +73,89 @@ const CompletedTripDetailDriver = () => {
             </header>
 
             <main className="pt-40 px-6 max-w-3xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom duration-1000 text-left">
-                {/* 여행 요약 히어로 섹션 */}
-                <section className="relative overflow-hidden bg-primary rounded-2xl p-10 text-white shadow-[0_40px_100px_-20px_rgba(0,104,95,0.4)] text-left">
-                    <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
-                    <div className="relative z-10 flex flex-col gap-4 text-left">
-                        <div className="flex flex-col gap-2 text-left">
-                            <div className="flex items-center gap-3 text-left">
-                                <span className="px-5 py-1.5 bg-white/20 rounded-xl text-[10px] font-black tracking-[0.3em] uppercase italic">운행 완료</span>
-                            </div>
-                            <h3 className="text-xl font-black text-white/90 italic uppercase tracking-tight">{trip.title}</h3>
-                        </div>
-                        <h2 className="font-headline text-5xl font-black italic uppercase tracking-tighter text-left leading-none">
-                            {startCity} <span className="text-secondary tracking-widest mx-2">→</span> {endCity}
-                        </h2>
-                        <div className="mt-6 flex flex-col text-left">
-                            <span className="text-white/60 text-[10px] font-black uppercase tracking-widest italic mb-2">총 정산 금액</span>
-                            <span className="text-6xl font-black italic headline tracking-tighter">₩{Number(trip.price || 0).toLocaleString()}</span>
-                        </div>
-                    </div>
-                    <div className="absolute bottom-8 right-12 opacity-10">
-                        <span className="material-symbols-outlined text-[10rem]" style={{fontVariationSettings: "'FILL' 1"}}>verified</span>
-                    </div>
+                {/* 제목 표시 */}
+                <section className="px-2 space-y-2">
+                    <h2 className="text-[24px] font-black text-[#1E293B] tracking-tight leading-tight">
+                        {trip.title}
+                    </h2>
                 </section>
 
-                {/* 한글 주석: ReservationDetailCustomer 스타일을 적용한 운행 타임라인 */}
-                <section className="bg-white rounded-[3.5rem] p-12 shadow-2xl shadow-teal-900/[0.03] border border-slate-50 text-left">
-                    <div className="text-xl font-black tracking-tight border-b border-slate-50 pb-6 italic text-teal-700 flex items-center gap-2">
-                        <span className="material-symbols-outlined">route</span>
-                        전체 운행 경로
+                {/* Section 1: 요청정보 요약 */}
+                <section className="space-y-6">
+                    <div className="flex justify-end items-center px-2">
+                        <span className="px-4 py-1.5 rounded-xl bg-[#E2E8F0] text-[#64748B] text-[11px] font-black uppercase tracking-wider">운행 완료</span>
                     </div>
-                    <div className="mt-8 space-y-10 relative">
-                        <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-100"></div>
-                        {trip.waypoints?.map((wp, idx) => {
-                            const isStart = wp.type === 'START';
-                            const isEnd = wp.type === 'END';
-                            const isDest = wp.type === 'ROUND' || wp.type === 'ROUND_TRIP';
-                            const title = isStart ? '출발지' : isEnd ? '도착지' : isDest ? '목적지' : '경유지';
-                            const pointType = isStart ? 'START' : isEnd ? 'END' : isDest ? 'ROUND_TRIP' : 'WAYPOINT';
 
-                            return (
-                                <div key={idx} className="relative pl-12">
-                                    <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center ${
-                                        pointType === 'START' ? 'bg-teal-600 text-white shadow-teal-200' : 
-                                        pointType === 'END' ? 'bg-rose-500 text-white shadow-rose-200' : 
-                                        pointType === 'ROUND_TRIP' ? 'bg-indigo-600 text-white shadow-indigo-100' :
-                                        'bg-amber-400 text-white shadow-amber-100'
-                                    }`}>
-                                        <span className="material-symbols-outlined text-[16px] font-black">
-                                            {pointType === 'START' ? 'location_on' : 
-                                             pointType === 'END' ? 'flag' : 
-                                             pointType === 'ROUND_TRIP' ? 'near_me' : 'more_horiz'}
-                                        </span>
-                                    </div>
-                                    <div className="flex flex-col text-left">
-                                        <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${
-                                            pointType === 'START' ? 'text-teal-600' : 
-                                            pointType === 'END' ? 'text-rose-500' : 
-                                            pointType === 'ROUND_TRIP' ? 'text-indigo-500' : 'text-amber-500'
-                                        }`}>
-                                            {title}
-                                        </p>
-                                        <h4 className="text-lg font-black tracking-tight text-on-surface text-left">
-                                            {wp.addr}
-                                        </h4>
-                                        {wp.time && (
-                                            <p className="text-xs text-slate-400 font-bold mt-1 opacity-70 italic text-left">
-                                                {wp.time}
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
+                    <div className="bg-white rounded-[3.5rem] p-12 shadow-2xl shadow-teal-900/[0.03] border border-slate-50 text-left space-y-10">
+                        {/* 운행 일정 */}
+                        <div className="flex items-center gap-4 border-b border-slate-100 pb-8 text-left">
+                            <div className="w-12 h-12 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center shadow-sm">
+                                <span className="material-symbols-outlined text-orange-600 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>calendar_today</span>
+                            </div>
+                            <div className="flex flex-col text-left">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic mb-1">
+                                    운행 일정
+                                </p>
+                                <p className="text-lg font-black text-[#1E293B] leading-snug">
+                                    {trip.startDate ? trip.startDate.split(' ')[0].replace(/[-/]/g, '.') : ''} -
+                                </p>
+                                <p className="text-lg font-black text-[#1E293B] leading-snug">
+                                    {trip.endDate ? trip.endDate.split(' ')[0].replace(/[-/]/g, '.') : ''}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* 전체 운행 경로 */}
+                        <div className="space-y-8">
+                            <h2 className="text-2xl font-black pb-4 border-b border-slate-50 flex items-center gap-3 italic text-teal-700">
+                                <span className="material-symbols-outlined text-primary" style={{fontVariationSettings: "'FILL' 1"}}>route</span>
+                                전체 운행 경로
+                            </h2>
+                            <div className="mt-8 space-y-10 relative">
+                                <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-100"></div>
+                                {trip.waypoints?.map((wp, idx) => {
+                                    const isStart = wp.type === 'START';
+                                    const isEnd = wp.type === 'END';
+                                    const isDest = wp.type === 'ROUND' || wp.type === 'ROUND_TRIP';
+                                    const title = isStart ? '출발지' : isEnd ? '도착지' : isDest ? '목적지' : '경유지';
+                                    const pointType = isStart ? 'START' : isEnd ? 'END' : isDest ? 'ROUND_TRIP' : 'WAYPOINT';
+
+                                    return (
+                                        <div key={idx} className="relative pl-12">
+                                            <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center ${
+                                                pointType === 'START' ? 'bg-teal-600 text-white shadow-teal-200' : 
+                                                pointType === 'END' ? 'bg-rose-500 text-white shadow-rose-200' : 
+                                                pointType === 'ROUND_TRIP' ? 'bg-indigo-600 text-white shadow-indigo-100' :
+                                                'bg-amber-400 text-white shadow-amber-100'
+                                            }`}>
+                                                <span className="material-symbols-outlined text-[16px] font-black">
+                                                    {pointType === 'START' ? 'location_on' : 
+                                                     pointType === 'END' ? 'flag' : 
+                                                     pointType === 'ROUND_TRIP' ? 'near_me' : 'more_horiz'}
+                                                </span>
+                                            </div>
+                                            <div className="flex flex-col text-left">
+                                                <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${
+                                                    pointType === 'START' ? 'text-teal-600' : 
+                                                    pointType === 'END' ? 'text-rose-500' : 
+                                                    pointType === 'ROUND_TRIP' ? 'text-indigo-500' : 'text-amber-500'
+                                                }`}>
+                                                    {title}
+                                                </p>
+                                                <h4 className="text-lg font-black tracking-tight text-on-surface text-left">
+                                                    {wp.addr}
+                                                </h4>
+                                                {wp.time && (
+                                                    <p className="text-xs text-slate-400 font-bold mt-1 opacity-70 italic text-left">
+                                                        {wp.time}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     </div>
                 </section>
 
@@ -162,6 +173,31 @@ const CompletedTripDetailDriver = () => {
                         <div className="text-left">
                             <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] mb-2 italic">차량 등록 번호</p>
                             <h4 className="text-xl font-black text-secondary italic uppercase tracking-widest text-left">{trip.busNumber || '차량 번호 없음'}</h4>
+                        </div>
+                    </div>
+                </section>
+
+                {/* 정산 내역 상세 */}
+                <section className="space-y-6">
+                    <h2 className="text-xl font-black text-[#1E293B] tracking-tight px-2">정산 내역 상세</h2>
+                    <div className="bg-white rounded-2xl p-10 shadow-sm border border-slate-100 space-y-8">
+                        <div className="flex justify-between items-center py-2">
+                            <span className="text-[16px] font-black text-[#1E293B]">청약 확정 금액</span>
+                            <span className="text-[20px] font-black text-[#1E293B]">₩ {Number(trip.price || 0).toLocaleString()}</span>
+                        </div>
+
+                        <div className="bg-[#00685F] p-10 rounded-2xl shadow-xl shadow-teal-900/10 flex items-center justify-between text-white relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl"></div>
+                            <div className="space-y-1">
+                                <p className="text-[10px] font-black text-white/50 uppercase tracking-[0.2em]">Final Settlement Payment</p>
+                                <p className="text-[14px] font-bold">정산 완료</p>
+                            </div>
+                            <div className="text-right">
+                                <span className="text-[40px] font-black tracking-tighter leading-none flex items-start justify-end gap-2">
+                                    <span className="text-[24px] mt-2">₩</span>
+                                    {Number(trip.price || 0).toLocaleString()}
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </section>

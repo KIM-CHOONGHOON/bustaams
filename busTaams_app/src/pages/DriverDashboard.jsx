@@ -89,7 +89,7 @@ const DriverDashboard = () => {
 
     // 빠른 메뉴 버튼 배열 순서 변경 (등록 관련 메뉴를 사용성 개선을 위해 맨 뒤로 이동)
     const quickMenus = [
-        { icon: 'format_list_bulleted', label: '청약 리스트', path: '/estimate-list-driver' },
+        { icon: 'format_list_bulleted', label: '청약 요청 목록', path: '/estimate-list-driver' },
         { icon: 'pending_actions', label: '승인 대기 목록', path: '/approval-pending-driver' },
         { icon: 'calendar_month', label: '운행 예정 목록', path: '/upcoming-trips-driver' },
         { icon: 'task_alt', label: '운행 완료 리스트', path: '/completed-trips-driver' },
@@ -105,7 +105,7 @@ const DriverDashboard = () => {
             {/* TopAppBar */}
             <header className="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-xl shadow-teal-900/5 flex items-center justify-between px-6 h-16 w-full">
                 <div className="flex items-center gap-3">
-                    <img src="/assets/BUSTAAMS_IMAGE_LOGO.png" alt="busTaams Logo" className="w-8 h-8 object-contain rounded-xl" />
+                    <img src="/app/assets/BUSTAAMS_IMAGE_LOGO.png" alt="busTaams Logo" className="w-8 h-8 object-contain rounded-xl" />
                     <div className="w-10 h-10 rounded-xl bg-surface-container-highest overflow-hidden border border-slate-100 flex items-center justify-center">
                         {userImage ? (
                             <img alt="Driver profile" className="w-full h-full object-cover" src={userImage} />
@@ -166,8 +166,9 @@ const DriverDashboard = () => {
                                                 </span>
                                                 <span className="text-[10px] text-slate-400 font-bold uppercase">{auction.timeAgo}</span>
                                             </div>
-                                            <h3 className="mt-4 font-bold text-lg text-on-surface italic truncate">{auction.title || '여행 제목 없음'}</h3>
-                                            <div className="text-[11px] text-on-surface-variant font-bold leading-tight mt-1 space-x-1">
+                                            <h3 className="mt-3 font-bold text-lg text-on-surface italic truncate">{auction.title || '여행 제목 없음'}</h3>
+                                            <p className="text-[10px] text-slate-400 font-medium mt-1">{auction.startDate} 운행</p>
+                                            <div className="text-[11px] text-on-surface-variant font-bold leading-tight mt-2 space-x-1">
                                                 <span>{auction.startAddr.split(' ')[1] || auction.startAddr.split(' ')[0]}</span>
                                                 {auction.roundTrip && (
                                                     <>
@@ -178,7 +179,6 @@ const DriverDashboard = () => {
                                                 <span className="text-secondary">→</span>
                                                 <span>{auction.endAddr.split(' ')[1] || auction.endAddr.split(' ')[0]}</span>
                                             </div>
-                                            <p className="text-[10px] text-slate-400 font-medium mt-2">{auction.startDate} 운행</p>
                                         </div>
                                         <div className="flex justify-between items-center mt-4">
                                             <span className="text-primary font-black text-xl tracking-tighter italic">₩{Number(auction.price).toLocaleString()}</span>

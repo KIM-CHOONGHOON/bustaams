@@ -135,12 +135,12 @@ const UpcomingTripDetailDriver = () => {
                 const cancelCode = document.getElementById('cancelCode').value;
                 const cancelReasonText = document.getElementById('cancelReasonText').value;
                 const reasonDoc = document.getElementById('reasonDoc').files[0];
-                
+
                 if (!cancelReasonText) {
                     Swal.showValidationMessage('상세 사유를 입력해주세요.');
                     return false;
                 }
-                
+
                 return { cancelCode, cancelReasonText, reasonDoc }
             }
         });
@@ -222,21 +222,42 @@ const UpcomingTripDetailDriver = () => {
                         <h2 className="text-xl md:text-2xl font-black text-[#004D40] leading-tight break-keep">
                             {trip.title || '여행 제목 없음'}
                         </h2>
-                        <div className="text-left md:text-right border-t border-gray-100 pt-4 md:border-none md:pt-0">
-                            <p className="text-gray-400 text-[10px] font-bold mb-1 uppercase tracking-widest">계약 금액</p>
-                            <p className="text-3xl font-black text-[#004D40]">₩{Number(trip.price).toLocaleString()}</p>
+                        {/* 운행 일정 */}
+                        <div className="flex items-center gap-4 border-b border-slate-100 pb-6 text-left">
+                            <div className="w-12 h-12 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center shadow-sm flex-shrink-0">
+                                <span className="material-symbols-outlined text-orange-600 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>calendar_today</span>
+                            </div>
+                            <div className="flex flex-col text-left">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic mb-1">
+                                    운행 일정
+                                </p>
+                                <p className="text-lg font-black text-[#1D3557] leading-snug">
+                                    {trip.startDate ? trip.startDate.split(' ')[0].replace(/[-/]/g, '.') : ''} -
+                                </p>
+                                <p className="text-lg font-black text-[#1D3557] leading-snug">
+                                    {trip.endDate ? trip.endDate.split(' ')[0].replace(/[-/]/g, '.') : ''}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="bg-slate-50 px-6 py-4 rounded-2xl border border-slate-100 space-y-2.5 text-left w-full">
+                            <div className="flex justify-between items-center text-xs gap-4">
+                                <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">계약 금액</span>
+                                <span className="font-bold text-slate-700">₩ {Number(trip.price || 0).toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-xs gap-4">
+                                <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">예약금 (6.6%)</span>
+                                <span className="font-bold text-slate-600">₩ {Math.round(Number(trip.price || 0) * 0.066).toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between items-center pt-2 border-t border-slate-200/60 gap-4">
+                                <span className="text-slate-500 font-black uppercase tracking-widest text-[10px]">결제 받을 금액</span>
+                                <span className="text-lg font-black text-teal-600">₩ {(Number(trip.price || 0) - Math.round(Number(trip.price || 0) * 0.066)).toLocaleString()}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* 메인 정보 카드 */}
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden relative mb-12 border-l-4 border-l-[#E64A19]">
                     <div className="p-8 space-y-10">
-                        {/* 일정 및 간략 타임라인 */}
-                        <div>
-                            <p className="text-gray-400 text-[10px] font-bold mb-2 uppercase">일정</p>
-                            <p className="text-lg font-black text-[#1D3557] mb-2">{trip.startDate.split(' ')[0]} – {trip.endDate.split(' ')[0]}</p>
-                        </div>
 
                         {/* 고객 정보 */}
                         <div className="bg-[#F8F9FA] rounded-2xl p-6">
@@ -244,12 +265,12 @@ const UpcomingTripDetailDriver = () => {
                             <div className="flex items-center gap-4">
                                 <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center text-[#004D40] overflow-hidden border-2 border-white shadow-sm">
                                     {trip.customerImage ? (
-                                        <img 
-                                            src={trip.customerImage.startsWith('http') ? 
-                                                trip.customerImage : 
-                                                `${import.meta.env.VITE_API_BASE_URL || ''}${trip.customerImage}`} 
-                                            className="w-full h-full object-cover" 
-                                            alt={trip.customerName} 
+                                        <img
+                                            src={trip.customerImage.startsWith('http') ?
+                                                trip.customerImage :
+                                                `${import.meta.env.VITE_API_BASE_URL || ''}${trip.customerImage}`}
+                                            className="w-full h-full object-cover"
+                                            alt={trip.customerName}
                                         />
                                     ) : (
                                         <span className="material-symbols-outlined text-2xl">person</span>
@@ -296,56 +317,57 @@ const UpcomingTripDetailDriver = () => {
                     </div>
                 </div>
 
-                {/* 한글 주석: ReservationDetailCustomer 스타일을 따르는 기사용 상세 경로 타임라인 */}
-                <section className="bg-white rounded-[3.5rem] p-12 shadow-2xl shadow-teal-900/[0.03] border border-slate-50 text-left mb-12">
-                    <div className="text-xl font-black tracking-tight border-b border-slate-50 pb-6 italic text-teal-700 flex items-center gap-2">
-                        <span className="material-symbols-outlined">route</span>
-                        전체 운행 경로
-                    </div>
-                    <div className="mt-8 space-y-10 relative">
-                        <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-100"></div>
-                        {trip.waypoints.map((wp, idx) => {
-                            const isStart = wp.type === 'START';
-                            const isEnd = wp.type === 'END';
-                            const isDest = wp.type === 'ROUND' || wp.type === 'ROUND_TRIP';
-                            const title = isStart ? '출발지' : isEnd ? '도착지' : isDest ? '목적지' : (wp.type === 'START_WAY' ? '출발 경유지' : '도착 경유지');
-                            const pointType = isStart ? 'START' : isEnd ? 'END' : isDest ? 'ROUND_TRIP' : 'WAYPOINT';
+                <section className="bg-white rounded-2xl p-8 shadow-[0_40px_60px_rgba(0,0,0,0.03)] border border-slate-50 relative overflow-hidden space-y-8 mb-12">
+                    <div className="absolute top-0 left-0 w-2 h-full bg-primary/20"></div>
 
-                            return (
-                                <div key={idx} className="relative pl-12">
-                                    <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center ${
-                                        pointType === 'START' ? 'bg-teal-600 text-white shadow-teal-200' : 
-                                        pointType === 'END' ? 'bg-rose-500 text-white shadow-rose-200' : 
-                                        pointType === 'ROUND_TRIP' ? 'bg-indigo-600 text-white shadow-indigo-100' :
-                                        'bg-amber-400 text-white shadow-amber-100'
-                                    }`}>
-                                        <span className="material-symbols-outlined text-[16px] font-black">
-                                            {pointType === 'START' ? 'location_on' : 
-                                             pointType === 'END' ? 'flag' : 
-                                             pointType === 'ROUND_TRIP' ? 'near_me' : 'more_horiz'}
-                                        </span>
+                    <div className="space-y-8">
+                        <h2 className="text-2xl font-black pb-4 border-b border-slate-50 flex items-center gap-3 italic text-teal-800">
+                            <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>route</span>
+                            여행 경로
+                        </h2>
+                        <div className="mt-8 space-y-10 relative">
+                            <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-100"></div>
+                            {trip.waypoints.map((wp, idx) => {
+                                const isStart = wp.type === 'START';
+                                const isEnd = wp.type === 'END';
+                                const isDest = wp.type === 'ROUND' || wp.type === 'ROUND_TRIP';
+                                const title = isStart ? '출발지' : isEnd ? '도착지' : isDest ? '목적지' : (wp.type === 'START_WAY' ? '출발 경유지' : '도착 경유지');
+                                const pointType = isStart ? 'START' : isEnd ? 'END' : isDest ? 'ROUND_TRIP' : 'WAYPOINT';
+
+                                return (
+                                    <div key={idx} className="relative pl-12">
+                                        <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full border-4 border-white shadow-md z-10 flex items-center justify-center ${pointType === 'START' ? 'bg-teal-600 text-white shadow-teal-200' :
+                                                pointType === 'END' ? 'bg-rose-500 text-white shadow-rose-200' :
+                                                    pointType === 'ROUND_TRIP' ? 'bg-indigo-600 text-white shadow-indigo-100' :
+                                                        'bg-amber-400 text-white shadow-amber-100'
+                                            }`}>
+                                            <span className="material-symbols-outlined text-[16px] font-black">
+                                                {pointType === 'START' ? 'location_on' :
+                                                    pointType === 'END' ? 'flag' :
+                                                        pointType === 'ROUND_TRIP' ? 'near_me' : 'more_horiz'}
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-col text-left">
+                                            <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${pointType === 'START' ? 'text-teal-600' :
+                                                    pointType === 'END' ? 'text-rose-500' :
+                                                        pointType === 'ROUND_TRIP' ? 'text-indigo-500' : 'text-amber-500'
+                                                }`}>
+                                                {title}
+                                            </p>
+                                            <h4 className="text-lg font-black tracking-tight text-on-surface text-left">
+                                                {wp.addr}
+                                            </h4>
+                                            <p className="text-xs text-slate-400 font-bold mt-1 opacity-70 italic text-left">
+                                                {isStart ? '승객 명단 확인 및 수하물 적재를 위해 최소 20분 전 대기 권장합니다.' :
+                                                    isEnd ? '최종 목적지 하차 및 차량 내부 유실물 확인 후 운행 종료 보고 바랍니다.' :
+                                                        isDest ? '목적지에서의 대기 시간 및 집결 시간을 다시 한번 확인해 주세요.' :
+                                                            '안전한 승하차를 위해 주변 환경을 확인하고 정차해 주세요.'}
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div className="flex flex-col text-left">
-                                        <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${
-                                            pointType === 'START' ? 'text-teal-600' : 
-                                            pointType === 'END' ? 'text-rose-500' : 
-                                            pointType === 'ROUND_TRIP' ? 'text-indigo-500' : 'text-amber-500'
-                                        }`}>
-                                            {title}
-                                        </p>
-                                        <h4 className="text-lg font-black tracking-tight text-on-surface text-left">
-                                            {wp.addr}
-                                        </h4>
-                                        <p className="text-xs text-slate-400 font-bold mt-1 opacity-70 italic text-left">
-                                            {isStart ? '승객 명단 확인 및 수하물 적재를 위해 최소 20분 전 대기 권장합니다.' :
-                                             isEnd ? '최종 목적지 하차 및 차량 내부 유실물 확인 후 운행 종료 보고 바랍니다.' :
-                                             isDest ? '목적지에서의 대기 시간 및 집결 시간을 다시 한번 확인해 주세요.' :
-                                             '안전한 승하차를 위해 주변 환경을 확인하고 정차해 주세요.'}
-                                        </p>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
+                        </div>
                     </div>
                 </section>
 

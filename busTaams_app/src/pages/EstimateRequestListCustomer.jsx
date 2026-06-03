@@ -158,65 +158,62 @@ const EstimateRequestListCustomer = () => {
                                 key={req.reqUuid}
                                 className="group bg-white rounded-2xl p-8 shadow-[0_10px_40px_rgba(30,41,59,0.04)] border border-slate-100 hover:shadow-2xl hover:translate-y-[-4px] transition-all relative overflow-hidden"
                             >
-                                <div className="flex justify-between items-start mb-6">
-                                    <div className="space-y-4 flex-1">
-                                        <div className="space-y-1">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="material-symbols-outlined text-teal-600 text-sm">event</span>
-                                                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{req.startDt}</p>
-                                                </div>
-                                                <div className={`px-3 py-1 rounded-xl text-[10px] font-black border ${getRequestStatus(req.status).color}`}>
-                                                    {getRequestStatus(req.status).label}
-                                                </div>
-                                            </div>
-                                            <h3 className="text-2xl font-black text-slate-800 line-clamp-1 mt-1">{req.tripTitle}</h3>
+                                <div className="space-y-4 mb-6">
+                                    <div className="flex items-center justify-between gap-4">
+                                        <h3 className="text-2xl font-black text-slate-800 line-clamp-1">{req.tripTitle}</h3>
+                                        <div className={`px-3 py-1 rounded-xl text-[10px] font-black border shrink-0 ${getRequestStatus(req.status).color}`}>
+                                            {getRequestStatus(req.status).label}
                                         </div>
-                                        
-                                        {/* Helper for address formatting */}
-                                        {(() => {
-                                            const formatAddr = (addr) => {
-                                                if (!addr) return '';
-                                                const parts = addr.split(' ');
-                                                // '서울시 강남구' (2단어)
-                                                // '경기도 성남시 분당구' (3단어)
-                                                // 3번째 단어가 '구'나 '군'으로 끝나면 3단어까지 표시, 아니면 2단어 표시
-                                                if (parts.length >= 3 && (parts[2].endsWith('구') || parts[2].endsWith('군'))) {
-                                                    return parts.slice(0, 3).join(' ');
-                                                }
-                                                return parts.slice(0, 2).join(' ');
-                                            };
+                                    </div>
+                                    
+                                    <div className="flex items-start gap-2">
+                                        <span className="material-symbols-outlined text-teal-600 text-sm mt-0.5">event</span>
+                                        <div className="flex flex-col text-left">
+                                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">{req.startDt} ~</p>
+                                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none">{req.endDt}</p>
+                                        </div>
+                                    </div>
 
-                                            return (
-                                                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100/50 space-y-4">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="flex-1">
-                                                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">출발</p>
-                                                            <p className="font-bold text-xs text-slate-700">{formatAddr(req.startAddr)}</p>
-                                                        </div>
-                                                        <div className="px-4 text-slate-200">
-                                                            <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                                                        </div>
-                                                        {req.roundAddr ? (
-                                                            <>
-                                                                <div className="flex-1 text-center">
-                                                                    <p className="text-[8px] font-black text-teal-500 uppercase tracking-tighter mb-0.5">목적지</p>
-                                                                    <p className="font-bold text-xs text-slate-700">{formatAddr(req.roundAddr)}</p>
-                                                                </div>
-                                                                <div className="px-4 text-slate-200">
-                                                                    <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                                                                </div>
-                                                            </>
-                                                        ) : null}
-                                                        <div className="flex-1 text-right">
-                                                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">도착</p>
-                                                            <p className="font-bold text-xs text-slate-700">{formatAddr(req.endAddr)}</p>
-                                                        </div>
+                                    {/* Helper for address formatting */}
+                                    {(() => {
+                                        const formatAddr = (addr) => {
+                                            if (!addr) return '';
+                                            const parts = addr.split(' ');
+                                            if (parts.length >= 3 && (parts[2].endsWith('구') || parts[2].endsWith('군'))) {
+                                                return parts.slice(0, 3).join(' ');
+                                            }
+                                            return parts.slice(0, 2).join(' ');
+                                        };
+
+                                        return (
+                                            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100/50 space-y-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex-1">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">출발</p>
+                                                        <p className="font-bold text-xs text-slate-700">{formatAddr(req.startAddr)}</p>
+                                                    </div>
+                                                    <div className="px-4 text-slate-200">
+                                                        <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                                                    </div>
+                                                    {req.roundAddr ? (
+                                                        <>
+                                                            <div className="flex-1 text-center">
+                                                                <p className="text-[8px] font-black text-teal-500 uppercase tracking-tighter mb-0.5">목적지</p>
+                                                                <p className="font-bold text-xs text-slate-700">{formatAddr(req.roundAddr)}</p>
+                                                            </div>
+                                                            <div className="px-4 text-slate-200">
+                                                                <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                                                            </div>
+                                                        </>
+                                                    ) : null}
+                                                    <div className="flex-1 text-right">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">도착</p>
+                                                        <p className="font-bold text-xs text-slate-700">{formatAddr(req.endAddr)}</p>
                                                     </div>
                                                 </div>
-                                            );
-                                        })()}
-                                    </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
 
                                 {/* Vehicle & Matching Section */}

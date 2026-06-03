@@ -6,14 +6,14 @@
     <title>전세 버스 영업 대행 서비스.</title>
     <meta property="og:title" content="전세 버스 영업 대행 서비스." />
     <!-- PWA Settings -->
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="icon" type="image/png" href="/icon-512.png" />
+    <link rel="manifest" href="/app/manifest.json" />
+    <link rel="icon" type="image/png" href="/app/icon-512.png" />
     <meta name="theme-color" content="#0052cc" />
-    <link rel="apple-touch-icon" href="/icon-512.png" />
+    <link rel="apple-touch-icon" href="/app/icon-512.png" />
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
+          navigator.serviceWorker.register('/app/sw.js')
             .then(registration => {
               console.log('App SW Registered');
               

@@ -240,14 +240,34 @@ const EstimateListCustomer = () => {
                     {/* 왼쪽 컨텐츠 */}
                     <div className="lg:col-span-7 space-y-8">
                         {/* 여행 경로 카드 */}
-                        <div className="bg-white rounded-2xl p-8 shadow-[0_40px_60px_rgba(0,0,0,0.03)] border border-slate-50 relative overflow-hidden">
+                        <div className="bg-white rounded-2xl p-8 shadow-[0_40px_60px_rgba(0,0,0,0.03)] border border-slate-50 relative overflow-hidden space-y-8">
                             <div className="absolute top-0 left-0 w-2 h-full bg-primary/20"></div>
-                            <h2 className="text-2xl font-black mb-10 flex items-center gap-3 italic text-teal-800">
-                                <span className="material-symbols-outlined text-primary" style={{fontVariationSettings: "'FILL' 1"}}>route</span>
-                                여행 경로
-                            </h2>
-                            <div className="mt-8 space-y-10 relative">
-                                <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-100"></div>
+                            
+                            {/* 운행 일정 */}
+                            <div className="flex items-center gap-4 border-b border-slate-100 pb-8 text-left">
+                                <div className="w-12 h-12 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center shadow-sm">
+                                    <span className="material-symbols-outlined text-orange-600 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>calendar_today</span>
+                                </div>
+                                <div className="flex flex-col text-left">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic mb-1">
+                                        운행 일정
+                                    </p>
+                                    <p className="text-lg font-black text-[#1E293B] leading-snug">
+                                        {tripSummary.startDt ? tripSummary.startDt.split(' ')[0].replace(/[-/]/g, '.') : ''} -
+                                    </p>
+                                    <p className="text-lg font-black text-[#1E293B] leading-snug">
+                                        {tripSummary.endDt ? tripSummary.endDt.split(' ')[0].replace(/[-/]/g, '.') : ''}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-8">
+                                <h2 className="text-2xl font-black pb-4 border-b border-slate-50 flex items-center gap-3 italic text-teal-800">
+                                    <span className="material-symbols-outlined text-primary" style={{fontVariationSettings: "'FILL' 1"}}>route</span>
+                                    여행 경로
+                                </h2>
+                                <div className="mt-8 space-y-10 relative">
+                                    <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-100"></div>
                                 
                                 {tripSummary.fullRoute && tripSummary.fullRoute.map((step, idx) => (
                                     <div key={idx} className="relative pl-12">
@@ -284,6 +304,7 @@ const EstimateListCustomer = () => {
                                 ))}
                             </div>
                         </div>
+                    </div>
 
                         {/* 차량별 청약 리스트 */}
                         <div className="space-y-6">

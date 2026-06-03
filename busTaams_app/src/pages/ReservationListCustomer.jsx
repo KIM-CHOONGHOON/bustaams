@@ -134,10 +134,6 @@ const ReservationListCustomer = () => {
                                         <div className="flex items-center justify-between mb-4">
                                             <div className="flex items-center gap-3">
                                                 <span className="bg-teal-50 text-teal-700 text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-[0.2em] border border-teal-100/50 shadow-sm">확정된 여행</span>
-                                                <p className="text-teal-600/30 font-black text-[10px] uppercase tracking-tighter italic font-mono">REQ: {res.id}</p>
-                                            </div>
-                                            <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${getBusStatusDisplay(res.statusCode).color}`}>
-                                                {getBusStatusDisplay(res.statusCode).label}
                                             </div>
                                         </div>
                                         
@@ -146,34 +142,55 @@ const ReservationListCustomer = () => {
                                             {res.title || '나의 여행 일정'}
                                         </h3>
                                         
-                                        {/* 운행 노선 (출발지, 경유지, 도착지) 세로 배치 */}
-                                        <div className="bg-slate-50/80 rounded-2xl p-8 md:p-10 flex flex-col gap-4 border border-slate-100 shadow-inner text-left">
-                                            {/* 출발지 */}
-                                            <div className="flex items-center gap-4">
-                                                <span className="w-16 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] shrink-0">출발지</span>
-                                                <p className="text-slate-900 font-black text-base md:text-lg tracking-tight italic" title={res.routeDetail?.start || res.startAddr}>
-                                                    {res.routeDetail?.start || res.startAddr || '출발지'}
-                                                </p>
-                                            </div>
-                                            
-                                            {/* 경유지 */}
-                                            {res.routeDetail?.via && (
-                                                <div className="flex items-center gap-4 border-t border-slate-200/50 pt-3">
-                                                    <span className="w-16 text-teal-600 text-[10px] font-black uppercase tracking-[0.2em] shrink-0">경유지</span>
-                                                    <p className="text-teal-900 font-black text-base md:text-lg tracking-tight italic" title={res.routeDetail.via}>
-                                                        {res.routeDetail.via}
-                                                    </p>
-                                                </div>
-                                            )}
-                                            
-                                            {/* 도착지 */}
-                                            <div className="flex items-center gap-4 border-t border-slate-200/50 pt-3">
-                                                <span className="w-16 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] shrink-0">도착지</span>
-                                                <p className="text-slate-900 font-black text-base md:text-lg tracking-tight italic" title={res.routeDetail?.end || res.endAddr}>
-                                                    {res.routeDetail?.end || res.endAddr || '도착지'}
-                                                </p>
+                                        {/* 운행 일정 */}
+                                        <div className="flex items-start gap-2 mt-4 mb-4">
+                                            <span className="material-symbols-outlined text-teal-600 text-sm mt-0.5">event</span>
+                                            <div className="flex flex-col text-left">
+                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">{res.startDt} ~</p>
+                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none">{res.endDt}</p>
                                             </div>
                                         </div>
+
+                                        {/* 운행 경로 Bento 스타일 */}
+                                        {(() => {
+                                            const formatAddr = (addr) => {
+                                                if (!addr) return '';
+                                                const parts = addr.split(' ');
+                                                if (parts.length >= 3 && (parts[2].endsWith('구') || parts[2].endsWith('군'))) {
+                                                    return parts.slice(0, 3).join(' ');
+                                                }
+                                                return parts.slice(0, 2).join(' ');
+                                            };
+
+                                            return (
+                                                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100/50 space-y-4 mb-6">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex-1 text-left">
+                                                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">출발</p>
+                                                            <p className="font-bold text-xs text-slate-700">{formatAddr(res.startAddr)}</p>
+                                                        </div>
+                                                        <div className="px-4 text-slate-200">
+                                                            <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                                                        </div>
+                                                        {res.routeDetail?.via ? (
+                                                            <>
+                                                                <div className="flex-1 text-center">
+                                                                    <p className="text-[8px] font-black text-teal-500 uppercase tracking-tighter mb-0.5">목적지</p>
+                                                                    <p className="font-bold text-xs text-slate-700">{formatAddr(res.routeDetail.via)}</p>
+                                                                </div>
+                                                                <div className="px-4 text-slate-200">
+                                                                    <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                                                                </div>
+                                                            </>
+                                                        ) : null}
+                                                        <div className="flex-1 text-right">
+                                                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">도착</p>
+                                                            <p className="font-bold text-xs text-slate-700">{formatAddr(res.endAddr)}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
 
                                     <div className="flex flex-col gap-10">
@@ -235,13 +252,7 @@ const ReservationListCustomer = () => {
                                         <div className="flex-1 flex flex-col justify-between py-2">
                                             <div className="space-y-10">
                                                 <div className="flex flex-col gap-6">
-                                                    <div className="flex items-center gap-6 border-b border-slate-50 pb-3">
-                                                        <span className="w-24 text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] shrink-0">출발 날짜</span>
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="material-symbols-outlined text-teal-600 text-xl">calendar_today</span>
-                                                            <p className="text-slate-900 font-black tracking-tight text-base md:text-lg italic">{res.date}</p>
-                                                        </div>
-                                                    </div>
+
                                                     <div className="flex items-center gap-6 border-b border-slate-50 pb-3">
                                                         <span className="w-24 text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] shrink-0">차량 정보</span>
                                                         <div className="flex items-center gap-3">
@@ -265,28 +276,26 @@ const ReservationListCustomer = () => {
                                                     </div>
                                                 </div>
 
-                                                <div className="p-6 sm:p-10 bg-slate-50/50 rounded-2xl border border-slate-100/50 flex flex-col items-center justify-center text-center gap-8">
-                                                    <div className="flex flex-col items-center gap-3">
-                                                        <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center shadow-sm border border-slate-100">
-                                                            <span className="material-symbols-outlined text-teal-600 text-2xl">payments</span>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-slate-400 text-[9px] font-black uppercase tracking-widest mb-1">총 결제 금액</p>
-                                                            <p className="text-slate-900 font-black text-xl md:text-2xl italic">
-                                                                {res.totalOfferPrice ? `${Number(res.totalOfferPrice).toLocaleString()}원` : '금액 정보 없음'}
-                                                            </p>
-                                                        </div>
+                                                <div className="flex justify-between items-center text-sm border-t border-slate-100 pt-4 mt-6">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="material-symbols-outlined text-teal-600 text-xl">payments</span>
+                                                        <span className="text-slate-400 font-bold uppercase tracking-tighter text-[11px]">총 결제 금액</span>
                                                     </div>
-                                                    
+                                                    <span className="font-black text-[#004e47] text-lg">
+                                                        {res.totalOfferPrice ? `${Number(res.totalOfferPrice).toLocaleString()}원` : '금액 정보 없음'}
+                                                    </span>
+                                                </div>
+                                                
+                                                <div className="mt-6">
                                                     <button 
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             navigate(`/reservation-detail/${res.id}`);
                                                         }}
-                                                        className="w-full max-w-[280px] min-h-[58px] bg-primary hover:bg-primary-container text-white px-4 py-4 sm:px-6 sm:py-5 rounded-xl font-black text-[13px] uppercase tracking-[0.08em] shadow-lg shadow-primary/20 hover:scale-[1.03] active:scale-[0.98] transition-all duration-300 italic flex items-center justify-center gap-2.5 whitespace-nowrap"
+                                                        className="w-full bg-teal-700 text-white py-4 rounded-xl font-black text-sm hover:opacity-90 active:scale-95 transition-all shadow-lg btn-primary flex items-center justify-center gap-2.5"
                                                     >
                                                         <span className="material-symbols-outlined text-[20px]">visibility</span>
-                                                        상세 내역 보기
+                                                        상세내역보기
                                                     </button>
                                                 </div>
                                             </div>

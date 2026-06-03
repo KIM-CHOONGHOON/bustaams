@@ -115,19 +115,61 @@ const ReviewPendingListCustomer = () => {
                                 </div>
 
                                 <div className="space-y-4 px-1">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <p className="text-[12px] font-black text-[#0F766E] uppercase tracking-wider">{mission.busModel} · {mission.busCnt}대</p>
-                                        <span className="text-[12px] text-[#94A3B8] font-bold">{mission.date}</span>
+                                    {/* 제목을 여행완료 바로 밑으로 이동 */}
+                                    <h3 className="text-[20px] font-black text-[#1E293B] truncate">{mission.title || '나의 버스 여행'}</h3>
+                                    
+                                    {/* 여행 일정 */}
+                                    <div className="flex items-start gap-2 mt-2">
+                                        <span className="material-symbols-outlined text-teal-600 text-sm mt-0.5">event</span>
+                                        <div className="flex flex-col text-left">
+                                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">{mission.startDt} ~</p>
+                                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none">{mission.endDt}</p>
+                                        </div>
                                     </div>
-                                    <h3 className="text-[18px] font-black text-[#1E293B] mb-2 truncate">{mission.title || '나의 버스 여행'}</h3>
-                                    <div className="flex items-center gap-2 text-[#64748B] mb-6">
-                                        <span className="material-symbols-outlined text-[18px] text-[#94A3B8]">distance</span>
-                                        <p className="text-[14px] font-bold truncate">
-                                            {mission.startAddr} 
-                                            {mission.viaAddr ? ` → ${mission.viaAddr}` : ''} 
-                                             → {mission.endAddrVia || mission.endAddrMaster}
-                                        </p>
-                                    </div>
+
+                                    {/* 여행 경로 Bento 스타일 */}
+                                    {(() => {
+                                        const formatAddr = (addr) => {
+                                            if (!addr) return '';
+                                            const parts = addr.split(' ');
+                                            if (parts.length >= 3 && (parts[2].endsWith('구') || parts[2].endsWith('군'))) {
+                                                return parts.slice(0, 3).join(' ');
+                                            }
+                                            return parts.slice(0, 2).join(' ');
+                                        };
+
+                                        return (
+                                            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100/50 space-y-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex-1 text-left">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">출발</p>
+                                                        <p className="font-bold text-xs text-slate-700">{formatAddr(mission.startAddr)}</p>
+                                                    </div>
+                                                    <div className="px-4 text-slate-200">
+                                                        <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                                                    </div>
+                                                    {mission.viaAddr ? (
+                                                        <>
+                                                            <div className="flex-1 text-center">
+                                                                <p className="text-[8px] font-black text-teal-500 uppercase tracking-tighter mb-0.5">목적지</p>
+                                                                <p className="font-bold text-xs text-slate-700">{formatAddr(mission.viaAddr)}</p>
+                                                            </div>
+                                                            <div className="px-4 text-slate-200">
+                                                                <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                                                            </div>
+                                                        </>
+                                                    ) : null}
+                                                    <div className="flex-1 text-right">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">도착</p>
+                                                        <p className="font-bold text-xs text-slate-700">{formatAddr(mission.endAddrVia || mission.endAddrMaster)}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* 버스 모델 및 대수 (여행 경로 밑으로 이동) */}
+                                    <p className="text-[12px] font-black text-[#0F766E] uppercase tracking-wider mt-1">{mission.busModel} · {mission.busCnt}대</p>
                                 </div>
 
                                 <div className="bg-[#F8FAFB] p-5 rounded-xl flex items-center gap-4">

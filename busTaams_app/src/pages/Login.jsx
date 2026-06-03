@@ -107,14 +107,14 @@ const Login = () => {
     <div className="bg-background font-body text-on-background min-h-screen flex flex-col overflow-x-hidden">
       <header className="flex justify-between items-center w-full px-6 pt-8 pb-4 max-w-7xl mx-auto z-10">
         <div className="flex items-center gap-3">
-          <img src="/assets/BUSTAAMS_IMAGE_LOGO.png" alt="busTaams Logo" className="w-14 h-14 object-contain rounded-xl shadow-sm" />
+          <img src="/app/assets/BUSTAAMS_IMAGE_LOGO.png" alt="busTaams Logo" className="w-14 h-14 object-contain rounded-xl shadow-sm" />
           <div className="text-teal-900 font-black tracking-tighter font-headline text-3xl">BUSTAAMS</div>
           <div 
             onClick={() => navigate('/signup')} 
             className="w-[40px] h-[40px] lg:w-[48px] lg:h-[48px] ml-2 flex-shrink-0 bg-white p-1 rounded-lg shadow-sm border border-outline/10 flex items-center justify-center cursor-pointer hover:scale-105 active:scale-95 transition-transform"
             title="회원가입 바로가기 QR코드"
           >
-            <img src="/assets/signup_qr.png" alt="Sign Up QR" className="w-full h-full object-contain" />
+            <img src="/app/assets/signup_qr.png" alt="Sign Up QR" className="w-full h-full object-contain" />
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -143,7 +143,7 @@ const Login = () => {
                 <p className="text-xl lg:text-2xl font-black uppercase tracking-widest text-primary italic">전세버스 예약</p>
               </div>
               <div className="rounded-2xl overflow-hidden shadow-md">
-                <img src="/assets/login_banner.png" alt="Promotion Banner" className="w-full h-auto object-cover" />
+                <img src="/app/assets/login_banner.png" alt="Promotion Banner" className="w-full h-auto object-cover" />
               </div>
               <div>
                 <h1 className="font-headline font-extrabold text-xl lg:text-2xl text-on-surface tracking-normal text-[22px]">귀하의  방문을  환영합니다.</h1>

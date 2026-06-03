@@ -77,6 +77,47 @@ const SettlementHistoryDriver = () => {
         setIsModalOpen(true);
     };
 
+    // 💰 프론트엔드 자체 연간 합계 및 월별 합계 가공 집계 (한글 주석)
+    let yearBidding = 0;
+    let yearFee = 0;
+    let yearSettlement = 0;
+
+    allDetails.forEach(d => {
+        if (d.dataStat === 'DONE') {
+            yearBidding += d.biddingPrice;
+            yearFee += d.isAttribution ? d.feeAttribution : d.feeTotal;
+            yearSettlement += d.settlementAmount;
+        } else if (d.dataStat === 'TRAVELER_CANCEL') {
+            yearBidding += d.feeRefund;
+            yearSettlement += d.settlementAmount;
+        }
+    });
+
+    const monthlySummary = {};
+    allDetails.forEach(item => {
+        const monthPart = item.yyyyyMMdd.substring(4, 6);
+        const monthKey = `${selectedYear}년 ${monthPart}월`;
+        if (!monthlySummary[monthKey]) {
+            monthlySummary[monthKey] = {
+                month: monthKey,
+                biddingPrice: 0,
+                fee: 0,
+                amount: 0,
+                count: 0
+            };
+        }
+        if (item.dataStat === 'DONE') {
+            monthlySummary[monthKey].biddingPrice += item.biddingPrice;
+            monthlySummary[monthKey].fee += item.isAttribution ? item.feeAttribution : item.feeTotal;
+            monthlySummary[monthKey].amount += item.settlementAmount;
+        } else if (item.dataStat === 'TRAVELER_CANCEL') {
+            monthlySummary[monthKey].biddingPrice += item.feeRefund;
+            monthlySummary[monthKey].amount += item.settlementAmount;
+        }
+        monthlySummary[monthKey].count += 1;
+    });
+    const computedMonthlyData = Object.values(monthlySummary).sort((a, b) => b.month.localeCompare(a.month));
+
     return (
         <div className="bg-background text-on-surface min-h-[100dvh] pb-40 font-body text-left">
             {/* TopAppBar */}
@@ -128,9 +169,17 @@ const SettlementHistoryDriver = () => {
                         <h2 className="font-headline text-6xl md:text-8xl font-black text-primary leading-[0.85] tracking-tighter italic uppercase text-left">
                             정산 <br/><span className="text-slate-200 underline decoration-slate-200/20 underline-offset-[12px]">내역서.</span>
                         </h2>
-                        <p className="text-slate-400 text-lg font-bold italic tracking-tight leading-relaxed text-left border-l-4 border-slate-50 pl-8">
-                            {selectedYear}년 총 정산 금액: <span className="text-teal-600 font-black text-3xl not-italic ml-2">₩{summary.totalAmount.toLocaleString()}</span>
-                        </p>
+                        <div className="space-y-1.5 text-left border-l-4 border-slate-200 pl-8 py-1">
+                            <p className="text-slate-500 text-sm font-bold tracking-tight">
+                                총 입찰금액 : <span className="text-slate-700 font-extrabold">₩{yearBidding.toLocaleString()}</span>
+                            </p>
+                            <p className="text-slate-500 text-sm font-bold tracking-tight">
+                                총 수수료 : <span className="text-rose-500 font-extrabold">₩{yearFee.toLocaleString()}</span>
+                            </p>
+                            <p className="text-slate-500 text-sm font-bold tracking-tight">
+                                총 정산 금액 : <span className="text-teal-600 font-black text-lg">₩{yearSettlement.toLocaleString()}</span>
+                            </p>
+                        </div>
                     </div>
                 </section>
 
@@ -156,35 +205,33 @@ const SettlementHistoryDriver = () => {
                     <div className="flex justify-center items-center py-24">
                         <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-primary"></div>
                     </div>
-                ) : monthlyData.length === 0 ? (
+                ) : computedMonthlyData.length === 0 ? (
                     <div className="text-center py-20 bg-white rounded-2xl border border-slate-100 shadow-2xl shadow-teal-900/5">
                         <span className="material-symbols-outlined text-4xl text-slate-200 mb-2">info</span>
                         <p className="text-slate-400 text-sm font-bold italic">조회된 정산 내역이 없습니다.</p>
                     </div>
                 ) : (
                     <div className="space-y-8 text-left uppercase animate-in fade-in duration-500">
-                        {monthlyData.map((item, idx) => (
-                            <div key={idx} className="grid grid-cols-1 md:grid-cols-12 items-center bg-white p-10 rounded-2xl shadow-xl shadow-teal-900/5 hover:-translate-x-2 transition-all duration-500 border border-slate-50 group text-left">
-                                <div className="md:col-span-3 mb-6 md:mb-0 text-left">
+                        {computedMonthlyData.map((item, idx) => (
+                            <div key={idx} className="grid grid-cols-1 md:grid-cols-12 items-center bg-white p-8 rounded-2xl shadow-xl shadow-teal-900/5 hover:-translate-x-2 transition-all duration-500 border border-slate-50 group text-left gap-4">
+                                <div className="md:col-span-3 text-left">
                                     <span className="block font-black text-primary italic text-xl tracking-tighter">{item.month}</span>
                                     <span className="text-slate-300 text-[9px] font-black uppercase tracking-widest italic">총 운행/취소 {item.count}건</span>
                                 </div>
-                                <div className="md:col-span-4 mb-6 md:mb-0 text-left">
-                                    <div className="flex items-center gap-6 text-left">
-                                        <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
-                                            <span className="material-symbols-outlined text-2xl" style={{fontVariationSettings: "'FILL' 1"}}>check_circle</span>
-                                        </div>
-                                        <div className="text-left space-y-1">
-                                            <span className="block font-black text-primary text-xs italic tracking-widest">정산 내역서 발행</span>
-                                            <span className="text-slate-300 text-[8px] font-bold italic tracking-tighter">SET-{selectedYear}{String(idx + 1).padStart(2, '0')}</span>
-                                        </div>
-                                    </div>
+                                
+                                <div className="md:col-span-6 space-y-1 text-left border-l border-slate-100 pl-6 py-1">
+                                    <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">
+                                        입찰 금액 : <span className="font-extrabold text-slate-700">₩{item.biddingPrice.toLocaleString()}</span>
+                                    </p>
+                                    <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">
+                                        수수료 : <span className="font-extrabold text-rose-500">₩{item.fee.toLocaleString()}</span>
+                                    </p>
+                                    <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">
+                                        정산 금액 : <span className="font-black text-teal-600 text-sm">₩{item.amount.toLocaleString()}</span>
+                                    </p>
                                 </div>
-                                <div className="md:col-span-3 mb-8 md:mb-0 text-left flex flex-col">
-                                    <span className="text-3xl font-black text-primary italic tracking-tighter leading-none">₩{item.amount.toLocaleString()}</span>
-                                    <span className="text-[8px] text-secondary font-black tracking-widest italic mt-2">정상 집계 완료</span>
-                                </div>
-                                <div className="md:col-span-2 flex justify-end gap-4 text-left">
+
+                                <div className="md:col-span-3 flex justify-end gap-4 text-left">
                                     <button 
                                         onClick={() => handleOpenDetails(item.month)}
                                         className="flex items-center gap-3 bg-slate-50 text-slate-400 px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest italic hover:bg-primary hover:text-white transition-all shadow-sm"
@@ -246,9 +293,9 @@ const SettlementHistoryDriver = () => {
                                     let formulaText = '';
                                     if (detail.dataStat === 'DONE') {
                                         if (detail.isAttribution) {
-                                            formulaText = `입찰 금액 (₩${detail.biddingPrice.toLocaleString()}) - 혜택수수료 (₩${detail.feeAttribution.toLocaleString()}) [회원 등급 혜택 적용 - ${detail.doneSeq}회차]`;
+                                            formulaText = `입찰 금액 (₩${detail.biddingPrice.toLocaleString()}) - 수수료 (₩${detail.feeAttribution.toLocaleString()}) [회원 등급 혜택 적용 - ${detail.doneSeq}회차]`;
                                         } else {
-                                            formulaText = `입찰 금액 (₩${detail.biddingPrice.toLocaleString()}) - 기본수수료 (₩${detail.feeTotal.toLocaleString()}) [혜택 횟수 초과 - ${detail.doneSeq}회차]`;
+                                            formulaText = `입찰 금액 (₩${detail.biddingPrice.toLocaleString()}) - 수수료 (₩${detail.feeTotal.toLocaleString()}) [혜택 횟수 초과 - ${detail.doneSeq}회차]`;
                                         }
                                     } else if (detail.dataStat === 'TRAVELER_CANCEL') {
                                         formulaText = `여행자 취소 위약금 정산 (₩${detail.feeRefund.toLocaleString()})`;

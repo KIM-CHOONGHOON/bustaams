@@ -80,11 +80,11 @@ const UpcomingTripsDriver = () => {
                         {upcomingTrips.map((trip, idx) => {
                             const isFeatured = idx === 0;
                             return (
-                                <div key={trip.id} className={`${isFeatured ? 'lg:col-span-2' : 'col-span-1'} group bg-white rounded-2xl p-10 relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:shadow-teal-900/5 hover:-translate-y-2 text-left shadow-lg`}>
+                                <div key={trip.id} className={`${isFeatured ? 'lg:col-span-2' : 'col-span-1'} group bg-white rounded-2xl p-8 relative overflow-hidden transition-all duration-500 hover:shadow-2xl hover:shadow-teal-900/5 hover:-translate-y-2 text-left shadow-lg`}>
                                     {isFeatured && <div className="absolute left-0 top-0 bottom-0 w-2.5 bg-secondary"></div>}
                                     
                                     <div className="flex flex-col md:flex-row gap-10 text-left">
-                                        <div className="flex-1 space-y-8 text-left">
+                                        <div className="flex-1 space-y-4 text-left">
                                             <div className="flex items-center justify-between text-left">
                                                 <div className="flex items-center gap-4 text-left">
                                                     {isFeatured && <span className="flex h-3 w-3 rounded-full bg-secondary animate-pulse"></span>}
@@ -97,23 +97,66 @@ const UpcomingTripsDriver = () => {
 
                                             <div className="space-y-2 text-left">
                                                 <h3 className="font-headline text-3xl font-black text-primary italic uppercase tracking-tighter text-left line-clamp-1">{trip.title || '여행 제목 없음'}</h3>
-                                                <p className="text-slate-400 font-bold italic text-lg leading-tight uppercase tracking-widest line-clamp-1">{trip.route || '정보 없음'}</p>
                                             </div>
 
-                                            <div className="grid grid-cols-2 gap-6 text-left">
-                                                <div className="bg-slate-50 p-6 rounded-xl text-left">
-                                                    <p className="text-[8px] font-black uppercase tracking-widest text-slate-300 mb-2 italic">운행 일정</p>
-                                                    <p className="font-black text-primary text-sm italic">{trip.period || trip.startDate + ' ~ ' + trip.endDate}</p>
-                                                </div>
-                                                <div className="bg-slate-50 p-6 rounded-xl text-left">
-                                                    <p className="text-[8px] font-black uppercase tracking-widest text-slate-300 mb-2 italic">계약 금액</p>
-                                                    <p className="font-black text-primary text-sm italic">₩{Number(trip.price).toLocaleString()}</p>
+                                            {/* 운행 일정 */}
+                                            <div className="flex items-start gap-2">
+                                                <span className="material-symbols-outlined text-teal-600 text-sm mt-0.5">event</span>
+                                                <div className="flex flex-col text-left">
+                                                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">
+                                                        {trip.startDt ? trip.startDt.replace(/[-/]/g, '.') : ''} ~
+                                                    </p>
+                                                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+                                                        {trip.endDt ? trip.endDt.replace(/[-/]/g, '.') : ''}
+                                                    </p>
                                                 </div>
                                             </div>
 
-                                            <div className="text-left py-2">
-                                                <p className="text-[8px] font-black uppercase tracking-widest text-slate-300 mb-2 italic">차량 모델</p>
-                                                <p className="font-black text-primary text-lg italic leading-none underline decoration-primary/10 underline-offset-4">{trip.model || '기본 차량'}</p>
+                                            {/* 운행 경로 */}
+                                            {(() => {
+                                                const formatAddr = (addr) => {
+                                                    if (!addr) return '';
+                                                    const parts = addr.split(' ');
+                                                    if (parts.length >= 3 && (parts[2].endsWith('구') || parts[2].endsWith('군'))) {
+                                                        return parts.slice(0, 3).join(' ');
+                                                    }
+                                                    return parts.slice(0, 2).join(' ');
+                                                };
+
+                                                return (
+                                                    <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100/50 space-y-4">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex-1">
+                                                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">출발</p>
+                                                                <p className="font-bold text-xs text-slate-700">{formatAddr(trip.startAddr)}</p>
+                                                            </div>
+                                                            <div className="px-4 text-slate-200">
+                                                                <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                                                            </div>
+                                                            {trip.roundTrip ? (
+                                                                <>
+                                                                    <div className="flex-1 text-center">
+                                                                        <p className="text-[8px] font-black text-teal-500 uppercase tracking-tighter mb-0.5">목적지</p>
+                                                                        <p className="font-bold text-xs text-slate-700">{formatAddr(trip.roundTrip)}</p>
+                                                                    </div>
+                                                                    <div className="px-4 text-slate-200">
+                                                                        <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                                                                    </div>
+                                                                </>
+                                                            ) : null}
+                                                            <div className="flex-1 text-right">
+                                                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">도착</p>
+                                                                <p className="font-bold text-xs text-slate-700">{formatAddr(trip.endAddr)}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
+
+                                            {/* 계약금액 */}
+                                            <div className="flex justify-between items-center text-sm border-t border-slate-100 pt-4 mt-2">
+                                                <span className="text-slate-400 font-bold uppercase tracking-tighter text-[11px]">계약 금액</span>
+                                                <span className="font-black text-[#004e47] text-lg">₩{Number(trip.price).toLocaleString()}</span>
                                             </div>
 
                                             <button 
