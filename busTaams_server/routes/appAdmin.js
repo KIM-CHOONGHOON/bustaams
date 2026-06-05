@@ -99,6 +99,8 @@ module.exports = (pool) => {
                     HP_NO as hpNo, 
                     EMAIL as email, 
                     ADMIN_STAT as adminStat,
+                    BANK_NM as bankNm,
+                    ACCT_NO as acctNo,
                     DATE_FORMAT(REG_DT, '%Y-%m-%d') as regDt 
                  FROM TB_ADMIN 
                  ORDER BY REG_DT DESC`
@@ -143,12 +145,16 @@ module.exports = (pool) => {
             const regId = registeredBy || adminId || 'SYSTEM'; // 등록자 ID
 
             // PWD_CHG_DT를 NULL로 명시적 입력하여 최초 로그인 비밀번호 변경 대상 상태로 등록
+            // 단, SALES(영업사원) 등급인 경우에는 강제 비밀번호 변경을 거치지 않으므로 PWD_CHG_DT를 NOW()로 등록
+            const pwdChgDtVal = adminGrade === 'SALES' ? 'NOW()' : 'NULL';
+            const { bankNm, acctNo } = req.body;
+
             await pool.execute(
                 `INSERT INTO TB_ADMIN (
                     ADMIN_ID, PASSWORD, ADMIN_NM, DEPT_NM, ADMIN_GRADE, HP_NO, EMAIL, ADMIN_STAT,
-                    REG_DT, REG_ID, MOD_DT, MOD_ID, PWD_CHG_DT
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', NOW(), ?, NOW(), ?, NULL)`,
-                [adminId, hashedPassword, adminNm, deptNm || null, adminGrade, hpNo || null, email || null, regId, regId]
+                    REG_DT, REG_ID, MOD_DT, MOD_ID, PWD_CHG_DT, BANK_NM, ACCT_NO
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', NOW(), ?, NOW(), ?, ${pwdChgDtVal}, ?, ?)`,
+                [adminId, hashedPassword, adminNm, deptNm || null, adminGrade, hpNo || null, email || null, regId, regId, bankNm || null, acctNo || null]
             );
 
             res.status(201).json({ 
@@ -197,7 +203,8 @@ module.exports = (pool) => {
             }
 
             // PWD_CHG_DT가 NULL인지 확인하여 최초 로그인(비밀번호 변경 필요) 감지
-            const requirePasswordChange = adminObj.PWD_CHG_DT === null;
+            // 단, SALES(영업사원) 등급은 최초 로그인 시 비밀번호 변경 강제가 없으므로 requirePasswordChange를 false로 처리
+            const requirePasswordChange = adminObj.ADMIN_GRADE === 'SALES' ? false : (adminObj.PWD_CHG_DT === null);
 
             // 비밀번호 변경이 불필요한 경우에만 최종 로그인 시각 업데이트
             if (!requirePasswordChange) {
@@ -216,7 +223,9 @@ module.exports = (pool) => {
                     deptNm: adminObj.DEPT_NM,
                     hpNo: adminObj.HP_NO,
                     email: adminObj.EMAIL,
-                    role: adminObj.ADMIN_GRADE
+                    role: adminObj.ADMIN_GRADE,
+                    bankNm: adminObj.BANK_NM,
+                    acctNo: adminObj.ACCT_NO
                 }
             });
         } catch (error) {
@@ -739,7 +748,7 @@ module.exports = (pool) => {
     router.patch('/:adminId/status', async (req, res) => {
         try {
             const { adminId } = req.params;
-            const { role, status, adminNm, deptNm, hpNo, email, modifiedBy } = req.body;
+            const { role, status, adminNm, deptNm, hpNo, email, modifiedBy, bankNm, acctNo } = req.body;
 
             const sets = [];
             const params = [];
@@ -767,6 +776,14 @@ module.exports = (pool) => {
             if (email !== undefined) {
                 sets.push('EMAIL = ?');
                 params.push(email);
+            }
+            if (bankNm !== undefined) {
+                sets.push('BANK_NM = ?');
+                params.push(bankNm);
+            }
+            if (acctNo !== undefined) {
+                sets.push('ACCT_NO = ?');
+                params.push(acctNo);
             }
 
             // MOD_ID 기록
@@ -1584,6 +1601,279 @@ module.exports = (pool) => {
         } catch (error) {
             console.error('Delete common code error:', error);
             res.status(500).json({ error: '공통 코드 삭제 중 오류가 발생했습니다.' });
+        }
+    });
+
+    // =========================================================================
+    // [세금계산서 관리 API]
+    // =========================================================================
+
+    // 22. 발행 완료된 세금계산서 목록 조회 API
+    router.get('/tax-invoices', async (req, res) => {
+        try {
+            const { yyyyMM, targetType, searchKeyword } = req.query;
+            let query = `
+                SELECT 
+                    TAX_INVOICE_ID as taxInvoiceId,
+                    TARGET_TYPE as targetType,
+                    TARGET_ID as targetId,
+                    YYYYMM as yyyyMM,
+                    SUPPLY_AMT as supplyAmt,
+                    TAX_AMT as taxAmt,
+                    TOTAL_AMT as totalAmt,
+                    INVOICE_STAT as invoiceStat,
+                    SUPPLIER_BIZ_NO as supplierBizNo,
+                    SUPPLIER_NM as supplierNm,
+                    SUPPLIER_CEO as supplierCeo,
+                    SUPPLIER_ADDR as supplierAddr,
+                    SUPPLIER_BIZ_TYPE as supplierBizType,
+                    SUPPLIER_ITEM as supplierItem,
+                    NTS_APPROVE_NO as ntsApproveNo,
+                    DATE_FORMAT(ISSUE_DT, '%Y-%m-%d %H:%i:%s') as issueDt,
+                    REMARKS as remarks
+                FROM TB_TAX_INVOICE
+                WHERE 1=1
+            `;
+            const params = [];
+
+            if (yyyyMM && yyyyMM.trim()) {
+                query += ` AND YYYYMM = ?`;
+                params.push(yyyyMM.trim().replace(/[^0-9]/g, ''));
+            }
+            if (targetType && targetType.trim()) {
+                query += ` AND TARGET_TYPE = ?`;
+                params.push(targetType.trim());
+            }
+            if (searchKeyword && searchKeyword.trim()) {
+                const keyword = `%${searchKeyword.trim()}%`;
+                query += ` AND (SUPPLIER_NM LIKE ? OR SUPPLIER_BIZ_NO LIKE ? OR SUPPLIER_CEO LIKE ?)`;
+                params.push(keyword, keyword, keyword);
+            }
+
+            query += ` ORDER BY REG_DT DESC`;
+
+            const [rows] = await pool.execute(query, params);
+            res.status(200).json(rows);
+        } catch (error) {
+            console.error('Fetch tax invoices error:', error);
+            res.status(500).json({ error: '세금계산서 목록 조회 중 오류가 발생했습니다.' });
+        }
+    });
+
+    // 23. 특정 월의 수당 기준, 세금계산서 미발행/대상자 목록 조회 API
+    router.get('/tax-invoices/unissued', async (req, res) => {
+        try {
+            const { yyyyMM } = req.query;
+            if (!yyyyMM || !yyyyMM.trim()) {
+                return res.status(400).json({ error: '조회 귀속월(yyyyMM)은 필수 항목입니다.' });
+            }
+            const cleanYm = yyyyMM.trim().replace(/[^0-9]/g, '');
+
+            // 1) 운전기사 미발행 대상자 조회
+            const driverQuery = `
+                SELECT 
+                    'DRIVER' as targetType,
+                    d.CUST_ID as targetId,
+                    d.USER_NM as targetName,
+                    d.HP_NO as hpNo,
+                    d.EMAIL as email,
+                    dd.FEE_POLICY as feePolicy,
+                    cc.CD_NM_KO as feePolicyLabel,
+                    SUM(br.DRIVER_BIDDING_PRICE) as totalBiddingPrice,
+                    SUM(br.DRIVER_BIDDING_PRICE * 0.055) as allowanceAmt,
+                    pbi.BIZ_NO as supplierBizNo,
+                    pbi.BIZ_NM as supplierNm,
+                    pbi.CEO_NM as supplierCeo,
+                    pbi.BIZ_ADDR as supplierAddr,
+                    pbi.BIZ_TYPE as supplierBizType,
+                    pbi.BIZ_ITEM as supplierItem
+                FROM TB_BUS_RESERVATION br
+                INNER JOIN TB_AUCTION_REQ req ON br.REQ_ID = req.REQ_ID AND req.DATA_STAT = 'DONE'
+                INNER JOIN TB_USER d ON br.DRIVER_ID = d.CUST_ID AND d.USER_TYPE = 'DRIVER'
+                LEFT JOIN TB_DRIVER_DETAIL dd ON d.CUST_ID = dd.CUST_ID
+                LEFT JOIN TB_COMMON_CODE cc ON cc.GRP_CD = 'FEE_POLICY' AND cc.DTL_CD = dd.FEE_POLICY
+                LEFT JOIN TB_PARTNER_BIZ_INFO pbi ON pbi.TARGET_TYPE = 'DRIVER' AND pbi.TARGET_ID = d.CUST_ID
+                LEFT JOIN TB_TAX_INVOICE ti ON ti.TARGET_TYPE = 'DRIVER' AND ti.TARGET_ID = d.CUST_ID AND ti.YYYYMM = ? AND ti.INVOICE_STAT != 'CANCELLED'
+                WHERE dd.FEE_POLICY IN ('DRIVER_GENERAL', 'DRIVER_GENNERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH')
+                  AND DATE_FORMAT(br.CONFIRM_DT, '%Y%m') = ?
+                  AND ti.TAX_INVOICE_ID IS NULL
+                GROUP BY d.CUST_ID, d.USER_NM, d.HP_NO, d.EMAIL, dd.FEE_POLICY, cc.CD_NM_KO,
+                         pbi.BIZ_NO, pbi.BIZ_NM, pbi.CEO_NM, pbi.BIZ_ADDR, pbi.BIZ_TYPE, pbi.BIZ_ITEM
+            `;
+
+            // 2) 영업사원 미발행 대상자 조회
+            const salesQuery = `
+                SELECT 
+                    'SALES' as targetType,
+                    a.ADMIN_ID as targetId,
+                    a.ADMIN_NM as targetName,
+                    a.HP_NO as hpNo,
+                    a.EMAIL as email,
+                    'SALES' as feePolicy,
+                    '영업사원' as feePolicyLabel,
+                    SUM(br.DRIVER_BIDDING_PRICE) as totalBiddingPrice,
+                    SUM(
+                        CASE 
+                            WHEN dd.FEE_POLICY IN ('DRIVER_GENERAL', 'DRIVER_GENNERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH') 
+                            THEN br.DRIVER_BIDDING_PRICE * 0.106
+                            ELSE br.DRIVER_BIDDING_PRICE * 0.066
+                        END
+                    ) as allowanceAmt,
+                    pbi.BIZ_NO as supplierBizNo,
+                    pbi.BIZ_NM as supplierNm,
+                    pbi.CEO_NM as supplierCeo,
+                    pbi.BIZ_ADDR as supplierAddr,
+                    pbi.BIZ_TYPE as supplierBizType,
+                    pbi.BIZ_ITEM as supplierItem
+                FROM TB_BUS_RESERVATION br
+                INNER JOIN TB_AUCTION_REQ req ON br.REQ_ID = req.REQ_ID AND req.DATA_STAT = 'DONE'
+                INNER JOIN TB_USER d ON br.DRIVER_ID = d.CUST_ID AND d.USER_TYPE = 'DRIVER'
+                LEFT JOIN TB_DRIVER_DETAIL dd ON d.CUST_ID = dd.CUST_ID
+                INNER JOIN TB_ADMIN a ON TRIM(d.RECOM_CODE) = TRIM(a.ADMIN_ID) AND a.ADMIN_GRADE = 'SALES'
+                LEFT JOIN TB_PARTNER_BIZ_INFO pbi ON pbi.TARGET_TYPE = 'SALES' AND pbi.TARGET_ID = a.ADMIN_ID
+                LEFT JOIN TB_TAX_INVOICE ti ON ti.TARGET_TYPE = 'SALES' AND ti.TARGET_ID = a.ADMIN_ID AND ti.YYYYMM = ? AND ti.INVOICE_STAT != 'CANCELLED'
+                WHERE DATE_FORMAT(br.CONFIRM_DT, '%Y%m') = ?
+                  AND ti.TAX_INVOICE_ID IS NULL
+                GROUP BY a.ADMIN_ID, a.ADMIN_NM, a.HP_NO, a.EMAIL,
+                         pbi.BIZ_NO, pbi.BIZ_NM, pbi.CEO_NM, pbi.BIZ_ADDR, pbi.BIZ_TYPE, pbi.BIZ_ITEM
+            `;
+
+            const [driverRows] = await pool.execute(driverQuery, [cleanYm, cleanYm]);
+            const [salesRows] = await pool.execute(salesQuery, [cleanYm, cleanYm]);
+
+            // 두 대상 목록을 병합하여 응답
+            const combinedList = [
+                ...driverRows.map(r => ({ ...r, allowanceAmt: Math.round(Number(r.allowanceAmt)) })),
+                ...salesRows.map(r => ({ ...r, allowanceAmt: Math.round(Number(r.allowanceAmt)) }))
+            ];
+
+            res.status(200).json(combinedList);
+        } catch (error) {
+            console.error('Fetch unissued tax invoices error:', error);
+            res.status(500).json({ error: '미발행 대상 조회 중 오류가 발생했습니다.' });
+        }
+    });
+
+    // 24. 세금계산서 신규 발행 API
+    router.post('/tax-invoices', async (req, res) => {
+        let connection;
+        try {
+            const {
+                targetType,
+                targetId,
+                yyyyMM,
+                supplyAmt,
+                taxAmt,
+                totalAmt,
+                supplierBizNo,
+                supplierNm,
+                supplierCeo,
+                supplierAddr,
+                supplierBizType,
+                supplierItem,
+                email,
+                remarks,
+                regId
+            } = req.body;
+
+            if (!targetType || !targetId || !yyyyMM || !supplyAmt || !supplierBizNo || !supplierNm || !supplierCeo || !supplierAddr) {
+                return res.status(400).json({ error: '필수 항목들이 누락되었습니다. (대상구분, 대상ID, 귀속월, 공급가액, 공급자 사업자정보)' });
+            }
+
+            const cleanYm = yyyyMM.trim().replace(/[^0-9]/g, '');
+
+            connection = await pool.getConnection();
+            await connection.beginTransaction();
+
+            // 1) 파트너 사업자 정보 테이블 저장/업데이트 (UPSERT)
+            const upsertBizInfoQuery = `
+                INSERT INTO TB_PARTNER_BIZ_INFO (
+                    TARGET_TYPE, TARGET_ID, BIZ_NO, BIZ_NM, CEO_NM, BIZ_ADDR, BIZ_TYPE, BIZ_ITEM, EMAIL, REG_DT, REG_ID, MOD_DT, MOD_ID
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?)
+                ON DUPLICATE KEY UPDATE
+                    BIZ_NO = ?, BIZ_NM = ?, CEO_NM = ?, BIZ_ADDR = ?, BIZ_TYPE = ?, BIZ_ITEM = ?, EMAIL = ?, MOD_DT = NOW(), MOD_ID = ?
+            `;
+            await connection.execute(upsertBizInfoQuery, [
+                targetType, targetId, supplierBizNo, supplierNm, supplierCeo, supplierAddr, supplierBizType || null, supplierItem || null, email || null, regId || 'ADMIN', regId || 'ADMIN',
+                supplierBizNo, supplierNm, supplierCeo, supplierAddr, supplierBizType || null, supplierItem || null, email || null, regId || 'ADMIN'
+            ]);
+
+            // 2) 세금계산서 ID 생성 (TAX-YYYYMM-XXXX)
+            const [maxSeqRows] = await connection.execute(
+                "SELECT MAX(SUBSTRING(TAX_INVOICE_ID, 12, 4)) as maxSeq FROM TB_TAX_INVOICE WHERE YYYYMM = ?",
+                [cleanYm]
+            );
+            const maxSeq = maxSeqRows[0]?.maxSeq ? parseInt(maxSeqRows[0].maxSeq, 10) : 0;
+            const nextSeqStr = String(maxSeq + 1).padStart(4, '0');
+            const taxInvoiceId = `TAX-${cleanYm}-${nextSeqStr}`;
+
+            // 국세청 승인번호 임의 생성 (가상 연동 승인번호)
+            const approveNo = `${cleanYm}${String(Math.floor(1000000000 + Math.random() * 9000000000))}`;
+
+            // 기본 공급받는자(청솔테크) 정보 고정
+            const buyerBizNo = '120-87-85472';
+            const buyerNm = '(주)청솔테크';
+            const buyerCeo = '이청솔';
+            const buyerAddr = '서울시 마포구 백범로 31길 21, 5층';
+            const buyerBizType = '서비스, 도소매';
+            const buyerItem = '소프트웨어 개발 및 공급업';
+
+            // 3) 세금계산서 등록
+            const insertInvoiceQuery = `
+                INSERT INTO TB_TAX_INVOICE (
+                    TAX_INVOICE_ID, TARGET_TYPE, TARGET_ID, YYYYMM, SUPPLY_AMT, TAX_AMT, TOTAL_AMT, INVOICE_STAT,
+                    SUPPLIER_BIZ_NO, SUPPLIER_NM, SUPPLIER_CEO, SUPPLIER_ADDR, SUPPLIER_BIZ_TYPE, SUPPLIER_ITEM,
+                    BUYER_BIZ_NO, BUYER_NM, BUYER_CEO, BUYER_ADDR, BUYER_BIZ_TYPE, BUYER_ITEM,
+                    NTS_APPROVE_NO, ISSUE_DT, REMARKS, REG_DT, REG_ID, MOD_DT, MOD_ID
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'ISSUED', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), ?, NOW(), ?)
+            `;
+
+            await connection.execute(insertInvoiceQuery, [
+                taxInvoiceId, targetType, targetId, cleanYm, supplyAmt, taxAmt || 0, totalAmt || supplyAmt,
+                supplierBizNo, supplierNm, supplierCeo, supplierAddr, supplierBizType || null, supplierItem || null,
+                buyerBizNo, buyerNm, buyerCeo, buyerAddr, buyerBizType, buyerItem,
+                approveNo, remarks || null, regId || 'ADMIN', regId || 'ADMIN'
+            ]);
+
+            await connection.commit();
+            res.status(200).json({ success: true, message: '세금계산서가 성공적으로 발행되었습니다.', taxInvoiceId, approveNo });
+        } catch (error) {
+            if (connection) await connection.rollback();
+            console.error('Create tax invoice error:', error);
+            res.status(500).json({ error: '세금계산서 발행 중 오류가 발생했습니다.' });
+        } finally {
+            if (connection) connection.release();
+        }
+    });
+
+    // 25. 세금계산서 발행 취소 API
+    router.patch('/tax-invoices/:taxInvoiceId/status', async (req, res) => {
+        try {
+            const { taxInvoiceId } = req.params;
+            const { status, modId } = req.body;
+
+            if (!status || !['ISSUED', 'CANCELLED'].includes(status)) {
+                return res.status(400).json({ error: '올바른 상태값을 지정하십시오. (ISSUED 또는 CANCELLED)' });
+            }
+
+            const query = `
+                UPDATE TB_TAX_INVOICE SET
+                    INVOICE_STAT = ?,
+                    MOD_DT = NOW(),
+                    MOD_ID = ?
+                WHERE TAX_INVOICE_ID = ?
+            `;
+
+            const [result] = await pool.execute(query, [status, modId || 'ADMIN', taxInvoiceId]);
+
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ error: '해당 세금계산서를 찾을 수 없습니다.' });
+            }
+
+            res.status(200).json({ success: true, message: '세금계산서 상태가 성공적으로 업데이트되었습니다.' });
+        } catch (error) {
+            console.error('Update tax invoice status error:', error);
+            res.status(500).json({ error: '세금계산서 상태 변경 중 오류가 발생했습니다.' });
         }
     });
 

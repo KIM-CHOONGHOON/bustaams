@@ -495,6 +495,9 @@
 | **REG_ID** | varchar(50) | YES |  | NULL |  | 등록자 ID |
 | **MOD_DT** | datetime | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP | 수정 일시 |
 | **MOD_ID** | varchar(50) | YES |  | NULL |  | 수정자 ID |
+| **BANK_NM** | varchar(50) | YES |  | NULL |  | 환급 은행명 |
+| **ACCT_NO** | varchar(30) | YES |  | NULL |  | 환급 계좌번호 |
+| **ACCT_HOLDER** | varchar(50) | YES |  | NULL |  | 환급 계좌 예금주명 |
 
 ## TB_NOTIFICATION
 

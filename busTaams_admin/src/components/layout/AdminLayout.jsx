@@ -10,6 +10,7 @@ import MembersManagement from '../../pages/MembersManagement';
 import DriversManagement from '../../pages/DriversManagement';
 import TripsManagement from '../../pages/TripsManagement';
 import SettlementManagement from '../../pages/SettlementManagement';
+import TaxInvoiceManagement from '../../pages/TaxInvoiceManagement';
 import MyCustomersManagement from '../../pages/MyCustomersManagement';
 import MyPerformanceManagement from '../../pages/MyPerformanceManagement';
 import SalesPerformanceManagement from '../../pages/SalesPerformanceManagement';
@@ -46,6 +47,8 @@ const AdminLayout = ({ onLogout }) => {
         return <TripsManagement />;
       case 'settlement':
         return <SettlementManagement />;
+      case 'tax-invoices':
+        return <TaxInvoiceManagement />;
       case 'my-customers':
         return <MyCustomersManagement />;
       case 'my-performance':

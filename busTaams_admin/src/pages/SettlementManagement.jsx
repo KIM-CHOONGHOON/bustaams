@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Receipt, Calendar, SlidersHorizontal, Search, RefreshCw,
-  Phone, TrendingUp, CheckCircle2, Info, CreditCard, UserCheck, Percent
+  Phone, TrendingUp, CheckCircle2, Info, CreditCard, UserCheck, Percent, Download
 } from 'lucide-react';
 
 const SettlementManagement = () => {
@@ -11,34 +11,55 @@ const SettlementManagement = () => {
   const [subscriptionSummary, setSubscriptionSummary] = useState({ totalCount: 0, totalAmt: 0 });
   const [loading, setLoading] = useState(false);
 
-  // 조회기간 — 기본값: 당월 1일 ~ 당월 말일
-  const formatDateLocal = (date) => {
+  // 조회 월 — 기본값: 당월 (YYYY-MM)
+  const formatMonthLocal = (date) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+    return `${y}-${m}`;
   };
 
   const today = new Date();
-  const firstDay = formatDateLocal(new Date(today.getFullYear(), today.getMonth(), 1));
-  const lastDay  = formatDateLocal(new Date(today.getFullYear(), today.getMonth() + 1, 0));
+  const currentMonthStr = formatMonthLocal(today);
 
-  const [confirmDtFrom, setConfirmDtFrom] = useState(firstDay);
-  const [confirmDtTo, setConfirmDtTo]     = useState(lastDay);
-  const [searchType, setSearchType]       = useState('all');
+  const [targetMonth, setTargetMonth] = useState(currentMonthStr);
+  const [searchType, setSearchType] = useState('all');
   const [searchKeyword, setSearchKeyword] = useState('');
+
+  // 선택된 YYYY-MM에 대응하는 시작일(1일)과 말일 구하기
+  const getMonthDateRange = (monthStr) => {
+    if (!monthStr || !monthStr.includes('-')) {
+      return { from: '', to: '' };
+    }
+    const [year, month] = monthStr.split('-').map(Number);
+    // month는 1-12이므로 Date 객체 생성 시 month-1로 세팅
+    const fromDate = new Date(year, month - 1, 1);
+    const toDate = new Date(year, month, 0); // 다음달 0일 = 이번달 말일
+
+    const formatDate = (date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+
+    return {
+      from: formatDate(fromDate),
+      to: formatDate(toDate)
+    };
+  };
 
   const fetchSettlements = async (overrideParams = {}) => {
     setLoading(true);
     try {
-      const currentFrom = overrideParams.hasOwnProperty('confirmDtFrom') ? overrideParams.confirmDtFrom : confirmDtFrom;
-      const currentTo = overrideParams.hasOwnProperty('confirmDtTo') ? overrideParams.confirmDtTo : confirmDtTo;
+      const currentMonth = overrideParams.hasOwnProperty('targetMonth') ? overrideParams.targetMonth : targetMonth;
       const currentType = overrideParams.hasOwnProperty('searchType') ? overrideParams.searchType : searchType;
       const currentKeyword = overrideParams.hasOwnProperty('searchKeyword') ? overrideParams.searchKeyword : searchKeyword;
 
+      const { from, to } = getMonthDateRange(currentMonth);
+
       const params = new URLSearchParams({ searchType: currentType, searchKeyword: currentKeyword.trim() });
-      if (currentFrom) params.append('confirmDtFrom', currentFrom);
-      if (currentTo)   params.append('confirmDtTo',   currentTo);
+      if (from) params.append('confirmDtFrom', from);
+      if (to)   params.append('confirmDtTo',   to);
 
       const res = await fetch(`/api/admin/settlement?${params.toString()}`);
       if (res.ok) {
@@ -65,16 +86,70 @@ const SettlementManagement = () => {
   };
 
   const handleReset = () => {
-    setConfirmDtFrom(firstDay);
-    setConfirmDtTo(lastDay);
+    setTargetMonth(currentMonthStr);
     setSearchType('all');
     setSearchKeyword('');
     fetchSettlements({
-      confirmDtFrom: firstDay,
-      confirmDtTo: lastDay,
+      targetMonth: currentMonthStr,
       searchType: 'all',
       searchKeyword: ''
     });
+  };
+
+  const exportSettlementsToExcel = () => {
+    const headers = ['담당 기사', '기사 등급', '예약자명', '예약자 연락처', '여행 제목', '출발지', '목적지', '여행 금액(원)', '기사 지급액(원)', '본사 귀속분(원)', '영업사원 수당(원)', '추천코드'];
+    const rows = settlements.map(item => {
+      const regular = isRegularDriver(item.feePolicy);
+      return [
+        item.driverName || '',
+        regular ? getFeePolicyLabel(item).replace('운전기사 ', '') : '일반 회원',
+        item.travelerName || '',
+        item.travelerPhone || '',
+        item.tripTitle || '',
+        item.startAddr || '',
+        item.destAddr || item.endAddr || '',
+        item.driverBiddingPrice || 0,
+        regular ? item.driverPayout : 0,
+        item.platformFee || 0,
+        item.salesCommission || 0,
+        item.recomCode || ''
+      ];
+    });
+
+    const csvContent = "\uFEFF" + [
+      headers.join(','),
+      ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.setAttribute("href", URL.createObjectURL(blob));
+    link.setAttribute("download", `여정별_매출_및_정산내역_${targetMonth}.csv`);
+    link.click();
+  };
+
+  const exportSubscriptionsToExcel = () => {
+    const headers = ['기사명', '연락처', '등급 정책', '청구 귀속월', '결제 금액(원)', '결제 수단', '결제 완료 일시'];
+    const rows = subscriptionList.map(item => [
+      item.driverName || '',
+      item.driverPhone || '',
+      getFeePolicyLabel(item),
+      item.billingYyyymm ? `${item.billingYyyymm.slice(0,4)}년 ${item.billingYyyymm.slice(4)}월` : '',
+      item.payAmt || 0,
+      item.cardNickname ? `${item.cardNickname} (끝 ${item.cardLastFour || '****'})` : '카드',
+      item.payCompletedDt || ''
+    ]);
+
+    const csvContent = "\uFEFF" + [
+      headers.join(','),
+      ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.setAttribute("href", URL.createObjectURL(blob));
+    link.setAttribute("download", `기사_월정액_구독매출내역_${targetMonth}.csv`);
+    link.click();
   };
 
   const formatAmt = (amt) => Number(amt || 0).toLocaleString('ko-KR') + '원';
@@ -209,29 +284,19 @@ const SettlementManagement = () => {
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
         <form onSubmit={handleSearchSubmit} className="flex flex-col gap-4">
 
-          {/* 1행: 확정일자 조회기간 */}
+          {/* 1행: 정산 귀속월 조회조건 */}
           <div className="flex flex-col md:flex-row items-center gap-4">
             <div className="flex items-center gap-2 text-slate-700 shrink-0 w-full md:w-auto">
               <Calendar size={18} className="text-indigo-500" />
-              <span className="text-sm font-bold">조회기간</span>
+              <span className="text-sm font-bold">정산 귀속월</span>
             </div>
             <div className="flex items-center gap-2 flex-1 w-full">
               <input
-                type="date"
-                id="confirmDtFrom"
-                value={confirmDtFrom}
-                onChange={(e) => setConfirmDtFrom(e.target.value)}
-                max={confirmDtTo || undefined}
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium"
-              />
-              <span className="text-slate-400 font-bold text-sm shrink-0">~</span>
-              <input
-                type="date"
-                id="confirmDtTo"
-                value={confirmDtTo}
-                onChange={(e) => setConfirmDtTo(e.target.value)}
-                min={confirmDtFrom || undefined}
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium"
+                type="month"
+                id="targetMonth"
+                value={targetMonth}
+                onChange={(e) => setTargetMonth(e.target.value)}
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-bold"
               />
             </div>
           </div>
@@ -291,10 +356,19 @@ const SettlementManagement = () => {
 
       {/* 2. 여정 정산 및 기사 환급/본사 귀속 구분 테이블 (상단 테이블) */}
       <div className="flex flex-col gap-3">
-        <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-          <span className="w-1.5 h-6 bg-indigo-500 rounded-full"></span>
-          여정별 매출 및 수수료 정산 내역 ({summary.totalCount}건)
-        </h3>
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+            <span className="w-1.5 h-6 bg-indigo-500 rounded-full"></span>
+            여정별 매출 및 수수료 정산 내역 ({summary.totalCount}건)
+          </h3>
+          <button
+            onClick={exportSettlementsToExcel}
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 rounded-xl transition-all shadow-sm active:scale-95 text-xs"
+          >
+            <Download size={14} />
+            엑셀 다운로드
+          </button>
+        </div>
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -428,10 +502,19 @@ const SettlementManagement = () => {
 
       {/* 3. 기사 월정액 결제 내역 테이블 (하단 테이블) */}
       <div className="flex flex-col gap-3">
-        <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-          <span className="w-1.5 h-6 bg-emerald-500 rounded-full"></span>
-          기사 월정액 구독 매출 상세 내역 ({subscriptionSummary.totalCount}건)
-        </h3>
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+            <span className="w-1.5 h-6 bg-emerald-500 rounded-full"></span>
+            기사 월정액 구독 매출 상세 내역 ({subscriptionSummary.totalCount}건)
+          </h3>
+          <button
+            onClick={exportSubscriptionsToExcel}
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 rounded-xl transition-all shadow-sm active:scale-95 text-xs"
+          >
+            <Download size={14} />
+            엑셀 다운로드
+          </button>
+        </div>
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
