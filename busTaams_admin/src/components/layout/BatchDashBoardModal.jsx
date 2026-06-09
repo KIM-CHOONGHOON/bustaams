@@ -432,7 +432,14 @@ const BatchDashBoardModal = ({ isOpen, onClose }) => {
   // ─── 서브 뷰 Placeholder 대체 렌더링 ─────────────────────────
   const renderSubView = () => {
     if (activeView === 'master') {
-      return <BatchTaskList onBack={() => setActiveView('home')} onRegister={() => setActiveView('register')} />;
+      return (
+        <BatchTaskList 
+          onBack={() => setActiveView('home')} 
+          onRegister={() => setActiveView('register')} 
+          onRunJob={handleRunJob}
+          isExecuting={isExecuting}
+        />
+      );
     }
     
     if (activeView === 'register') {

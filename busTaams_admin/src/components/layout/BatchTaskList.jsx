@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, ChevronDown, Play, Edit, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 
-const BatchTaskList = ({ onBack, onRegister }) => {
+const BatchTaskList = ({ onBack, onRegister, onRunJob, isExecuting }) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -133,8 +133,17 @@ const BatchTaskList = ({ onBack, onRegister }) => {
                     </td>
                     <td className="px-6 py-5 text-right">
                       <div className="flex justify-end gap-1 opacity-40 group-hover:opacity-100 transition-opacity">
-                        <button className="p-2 hover:bg-slate-200 rounded text-slate-500 transition-colors" title="실행">
-                          <Play size={18} />
+                        <button 
+                          onClick={() => onRunJob && onRunJob(task.jobId)}
+                          disabled={isExecuting !== null}
+                          className={`p-2 rounded transition-colors ${isExecuting === task.jobId ? 'bg-amber-100 text-amber-700' : 'hover:bg-slate-200 text-slate-500'}`}
+                          title="실행"
+                        >
+                          {isExecuting === task.jobId ? (
+                            <span className="w-4 h-4 border-2 border-amber-700 border-t-transparent rounded-full animate-spin inline-block"></span>
+                          ) : (
+                            <Play size={18} />
+                          )}
                         </button>
                         <button className="p-2 hover:bg-slate-200 rounded text-slate-500 transition-colors" title="수정">
                           <Edit size={18} />
