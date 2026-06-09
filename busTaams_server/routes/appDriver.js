@@ -10,6 +10,7 @@ const fs = require('fs');
 const { registerBusDriverPaymentCard } = require('../lib/busDriverCreditCardRegistration');
 const { sendNotification } = require('../services/notificationService');
 const { runDriverVerificationsForProfileSetup } = require('../driverVerification');
+const { processBankbookOcr, processBizRegOcr } = require('../services/ocrService');
 
 const JWT_SECRET_KEY = process.env.JWT_SECRET || 'bustaams-dev-secret-key-2026';
 
@@ -394,7 +395,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
 
         // 2. TB_DRIVER_DETAIL 상세 정보 (주소, 요금제 등)
         const [detailRows] = await pool.execute(
-            'SELECT ZIPCODE as zipcode, ADDRESS as address, DETAIL_ADDRESS as detailAddress, SEX as sex, ADDR_TYPE as addrType, SELF_INTRO as selfIntro, FEE_POLICY as feePolicy FROM TB_DRIVER_DETAIL WHERE CUST_ID = ?',
+            'SELECT ZIPCODE as zipcode, ADDRESS as address, DETAIL_ADDRESS as detailAddress, SEX as sex, ADDR_TYPE as addrType, SELF_INTRO as selfIntro, FEE_POLICY as feePolicy, BANK_NM as bankNm, ACCT_NO as acctNo, ACCT_HOLD as acctHold FROM TB_DRIVER_DETAIL WHERE CUST_ID = ?',
             [custId]
         );
 
@@ -442,6 +443,9 @@ router.get('/profile', authenticateToken, async (req, res) => {
             sex: 'M',
             addrType: 'HOME',
             selfIntro: '',
+            bankNm: '',
+            acctNo: '',
+            acctHold: '',
             ...(detailRows.length > 0 ? detailRows[0] : {}),
             residentNo: residentNoDisplay,
             profileImg: userData.userImage,
@@ -611,7 +615,8 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
             name, phone, residentNo, zipcode, address, detailAddress,
             licenseType, licenseNo, licenseIssueDt, licenseValidity,
             busLicenseNo, qualAcquisitionDt, qualStatus,
-            sex, addrType, selfIntro, firebaseToken, marketing
+            sex, addrType, selfIntro, firebaseToken, marketing,
+            bankNm, acctNo, acctHold
         } = req.body;
 
         let verifyWarning = null;
@@ -655,11 +660,23 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
             finalResidentNoEnc = encrypt(residentNo);
         }
 
+        // 한글 주석: 만약 전달받은 주민등록번호가 마스킹된 것이라면 기존 저장된 원본 주민번호 복호화해서 사용
+        let verifyRrn = residentNo;
+        if (/^\d{6}-?[0-9]\*{6}$/.test(residentNo)) {
+            if (existingResidentNoEnc) {
+                try {
+                    verifyRrn = decrypt(existingResidentNoEnc);
+                } catch (decErr) {
+                    console.error('[Profile Update] RRN Decrypt failed for verify:', decErr);
+                }
+            }
+        }
+
         // 한글 주석: 운수종사자 자격증 및 면허증 진위여부 검증 호출 (실패 시에도 저장은 허용)
         try {
             const extVerify = await runDriverVerificationsForProfileSetup({
                 driverName: name,
-                rrn: residentNo,
+                rrn: verifyRrn,
                 licenseNo: licenseNo,
                 licenseSerialNo: '',
                 qualCertNo: busLicenseNo,
@@ -747,13 +764,13 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
         const [existsDetail] = await connection.execute('SELECT 1 FROM TB_DRIVER_DETAIL WHERE CUST_ID = ?', [custId]);
         if (existsDetail.length > 0) {
             await connection.execute(
-                'UPDATE TB_DRIVER_DETAIL SET BIRTH_YMD = ?, ZIPCODE = ?, ADDRESS = ?, DETAIL_ADDRESS = ?, SEX = ?, ADDR_TYPE = ?, SELF_INTRO = ?, MOD_ID = ?, MOD_DT = NOW() WHERE CUST_ID = ?',
-                [birthYmd, zipcode, address, detailAddress, sex, addrType, selfIntro, custId, custId]
+                'UPDATE TB_DRIVER_DETAIL SET BIRTH_YMD = ?, ZIPCODE = ?, ADDRESS = ?, DETAIL_ADDRESS = ?, SEX = ?, ADDR_TYPE = ?, SELF_INTRO = ?, BANK_NM = ?, ACCT_NO = ?, ACCT_HOLD = ?, MOD_ID = ?, MOD_DT = NOW() WHERE CUST_ID = ?',
+                [birthYmd, zipcode, address, detailAddress, sex, addrType, selfIntro, bankNm || null, acctNo || null, acctHold || null, custId, custId]
             );
         } else {
             await connection.execute(
-                'INSERT INTO TB_DRIVER_DETAIL (CUST_ID, BIRTH_YMD, ZIPCODE, ADDRESS, DETAIL_ADDRESS, SEX, ADDR_TYPE, SELF_INTRO, FEE_POLICY, REG_ID, MOD_ID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [custId, birthYmd, zipcode, address, detailAddress, sex, addrType, selfIntro, 'DRIVER', custId, custId]
+                'INSERT INTO TB_DRIVER_DETAIL (CUST_ID, BIRTH_YMD, ZIPCODE, ADDRESS, DETAIL_ADDRESS, SEX, ADDR_TYPE, SELF_INTRO, FEE_POLICY, BANK_NM, ACCT_NO, ACCT_HOLD, REG_ID, MOD_ID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [custId, birthYmd, zipcode, address, detailAddress, sex, addrType, selfIntro, 'DRIVER', bankNm || null, acctNo || null, acctHold || null, custId, custId]
             );
         }
 
@@ -978,6 +995,17 @@ router.get('/bus/profile', authenticateToken, async (req, res) => {
             photos = photoRows.map(p => p.url);
         }
 
+        // 한글 주석: 사업자등록 정보 조회 추가 (CUST_ID 기준)
+        const [bizRows] = await pool.execute(
+            `SELECT BIZ_NO as bizNo, BIZ_NM as bizNm, CEO_NM as ceoNm, BIZ_ADDR as bizAddr, BIZ_TYPE as bizType, BIZ_ITEM as bizItem, EMAIL as email 
+             FROM TB_PARTNER_BIZ_INFO 
+             WHERE TARGET_TYPE = 'DRIVER' AND TARGET_ID = ?`,
+            [custId]
+        );
+        const bizData = bizRows.length > 0 ? bizRows[0] : {
+            bizNo: '', bizNm: '', ceoNm: '', bizAddr: '', bizType: '', bizItem: '', email: ''
+        };
+ 
         res.json({
             success: true,
             data: {
@@ -985,7 +1013,8 @@ router.get('/bus/profile', authenticateToken, async (req, res) => {
                 bizRegImg: fileMap[busData.BIZ_REG_FILE_ID] || null,
                 transLicImg: fileMap[busData.TRANS_LIC_FILE_ID] || null,
                 insCertImg: fileMap[busData.INS_CERT_FILE_ID] || null,
-                vehiclePhotos: photos
+                vehiclePhotos: photos,
+                ...bizData // 사업자 정보 병합
             }
         });
     } catch (err) {
@@ -1006,7 +1035,10 @@ router.post('/bus/register', authenticateToken, memoryUpload.fields([
     const connection = await pool.getConnection();
     try {
         await connection.beginTransaction();
-        const { vehicleNo, modelNm, manufactureYear, mileage, serviceClass, amenities, hasAdas, lastInspectDt, insuranceExpDt } = req.body;
+        const { 
+            vehicleNo, modelNm, manufactureYear, mileage, serviceClass, amenities, hasAdas, lastInspectDt, insuranceExpDt,
+            bizNo, bizNm, ceoNm, bizAddr, bizType, bizItem, email
+        } = req.body;
         const userId = req.user.userId;
         const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
         const custId = uRows[0].CUST_ID;
@@ -1060,6 +1092,26 @@ router.post('/bus/register', authenticateToken, memoryUpload.fields([
             await connection.execute(
                 `INSERT INTO TB_BUS_DRIVER_VEHICLE (BUS_ID, CUST_ID, VEHICLE_NO, MODEL_NM, MANUFACTURE_YEAR, MILEAGE, SERVICE_CLASS, AMENITIES, HAS_ADAS, LAST_INSPECT_DT, INSURANCE_EXP_DT, VEHICLE_PHOTOS_JSON, BIZ_REG_FILE_ID, TRANS_LIC_FILE_ID, INS_CERT_FILE_ID, REG_ID, MOD_ID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [busId, custId, vehicleNo, modelNm, manufactureYear, mileage || 0, serviceClass, amenitiesJson, hasAdas || 'N', lastInspectDt || null, insuranceExpDt || null, JSON.stringify(finalPhotoIds), bizRegId, transLicId, insCertId, custId, custId]
+            );
+        }
+
+        // 한글 주석: 사업자등록 정보 (TB_PARTNER_BIZ_INFO) 저장 및 갱신 (CUST_ID 기준)
+        if (bizNo && bizNm && ceoNm && bizAddr) {
+            await connection.execute(
+                `INSERT INTO TB_PARTNER_BIZ_INFO 
+                    (TARGET_TYPE, TARGET_ID, BIZ_NO, BIZ_NM, CEO_NM, BIZ_ADDR, BIZ_TYPE, BIZ_ITEM, EMAIL, REG_ID, MOD_ID)
+                 VALUES ('DRIVER', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE 
+                    BIZ_NO = VALUES(BIZ_NO),
+                    BIZ_NM = VALUES(BIZ_NM),
+                    CEO_NM = VALUES(CEO_NM),
+                    BIZ_ADDR = VALUES(BIZ_ADDR),
+                    BIZ_TYPE = VALUES(BIZ_TYPE),
+                    BIZ_ITEM = VALUES(BIZ_ITEM),
+                    EMAIL = VALUES(EMAIL),
+                    MOD_ID = VALUES(MOD_ID),
+                    MOD_DT = NOW()`,
+                [custId, bizNo, bizNm, ceoNm, bizAddr, bizType || null, bizItem || null, email || null, custId, custId]
             );
         }
 
@@ -2754,6 +2806,54 @@ router.get('/settlement-history', authenticateToken, async (req, res) => {
     } catch (err) {
         console.error('Fetch settlement history error:', err);
         res.status(500).json({ error: '정산 내역 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+/**
+ * [App] 통장 사본 OCR 분석 API
+ * 한글 주석: 통장 사본 이미지 파일을 받아 은행명, 계좌번호, 예금주를 추출하여 반환합니다.
+ */
+router.post('/ocr/bankbook', authenticateToken, memoryUpload.single('bankBookImg'), async (req, res) => {
+    try {
+        const file = req.file;
+        if (!file) {
+            return res.status(400).json({ error: '업로드된 통장 사본 파일이 없습니다.' });
+        }
+
+        // ocrService의 분석 함수 호출
+        const ocrData = await processBankbookOcr(file.buffer);
+        
+        res.json({
+            success: true,
+            data: ocrData
+        });
+    } catch (err) {
+        console.error('[OCR Bankbook API] Error:', err);
+        res.status(500).json({ error: '통장 사본 분석 중 오류 발생: ' + err.message });
+    }
+});
+
+/**
+ * [App] 사업자 등록증 OCR 분석 API
+ * 한글 주석: 사업자 등록증 이미지 파일을 받아 사업자등록번호, 상호, 대표자명, 주소, 업태, 종목을 추출하여 반환합니다.
+ */
+router.post('/ocr/bizreg', authenticateToken, memoryUpload.single('bizRegImg'), async (req, res) => {
+    try {
+        const file = req.file;
+        if (!file) {
+            return res.status(400).json({ error: '업로드된 사업자 등록증 파일이 없습니다.' });
+        }
+
+        // ocrService의 분석 함수 호출
+        const ocrData = await processBizRegOcr(file.buffer);
+        
+        res.json({
+            success: true,
+            data: ocrData
+        });
+    } catch (err) {
+        console.error('[OCR BizReg API] Error:', err);
+        res.status(500).json({ error: '사업자 등록증 분석 중 오류 발생: ' + err.message });
     }
 });
 

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getBusProfile, getDriverProfile, updateBusProfile, request } from '../api';
 import { notify } from '../utils/toast';
 import BottomNavDriver from '../components/BottomNavDriver';
+import Swal from 'sweetalert2'; // 한글 주석: OCR 로딩 및 팝업용 SweetAlert2 추가
 
 const BusInfoRegistration = () => {
     const navigate = useNavigate();
@@ -32,7 +33,15 @@ const BusInfoRegistration = () => {
         hasAdas: 'N',
         lastInspectDt: '',
         insuranceExpDt: '',
-        insuranceType: 'comprehensive'
+        insuranceType: 'comprehensive',
+        // 한글 주석: 사업자등록 정보 관련 상태 필드 추가
+        bizNo: '',
+        bizNm: '',
+        ceoNm: '',
+        bizAddr: '',
+        bizType: '',
+        bizItem: '',
+        email: ''
     });
 
     const [previews, setPreviews] = useState({
@@ -101,7 +110,15 @@ const BusInfoRegistration = () => {
                             hasAdas: bus.hasAdas || 'N',
                             lastInspectDt: bus.lastInspectDt || '',
                             insuranceExpDt: bus.insuranceExpDt || '',
-                            insuranceType: savedAmenities.insuranceType || 'comprehensive'
+                            insuranceType: savedAmenities.insuranceType || 'comprehensive',
+                            // 한글 주석: 서버로부터 받은 사업자등록 정보 바인딩
+                            bizNo: bus.bizNo || '',
+                            bizNm: bus.bizNm || '',
+                            ceoNm: bus.ceoNm || '',
+                            bizAddr: bus.bizAddr || '',
+                            bizType: bus.bizType || '',
+                            bizItem: bus.bizItem || '',
+                            email: bus.email || ''
                         });
                         setPreviews({
                             bizRegImg: bus.bizRegImg || '',
@@ -135,7 +152,7 @@ const BusInfoRegistration = () => {
         }));
     };
 
-    const handleFileChange = (e, key) => {
+    const handleFileChange = async (e, key) => {
         const file = e.target.files[0];
         if (!file) return;
 
@@ -145,6 +162,59 @@ const BusInfoRegistration = () => {
             setFiles(prev => ({ ...prev, [key + 'File']: file }));
         };
         reader.readAsDataURL(file);
+
+        // 한글 주석: 사업자등록증 이미지 첨부 시 백엔드 OCR API 호출 연동
+        if (key === 'bizReg') {
+            try {
+                Swal.fire({
+                    title: '사업자등록증 인식 중',
+                    text: '이미지에서 사업자 정보를 자동으로 분석하고 있습니다. 잠시만 기다려 주세요...',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
+                const ocrFormData = new FormData();
+                ocrFormData.append('bizRegImg', file);
+
+                const res = await request('/app/driver/ocr/bizreg', {
+                    method: 'POST',
+                    body: ocrFormData
+                }, true);
+
+                if (res.success && res.data) {
+                    const info = res.data;
+                    setFormData(prev => ({
+                        ...prev,
+                        bizNo: info.bizNo || prev.bizNo || '',
+                        bizNm: info.bizNm || prev.bizNm || '',
+                        ceoNm: info.ceoNm || prev.ceoNm || '',
+                        bizAddr: info.bizAddr || prev.bizAddr || '',
+                        bizType: info.bizType || prev.bizType || '',
+                        bizItem: info.bizItem || prev.bizItem || ''
+                    }));
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: '분석 완료',
+                        text: '사업자 정보가 추출되어 화면에 자동으로 입력되었습니다.',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    throw new Error('인식 실패');
+                }
+            } catch (err) {
+                console.error('[OCR Error]', err);
+                Swal.fire({
+                    icon: 'warning',
+                    title: '자동 인식 불가',
+                    text: '사업자등록증에서 정보를 추출하지 못했습니다. 아래 폼에 정보를 직접 입력해 주세요.',
+                    confirmButtonText: '확인'
+                });
+            }
+        }
     };
 
     const handleMultiFileChange = (e) => {
@@ -220,6 +290,15 @@ const BusInfoRegistration = () => {
 
             // 요청에 따라 'list' 래퍼와 'insuranceType'을 제외한 순수 편의시설 객체만 전송
             data.append('amenities', JSON.stringify(formData.amenities));
+
+            // 한글 주석: 사업자등록 정보 관련 필드 FormData에 추가
+            data.append('bizNo', formData.bizNo || '');
+            data.append('bizNm', formData.bizNm || '');
+            data.append('ceoNm', formData.ceoNm || '');
+            data.append('bizAddr', formData.bizAddr || '');
+            data.append('bizType', formData.bizType || '');
+            data.append('bizItem', formData.bizItem || '');
+            data.append('email', formData.email || '');
 
             if (files.bizRegFile) data.append('bizRegFile', files.bizRegFile);
             if (files.transLicFile) data.append('transLicFile', files.transLicFile);
@@ -435,6 +514,47 @@ const BusInfoRegistration = () => {
                                         </div>
                                     ))
                                 }
+                            </div>
+                        </section>
+
+                        {/* Section 6 */}
+                        <section className="space-y-6 text-left bg-white p-8 rounded-2xl shadow-[0_40px_60px_-15px_rgba(0,104,95,0.08)] border border-teal-500/10">
+                            <div className="flex items-baseline justify-between border-b border-[#bec9c6] pb-4">
+                                <h3 className="font-headline text-2xl font-bold text-[#191c1e]">06. 사업자 정보 확인</h3>
+                                <span className="text-[#9d4300] text-xs font-bold uppercase tracking-widest">수정 가능</span>
+                            </div>
+                            <p className="text-xs text-[#6e7977] leading-relaxed">
+                                사업자 등록증을 등록하면 정보가 자동으로 입력됩니다. 정보가 없거나 틀린 경우 직접 입력/수정할 수 있습니다.
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                                <div className="space-y-2">
+                                    <label className="block text-xs font-extrabold text-[#004e47] uppercase tracking-wider ml-1">사업자등록번호</label>
+                                    <input name="bizNo" value={formData.bizNo} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-[#00685f] text-[#191c1e] font-medium placeholder:text-[#6e7977]/50" placeholder="예: 120-00-00000" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="block text-xs font-extrabold text-[#004e47] uppercase tracking-wider ml-1">상호 (법인명)</label>
+                                    <input name="bizNm" value={formData.bizNm} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-[#00685f] text-[#191c1e] font-medium placeholder:text-[#6e7977]/50" placeholder="예: (주)버스타암스" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="block text-xs font-extrabold text-[#004e47] uppercase tracking-wider ml-1">대표자 성명</label>
+                                    <input name="ceoNm" value={formData.ceoNm} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-[#00685f] text-[#191c1e] font-medium placeholder:text-[#6e7977]/50" placeholder="예: 홍길동" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="block text-xs font-extrabold text-[#004e47] uppercase tracking-wider ml-1">세금계산서 수신용 이메일</label>
+                                    <input name="email" value={formData.email} onChange={handleInputChange} type="email" className="w-full bg-[#e6e8ea] border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-[#00685f] text-[#191c1e] font-medium placeholder:text-[#6e7977]/50" placeholder="예: tax@company.com" />
+                                </div>
+                                <div className="space-y-2 md:col-span-2">
+                                    <label className="block text-xs font-extrabold text-[#004e47] uppercase tracking-wider ml-1">사업장 주소</label>
+                                    <input name="bizAddr" value={formData.bizAddr} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-[#00685f] text-[#191c1e] font-medium placeholder:text-[#6e7977]/50" placeholder="예: 서울특별시 마포구 백범로 31길 21" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="block text-xs font-extrabold text-[#004e47] uppercase tracking-wider ml-1">업태</label>
+                                    <input name="bizType" value={formData.bizType} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-[#00685f] text-[#191c1e] font-medium placeholder:text-[#6e7977]/50" placeholder="예: 서비스업, 운수업" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="block text-xs font-extrabold text-[#004e47] uppercase tracking-wider ml-1">종목</label>
+                                    <input name="bizItem" value={formData.bizItem} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-[#00685f] text-[#191c1e] font-medium placeholder:text-[#6e7977]/50" placeholder="예: 전세버스 운송업, 소프트웨어 개발" />
+                                </div>
                             </div>
                         </section>
 

@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const axios = require('axios');
 const iconv = require('iconv-lite');
 const { getCurrentYyyyMm } = require('../lib/loginPayload');
+const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
 
 // 이니시스 설정 (.env에서 가져옴)
@@ -16,6 +17,22 @@ module.exports = function createPaymentRouter(pool, app) {
     if (app) {
         app.use('/api/payment', router);
     }
+
+    // 결제 고유 ID 생성 (YYYYMMDD + 12자리 순번) (한글 주석)
+    const generatePayId = async (connectionOrPool) => {
+        const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+        const [rows] = await connectionOrPool.execute(
+            `SELECT MAX(PAY_ID) as maxVal FROM TB_PAYMENT_MASTER WHERE PAY_ID LIKE ?`,
+            [`${todayStr}%`]
+        );
+        const maxVal = rows[0]?.maxVal;
+        if (!maxVal) {
+            return todayStr + '000000000001';
+        }
+        const seqPart = maxVal.substring(8);
+        const nextSeq = parseInt(seqPart, 10) + 1;
+        return todayStr + String(nextSeq).padStart(12, '0');
+    };
     
     /**
      * POST /api/payment/ready
@@ -192,10 +209,23 @@ module.exports = function createPaymentRouter(pool, app) {
         }
     };
 
-    router.post('/ready', async (req, res) => {
+    router.post('/ready', authenticateToken, async (req, res) => {
         console.log('>>> [Payment Ready] Requested:', req.body);
         try {
             let { price, goodname, buyername, buyertel, buyeremail, resId, reqId } = req.body;
+
+            // 토큰 정보로부터 결제자의 CUST_ID를 구함 (한글 주석)
+            let custId = req.user.custId;
+            if (!custId) {
+                const [uRows] = await pool.execute(
+                    'SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?',
+                    [req.user.userId]
+                );
+                if (uRows.length === 0) {
+                    return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+                }
+                custId = uRows[0].CUST_ID;
+            }
 
             if (!price) {
                 console.warn('>>> [Payment Ready] Missing price');
@@ -222,6 +252,25 @@ module.exports = function createPaymentRouter(pool, app) {
             }
 
             console.log(`>>> [Payment Ready] Generated OID: ${oid}, Price: ${cleanAmount}`);
+
+            // 결제 마스터 테이블(TB_PAYMENT_MASTER)에 READY 상태로 최초 결제 시도 정보 저장 (한글 주석)
+            const payId = await generatePayId(pool);
+            await pool.execute(
+                `INSERT INTO TB_PAYMENT_MASTER (
+                    PAY_ID, ORDER_NO, PAY_TYPE, REQ_ID, CUST_ID, 
+                    PG_MID, PLAN_DATE, PAY_AMOUNT, PAY_STATUS, 
+                    REG_ID, REG_DT
+                ) VALUES (?, ?, 'ONETIME', ?, ?, ?, CURDATE(), ?, 'READY', ?, NOW())`,
+                [
+                    payId,
+                    oid,
+                    reqId || resId || null,
+                    custId,
+                    MID,
+                    cleanAmount,
+                    custId
+                ]
+            );
 
             // Signature 생성: SHA256(oid=...&price=...&timestamp=...)
             const signatureStr = `oid=${oid}&price=${cleanAmount}&timestamp=${timestamp}`;
@@ -318,6 +367,22 @@ module.exports = function createPaymentRouter(pool, app) {
             const { P_STATUS, P_RMESG1, P_TID, P_REQ_URL, P_MID, P_OID } = req.body;
 
             if (P_STATUS !== '00') {
+                // 결제 마스터 테이블에 인증 실패 상태 저장 (한글 주석)
+                try {
+                    await pool.execute(
+                        `UPDATE TB_PAYMENT_MASTER SET 
+                            PAY_STATUS = 'FAIL', 
+                            PG_RESULT_CODE = ?, 
+                            PG_RESULT_MSG = ?, 
+                            COMPLETE_DT = NOW(),
+                            MOD_DT = NOW(),
+                            MOD_ID = 'SYSTEM'
+                         WHERE ORDER_NO = ?`,
+                        [P_STATUS, P_RMESG1 || '모바일 결제 인증 실패', P_OID]
+                    );
+                } catch (dbErr) {
+                    console.error('>>> [Payment DB Update Error (Mobile Auth Fail)]:', dbErr);
+                }
                 return sendHtmlResponse(`결제 인증 실패: ${P_RMESG1}`, '/approval-list');
             }
 
@@ -352,6 +417,34 @@ module.exports = function createPaymentRouter(pool, app) {
                     try {
                         await connection.beginTransaction();
                         await updateDBAfterPayment(oid, connection);
+
+                        // 결제 마스터 테이블에 결제 성공 정보 반영 (한글 주석)
+                        await connection.execute(
+                            `UPDATE TB_PAYMENT_MASTER SET 
+                                PAY_STATUS = 'SUCCESS',
+                                PG_TID = ?,
+                                CARD_AUTH_NO = ?,
+                                PG_RESULT_CODE = ?,
+                                PG_RESULT_MSG = ?,
+                                CARD_CODE = ?,
+                                CARD_NAME = ?,
+                                CARD_MASK_NO = ?,
+                                COMPLETE_DT = NOW(),
+                                MOD_DT = NOW(),
+                                MOD_ID = 'SYSTEM'
+                             WHERE ORDER_NO = ?`,
+                            [
+                                tid,
+                                resultParams.get('P_AUTH_NO') || null,
+                                status,
+                                msg || '성공',
+                                resultParams.get('P_FN_CD1') || null,
+                                resultParams.get('P_FN_NM') || null,
+                                resultParams.get('P_CARD_NUM') || resultParams.get('P_CARD_NO') || null,
+                                oid
+                            ]
+                        );
+
                         await connection.commit();
 
                         // oid에서 reqId 또는 resId 추출 (예: BUS_REQ_123_timestamp)
@@ -376,10 +469,42 @@ module.exports = function createPaymentRouter(pool, app) {
                         connection.release();
                     }
                 } else {
+                    // 결제 마스터 테이블에 승인 실패 정보 반영 (한글 주석)
+                    try {
+                        await pool.execute(
+                            `UPDATE TB_PAYMENT_MASTER SET 
+                                PAY_STATUS = 'FAIL', 
+                                PG_TID = ?, 
+                                PG_RESULT_CODE = ?, 
+                                PG_RESULT_MSG = ?, 
+                                COMPLETE_DT = NOW(),
+                                MOD_DT = NOW(),
+                                MOD_ID = 'SYSTEM'
+                             WHERE ORDER_NO = ?`,
+                            [tid, status, msg || '모바일 결제 승인 실패', oid]
+                        );
+                    } catch (dbErr) {
+                        console.error('>>> [Payment DB Update Error (Mobile Approval Fail)]:', dbErr);
+                    }
                     sendHtmlResponse(`모바일 결제 승인 실패: ${msg || '알 수 없는 오류'}`, '/approval-list');
                 }
             } catch (err) {
                 console.error('Mobile Approval Critical Error:', err);
+                try {
+                    await pool.execute(
+                        `UPDATE TB_PAYMENT_MASTER SET 
+                            PAY_STATUS = 'FAIL', 
+                            PG_RESULT_CODE = 'ERROR', 
+                            PG_RESULT_MSG = ?, 
+                            COMPLETE_DT = NOW(),
+                            MOD_DT = NOW(),
+                            MOD_ID = 'SYSTEM'
+                         WHERE ORDER_NO = ?`,
+                        [err.message || '모바일 결제 승인 에러', P_OID]
+                    );
+                } catch (dbErr) {
+                    console.error('>>> [Payment DB Update Error (Mobile Auth Exception)]:', dbErr);
+                }
                 res.status(500).send('모바일 결제 승인 처리 중 오류 발생');
             }
             return;
@@ -389,6 +514,22 @@ module.exports = function createPaymentRouter(pool, app) {
         const { resultCode, resultMsg, authToken, authUrl, mid } = req.body;
 
         if (resultCode !== '0000') {
+            // 결제 마스터 테이블에 인증 실패 상태 저장 (한글 주석)
+            try {
+                await pool.execute(
+                    `UPDATE TB_PAYMENT_MASTER SET 
+                        PAY_STATUS = 'FAIL', 
+                        PG_RESULT_CODE = ?, 
+                        PG_RESULT_MSG = ?, 
+                        COMPLETE_DT = NOW(),
+                        MOD_DT = NOW(),
+                        MOD_ID = 'SYSTEM'
+                     WHERE ORDER_NO = ?`,
+                    [resultCode, resultMsg || 'PC 결제 인증 실패', req.body.orderNumber || req.body.MOID]
+                );
+            } catch (dbErr) {
+                console.error('>>> [Payment DB Update Error (PC Auth Fail)]:', dbErr);
+            }
             return sendHtmlResponse(`결제 인증 실패: ${resultMsg}`, '/approval-list');
         }
 
@@ -417,6 +558,34 @@ module.exports = function createPaymentRouter(pool, app) {
                 try {
                     await connection.beginTransaction();
                     await updateDBAfterPayment(result.MOID, connection);
+
+                    // 결제 마스터 테이블에 결제 성공 정보 반영 (한글 주석)
+                    await connection.execute(
+                        `UPDATE TB_PAYMENT_MASTER SET 
+                            PAY_STATUS = 'SUCCESS',
+                            PG_TID = ?,
+                            CARD_AUTH_NO = ?,
+                            PG_RESULT_CODE = ?,
+                            PG_RESULT_MSG = ?,
+                            CARD_CODE = ?,
+                            CARD_NAME = ?,
+                            CARD_MASK_NO = ?,
+                            COMPLETE_DT = NOW(),
+                            MOD_DT = NOW(),
+                            MOD_ID = 'SYSTEM'
+                         WHERE ORDER_NO = ?`,
+                        [
+                            result.tid || null,
+                            result.applNum || null,
+                            result.resultCode,
+                            result.resultMsg || '성공',
+                            result.cardCode || null,
+                            result.cardName || null,
+                            result.cardNumber || null,
+                            result.MOID
+                        ]
+                    );
+
                     await connection.commit();
 
                     const oid = result.MOID;
@@ -435,10 +604,47 @@ module.exports = function createPaymentRouter(pool, app) {
                     connection.release();
                 }
             } else {
+                // 결제 마스터 테이블에 승인 실패 정보 반영 (한글 주석)
+                try {
+                    await pool.execute(
+                        `UPDATE TB_PAYMENT_MASTER SET 
+                            PAY_STATUS = 'FAIL',
+                            PG_TID = ?,
+                            PG_RESULT_CODE = ?,
+                            PG_RESULT_MSG = ?,
+                            COMPLETE_DT = NOW(),
+                            MOD_DT = NOW(),
+                            MOD_ID = 'SYSTEM'
+                         WHERE ORDER_NO = ?`,
+                        [
+                            result.tid || null,
+                            result.resultCode,
+                            result.resultMsg || 'PC 결제 승인 실패',
+                            result.MOID || req.body.orderNumber
+                        ]
+                    );
+                } catch (dbErr) {
+                    console.error('>>> [Payment DB Update Error (PC Approval Fail)]:', dbErr);
+                }
                 sendHtmlResponse(`결제 승인 실패: ${result.resultMsg}`, '/approval-list');
             }
         } catch (err) {
             console.error('PC Approval Critical Error:', err);
+            try {
+                await pool.execute(
+                    `UPDATE TB_PAYMENT_MASTER SET 
+                        PAY_STATUS = 'FAIL', 
+                        PG_RESULT_CODE = 'ERROR', 
+                        PG_RESULT_MSG = ?, 
+                        COMPLETE_DT = NOW(),
+                        MOD_DT = NOW(),
+                        MOD_ID = 'SYSTEM'
+                     WHERE ORDER_NO = ?`,
+                    [err.message || 'PC 결제 승인 에러', req.body.orderNumber || req.body.MOID]
+                );
+            } catch (dbErr) {
+                console.error('>>> [Payment DB Update Error (PC Exception)]:', dbErr);
+            }
             res.status(500).send('결제 승인 처리 중 오류가 발생했습니다.');
         }
     };

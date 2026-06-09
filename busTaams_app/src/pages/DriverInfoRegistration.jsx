@@ -71,7 +71,10 @@ const DriverInfoRegistration = () => {
         qualStatus: 'ACTIVE',
         qualApproveStat: '',
         careerCertApproveStat: '',
-        bankBookApproveStat: ''
+        bankBookApproveStat: '',
+        bankNm: '',
+        acctNo: '',
+        acctHold: ''
     });
 
     const [verificationSent, setVerificationSent] = useState(false);
@@ -175,7 +178,10 @@ const DriverInfoRegistration = () => {
                         qualStatus: driver?.qualStatus || 'ACTIVE',
                         qualApproveStat: driver?.qualApproveStat || '',
                         careerCertApproveStat: driver?.careerCertApproveStat || '',
-                        bankBookApproveStat: driver?.bankBookApproveStat || ''
+                        bankBookApproveStat: driver?.bankBookApproveStat || '',
+                        bankNm: driver?.bankNm || '',
+                        acctNo: driver?.acctNo || '',
+                        acctHold: driver?.acctHold || ''
                     }));
                     setOriginalPhone(user?.phone || '');
                     if (user?.phone) setIsVerified(true); // 이미 번호가 있으면 인증된 것으로 간주 (변경 시 재인증 필요)
@@ -315,6 +321,61 @@ const DriverInfoRegistration = () => {
             const compressedFile = await compressImage(file);
             setFiles(prev => ({ ...prev, [type]: compressedFile }));
             setPreviews(prev => ({ ...prev, [type]: URL.createObjectURL(compressedFile) }));
+
+            // 한글 주석: 통장 사본 업로드 시 백엔드 OCR API 호출
+            if (type === 'bankBookImg') {
+                Swal.fire({
+                    title: '통장 사본 인식 중...',
+                    text: '이미지에서 계좌 정보를 추출하고 있습니다. 잠시만 기다려 주세요.',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
+                try {
+                    const token = localStorage.getItem('accessToken');
+                    const ocrFormData = new FormData();
+                    ocrFormData.append('bankBookImg', compressedFile);
+
+                    const response = await fetch('/api/app/driver/ocr/bankbook', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: ocrFormData
+                    });
+
+                    if (!response.ok) throw new Error('OCR API 호출 실패');
+                    const resJson = await response.json();
+
+                    if (resJson.success && resJson.data) {
+                        const { bankName, accountNumber, accountHolder } = resJson.data;
+                        setFormData(prev => ({
+                            ...prev,
+                            bankNm: bankName || '',
+                            acctNo: accountNumber || '',
+                            acctHold: accountHolder || ''
+                        }));
+                        Swal.fire({
+                            icon: 'success',
+                            title: '인식 완료',
+                            text: '통장 사본 정보가 자동으로 추출되었습니다. 정보를 확인해 주세요!',
+                            confirmButtonColor: '#004e47'
+                        });
+                    } else {
+                        throw new Error(resJson.error || '분석 실패');
+                    }
+                } catch (ocrErr) {
+                    console.error('[OCR Bankbook Front] Error:', ocrErr);
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '인식 실패',
+                        text: '계좌 정보를 자동으로 추출하지 못했습니다. 수동으로 입력해 주세요.',
+                        confirmButtonColor: '#004e47'
+                    });
+                }
+            }
         }
     };
 
@@ -389,6 +450,9 @@ const DriverInfoRegistration = () => {
             data.append('qualAcquisitionDt', formData.qualAcquisitionDt);
             data.append('qualStatus', formData.qualStatus);
             data.append('marketing', JSON.stringify(marketing)); // 마케팅 알림 동의 데이터 추가
+            data.append('bankNm', formData.bankNm);
+            data.append('acctNo', formData.acctNo);
+            data.append('acctHold', formData.acctHold);
 
             if (files.profileImg) data.append('profileImg', files.profileImg);
             if (files.licenseImg) data.append('licenseImg', files.licenseImg);
@@ -841,6 +905,49 @@ const DriverInfoRegistration = () => {
                                             <p className="text-xs text-[#3e4947]">입금받으실 통장 입니다.</p>
                                         </div>
                                     </div>
+                                </div>
+
+                                {/* 한글 주석: 계좌 정보 확인 및 수동 입력 영역 추가 */}
+                                <div className="col-span-1 md:col-span-2 p-6 rounded-xl bg-teal-50/40 border border-teal-100/50 space-y-4">
+                                    <h5 className="font-headline font-bold text-[#004e47] text-sm flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-teal-800 text-lg">payments</span>
+                                        정산 계좌 정보 확인
+                                    </h5>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-bold text-[#3e4947] ml-1">은행명</label>
+                                            <input 
+                                                name="bankNm" 
+                                                value={formData.bankNm} 
+                                                onChange={handleInputChange} 
+                                                className="w-full bg-white border border-[#bec9c6]/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#004e47]/20 text-[#191c1e] placeholder:text-slate-400 font-bold" 
+                                                placeholder="예: 신한은행" 
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-bold text-[#3e4947] ml-1">계좌번호</label>
+                                            <input 
+                                                name="acctNo" 
+                                                value={formData.acctNo} 
+                                                onChange={handleInputChange} 
+                                                className="w-full bg-white border border-[#bec9c6]/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#004e47]/20 text-[#191c1e] placeholder:text-slate-400 font-bold" 
+                                                placeholder="하이픈(-) 포함 입력 가능" 
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-bold text-[#3e4947] ml-1">예금주</label>
+                                            <input 
+                                                name="acctHold" 
+                                                value={formData.acctHold} 
+                                                onChange={handleInputChange} 
+                                                className="w-full bg-white border border-[#bec9c6]/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#004e47]/20 text-[#191c1e] placeholder:text-slate-400 font-bold" 
+                                                placeholder="실명 입력" 
+                                            />
+                                        </div>
+                                    </div>
+                                    <p className="text-[10px] text-teal-700/80 font-medium">
+                                        * 통장 사본 이미지를 등록하면 위의 정보가 자동으로 입력됩니다. 정보가 올바른지 반드시 확인 후 수정해 주세요.
+                                    </p>
                                 </div>
                             </div>
                         </div>
