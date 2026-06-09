@@ -2014,19 +2014,39 @@ module.exports = (pool) => {
 
             const execId = histResult.insertId;
 
-            // 2) 비동기 지연 처리를 통해 백그라운드 구동 시뮬레이션
-            setTimeout(async () => {
-                try {
-                    // 성공 처리 완료
-                    await pool.execute(`
-                        UPDATE TB_BATCH_HIST 
-                        SET EXEC_STAT = 'SUCCESS', END_DT = NOW(), TARGET_CNT = 5, SUCC_CNT = 5, FAIL_CNT = 0
-                        WHERE EXEC_ID = ?
-                    `, [execId]);
-                } catch (e) {
-                    console.error('Manual batch background update error:', e);
-                }
-            }, 2000);
+            // 2) 비동기 지연 처리를 통해 백그라운드 구동 시뮬레이션 또는 실제 구동
+            if (jobId === 'JOB_DONE_TOUR') {
+                (async () => {
+                    try {
+                        const jobModule = require('../batch/jobs/JOB_DONE_TOUR');
+                        await jobModule.run(execId);
+                    } catch (e) {
+                        console.error('JOB_DONE_TOUR execution error:', e);
+                        try {
+                            await pool.execute(`
+                                UPDATE TB_BATCH_HIST 
+                                SET EXEC_STAT = 'FAILED', END_DT = NOW(), ERR_MSG = ?
+                                WHERE EXEC_ID = ?
+                            `, [e.message.substring(0, 255), execId]);
+                        } catch (dbErr) {
+                            console.error('Failed to write failure history:', dbErr);
+                        }
+                    }
+                })();
+            } else {
+                setTimeout(async () => {
+                    try {
+                        // 성공 처리 완료 (미구현 배치 전용 모의 시뮬레이션)
+                        await pool.execute(`
+                            UPDATE TB_BATCH_HIST 
+                            SET EXEC_STAT = 'SUCCESS', END_DT = NOW(), TARGET_CNT = 5, SUCC_CNT = 5, FAIL_CNT = 0
+                            WHERE EXEC_ID = ?
+                        `, [execId]);
+                    } catch (e) {
+                        console.error('Manual batch background update error:', e);
+                    }
+                }, 2000);
+            }
 
             res.status(200).json({ success: true, message: '배치 실행이 성공적으로 요청되었습니다.' });
         } catch (error) {
