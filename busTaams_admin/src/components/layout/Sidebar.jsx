@@ -1,13 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LayoutDashboard, Users, Bus, Settings, Compass, HeartHandshake, TrendingUp, BarChart3, UserCheck, Receipt, Newspaper, User, ChevronDown, ChevronUp } from 'lucide-react';
 
 const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(currentMenu.startsWith('settings'));
 
+  useEffect(() => {
+    if (currentMenu.startsWith('settings')) {
+      setIsSettingsOpen(true);
+    }
+  }, [currentMenu]);
+
   // 로컬스토리지에서 로그인된 관리자 정보 획득
   const adminUserStr = localStorage.getItem('adminUser');
   const adminUser = adminUserStr ? JSON.parse(adminUserStr) : null;
   const role = adminUser ? adminUser.role : 'SALES'; // fallback to SALES
+
+
 
   // 모든 메뉴 리스트 정의
   const allMenuItems = [
@@ -18,6 +26,7 @@ const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
     { id: 'reservations', label: '예약/입찰 관리', icon: <Bus size={20} /> },
     { id: 'trips',           label: '여정/입찰현황',  icon: <Compass size={20} /> },
     { id: 'settlement',      label: '여정/입찰 정산',  icon: <Receipt size={20} /> },
+    { id: 'tax-invoices',    label: '세금계산서 관리', icon: <Receipt size={20} /> },
     { id: 'my-customers', label: '나의 고객관리', icon: <HeartHandshake size={20} /> },
     { id: 'my-performance', label: '나의 실적관리', icon: <TrendingUp size={20} /> },
     { id: 'sales-performance', label: '영업사원 실적', icon: <BarChart3 size={20} /> },
@@ -73,7 +82,24 @@ const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
         />
       </div>
 
-      <nav className="flex-1 px-4 py-6 space-y-2">
+      <style>{`
+        .thin-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .thin-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .thin-scrollbar::-webkit-scrollbar-thumb {
+          background: #334155;
+          border-radius: 4px;
+        }
+        .thin-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: #334155 transparent;
+        }
+      `}</style>
+
+      <nav className="flex-1 pl-4 pr-2 py-6 space-y-2 overflow-y-auto thin-scrollbar">
         {menuItems.map((item) => {
           const isSelected = currentMenu === item.id || (item.hasSubmenu && currentMenu.startsWith(item.id));
           return (
@@ -88,7 +114,7 @@ const Sidebar = ({ currentMenu, setCurrentMenu, onBatchClick }) => {
                     setCurrentMenu(item.id);
                   }
                 }}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${
+                className={`w-full flex items-center justify-between pl-3 pr-2.5 py-3 rounded-xl transition-all ${
                   isSelected 
                     ? 'bg-emerald-500/10 text-emerald-400 font-bold' 
                     : 'hover:bg-slate-800 hover:text-white font-medium'

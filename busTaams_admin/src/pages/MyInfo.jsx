@@ -31,6 +31,8 @@ const MyInfo = () => {
     hpNo: '',
     email: '',
     role: '',
+    bankNm: '',
+    acctNo: ''
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -51,6 +53,8 @@ const MyInfo = () => {
         hpNo: formatHpNo(adminUser.hpNo || ''),
         email: adminUser.email || '',
         role: adminUser.role || 'MANAGER',
+        bankNm: adminUser.bankNm || '',
+        acctNo: adminUser.acctNo || ''
       });
     }
   }, [adminUser]);
@@ -85,6 +89,10 @@ const MyInfo = () => {
       return alert('이름은 필수 입력 사항입니다.');
     }
 
+    if (profileData.role === 'SALES' && (!profileData.bankNm || !profileData.acctNo)) {
+      return alert('영업사원은 환급 은행명과 계좌번호가 필수 입력 사항입니다.');
+    }
+
     setProfileLoading(true);
     try {
       const response = await fetch(`/api/admin/${profileData.adminId}/status`, {
@@ -95,6 +103,8 @@ const MyInfo = () => {
           deptNm: profileData.deptNm,
           hpNo: profileData.hpNo,
           email: profileData.email,
+          bankNm: profileData.role === 'SALES' ? profileData.bankNm : null,
+          acctNo: profileData.role === 'SALES' ? profileData.acctNo : null,
           modifiedBy: profileData.adminId
         }),
       });
@@ -109,6 +119,8 @@ const MyInfo = () => {
           deptNm: profileData.deptNm,
           hpNo: profileData.hpNo,
           email: profileData.email,
+          bankNm: profileData.role === 'SALES' ? profileData.bankNm : null,
+          acctNo: profileData.role === 'SALES' ? profileData.acctNo : null
         };
         localStorage.setItem('adminUser', JSON.stringify(updatedUser));
         setAdminUser(updatedUser);
@@ -216,6 +228,14 @@ const MyInfo = () => {
               <MapPin size={16} className="text-slate-400 shrink-0" />
               <span className="truncate">{profileData.deptNm || '소속 부서 미정'}</span>
             </div>
+            {profileData.role === 'SALES' && (
+              <div className="flex items-center gap-3 border-t border-slate-50 pt-3 mt-1 text-xs">
+                <div className="w-4 text-center text-slate-400 font-bold">🏦</div>
+                <div className="truncate text-slate-500 font-semibold">
+                  {profileData.bankNm ? `${profileData.bankNm} ${profileData.acctNo}` : '계좌 정보 미등록'}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -294,6 +314,66 @@ const MyInfo = () => {
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
                 />
               </div>
+
+              {/* 영업사원 전용 환급계좌정보 노출 및 편집 */}
+              {profileData.role === 'SALES' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-emerald-50/30 rounded-2xl border border-emerald-100/50 animate-fadeIn">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                      환급 은행명 <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      name="bankNm"
+                      value={profileData.bankNm}
+                      onChange={handleProfileChange}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-slate-800"
+                      required
+                    >
+                      <option value="">은행 선택</option>
+                      <option value="KB국민은행">KB국민은행</option>
+                      <option value="신한은행">신한은행</option>
+                      <option value="우리은행">우리은행</option>
+                      <option value="하나은행">하나은행</option>
+                      <option value="NH농협은행">NH농협은행</option>
+                      <option value="IBK기업은행">IBK기업은행</option>
+                      <option value="카카오뱅크">카카오뱅크</option>
+                      <option value="토스뱅크">토스뱅크</option>
+                      <option value="케이뱅크">케이뱅크</option>
+                      <option value="SC제일은행">SC제일은행</option>
+                      <option value="KDB산업은행">KDB산업은행</option>
+                      <option value="Sh수협은행">Sh수협은행</option>
+                      <option value="우체국">우체국</option>
+                      <option value="대구은행 (iM뱅크)">대구은행 (iM뱅크)</option>
+                      <option value="부산은행">부산은행</option>
+                      <option value="광주은행">광주은행</option>
+                      <option value="제주은행">제주은행</option>
+                      <option value="전북은행">전북은행</option>
+                      <option value="경남은행">경남은행</option>
+                      <option value="새마을금고">새마을금고</option>
+                      <option value="신협">신협</option>
+                      <option value="상호저축은행">상호저축은행</option>
+                      <option value="지역농·축협">지역농·축협</option>
+                      <option value="한국씨티은행">한국씨티은행</option>
+                      <option value="산림조합">산림조합</option>
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                      환급 계좌번호 <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="acctNo"
+                      value={profileData.acctNo}
+                      onChange={handleProfileChange}
+                      placeholder="- 없이 계좌번호 입력"
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-slate-800"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end pt-3">
                 <button
