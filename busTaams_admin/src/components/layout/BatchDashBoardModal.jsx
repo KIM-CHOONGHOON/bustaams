@@ -11,6 +11,8 @@ const BatchDashBoardModal = ({ isOpen, onClose }) => {
   const [isExecuting, setIsExecuting] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const [jobToEdit, setJobToEdit] = useState(null);
+
   // Sub-view states
   const [subData, setSubData] = useState([]);
   const [subLoading, setSubLoading] = useState(false);
@@ -435,7 +437,8 @@ const BatchDashBoardModal = ({ isOpen, onClose }) => {
       return (
         <BatchTaskList 
           onBack={() => setActiveView('home')} 
-          onRegister={() => setActiveView('register')} 
+          onRegister={() => { setJobToEdit(null); setActiveView('register'); }} 
+          onEditJob={(job) => { setJobToEdit(job); setActiveView('register'); }}
           onRunJob={handleRunJob}
           isExecuting={isExecuting}
         />
@@ -443,7 +446,7 @@ const BatchDashBoardModal = ({ isOpen, onClose }) => {
     }
     
     if (activeView === 'register') {
-      return <NewBatchRegistration onBack={() => setActiveView('master')} />;
+      return <NewBatchRegistration onBack={() => { setJobToEdit(null); setActiveView('master'); }} jobToEdit={jobToEdit} />;
     }
 
     return (

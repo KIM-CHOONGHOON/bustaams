@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, ChevronDown, Play, Edit, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 
-const BatchTaskList = ({ onBack, onRegister, onRunJob, isExecuting }) => {
+const BatchTaskList = ({ onBack, onRegister, onEditJob, onRunJob, isExecuting }) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -145,7 +145,11 @@ const BatchTaskList = ({ onBack, onRegister, onRunJob, isExecuting }) => {
                             <Play size={18} />
                           )}
                         </button>
-                        <button className="p-2 hover:bg-slate-200 rounded text-slate-500 transition-colors" title="수정">
+                        <button 
+                          onClick={() => onEditJob && onEditJob(task)}
+                          className="p-2 hover:bg-slate-200 rounded text-slate-500 transition-colors" 
+                          title="수정"
+                        >
                           <Edit size={18} />
                         </button>
                         <button className="p-2 hover:bg-red-50 hover:text-red-600 rounded text-slate-500 transition-colors" title="삭제">

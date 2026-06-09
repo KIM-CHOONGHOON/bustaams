@@ -2000,6 +2000,64 @@ module.exports = (pool) => {
         }
     });
 
+    // 4-1. 배치 작업 수정 API
+    router.post('/updateBatch/:jobId', async (req, res) => {
+        const { jobId } = req.params;
+        const { jobName, description, useYn, execPath, execCycle, retryPolicy, maxRetry, execTime, execMonth, execDay, execDow, calcRule, holidayRule } = req.body;
+        
+        let connection;
+        try {
+            connection = await pool.getConnection();
+            await connection.beginTransaction();
+
+            // 1) 마스터 수정
+            await connection.execute(`
+                UPDATE TB_BATCH_JOB_MST SET
+                    BATCH_JOB_NM = ?,
+                    JOB_DESC = ?,
+                    EXEC_FILE_PATH = ?,
+                    EXEC_CYCLE = ?,
+                    USE_YN = ?,
+                    RETRY_POLICY = ?,
+                    MAX_RETRY_CNT = ?,
+                    MOD_DT = NOW()
+                WHERE BATCH_JOB_ID = ?
+            `, [jobName, description || null, execPath, execCycle, useYn || 'Y', retryPolicy || 'RETRYABLE', maxRetry || 3, jobId]);
+
+            // 2) 스케줄 수정
+            const [existSched] = await connection.execute('SELECT SCHED_ID FROM TB_BATCH_SCHED WHERE BATCH_JOB_ID = ?', [jobId]);
+            if (existSched.length > 0) {
+                await connection.execute(`
+                    UPDATE TB_BATCH_SCHED SET
+                        EXEC_TIME = ?,
+                        EXEC_MONTH = ?,
+                        EXEC_DAY = ?,
+                        EXEC_DOW = ?,
+                        CALC_RULE = ?,
+                        HOLIDAY_RULE = ?,
+                        USE_YN = ?,
+                        MOD_DT = NOW()
+                    WHERE BATCH_JOB_ID = ?
+                `, [execTime, execMonth || '*', execDay || '*', execDow || '*', calcRule || 'T', holidayRule || 'RUN', useYn || 'Y', jobId]);
+            } else {
+                await connection.execute(`
+                    INSERT INTO TB_BATCH_SCHED (
+                        BATCH_JOB_ID, EXEC_TIME, EXEC_MONTH, EXEC_DAY, EXEC_DOW, CALC_RULE, holiday_rule, USE_YN, REG_DT
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                `, [jobId, execTime, execMonth || '*', execDay || '*', execDow || '*', calcRule || 'T', holidayRule || 'RUN', useYn || 'Y']);
+            }
+
+            await connection.commit();
+            res.status(200).json({ success: true, message: '배치 작업이 정상 수정되었습니다.' });
+        } catch (error) {
+            if (connection) await connection.rollback();
+            console.error('Update Batch Error:', error);
+            res.status(500).json({ error: '배치 작업 수정 중 서버 오류가 발생했습니다.' });
+        } finally {
+            if (connection) connection.release();
+        }
+    });
+
     // 5. 배치 수동 기동 API (비동기 Mock 실행 시뮬레이션)
     router.post('/batch/run/:jobId', async (req, res) => {
         try {
