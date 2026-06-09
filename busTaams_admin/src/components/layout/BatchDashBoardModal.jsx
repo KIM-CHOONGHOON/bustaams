@@ -1,49 +1,132 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Play, RefreshCw, AlertCircle, FileText, CheckCircle, Clock, Database, CalendarClock, ListChecks, History, FileSearch, RotateCcw, Bell, Lock, ChevronLeft } from 'lucide-react';
 import BatchTaskList from './BatchTaskList';
 import NewBatchRegistration from './NewBatchRegistration';
 
 const BatchDashBoardModal = ({ isOpen, onClose }) => {
-  // 현재 활성화된 뷰 상태: 'home' | 각 메뉴 ID
   const [activeView, setActiveView] = useState('home');
-
-  const [logs, setLogs] = useState([
-    { time: '2026-05-20 18:00:00', text: '[SYSTEM] Scheduler active.' },
-    { time: '2026-05-20 18:00:02', text: '[JOB_DONE_TOUR] Starting DONE status batch...' },
-    { time: '2026-05-20 18:00:05', text: '[JOB_DONE_TOUR] Success. 12 reservation items updated.' },
-  ]);
+  const [jobs, setJobs] = useState([]);
+  const [stats, setStats] = useState({ total: 0, running: 0, success: 0, fail: 0 });
+  const [logs, setLogs] = useState([]);
   const [isExecuting, setIsExecuting] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Mock batch jobs database
-  const [jobs, setJobs] = useState([
-    { id: 'JOB_DONE_TOUR', name: '여행 종료 처리 배치', cycle: 'DAILY', status: 'SUCCESS', lastRun: '2026-05-20 18:00:00' },
-    { id: 'JOB_TAX_SEND', name: '국세청 세금계산서 전송 배치', cycle: 'MONTHLY', status: 'FAILED', lastRun: '2026-05-20 09:00:00', error: 'API Timeout from NTS Server' },
-    { id: 'JOB_CARD_PAY', name: '월 정기 기사 회원 결제 배치', cycle: 'MONTHLY', status: 'SUCCESS', lastRun: '2026-05-15 10:00:00' },
-    { id: 'JOB_PUSH_ERR', name: '결제 오류 PUSH 발송 배치', cycle: 'DAILY', status: 'SUCCESS', lastRun: '2026-05-20 10:05:00' },
-  ]);
+  // Sub-view states
+  const [subData, setSubData] = useState([]);
+  const [subLoading, setSubLoading] = useState(false);
+
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    try {
+      const statsRes = await fetch('/api/admin/batch/stats');
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        setStats(statsData);
+      }
+      const listRes = await fetch('/api/admin/batch/list');
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        setJobs(listData.map(item => ({
+          id: item.jobId,
+          name: item.jobName,
+          cycle: item.execCycle,
+          status: item.lastStatus || 'SUCCESS', // Fallback to success if not run
+          lastRun: item.lastRunTime || '-',
+          error: item.lastError
+        })));
+      }
+    } catch (error) {
+      console.error('Failed to fetch batch dashboard data', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchSubViewData = async () => {
+    if (activeView === 'home' || activeView === 'master' || activeView === 'register') return;
+    setSubLoading(true);
+    try {
+      let url = '';
+      if (activeView === 'schedule') url = '/api/admin/batch/schedules';
+      else if (activeView === 'plan') url = '/api/admin/batch/plans';
+      else if (activeView === 'history') url = '/api/admin/batch/histories';
+      else if (activeView === 'detail') url = '/api/admin/batch/details';
+      else if (activeView === 'retry') url = '/api/admin/batch/retries';
+      else if (activeView === 'notification') url = '/api/admin/batch/notifications';
+      else if (activeView === 'lock') url = '/api/admin/batch/locks';
+      
+      if (url) {
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          setSubData(data);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch sub-view data', err);
+    } finally {
+      setSubLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchDashboardData();
+      setLogs([
+        { time: new Date().toISOString().replace('T', ' ').substring(0, 19), text: '[SYSTEM] Scheduler active and connected.' }
+      ]);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    fetchSubViewData();
+  }, [activeView]);
 
   if (!isOpen) return null;
 
-  const handleRunJob = (jobId) => {
+  const handleRunJob = async (jobId) => {
     setIsExecuting(jobId);
     setLogs(prev => [...prev, { time: new Date().toISOString().replace('T', ' ').substring(0, 19), text: `[${jobId}] Manual trigger requested.` }]);
     
-    setTimeout(() => {
-      setJobs(prev => prev.map(job => {
-        if (job.id === jobId) {
-          return { ...job, status: 'SUCCESS', lastRun: new Date().toISOString().replace('T', ' ').substring(0, 19), error: undefined };
-        }
-        return job;
-      }));
-      setLogs(prev => [...prev, { time: new Date().toISOString().replace('T', ' ').substring(0, 19), text: `[${jobId}] Execution finished successfully.` }]);
+    try {
+      const response = await fetch(`/api/admin/batch/run/${jobId}`, {
+        method: 'POST'
+      });
+      if (response.ok) {
+        setLogs(prev => [...prev, { time: new Date().toISOString().replace('T', ' ').substring(0, 19), text: `[${jobId}] Trigger request accepted by server.` }]);
+        
+        // Wait 2.5 seconds to query again to show updated list/stats
+        setTimeout(() => {
+          fetchDashboardData();
+          setLogs(prev => [...prev, { time: new Date().toISOString().replace('T', ' ').substring(0, 19), text: `[${jobId}] Execution logs refreshed.` }]);
+          setIsExecuting(null);
+          alert(`${jobId} 배치가 성공적으로 실행 요청되었습니다.`);
+        }, 2500);
+      } else {
+        alert('배치 실행 요청에 실패했습니다.');
+        setIsExecuting(null);
+      }
+    } catch (error) {
+      console.error(error);
+      alert('배치 실행 요청 중 통신 오류가 발생했습니다.');
       setIsExecuting(null);
-      alert(`${jobId} 배치가 성공적으로 실행 완료되었습니다.`);
-    }, 2000);
+    }
   };
 
-  const handleForceUnlock = () => {
-    setLogs(prev => [...prev, { time: new Date().toISOString().replace('T', ' ').substring(0, 19), text: '[SYSTEM] Force unlock command sent to lock manager.' }]);
-    alert('모든 배치 잠금(Lock)을 강제 해제했습니다.');
+  const handleForceUnlock = async () => {
+    try {
+      const res = await fetch('/api/admin/batch/unlock', { method: 'POST' });
+      if (res.ok) {
+        setLogs(prev => [...prev, { time: new Date().toISOString().replace('T', ' ').substring(0, 19), text: '[SYSTEM] Force unlock command executed successfully.' }]);
+        alert('모든 배치 잠금(Lock)을 강제 해제했습니다.');
+        fetchDashboardData();
+      } else {
+        alert('잠금 해제 실패');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('잠금 해제 통신 오류');
+    }
   };
 
   // ─── 배치 기본 정보 관리 메뉴 정의 ─────────────────────────
@@ -70,7 +153,283 @@ const BatchDashBoardModal = ({ isOpen, onClose }) => {
     return found ? found.label : 'BATCH JOB 모니터링';
   };
 
-  // ─── 서브 뷰 Placeholder 렌더링 ─────────────────────────
+  // ─── 서브 뷰 테이블 렌더러 ─────────────────────────
+  const renderTableContent = (viewType) => {
+    if (subLoading) {
+      return (
+        <div className="flex items-center justify-center p-12 text-slate-500 font-medium">
+          <span className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mr-2"></span>
+          데이터를 로딩 중입니다...
+        </div>
+      );
+    }
+    if (subData.length === 0) {
+      return (
+        <div className="text-center p-12 text-slate-400 font-medium italic">
+          조회된 데이터가 없습니다.
+        </div>
+      );
+    }
+
+    if (viewType === 'schedule') {
+      return (
+        <table className="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold">
+              <th className="px-6 py-3">스케줄 ID</th>
+              <th className="px-6 py-3">배치 작업명</th>
+              <th className="px-6 py-3">수행시간</th>
+              <th className="px-6 py-3">수행월/일/요일</th>
+              <th className="px-6 py-3">기준일 계산</th>
+              <th className="px-6 py-3">휴일 처리</th>
+              <th className="px-6 py-3 text-center">사용여부</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 font-medium">
+            {subData.map(item => (
+              <tr key={item.SCHED_ID} className="hover:bg-slate-50/50">
+                <td className="px-6 py-4 font-mono text-xs text-slate-600">{item.SCHED_ID}</td>
+                <td className="px-6 py-4 text-slate-800">{item.jobName || item.BATCH_JOB_ID}</td>
+                <td className="px-6 py-4 text-slate-800 font-mono text-xs">{item.EXEC_TIME}</td>
+                <td className="px-6 py-4 text-slate-500 font-mono text-xs">
+                  {item.EXEC_MONTH} / {item.EXEC_DAY} / {item.EXEC_DOW}
+                </td>
+                <td className="px-6 py-4 text-slate-600">{item.CALC_RULE}</td>
+                <td className="px-6 py-4 text-slate-600">{item.HOLIDAY_RULE}</td>
+                <td className="px-6 py-4 text-center">
+                  <span className={`px-2.5 py-0.5 rounded text-xs font-bold ${item.USE_YN === 'Y' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>
+                    {item.USE_YN === 'Y' ? '사용' : '미사용'}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+
+    if (viewType === 'plan') {
+      return (
+        <table className="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold">
+              <th className="px-6 py-3">계획 ID</th>
+              <th className="px-6 py-3">배치 작업명</th>
+              <th className="px-6 py-3">수행일자</th>
+              <th className="px-6 py-3">수행회차</th>
+              <th className="px-6 py-3">계획상태</th>
+              <th className="px-6 py-3">유형</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 font-medium">
+            {subData.map(item => (
+              <tr key={item.PLAN_ID} className="hover:bg-slate-50/50">
+                <td className="px-6 py-4 font-mono text-xs text-slate-600">{item.PLAN_ID}</td>
+                <td className="px-6 py-4 text-slate-800">{item.jobName || item.BATCH_JOB_ID}</td>
+                <td className="px-6 py-4 text-slate-800 font-mono text-xs">{item.JOB_DT ? item.JOB_DT.substring(0, 10) : ''}</td>
+                <td className="px-6 py-4 text-slate-600">{item.JOB_ROUND}회차</td>
+                <td className="px-6 py-4">
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${item.PLAN_STAT === 'SUCCESS' ? 'bg-emerald-100 text-emerald-700' : item.PLAN_STAT === 'FAILED' ? 'bg-rose-100 text-rose-700' : item.PLAN_STAT === 'RUNNING' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
+                    {item.PLAN_STAT}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-slate-600">{item.PLAN_TYPE}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+
+    if (viewType === 'history') {
+      return (
+        <table className="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold">
+              <th className="px-6 py-3">실행 ID</th>
+              <th className="px-6 py-3">배치 작업명</th>
+              <th className="px-6 py-3">수행일자/회차</th>
+              <th className="px-6 py-3">시작/종료 시각</th>
+              <th className="px-6 py-3">상태</th>
+              <th className="px-6 py-3">성공/실패/전체</th>
+              <th className="px-6 py-3">비고/오류</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 font-medium">
+            {subData.map(item => (
+              <tr key={item.EXEC_ID} className="hover:bg-slate-50/50">
+                <td className="px-6 py-4 font-mono text-xs text-slate-600">{item.EXEC_ID}</td>
+                <td className="px-6 py-4 text-slate-800">{item.jobName || item.BATCH_JOB_ID}</td>
+                <td className="px-6 py-4 text-slate-600 font-mono text-xs">
+                  {item.JOB_DT ? item.JOB_DT.substring(0, 10) : ''} ({item.JOB_ROUND}회)
+                </td>
+                <td className="px-6 py-4 text-slate-500 font-mono text-xs">
+                  시작: {item.START_DT ? item.START_DT.replace('T', ' ').substring(0, 19) : '-'}<br/>
+                  종료: {item.END_DT ? item.END_DT.replace('T', ' ').substring(0, 19) : '-'}
+                </td>
+                <td className="px-6 py-4">
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${item.EXEC_STAT === 'SUCCESS' ? 'bg-emerald-100 text-emerald-700' : item.EXEC_STAT === 'FAILED' ? 'bg-rose-100 text-rose-700' : item.EXEC_STAT === 'RUNNING' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
+                    {item.EXEC_STAT}
+                  </span>
+                </td>
+                <td className="px-6 py-4 font-mono text-xs text-slate-600">
+                  {item.SUCC_CNT} / {item.FAIL_CNT} / {item.TARGET_CNT}
+                </td>
+                <td className="px-6 py-4 text-xs max-w-xs truncate text-rose-600 font-medium" title={item.ERR_MSG}>
+                  {item.ERR_MSG || item.REQ_REASON || '-'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+
+    if (viewType === 'detail') {
+      return (
+        <table className="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold">
+              <th className="px-6 py-3">상세 ID</th>
+              <th className="px-6 py-3">실행 ID</th>
+              <th className="px-6 py-3">배치 작업명</th>
+              <th className="px-6 py-3">대상 업무 키 / 테이블</th>
+              <th className="px-6 py-3">이전 ➔ 이후 상태</th>
+              <th className="px-6 py-3 text-center">처리상태</th>
+              <th className="px-6 py-3">오류메시지</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 font-medium">
+            {subData.map(item => (
+              <tr key={item.DTL_ID} className="hover:bg-slate-50/50">
+                <td className="px-6 py-4 font-mono text-xs text-slate-600">{item.DTL_ID}</td>
+                <td className="px-6 py-4 font-mono text-xs text-slate-600">{item.EXEC_ID}</td>
+                <td className="px-6 py-4 text-slate-800">{item.jobName || item.jobId}</td>
+                <td className="px-6 py-4 font-mono text-xs">
+                  {item.TARGET_KEY} ({item.TARGET_TABLE})
+                </td>
+                <td className="px-6 py-4 font-mono text-xs text-slate-600">
+                  {item.BEFORE_STAT} ➔ {item.AFTER_STAT}
+                </td>
+                <td className="px-6 py-4 text-center">
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${item.WORK_STAT === 'SUCCESS' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                    {item.WORK_STAT}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-xs text-rose-600 font-medium" title={item.ERR_MSG}>
+                  {item.ERR_MSG || '-'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+
+    if (viewType === 'retry') {
+      return (
+        <table className="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold">
+              <th className="px-6 py-3">재실행 ID</th>
+              <th className="px-6 py-3">배치 작업명</th>
+              <th className="px-6 py-3">원본 ➔ 신규 실행 ID</th>
+              <th className="px-6 py-3">요청자 / 사유</th>
+              <th className="px-6 py-3">승인자</th>
+              <th className="px-6 py-3 text-center">상태</th>
+              <th className="px-6 py-3">요청일시</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 font-medium">
+            {subData.map(item => (
+              <tr key={item.RETRY_REQ_ID} className="hover:bg-slate-50/50">
+                <td className="px-6 py-4 font-mono text-xs text-slate-600">{item.RETRY_REQ_ID}</td>
+                <td className="px-6 py-4 text-slate-800">{item.jobName || item.jobId}</td>
+                <td className="px-6 py-4 font-mono text-xs text-slate-600">
+                  {item.ORIG_EXEC_ID} ➔ {item.NEW_EXEC_ID || '-'}
+                </td>
+                <td className="px-6 py-4">
+                  <p className="text-slate-800">{item.REQ_USR_ID}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{item.REQ_REASON}</p>
+                </td>
+                <td className="px-6 py-4 text-slate-700">{item.APPR_USR_ID || '-'}</td>
+                <td className="px-6 py-4 text-center">
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${item.APPR_STAT === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' : item.APPR_STAT === 'REJECTED' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'}`}>
+                    {item.APPR_STAT}
+                  </span>
+                </td>
+                <td className="px-6 py-4 font-mono text-xs text-slate-500">{item.REG_DT ? item.REG_DT.substring(0, 19).replace('T', ' ') : ''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+
+    if (viewType === 'notification') {
+      return (
+        <table className="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold">
+              <th className="px-6 py-3">알림 ID</th>
+              <th className="px-6 py-3">배치 작업명</th>
+              <th className="px-6 py-3">알림 유형</th>
+              <th className="px-6 py-3">알림 내용</th>
+              <th className="px-6 py-3 text-center">발송상태</th>
+              <th className="px-6 py-3">발송 오류</th>
+              <th className="px-6 py-3">발송일시</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 font-medium">
+            {subData.map(item => (
+              <tr key={item.NOTI_ID} className="hover:bg-slate-50/50">
+                <td className="px-6 py-4 font-mono text-xs text-slate-600">{item.NOTI_ID}</td>
+                <td className="px-6 py-4 text-slate-800">{item.jobName || item.jobId}</td>
+                <td className="px-6 py-4 text-slate-700">{item.NOTI_TYPE}</td>
+                <td className="px-6 py-4 text-xs text-slate-600 max-w-sm truncate" title={item.NOTI_MSG}>{item.NOTI_MSG}</td>
+                <td className="px-6 py-4 text-center">
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${item.NOTI_STAT === 'SUCCESS' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                    {item.NOTI_STAT}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-xs text-rose-600 font-medium">{item.ERR_MSG || '-'}</td>
+                <td className="px-6 py-4 font-mono text-xs text-slate-500">{item.REG_DT ? item.REG_DT.substring(0, 19).replace('T', ' ') : ''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+
+    if (viewType === 'lock') {
+      return (
+        <table className="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold">
+              <th className="px-6 py-3">잠금 키</th>
+              <th className="px-6 py-3">배치 작업명</th>
+              <th className="px-6 py-3">프로세스 ID / 서버</th>
+              <th className="px-6 py-3">획득일시</th>
+              <th className="px-6 py-3">만료일시</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 font-medium">
+            {subData.map(item => (
+              <tr key={item.LOCK_KEY} className="hover:bg-slate-50/50">
+                <td className="px-6 py-4 font-mono text-xs text-slate-600">{item.LOCK_KEY}</td>
+                <td className="px-6 py-4 text-slate-800">{item.jobName || item.BATCH_JOB_ID}</td>
+                <td className="px-6 py-4 font-mono text-xs text-slate-700">{item.PROCESS_ID}</td>
+                <td className="px-6 py-4 font-mono text-xs text-slate-500">{item.ACQUIRED_DT ? item.ACQUIRED_DT.substring(0, 19).replace('T', ' ') : ''}</td>
+                <td className="px-6 py-4 font-mono text-xs text-slate-500">{item.EXPIRED_DT ? item.EXPIRED_DT.substring(0, 19).replace('T', ' ') : ''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+  };
+
+  // ─── 서브 뷰 Placeholder 대체 렌더링 ─────────────────────────
   const renderSubView = () => {
     if (activeView === 'master') {
       return <BatchTaskList onBack={() => setActiveView('home')} onRegister={() => setActiveView('register')} />;
@@ -80,43 +439,23 @@ const BatchDashBoardModal = ({ isOpen, onClose }) => {
       return <NewBatchRegistration onBack={() => setActiveView('master')} />;
     }
 
-    const all = [...basicMenuItems, ...execMenuItems];
-    const found = all.find(m => m.id === activeView);
-    if (!found) return null;
-
     return (
       <div className="flex-1 flex flex-col p-8 overflow-y-auto space-y-6">
-        {/* 뒤로가기 */}
-        <button
-          onClick={() => setActiveView('home')}
-          className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors w-fit"
-        >
-          <ChevronLeft size={16} />
-          대시보드로 돌아가기
-        </button>
-
-        {/* 서브 뷰 헤더 */}
-        <div className="flex items-center gap-4">
-          <div className={`p-3 ${found.color} text-white rounded-xl`}>
-            {found.icon}
-          </div>
-          <div>
-            <h3 className="text-xl font-black text-slate-800">{found.label}</h3>
-            <p className="text-sm text-slate-500 font-medium">{found.desc}</p>
-          </div>
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setActiveView('home')}
+            className="px-4 py-2 bg-slate-200 text-slate-700 hover:bg-slate-350 font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5"
+          >
+            <ChevronLeft size={16} />
+            대시보드로 돌아가기
+          </button>
         </div>
-
-        {/* Placeholder 콘텐츠 */}
-        <div className="flex-1 bg-white rounded-2xl border border-slate-100 shadow-sm flex items-center justify-center min-h-[300px]">
-          <div className="text-center space-y-3">
-            <div className={`w-16 h-16 mx-auto ${found.color}/10 rounded-2xl flex items-center justify-center`}>
-              <span className="text-3xl">🚧</span>
-            </div>
-            <h4 className="text-lg font-bold text-slate-700">{found.label} 화면</h4>
-            <p className="text-sm text-slate-400 max-w-sm">
-              해당 관리 화면은 백엔드 API 개발 완료 후 연동될 예정입니다.
-            </p>
-            <p className="text-xs text-slate-300 font-mono">{found.desc}</p>
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="px-6 py-4 border-b border-slate-100">
+            <h3 className="font-bold text-slate-800">{getViewTitle()} 상세 목록</h3>
+          </div>
+          <div className="overflow-x-auto">
+            {renderTableContent(activeView)}
           </div>
         </div>
       </div>
@@ -187,31 +526,31 @@ const BatchDashBoardModal = ({ isOpen, onClose }) => {
         {/* Stat Cards */}
         <div className="grid grid-cols-4 gap-4 mb-4">
           <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-            <div className="p-3 bg-blue-50 text-blue-500 rounded-xl"><FileText size={20} /></div>
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><FileText size={20} /></div>
             <div>
               <p className="text-xs font-bold text-slate-400 uppercase">전체 배치</p>
-              <p className="text-2xl font-black text-slate-800">{jobs.length}</p>
+              <p className="text-2xl font-black text-slate-800">{stats.total}</p>
             </div>
           </div>
           <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
             <div className="p-3 bg-amber-50 text-amber-500 rounded-xl"><Clock size={20} /></div>
             <div>
               <p className="text-xs font-bold text-slate-400 uppercase">대기/실행 중</p>
-              <p className="text-2xl font-black text-slate-800">{isExecuting ? 1 : 0}</p>
+              <p className="text-2xl font-black text-slate-800">{stats.running || (isExecuting ? 1 : 0)}</p>
             </div>
           </div>
           <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
             <div className="p-3 bg-emerald-50 text-emerald-500 rounded-xl"><CheckCircle size={20} /></div>
             <div>
-              <p className="text-xs font-bold text-slate-400 uppercase">성공</p>
-              <p className="text-2xl font-black text-slate-800">{jobs.filter(j => j.status === 'SUCCESS').length}</p>
+              <p className="text-xs font-bold text-slate-400 uppercase">성공 (최근 7일)</p>
+              <p className="text-2xl font-black text-slate-800">{stats.success}</p>
             </div>
           </div>
           <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
             <div className="p-3 bg-rose-50 text-rose-500 rounded-xl"><AlertCircle size={20} /></div>
             <div>
-              <p className="text-xs font-bold text-slate-400 uppercase">실패</p>
-              <p className="text-2xl font-black text-slate-800">{jobs.filter(j => j.status === 'FAILED').length}</p>
+              <p className="text-xs font-bold text-slate-400 uppercase">실패 (최근 7일)</p>
+              <p className="text-2xl font-black text-slate-800">{stats.fail}</p>
             </div>
           </div>
         </div>
@@ -232,64 +571,74 @@ const BatchDashBoardModal = ({ isOpen, onClose }) => {
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold">
-                <th className="px-6 py-3">배치 작업 ID</th>
-                <th className="px-6 py-3">배치 작업명</th>
-                <th className="px-6 py-3">주기</th>
-                <th className="px-6 py-3">최종 실행시각</th>
-                <th className="px-6 py-3">상태</th>
-                <th className="px-6 py-3 text-right">제어</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-medium">
-              {jobs.map((job) => (
-                <tr key={job.id} className="hover:bg-slate-50/50">
-                  <td className="px-6 py-4 font-mono text-xs text-slate-600">{job.id}</td>
-                  <td className="px-6 py-4 text-slate-800">{job.name}</td>
-                  <td className="px-6 py-4">
-                    <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs font-semibold">{job.cycle}</span>
-                  </td>
-                  <td className="px-6 py-4 text-slate-500 font-mono text-xs">{job.lastRun}</td>
-                  <td className="px-6 py-4">
-                    {job.status === 'SUCCESS' ? (
-                      <span className="px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-bold flex items-center gap-1 w-fit">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>성공
-                      </span>
-                    ) : (
-                      <span className="px-2.5 py-1 bg-rose-50 text-rose-600 rounded-full text-xs font-bold flex items-center gap-1 w-fit cursor-help" title={job.error}>
-                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>실패
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => handleRunJob(job.id)}
-                      disabled={isExecuting !== null}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1 ${
-                        isExecuting === job.id
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-emerald-500 text-white hover:bg-emerald-600 hover:shadow-md'
-                      }`}
-                    >
-                      {isExecuting === job.id ? (
-                        <>
-                          <span className="w-3 h-3 border-2 border-amber-700 border-t-transparent rounded-full animate-spin"></span>
-                          실행 중
-                        </>
-                      ) : (
-                        <>
-                          <Play size={12} fill="white" />
-                          수동 구동
-                        </>
-                      )}
-                    </button>
-                  </td>
+          {loading ? (
+            <div className="text-center py-10 text-slate-400 font-medium">데이터 조회 중...</div>
+          ) : jobs.length === 0 ? (
+            <div className="text-center py-10 text-slate-400 font-medium">등록된 배치 작업이 없습니다.</div>
+          ) : (
+            <table className="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold">
+                  <th className="px-6 py-3">배치 작업 ID</th>
+                  <th className="px-6 py-3">배치 작업명</th>
+                  <th className="px-6 py-3">주기</th>
+                  <th className="px-6 py-3">최종 실행시각</th>
+                  <th className="px-6 py-3">상태</th>
+                  <th className="px-6 py-3 text-right">제어</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium">
+                {jobs.map((job) => (
+                  <tr key={job.id} className="hover:bg-slate-50/50">
+                    <td className="px-6 py-4 font-mono text-xs text-slate-600">{job.id}</td>
+                    <td className="px-6 py-4 text-slate-800">{job.name}</td>
+                    <td className="px-6 py-4">
+                      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs font-semibold">{job.cycle}</span>
+                    </td>
+                    <td className="px-6 py-4 text-slate-500 font-mono text-xs">{job.lastRun}</td>
+                    <td className="px-6 py-4">
+                      {job.status === 'SUCCESS' ? (
+                        <span className="px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-bold flex items-center gap-1 w-fit">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>성공
+                        </span>
+                      ) : job.status === 'RUNNING' ? (
+                        <span className="px-2.5 py-1 bg-amber-50 text-amber-600 rounded-full text-xs font-bold flex items-center gap-1 w-fit">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>실행 중
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-1 bg-rose-50 text-rose-600 rounded-full text-xs font-bold flex items-center gap-1 w-fit cursor-help" title={job.error}>
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>실패
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        onClick={() => handleRunJob(job.id)}
+                        disabled={isExecuting !== null}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1 ${
+                          isExecuting === job.id
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-emerald-500 text-white hover:bg-emerald-600 hover:shadow-md'
+                        }`}
+                      >
+                        {isExecuting === job.id ? (
+                          <>
+                            <span className="w-3 h-3 border-2 border-amber-700 border-t-transparent rounded-full animate-spin"></span>
+                            실행 중
+                          </>
+                        ) : (
+                          <>
+                            <Play size={12} fill="white" />
+                            수동 구동
+                          </>
+                        )}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
