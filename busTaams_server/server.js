@@ -5250,6 +5250,8 @@ app.get('/api/admin/batch/list', async (req, res) => {
     }
 });
 
+const { startScheduler } = require('./batch/scheduler');
+
 app.listen(PORT, () => {
     console.log(`🚀 busTaams REST API Server is running beautifully on http://localhost:${PORT}`);
 });
@@ -5265,10 +5267,14 @@ app.listen(PORT, () => {
         console.log('📡 [1/1] 데이터베이스 연결 시도 중...');
         connection = await pool.getConnection();
         console.log('✅ [1/1] DB 연결 성공!');
+        
+        // Start the Batch Scheduler Daemon
+        startScheduler();
     } catch (e) {
         console.error('⚠️ DB 연결 확인 실패:', e.message);
     } finally {
         if (connection) connection.release();
     }
 })();
+
 

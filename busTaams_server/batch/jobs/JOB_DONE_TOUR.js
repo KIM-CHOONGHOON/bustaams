@@ -64,11 +64,11 @@ async function runBatch(customExecId = null) {
 
         await conn.beginTransaction();
 
-        // 3. Find Tour Completed targets (CONFIRM status && END_DT <= today)
+        // 3. Find Tour Completed targets (CONFIRM status && END_DT < today)
         const [targets] = await conn.execute(`
             SELECT REQ_ID, TRIP_TITLE, DATA_STAT, END_DT 
             FROM TB_AUCTION_REQ 
-            WHERE DATA_STAT = 'CONFIRM' AND DATE(END_DT) <= CURDATE()
+            WHERE DATA_STAT = 'CONFIRM' AND DATE(END_DT) < CURDATE()
         `);
 
         console.log(`[${jobId}] Found ${targets.length} targets to transition to DONE.`);
