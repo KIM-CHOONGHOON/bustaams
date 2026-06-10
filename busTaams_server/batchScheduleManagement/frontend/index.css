@@ -1,0 +1,38 @@
+body { background: #0a0a1a; color: #fff; font-family: 'Inter', sans-serif; margin: 0; }
+
+/* Glassmorphism card */
+.glass-card {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* Basic button styling (override Tailwind classes if not using Tailwind) */
+button {
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+/* Input fields */
+input, select {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid #0ff;
+  color: #fff;
+  border-radius: 0.5rem;
+  padding: 0.3rem 0.5rem;
+}
+
+/* Hover effects */
+button:hover {
+  opacity: 0.9;
+}
+
+/* Layout adjustments */
+#batchScheduleManagementRoot {
+  background: #0a0a1a;
+  min-height: 100vh;
+}

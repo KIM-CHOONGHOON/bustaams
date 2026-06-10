@@ -34,6 +34,7 @@ const {
 } = require('./lib/feePolicyDtl');
 const fs = require('fs');
 const createCommonLiveChatRouter = require('./routes/commonLiveChat');
+const batchScheduleManagementRouter = require('./batchScheduleManagement/router/batchScheduleManagementRouter');
 const createLiveChatTravelerRouter = require('./routes/liveChatTraveler');
 const createUserDeviceTokenRouter = require('./routes/userDeviceToken');
 const { 
@@ -177,6 +178,7 @@ app.use('/api/traveler-quote-request-details', auctionTripRouter);
 // 4-1. Admin Router 설정
 const adminRouter = require('./routes/appAdmin')(pool);
 app.use('/api/admin', adminRouter);
+app.use('/api/batchScheduleManagement', batchScheduleManagementRouter);
 
 // 4-2. Common Router 설정 (이미지 표시용 display-image API 포함)
 const commonRouter = require('./routes/common');
