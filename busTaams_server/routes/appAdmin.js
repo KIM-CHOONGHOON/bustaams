@@ -2109,6 +2109,24 @@ module.exports = (pool) => {
                         }
                     }
                 })();
+            } else if (jobId === 'JOB_PARTNER_DAILY_01') {
+                (async () => {
+                    try {
+                        const jobModule = require('../batch/jobs/JOB_PARTNER_DAILY_01');
+                        await jobModule.run(execId);
+                    } catch (e) {
+                        console.error('JOB_PARTNER_DAILY_01 execution error:', e);
+                        try {
+                            await pool.execute(`
+                                UPDATE TB_BATCH_HIST 
+                                SET EXEC_STAT = 'FAILED', END_DT = NOW(), ERR_MSG = ?
+                                WHERE EXEC_ID = ?
+                            `, [e.message.substring(0, 255), execId]);
+                        } catch (dbErr) {
+                            console.error('Failed to write failure history:', dbErr);
+                        }
+                    }
+                })();
             } else {
                 setTimeout(async () => {
                     try {
