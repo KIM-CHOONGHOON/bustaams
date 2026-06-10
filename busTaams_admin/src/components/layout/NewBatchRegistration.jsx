@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronRight, Info, PlayCircle, Gavel, Save, FolderOpen } from 'lucide-react';
 
-const NewBatchRegistration = ({ onBack }) => {
+const NewBatchRegistration = ({ onBack, jobToEdit }) => {
   const [formData, setFormData] = useState({
     jobId: '',
     jobName: '',
@@ -20,8 +20,32 @@ const NewBatchRegistration = ({ onBack }) => {
     holidayRule: 'RUN',
   });
 
-  // Fetch the next Batch ID when cycle or businessType changes
+  // Populate form if editing
   useEffect(() => {
+    if (jobToEdit) {
+      setFormData({
+        jobId: jobToEdit.jobId || '',
+        jobName: jobToEdit.jobName || '',
+        description: jobToEdit.description || '',
+        useYn: jobToEdit.useYn || 'Y',
+        execPath: jobToEdit.execPath || '',
+        execCycle: jobToEdit.execCycle || 'DAILY',
+        businessType: jobToEdit.jobId ? (jobToEdit.jobId.split('_')[1] || 'PARTNER') : 'PARTNER',
+        retryPolicy: jobToEdit.retryPolicy || 'RETRYABLE',
+        maxRetry: jobToEdit.maxRetry != null ? jobToEdit.maxRetry : 3,
+        execTime: jobToEdit.execTime || '00:00:00',
+        execMonth: jobToEdit.execMonth || '*',
+        execDay: jobToEdit.execDay || '*',
+        execDow: jobToEdit.execDow || '*',
+        calcRule: jobToEdit.calcRule || 'T',
+        holidayRule: jobToEdit.holidayRule || 'RUN',
+      });
+    }
+  }, [jobToEdit]);
+
+  // Fetch the next Batch ID when cycle or businessType changes (only during registration)
+  useEffect(() => {
+    if (jobToEdit) return;
     const fetchNextId = async () => {
       try {
         const res = await fetch(`/api/admin/nextBatchId?cycle=${formData.execCycle}&businessType=${formData.businessType}`);
@@ -40,12 +64,16 @@ const NewBatchRegistration = ({ onBack }) => {
       }
     };
     fetchNextId();
-  }, [formData.execCycle, formData.businessType]);
+  }, [formData.execCycle, formData.businessType, jobToEdit]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch('/api/admin/newBatchRegistration', {
+      const url = jobToEdit 
+        ? `/api/admin/updateBatch/${formData.jobId}`
+        : '/api/admin/newBatchRegistration';
+
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -54,10 +82,10 @@ const NewBatchRegistration = ({ onBack }) => {
       });
       const result = await response.json();
       if (response.ok) {
-        alert('배치 작업이 성공적으로 등록되었습니다.');
+        alert(jobToEdit ? '배치 작업이 성공적으로 수정되었습니다.' : '배치 작업이 성공적으로 등록되었습니다.');
         onBack();
       } else {
-        alert(`배치 작업 등록 실패:\n${result.message || '알 수 없는 오류가 발생했습니다.'}`);
+        alert(`배치 작업 처리 실패:\n${result.message || '알 수 없는 오류가 발생했습니다.'}`);
       }
     } catch (error) {
       console.error(error);
@@ -79,10 +107,12 @@ const NewBatchRegistration = ({ onBack }) => {
             <ChevronRight size={16} />
             <span className="text-sm text-blue-800 font-semibold cursor-pointer" onClick={onBack}>작업 목록</span>
             <ChevronRight size={16} />
-            <span className="text-sm text-blue-800 font-semibold">작업 등록</span>
+            <span className="text-sm text-blue-800 font-semibold">{jobToEdit ? '작업 수정' : '작업 등록'}</span>
           </div>
-          <h2 className="text-3xl font-bold text-slate-900">배치작업 등록</h2>
-          <p className="text-base text-slate-500 mt-1">시스템에서 실행될 새로운 자동화 배치 작업을 구성하고 등록합니다.</p>
+          <h2 className="text-3xl font-bold text-slate-900">{jobToEdit ? '배치작업 수정' : '배치작업 등록'}</h2>
+          <p className="text-base text-slate-500 mt-1">
+            {jobToEdit ? '선택한 배치 작업의 설정과 스케줄 정보를 수정합니다.' : '시스템에서 실행될 새로운 자동화 배치 작업을 구성하고 등록합니다.'}
+          </p>
         </div>
 
         {/* Registration Form */}
@@ -345,7 +375,7 @@ const NewBatchRegistration = ({ onBack }) => {
               className="px-10 py-2.5 rounded-lg bg-blue-800 text-white font-bold text-sm shadow-md hover:bg-blue-900 transition-all active:scale-95 flex items-center gap-2"
             >
               <Save size={18} />
-              배치 등록
+              {jobToEdit ? '배치 수정' : '배치 등록'}
             </button>
           </div>
         </form>

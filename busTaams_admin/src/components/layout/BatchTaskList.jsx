@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, ChevronDown, Play, Edit, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 
-const BatchTaskList = ({ onBack, onRegister }) => {
+const BatchTaskList = ({ onBack, onRegister, onEditJob, onRunJob, isExecuting }) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -133,10 +133,23 @@ const BatchTaskList = ({ onBack, onRegister }) => {
                     </td>
                     <td className="px-6 py-5 text-right">
                       <div className="flex justify-end gap-1 opacity-40 group-hover:opacity-100 transition-opacity">
-                        <button className="p-2 hover:bg-slate-200 rounded text-slate-500 transition-colors" title="실행">
-                          <Play size={18} />
+                        <button 
+                          onClick={() => onRunJob && onRunJob(task.jobId)}
+                          disabled={isExecuting !== null}
+                          className={`p-2 rounded transition-colors ${isExecuting === task.jobId ? 'bg-amber-100 text-amber-700' : 'hover:bg-slate-200 text-slate-500'}`}
+                          title="실행"
+                        >
+                          {isExecuting === task.jobId ? (
+                            <span className="w-4 h-4 border-2 border-amber-700 border-t-transparent rounded-full animate-spin inline-block"></span>
+                          ) : (
+                            <Play size={18} />
+                          )}
                         </button>
-                        <button className="p-2 hover:bg-slate-200 rounded text-slate-500 transition-colors" title="수정">
+                        <button 
+                          onClick={() => onEditJob && onEditJob(task)}
+                          className="p-2 hover:bg-slate-200 rounded text-slate-500 transition-colors" 
+                          title="수정"
+                        >
                           <Edit size={18} />
                         </button>
                         <button className="p-2 hover:bg-red-50 hover:text-red-600 rounded text-slate-500 transition-colors" title="삭제">
@@ -152,13 +165,13 @@ const BatchTaskList = ({ onBack, onRegister }) => {
         </div>
         {/* Pagination */}
         <div className="px-6 py-4 flex items-center justify-between bg-white border-t border-slate-200">
-          <p className="text-sm text-slate-500">총 3개의 작업 중 1-3 표시</p>
+          <p className="text-sm text-slate-500">총 {tasks.length}개의 작업 중 1-{tasks.length} 표시</p>
           <div className="flex items-center gap-2">
             <button className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 disabled:opacity-30" disabled>
               <ChevronLeft size={18} />
             </button>
             <button className="w-8 h-8 rounded-lg bg-blue-800 text-white text-xs font-bold flex items-center justify-center">1</button>
-            <button className="p-2 rounded-lg hover:bg-slate-100 text-slate-400">
+            <button className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 disabled:opacity-30" disabled>
               <ChevronRight size={18} />
             </button>
           </div>
@@ -168,24 +181,28 @@ const BatchTaskList = ({ onBack, onRegister }) => {
       {/* Footer Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8 shrink-0 pb-8">
         <div className="bg-white/80 backdrop-blur-md p-5 rounded-xl border border-slate-200 border-l-4 border-l-emerald-500 shadow-sm">
-          <p className="text-xs font-bold text-slate-500 mb-1">정상 작동 중</p>
+          <p className="text-xs font-bold text-slate-500 mb-1">정상 작동 중 (사용중)</p>
           <div className="flex items-end gap-2">
-            <span className="text-3xl font-bold text-slate-800">2</span>
-            <span className="text-sm text-emerald-700 mb-1">성공률 100%</span>
+            <span className="text-3xl font-bold text-slate-800">
+              {tasks.filter(t => t.useYn === 'Y').length}
+            </span>
+            <span className="text-sm text-emerald-700 mb-1">사용 설정된 배치</span>
           </div>
         </div>
         <div className="bg-white/80 backdrop-blur-md p-5 rounded-xl border border-slate-200 border-l-4 border-l-blue-800 shadow-sm">
-          <p className="text-xs font-bold text-slate-500 mb-1">예약된 작업</p>
+          <p className="text-xs font-bold text-slate-500 mb-1">총 등록된 배치 작업</p>
           <div className="flex items-end gap-2">
-            <span className="text-3xl font-bold text-slate-800">12</span>
-            <span className="text-sm text-blue-800 mb-1">다음 24시간 이내</span>
+            <span className="text-3xl font-bold text-slate-800">{tasks.length}</span>
+            <span className="text-sm text-blue-800 mb-1">건 등록됨</span>
           </div>
         </div>
         <div className="bg-white/80 backdrop-blur-md p-5 rounded-xl border border-slate-200 border-l-4 border-l-red-600 shadow-sm">
-          <p className="text-xs font-bold text-slate-500 mb-1">실패 알림</p>
+          <p className="text-xs font-bold text-slate-500 mb-1">최근 실패한 작업</p>
           <div className="flex items-end gap-2">
-            <span className="text-3xl font-bold text-red-600">0</span>
-            <span className="text-sm text-slate-400 mb-1">최근 7일간</span>
+            <span className="text-3xl font-bold text-red-600">
+              {tasks.filter(t => t.lastStatus === 'FAILED').length}
+            </span>
+            <span className="text-sm text-slate-400 mb-1">건 실패 상태</span>
           </div>
         </div>
       </div>

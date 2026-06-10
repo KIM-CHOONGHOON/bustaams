@@ -1877,6 +1877,386 @@ module.exports = (pool) => {
         }
     });
 
+    // ==========================================
+    // ⚙️ BATCH JOB MONITORING APIs
+    // ==========================================
+
+    // 1. 배치 대시보드 통계 API
+    router.get('/batch/stats', async (req, res) => {
+        try {
+            // 전체 배치 수
+            const [totalRows] = await pool.execute('SELECT COUNT(*) as cnt FROM TB_BATCH_JOB_MST');
+            const total = totalRows[0]?.cnt || 0;
+
+            // 대기/실행 중 배치 수
+            const [runningRows] = await pool.execute("SELECT COUNT(*) as cnt FROM TB_BATCH_HIST WHERE EXEC_STAT = 'RUNNING'");
+            const running = runningRows[0]?.cnt || 0;
+
+            // 최근 7일 내 성공 및 실패 수
+            const [succRows] = await pool.execute("SELECT COUNT(*) as cnt FROM TB_BATCH_HIST WHERE EXEC_STAT = 'SUCCESS' AND REG_DT >= DATE_SUB(NOW(), INTERVAL 7 DAY)");
+            const success = succRows[0]?.cnt || 0;
+
+            const [failRows] = await pool.execute("SELECT COUNT(*) as cnt FROM TB_BATCH_HIST WHERE EXEC_STAT = 'FAILED' AND REG_DT >= DATE_SUB(NOW(), INTERVAL 7 DAY)");
+            const fail = failRows[0]?.cnt || 0;
+
+            res.status(200).json({ total, running, success, fail });
+        } catch (error) {
+            console.error('Batch Stats API Error:', error);
+            res.status(200).json({ total: 0, running: 0, success: 0, fail: 0 });
+        }
+    });
+
+    // 2. 배치 작업 목록 조회 API
+    router.get('/batch/list', async (req, res) => {
+        try {
+            const query = `
+                SELECT 
+                    m.BATCH_JOB_ID as jobId,
+                    m.BATCH_JOB_NM as jobName,
+                    m.JOB_DESC as description,
+                    m.EXEC_FILE_PATH as execPath,
+                    m.EXEC_CYCLE as execCycle,
+                    m.USE_YN as useYn,
+                    m.RETRY_POLICY as retryPolicy,
+                    m.MAX_RETRY_CNT as maxRetry,
+                    s.EXEC_TIME as execTime,
+                    s.EXEC_MONTH as execMonth,
+                    s.EXEC_DAY as execDay,
+                    s.EXEC_DOW as execDow,
+                    s.CALC_RULE as calcRule,
+                    s.HOLIDAY_RULE as holidayRule,
+                    h.EXEC_STAT as lastStatus,
+                    DATE_FORMAT(h.END_DT, '%Y-%m-%d %H:%i:%s') as lastRunTime,
+                    h.ERR_MSG as lastError
+                FROM TB_BATCH_JOB_MST m
+                LEFT JOIN TB_BATCH_SCHED s ON m.BATCH_JOB_ID = s.BATCH_JOB_ID
+                LEFT JOIN (
+                    SELECT h1.* FROM TB_BATCH_HIST h1
+                    INNER JOIN (
+                        SELECT BATCH_JOB_ID, MAX(EXEC_ID) as max_id 
+                        FROM TB_BATCH_HIST 
+                        GROUP BY BATCH_JOB_ID
+                    ) h2 ON h1.EXEC_ID = h2.max_id
+                ) h ON m.BATCH_JOB_ID = h.BATCH_JOB_ID
+                ORDER BY m.REG_DT DESC
+            `;
+            const [rows] = await pool.execute(query);
+            res.status(200).json(rows);
+        } catch (error) {
+            console.error('Batch List API Error:', error);
+            res.status(500).json({ error: '배치 작업 목록 조회 실패' });
+        }
+    });
+
+    // 3. 차기 신규 배치 ID 생성 API
+    router.get('/nextBatchId', async (req, res) => {
+        try {
+            const { cycle, businessType } = req.query;
+            const prefix = `JOB_${businessType || 'PARTNER'}_${cycle || 'DAILY'}`;
+            const [rows] = await pool.execute(
+                `SELECT COUNT(*) as cnt FROM TB_BATCH_JOB_MST WHERE BATCH_JOB_ID LIKE ?`,
+                [`${prefix}%`]
+            );
+            const count = (rows[0]?.cnt || 0) + 1;
+            const nextId = `${prefix}_${String(count).padStart(2, '0')}`;
+            res.status(200).json({ nextId });
+        } catch (error) {
+            console.error('Next Batch ID API Error:', error);
+            res.status(500).json({ error: '차기 배치 ID 계산 실패' });
+        }
+    });
+
+    // 4. 신규 배치 작업 등록 API
+    router.post('/newBatchRegistration', async (req, res) => {
+        const { jobId, jobName, description, useYn, execPath, execCycle, retryPolicy, maxRetry, execTime, execMonth, execDay, execDow, calcRule, holidayRule } = req.body;
+        
+        let connection;
+        try {
+            connection = await pool.getConnection();
+            await connection.beginTransaction();
+
+            // 1) 마스터 저장
+            await connection.execute(`
+                INSERT INTO TB_BATCH_JOB_MST (
+                    BATCH_JOB_ID, BATCH_JOB_NM, JOB_DESC, EXEC_FILE_PATH, EXEC_CYCLE, USE_YN, RETRY_POLICY, MAX_RETRY_CNT
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `, [jobId, jobName, description || null, execPath, execCycle, useYn || 'Y', retryPolicy || 'RETRYABLE', maxRetry || 3]);
+
+            // 2) 스케줄 저장
+            await connection.execute(`
+                INSERT INTO TB_BATCH_SCHED (
+                    BATCH_JOB_ID, EXEC_TIME, EXEC_MONTH, EXEC_DAY, EXEC_DOW, CALC_RULE, holiday_rule, USE_YN
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `, [jobId, execTime, execMonth || '*', execDay || '*', execDow || '*', calcRule || 'T', holidayRule || 'RUN', useYn || 'Y']);
+
+            await connection.commit();
+            res.status(200).json({ success: true, message: '배치 작업이 정상 등록되었습니다.' });
+        } catch (error) {
+            if (connection) await connection.rollback();
+            console.error('New Batch Registration Error:', error);
+            res.status(500).json({ error: '배치 작업 등록 중 서버 오류가 발생했습니다.' });
+        } finally {
+            if (connection) connection.release();
+        }
+    });
+
+    // 4-1. 배치 작업 수정 API
+    router.post('/updateBatch/:jobId', async (req, res) => {
+        const { jobId } = req.params;
+        const { jobName, description, useYn, execPath, execCycle, retryPolicy, maxRetry, execTime, execMonth, execDay, execDow, calcRule, holidayRule } = req.body;
+        
+        let connection;
+        try {
+            connection = await pool.getConnection();
+            await connection.beginTransaction();
+
+            // 1) 마스터 수정
+            await connection.execute(`
+                UPDATE TB_BATCH_JOB_MST SET
+                    BATCH_JOB_NM = ?,
+                    JOB_DESC = ?,
+                    EXEC_FILE_PATH = ?,
+                    EXEC_CYCLE = ?,
+                    USE_YN = ?,
+                    RETRY_POLICY = ?,
+                    MAX_RETRY_CNT = ?,
+                    MOD_DT = NOW()
+                WHERE BATCH_JOB_ID = ?
+            `, [jobName, description || null, execPath, execCycle, useYn || 'Y', retryPolicy || 'RETRYABLE', maxRetry || 3, jobId]);
+
+            // 2) 스케줄 수정
+            const [existSched] = await connection.execute('SELECT SCHED_ID FROM TB_BATCH_SCHED WHERE BATCH_JOB_ID = ?', [jobId]);
+            if (existSched.length > 0) {
+                await connection.execute(`
+                    UPDATE TB_BATCH_SCHED SET
+                        EXEC_TIME = ?,
+                        EXEC_MONTH = ?,
+                        EXEC_DAY = ?,
+                        EXEC_DOW = ?,
+                        CALC_RULE = ?,
+                        HOLIDAY_RULE = ?,
+                        USE_YN = ?,
+                        MOD_DT = NOW()
+                    WHERE BATCH_JOB_ID = ?
+                `, [execTime, execMonth || '*', execDay || '*', execDow || '*', calcRule || 'T', holidayRule || 'RUN', useYn || 'Y', jobId]);
+            } else {
+                await connection.execute(`
+                    INSERT INTO TB_BATCH_SCHED (
+                        BATCH_JOB_ID, EXEC_TIME, EXEC_MONTH, EXEC_DAY, EXEC_DOW, CALC_RULE, holiday_rule, USE_YN, REG_DT
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                `, [jobId, execTime, execMonth || '*', execDay || '*', execDow || '*', calcRule || 'T', holidayRule || 'RUN', useYn || 'Y']);
+            }
+
+            await connection.commit();
+            res.status(200).json({ success: true, message: '배치 작업이 정상 수정되었습니다.' });
+        } catch (error) {
+            if (connection) await connection.rollback();
+            console.error('Update Batch Error:', error);
+            res.status(500).json({ error: '배치 작업 수정 중 서버 오류가 발생했습니다.' });
+        } finally {
+            if (connection) connection.release();
+        }
+    });
+
+    // 5. 배치 수동 기동 API (비동기 Mock 실행 시뮬레이션)
+    router.post('/batch/run/:jobId', async (req, res) => {
+        try {
+            const { jobId } = req.params;
+            
+            // 1) 현재 실행 상태 기록 (RUNNING)
+            const [histResult] = await pool.execute(`
+                INSERT INTO TB_BATCH_HIST (
+                    BATCH_JOB_ID, JOB_DT, JOB_ROUND, EXEC_STAT, START_DT, DRY_RUN_YN, REQ_USR_ID, REQ_REASON
+                ) VALUES (?, CURDATE(), IFNULL((SELECT MAX(h.JOB_ROUND) + 1 FROM TB_BATCH_HIST h WHERE h.BATCH_JOB_ID = ? AND h.JOB_DT = CURDATE()), 1), 'RUNNING', NOW(), 'N', 'ADMIN', 'Manual Execution via Dashboard')
+            `, [jobId, jobId]);
+
+            const execId = histResult.insertId;
+
+            // 2) 비동기 지연 처리를 통해 백그라운드 구동 시뮬레이션 또는 실제 구동
+            if (jobId === 'JOB_DONE_TOUR') {
+                (async () => {
+                    try {
+                        const jobModule = require('../batch/jobs/JOB_DONE_TOUR');
+                        await jobModule.run(execId);
+                    } catch (e) {
+                        console.error('JOB_DONE_TOUR execution error:', e);
+                        try {
+                            await pool.execute(`
+                                UPDATE TB_BATCH_HIST 
+                                SET EXEC_STAT = 'FAILED', END_DT = NOW(), ERR_MSG = ?
+                                WHERE EXEC_ID = ?
+                            `, [e.message.substring(0, 255), execId]);
+                        } catch (dbErr) {
+                            console.error('Failed to write failure history:', dbErr);
+                        }
+                    }
+                })();
+            } else if (jobId === 'JOB_MOM_RESET') {
+                (async () => {
+                    try {
+                        const jobModule = require('../batch/jobs/JOB_MOM_RESET');
+                        await jobModule.run(execId);
+                    } catch (e) {
+                        console.error('JOB_MOM_RESET execution error:', e);
+                        try {
+                            await pool.execute(`
+                                UPDATE TB_BATCH_HIST 
+                                SET EXEC_STAT = 'FAILED', END_DT = NOW(), ERR_MSG = ?
+                                WHERE EXEC_ID = ?
+                            `, [e.message.substring(0, 255), execId]);
+                        } catch (dbErr) {
+                            console.error('Failed to write failure history:', dbErr);
+                        }
+                    }
+                })();
+            } else {
+                setTimeout(async () => {
+                    try {
+                        // 성공 처리 완료 (미구현 배치 전용 모의 시뮬레이션)
+                        await pool.execute(`
+                            UPDATE TB_BATCH_HIST 
+                            SET EXEC_STAT = 'SUCCESS', END_DT = NOW(), TARGET_CNT = 5, SUCC_CNT = 5, FAIL_CNT = 0
+                            WHERE EXEC_ID = ?
+                        `, [execId]);
+                    } catch (e) {
+                        console.error('Manual batch background update error:', e);
+                    }
+                }, 2000);
+            }
+
+            res.status(200).json({ success: true, message: '배치 실행이 성공적으로 요청되었습니다.' });
+        } catch (error) {
+            console.error('Run Batch API Error:', error);
+            res.status(500).json({ error: '배치 실행 요청 처리 실패' });
+        }
+    });
+
+    // 6. 배치 강제 락 해제 API
+    router.post('/batch/unlock', async (req, res) => {
+        try {
+            await pool.execute('DELETE FROM TB_BATCH_LOCK');
+            res.status(200).json({ success: true, message: '모든 배치의 잠금이 해제되었습니다.' });
+        } catch (error) {
+            console.error('Force Unlock API Error:', error);
+            res.status(500).json({ error: '잠금 강제 해제 실패' });
+        }
+    });
+
+    // 7. 배치 스케줄 목록 조회 API
+    router.get('/batch/schedules', async (req, res) => {
+        try {
+            const [rows] = await pool.execute(`
+                SELECT s.*, m.BATCH_JOB_NM as jobName 
+                FROM TB_BATCH_SCHED s
+                LEFT JOIN TB_BATCH_JOB_MST m ON s.BATCH_JOB_ID = m.BATCH_JOB_ID
+                ORDER BY s.SCHED_ID DESC
+            `);
+            res.status(200).json(rows);
+        } catch (error) {
+            console.error('Get Schedules Error:', error);
+            res.status(500).json([]);
+        }
+    });
+
+    // 8. 배치 수행 계획 목록 조회 API
+    router.get('/batch/plans', async (req, res) => {
+        try {
+            const [rows] = await pool.execute(`
+                SELECT p.*, m.BATCH_JOB_NM as jobName 
+                FROM TB_BATCH_PLAN p
+                LEFT JOIN TB_BATCH_JOB_MST m ON p.BATCH_JOB_ID = m.BATCH_JOB_ID
+                ORDER BY p.PLAN_ID DESC
+            `);
+            res.status(200).json(rows);
+        } catch (error) {
+            console.error('Get Plans Error:', error);
+            res.status(500).json([]);
+        }
+    });
+
+    // 9. 배치 실행 결과 이력 조회 API
+    router.get('/batch/histories', async (req, res) => {
+        try {
+            const [rows] = await pool.execute(`
+                SELECT h.*, m.BATCH_JOB_NM as jobName 
+                FROM TB_BATCH_HIST h
+                LEFT JOIN TB_BATCH_JOB_MST m ON h.BATCH_JOB_ID = m.BATCH_JOB_ID
+                ORDER BY h.EXEC_ID DESC
+            `);
+            res.status(200).json(rows);
+        } catch (error) {
+            console.error('Get Histories Error:', error);
+            res.status(500).json([]);
+        }
+    });
+
+    // 10. 배치 처리 상세 조회 API
+    router.get('/batch/details', async (req, res) => {
+        try {
+            const [rows] = await pool.execute(`
+                SELECT d.*, h.BATCH_JOB_ID as jobId, m.BATCH_JOB_NM as jobName
+                FROM TB_BATCH_DTL d
+                LEFT JOIN TB_BATCH_HIST h ON d.EXEC_ID = h.EXEC_ID
+                LEFT JOIN TB_BATCH_JOB_MST m ON h.BATCH_JOB_ID = m.BATCH_JOB_ID
+                ORDER BY d.DTL_ID DESC
+            `);
+            res.status(200).json(rows);
+        } catch (error) {
+            console.error('Get Details Error:', error);
+            res.status(500).json([]);
+        }
+    });
+
+    // 11. 배치 재실행 요청 목록 조회 API
+    router.get('/batch/retries', async (req, res) => {
+        try {
+            const [rows] = await pool.execute(`
+                SELECT r.*, h.BATCH_JOB_ID as jobId, m.BATCH_JOB_NM as jobName
+                FROM TB_BATCH_RETRY_REQ r
+                LEFT JOIN TB_BATCH_HIST h ON r.ORIG_EXEC_ID = h.EXEC_ID
+                LEFT JOIN TB_BATCH_JOB_MST m ON h.BATCH_JOB_ID = m.BATCH_JOB_ID
+                ORDER BY r.RETRY_REQ_ID DESC
+            `);
+            res.status(200).json(rows);
+        } catch (error) {
+            console.error('Get Retries Error:', error);
+            res.status(500).json([]);
+        }
+    });
+
+    // 12. 배치 알림 이력 조회 API
+    router.get('/batch/notifications', async (req, res) => {
+        try {
+            const [rows] = await pool.execute(`
+                SELECT n.*, h.BATCH_JOB_ID as jobId, m.BATCH_JOB_NM as jobName
+                FROM TB_BATCH_NOTI_HIST n
+                LEFT JOIN TB_BATCH_HIST h ON n.EXEC_ID = h.EXEC_ID
+                LEFT JOIN TB_BATCH_JOB_MST m ON h.BATCH_JOB_ID = m.BATCH_JOB_ID
+                ORDER BY n.NOTI_ID DESC
+            `);
+            res.status(200).json(rows);
+        } catch (error) {
+            console.error('Get Notifications Error:', error);
+            res.status(500).json([]);
+        }
+    });
+
+    // 13. 배치 실행 잠금 상태 조회 API
+    router.get('/batch/locks', async (req, res) => {
+        try {
+            const [rows] = await pool.execute(`
+                SELECT l.*, m.BATCH_JOB_NM as jobName
+                FROM TB_BATCH_LOCK l
+                LEFT JOIN TB_BATCH_JOB_MST m ON l.BATCH_JOB_ID = m.BATCH_JOB_ID
+                ORDER BY l.ACQUIRED_DT DESC
+            `);
+            res.status(200).json(rows);
+        } catch (error) {
+            console.error('Get Locks Error:', error);
+            res.status(500).json([]);
+        }
+    });
+
     return router;
 };
 
