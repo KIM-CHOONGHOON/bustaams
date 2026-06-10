@@ -42,7 +42,7 @@ export default function ScheduleForm({
   return (
     <form
       id="batchScheduleManagement-schedule-form"
-      className="glass-card p-4 rounded-lg shadow-lg"
+      className="glass-card"
       onSubmit={handleSubmit}
     >
       <h2 className="text-xl font-semibold mb-4 text-teal-300">
@@ -146,7 +146,7 @@ export default function ScheduleForm({
         <button
           type="button"
           id="batchScheduleManagement-cancel-btn"
-          className="px-4 py-2 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition"
+          className="btn-cancel"
           onClick={onCancel}
         >
           취소
@@ -154,7 +154,7 @@ export default function ScheduleForm({
         <button
           type="submit"
           id="batchScheduleManagement-submit-btn"
-          className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-500 transition"
+          className="btn-primary"
         >
           저장
         </button>

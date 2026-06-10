@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { X, Play, RefreshCw, AlertCircle, FileText, CheckCircle, Clock, Database, CalendarClock, ListChecks, History, FileSearch, RotateCcw, Bell, Lock, ChevronLeft } from 'lucide-react';
 import BatchTaskList from './BatchTaskList';
+import ScheduleForm from '../../batchScheduleManagement/frontend/ScheduleForm';
+import { useEffect } from 'react';
 import NewBatchRegistration from './NewBatchRegistration';
 
 const BatchDashBoardModal = ({ isOpen, onClose }) => {
@@ -13,6 +15,7 @@ const BatchDashBoardModal = ({ isOpen, onClose }) => {
     { time: '2026-05-20 18:00:05', text: '[JOB_DONE_TOUR] Success. 12 reservation items updated.' },
   ]);
   const [isExecuting, setIsExecuting] = useState(null);
+  const [scheduleList, setScheduleList] = useState([]);
 
   // Mock batch jobs database
   const [jobs, setJobs] = useState([
@@ -21,6 +24,16 @@ const BatchDashBoardModal = ({ isOpen, onClose }) => {
     { id: 'JOB_CARD_PAY', name: '월 정기 기사 회원 결제 배치', cycle: 'MONTHLY', status: 'SUCCESS', lastRun: '2026-05-15 10:00:00' },
     { id: 'JOB_PUSH_ERR', name: '결제 오류 PUSH 발송 배치', cycle: 'DAILY', status: 'SUCCESS', lastRun: '2026-05-20 10:05:00' },
   ]);
+
+  // Fetch existing schedules when schedule view is active
+  useEffect(() => {
+    if (activeView === 'schedule') {
+      fetch('/schedule/inqueryList')
+        .then(res => res.json())
+        .then(data => setScheduleList(data))
+        .catch(err => console.error('Failed to fetch schedules:', err));
+    }
+  }, [activeView]);
 
   if (!isOpen) return null;
 
@@ -80,21 +93,61 @@ const BatchDashBoardModal = ({ isOpen, onClose }) => {
       return <NewBatchRegistration onBack={() => setActiveView('master')} />;
     }
 
+    // Special handling for schedule management view
+    if (activeView === 'schedule') {
+      return (
+        <div className="flex-1 flex flex-col p-8 overflow-y-auto space-y-6">
+          {/* Schedule list (if any) */}
+          {scheduleList.length > 0 && (
+            <div className="mb-4">
+              <h4 className="text-lg font-bold mb-2">등록된 스케줄 목록</h4>
+              <ul className="list-disc list-inside text-sm text-slate-700">
+                {scheduleList.map((item, idx) => (
+                  <li key={idx}>{item.BATCH_JOB_NM || item.id}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {/* Schedule form */}
+          <ScheduleForm
+            onCancel={() => setActiveView('home')}
+            onSubmit={async (data) => {
+              try {
+                const res = await fetch('/schedule/inqueryList', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(data),
+                });
+                if (!res.ok) throw new Error('Failed to save schedule');
+                alert('스케줄이 성공적으로 저장되었습니다.');
+                // Refresh list after save
+                fetch('/schedule/inqueryList')
+                  .then(r => r.json())
+                  .then(d => setScheduleList(d))
+                  .catch(e => console.error('Refresh list error:', e));
+              } catch (e) {
+                console.error(e);
+                alert('스케줄 저장에 실패했습니다.');
+              }
+              setActiveView('home');
+            }}
+          />
+        </div>
+      );
+    }
+
     const all = [...basicMenuItems, ...execMenuItems];
     const found = all.find(m => m.id === activeView);
     if (!found) return null;
 
+    // Default placeholder for other views
     return (
       <div className="flex-1 flex flex-col p-8 overflow-y-auto space-y-6">
         {/* 뒤로가기 */}
-        <button
-          onClick={() => setActiveView('home')}
-          className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors w-fit"
-        >
+        <button onClick={() => setActiveView('home')} className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors w-fit">
           <ChevronLeft size={16} />
           대시보드로 돌아가기
         </button>
-
         {/* 서브 뷰 헤더 */}
         <div className="flex items-center gap-4">
           <div className={`p-3 ${found.color} text-white rounded-xl`}>
