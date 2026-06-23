@@ -88,20 +88,20 @@ const TripsManagement = () => {
     switch (status) {
       case '2':
         return (
-          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg text-xs font-bold shadow-sm">
+          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg text-xs font-bold shadow-sm whitespace-nowrap">
             결제완료
           </span>
         );
       case '1':
         return (
-          <span className="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-100 rounded-lg text-xs font-bold animate-pulse shadow-sm">
+          <span className="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-100 rounded-lg text-xs font-bold animate-pulse shadow-sm whitespace-nowrap">
             결제요청
           </span>
         );
       case '0':
       default:
         return (
-          <span className="px-2.5 py-1 bg-slate-100 text-slate-500 border border-slate-200 rounded-lg text-xs font-medium">
+          <span className="px-2.5 py-1 bg-slate-100 text-slate-500 border border-slate-200 rounded-lg text-xs font-medium whitespace-nowrap">
             결제대기
           </span>
         );
@@ -113,49 +113,49 @@ const TripsManagement = () => {
     switch (status) {
       case 'CONFIRM':
         return (
-          <span className="px-2.5 py-1 bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-sm">
+          <span className="px-2.5 py-1 bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-sm whitespace-nowrap">
             확정됨
           </span>
         );
       case 'BIDDING':
         return (
-          <span className="px-2.5 py-1 bg-blue-500 text-white rounded-lg text-xs font-bold shadow-sm">
+          <span className="px-2.5 py-1 bg-blue-500 text-white rounded-lg text-xs font-bold shadow-sm whitespace-nowrap">
             입찰중
           </span>
         );
       case 'AUCTION':
         return (
-          <span className="px-2.5 py-1 bg-amber-500 text-white rounded-lg text-xs font-bold shadow-sm">
+          <span className="px-2.5 py-1 bg-amber-500 text-white rounded-lg text-xs font-bold shadow-sm whitespace-nowrap">
             대기중
           </span>
         );
       case 'DONE':
         return (
-          <span className="px-2.5 py-1 bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-sm">
+          <span className="px-2.5 py-1 bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-sm whitespace-nowrap">
             완료
           </span>
         );
       case 'TRAVELER_CANCEL':
         return (
-          <span className="px-2.5 py-1 bg-rose-500 text-white rounded-lg text-xs font-bold shadow-sm">
+          <span className="px-2.5 py-1 bg-rose-500 text-white rounded-lg text-xs font-bold shadow-sm whitespace-nowrap">
             여행자 취소
           </span>
         );
       case 'DRIVER_CANCEL':
         return (
-          <span className="px-2.5 py-1 bg-rose-600 text-white rounded-lg text-xs font-bold shadow-sm">
+          <span className="px-2.5 py-1 bg-rose-600 text-white rounded-lg text-xs font-bold shadow-sm whitespace-nowrap">
             기사 취소
           </span>
         );
       case 'BUS_CANCEL':
         return (
-          <span className="px-2.5 py-1 bg-rose-700 text-white rounded-lg text-xs font-bold shadow-sm">
+          <span className="px-2.5 py-1 bg-rose-700 text-white rounded-lg text-xs font-bold shadow-sm whitespace-nowrap">
             차량 취소
           </span>
         );
       default:
         return (
-          <span className="px-2.5 py-1 bg-slate-400 text-white rounded-lg text-xs font-medium">
+          <span className="px-2.5 py-1 bg-slate-400 text-white rounded-lg text-xs font-medium whitespace-nowrap">
             {status || '미지정'}
           </span>
         );
@@ -168,11 +168,13 @@ const TripsManagement = () => {
 
   const getShortAddr = (addr) => {
     if (!addr) return '-';
-    const parts = addr.split(' ');
+    // 괄호 및 괄호 안의 문자열 제거
+    const cleanAddr = addr.replace(/\s*[\(\[].*?[\)\]]/g, '').trim();
+    const parts = cleanAddr.split(' ');
     if (parts.length >= 2) {
       return `${parts[0]} ${parts[1]}`;
     }
-    return addr;
+    return cleanAddr;
   };
 
   return (
@@ -338,7 +340,7 @@ const TripsManagement = () => {
                         </div>
                         <div className="flex items-center gap-1.5 text-xs">
                           <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-                          <span className="text-slate-700 font-medium truncate">{getShortAddr(item.endAddr)}</span>
+                          <span className="text-slate-700 font-medium truncate">{getShortAddr(item.destAddr || item.endAddr)}</span>
                         </div>
                       </div>
                     </td>
@@ -487,10 +489,19 @@ const TripsManagement = () => {
                                   <p className="text-slate-800 font-semibold">{detailData.trip.startAddr}</p>
                                 </div>
                               </div>
+                              {detailData.trip.destAddr && (
+                                <div className="flex items-start gap-3">
+                                  <MapPin size={18} className="text-teal-500 mt-0.5 shrink-0" />
+                                  <div>
+                                    <p className="text-xs text-slate-400 font-bold">목적지 주소</p>
+                                    <p className="text-slate-800 font-semibold">{detailData.trip.destAddr}</p>
+                                  </div>
+                                </div>
+                              )}
                               <div className="flex items-start gap-3">
                                 <MapPin size={18} className="text-indigo-500 mt-0.5 shrink-0" />
                                 <div>
-                                  <p className="text-xs text-slate-400 font-bold">도착지 주소</p>
+                                  <p className="text-xs text-slate-400 font-bold">도착지 주소 (귀가행선지)</p>
                                   <p className="text-slate-800 font-semibold">{detailData.trip.endAddr}</p>
                                 </div>
                               </div>
@@ -512,10 +523,6 @@ const TripsManagement = () => {
                             </div>
                             
                             <div className="border-t border-slate-50 pt-3">
-                              <p className="text-xs text-slate-400 font-bold">탑승 승객 수</p>
-                              <p className="text-slate-800 font-black text-lg">{detailData.trip.passengerCnt}명</p>
-                            </div>
-                            <div className="border-t border-slate-50 pt-3">
                               <p className="text-xs text-slate-400 font-bold">요청 가격</p>
                               <p className="text-emerald-600 font-black text-lg">{formatAmt(detailData.trip.reqAmt)}</p>
                             </div>
@@ -524,11 +531,42 @@ const TripsManagement = () => {
                               <p className="text-xs text-slate-400 font-bold">진행 상태</p>
                               <p className="mt-1">{getStatusBadge(detailData.trip.dataStat)}</p>
                             </div>
-                            <div className="border-t border-slate-50 pt-3">
-                              <p className="text-xs text-slate-400 font-bold">결제 상태</p>
-                              <p className="mt-1">{getPaymentBadge(detailData.trip.paymentSts)}</p>
-                            </div>
                           </div>
+                        </div>
+
+                        {/* 1-2. Requested Bus Info */}
+                        <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm space-y-4">
+                          <h3 className="text-sm font-black text-slate-800 border-b border-slate-100 pb-2.5 flex items-center gap-2">
+                            <Compass size={16} className="text-emerald-500" />
+                            요청 버스 정보
+                          </h3>
+                          {detailData.buses && detailData.buses.length > 0 ? (
+                            <div className="space-y-3">
+                              {detailData.buses.map((bus) => (
+                                <div key={bus.reqBusSeq} className="flex items-center justify-between bg-slate-50 rounded-xl p-3 border border-slate-100 text-sm font-medium">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-xs">
+                                      {bus.reqBusSeq}
+                                    </div>
+                                    <div>
+                                      <p className="text-slate-800 font-semibold">{bus.busTypeNm || bus.busTypeCd}</p>
+                                      <p className="text-xs text-slate-400 font-bold">버스 일련번호: {bus.reqBusSeq}</p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-slate-900 font-extrabold">{formatAmt(bus.resBusAmt)}</p>
+                                    <p className="mt-0.5">
+                                      {getStatusBadge(bus.dataStat)}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-slate-400 font-medium py-2 text-center">
+                              요청된 버스 정보가 없습니다.
+                            </p>
+                          )}
                         </div>
 
                         {/* 2. Customer Profile Card */}

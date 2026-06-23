@@ -131,34 +131,4 @@ router.get('/codes/:groupCode', async (req, res) => {
     }
 });
 
-/**
- * [공통] 차량 번호 가입 여부 확인
- * TB_BUS_DRIVER_VEHICLE 테이블에서 해당 차량 번호가 존재하는지 체크합니다.
- */
-router.get('/check-vehicle', async (req, res) => {
-    const { vehicleNo } = req.query;
-    const { pool } = require('../db');
-
-    if (!vehicleNo) {
-        return res.status(400).json({ success: false, error: '차량 번호를 입력해주세요.' });
-    }
-
-    try {
-        const [rows] = await pool.execute(
-            `SELECT VEHICLE_NO FROM TB_BUS_DRIVER_VEHICLE WHERE VEHICLE_NO = ? LIMIT 1`,
-            [vehicleNo.trim()]
-        );
-
-        const exists = rows.length > 0;
-
-        res.json({
-            success: true,
-            exists: exists
-        });
-    } catch (error) {
-        console.error(`[Check Vehicle Error] VehicleNo: ${vehicleNo}, Error:`, error.message);
-        res.status(500).json({ success: false, error: '차량 번호 조회 중 오류가 발생했습니다.' });
-    }
-});
-
 module.exports = router;

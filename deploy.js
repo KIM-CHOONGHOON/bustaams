@@ -140,7 +140,7 @@ const remoteCommands = [
   `cd ${REMOTE_SERVER_DIR} && npm install --production`,
   
   // 2. PM2로 백엔드 서비스 실행 및 재시작 설정
-  `pm2 delete bustaams-backend || true`,
+  `pm2 kill`,
   `cd ${REMOTE_SERVER_DIR} && pm2 start server.js --name bustaams-backend`,
   `pm2 save`,
   

@@ -1,7 +1,5 @@
 require('./loadEnv');
 const mysql = require('mysql2/promise');
-const path = require('path');
-const fs = require('fs');
 
 const rawPort = String(process.env.DB_PORT ?? '').trim();
 const parsedPort = parseInt(rawPort, 10);
@@ -61,18 +59,9 @@ async function getNextId(tableName, columnName, length, connection = null) {
     return String(nextVal).padStart(length, '0');
 }
 
-// Google Cloud Storage 설정 (한글 주석)
+// Google Cloud Storage 설정
 const bucketName = process.env.GCS_BUCKET_NAME || 'bustaams-secure-data';
-
-let storageOptions = {};
-const keyPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH 
-    ? path.resolve(process.cwd(), process.env.FIREBASE_SERVICE_ACCOUNT_PATH)
-    : null;
-
-if (keyPath && fs.existsSync(keyPath)) {
-    storageOptions.keyFilename = keyPath;
-}
-const storage = new Storage(storageOptions);
+const storage = new Storage();
 const gcsBucket = storage.bucket(bucketName);
 
 /**

@@ -73,6 +73,17 @@ const Login = () => {
     }
   };
 
+  // 플레이스토어 앱 다운로드용 QR코드 이미지 다운로드 핸들러
+  const handleDownloadQR = (e) => {
+    e.stopPropagation();
+    const link = document.createElement('a');
+    link.href = '/app/assets/signup_qr.png';
+    link.download = 'busTaams_app_download_qr.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
@@ -110,11 +121,11 @@ const Login = () => {
           <img src="/app/assets/BUSTAAMS_IMAGE_LOGO.png" alt="busTaams Logo" className="w-14 h-14 object-contain rounded-xl shadow-sm" />
           <div className="text-teal-900 font-black tracking-tighter font-headline text-3xl">BUSTAAMS</div>
           <div 
-            onClick={() => navigate('/signup')} 
+            onClick={handleDownloadQR} 
             className="w-[40px] h-[40px] lg:w-[48px] lg:h-[48px] ml-2 flex-shrink-0 bg-white p-1 rounded-lg shadow-sm border border-outline/10 flex items-center justify-center cursor-pointer hover:scale-105 active:scale-95 transition-transform"
-            title="회원가입 바로가기 QR코드"
+            title="busTaams 앱 다운로드 QR코드 (클릭 시 다운로드)"
           >
-            <img src="/app/assets/signup_qr.png" alt="Sign Up QR" className="w-full h-full object-contain" />
+            <img src="/app/assets/signup_qr.png" alt="App Download QR" className="w-full h-full object-contain" />
           </div>
         </div>
         <div className="flex items-center gap-4">

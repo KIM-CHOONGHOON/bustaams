@@ -110,8 +110,14 @@ const DriverInfoRegistration = () => {
         licenseImg: null,
         busLicenseImg: null,
         careerCertImg: null,
-        bankBookImg: null
     });
+
+    // 한글 주석: PDF 파일인지 판별하는 로컬 헬퍼 함수
+    const isPdf = (key) => {
+        return files[key]?.type === 'application/pdf' || 
+               (previews[key] && previews[key].startsWith('data:application/pdf')) ||
+               (previews[key] && previews[key].endsWith('.pdf'));
+    };
 
     useEffect(() => {
         fetchInitialData();
@@ -832,7 +838,15 @@ const DriverInfoRegistration = () => {
                                     </div>
                                     <div className="flex items-center gap-4">
                                         <div className="w-12 h-12 rounded-lg bg-[#eceef0] flex items-center justify-center text-[#6e7977] group-hover:text-[#004e47] transition-colors overflow-hidden">
-                                            {previews.licenseImg ? <img src={previews.licenseImg} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-3xl">badge</span>}
+                                            {previews.licenseImg ? (
+                                                isPdf('licenseImg') ? (
+                                                    <span className="material-symbols-outlined text-3xl text-red-500">picture_as_pdf</span>
+                                                ) : (
+                                                    <img src={previews.licenseImg} className="w-full h-full object-cover" />
+                                                )
+                                            ) : (
+                                                <span className="material-symbols-outlined text-3xl">badge</span>
+                                            )}
                                         </div>
                                         <div className="flex-1">
                                             <p className="text-sm font-bold text-[#191c1e]">면허증 앞면</p>
@@ -854,7 +868,15 @@ const DriverInfoRegistration = () => {
                                     </div>
                                     <div className="flex items-center gap-4">
                                         <div className="w-12 h-12 rounded-lg bg-[#eceef0] flex items-center justify-center text-[#6e7977] group-hover:text-[#004e47] transition-colors overflow-hidden">
-                                            {previews.busLicenseImg ? <img src={previews.busLicenseImg} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-3xl">description</span>}
+                                            {previews.busLicenseImg ? (
+                                                isPdf('busLicenseImg') ? (
+                                                    <span className="material-symbols-outlined text-3xl text-red-500">picture_as_pdf</span>
+                                                ) : (
+                                                    <img src={previews.busLicenseImg} className="w-full h-full object-cover" />
+                                                )
+                                            ) : (
+                                                <span className="material-symbols-outlined text-3xl">description</span>
+                                            )}
                                         </div>
                                         <div className="flex-1">
                                             <p className="text-sm font-bold text-[#191c1e]">자격증 사본</p>
@@ -876,7 +898,15 @@ const DriverInfoRegistration = () => {
                                     </div>
                                     <div className="flex items-center gap-4">
                                         <div className="w-12 h-12 rounded-lg bg-[#eceef0] flex items-center justify-center text-[#6e7977] group-hover:text-[#004e47] transition-colors overflow-hidden">
-                                            {previews.careerCertImg ? <img src={previews.careerCertImg} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-3xl">history_edu</span>}
+                                            {previews.careerCertImg ? (
+                                                isPdf('careerCertImg') ? (
+                                                    <span className="material-symbols-outlined text-3xl text-red-500">picture_as_pdf</span>
+                                                ) : (
+                                                    <img src={previews.careerCertImg} className="w-full h-full object-cover" />
+                                                )
+                                            ) : (
+                                                <span className="material-symbols-outlined text-3xl">history_edu</span>
+                                            )}
                                         </div>
                                         <div className="flex-1">
                                             <p className="text-sm font-bold text-[#191c1e]">경력증명서</p>
@@ -898,7 +928,15 @@ const DriverInfoRegistration = () => {
                                     </div>
                                     <div className="flex items-center gap-4">
                                         <div className="w-12 h-12 rounded-lg bg-[#eceef0] flex items-center justify-center text-[#6e7977] group-hover:text-[#004e47] transition-colors overflow-hidden">
-                                            {previews.bankBookImg ? <img src={previews.bankBookImg} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-3xl">account_balance_wallet</span>}
+                                            {previews.bankBookImg ? (
+                                                isPdf('bankBookImg') ? (
+                                                    <span className="material-symbols-outlined text-3xl text-red-500">picture_as_pdf</span>
+                                                ) : (
+                                                    <img src={previews.bankBookImg} className="w-full h-full object-cover" />
+                                                )
+                                            ) : (
+                                                <span className="material-symbols-outlined text-3xl">account_balance_wallet</span>
+                                            )}
                                         </div>
                                         <div className="flex-1">
                                             <p className="text-sm font-bold text-[#191c1e]">통장 사본</p>
@@ -998,13 +1036,13 @@ const DriverInfoRegistration = () => {
                 </div>
             </main>
 
-            {/* 공용 앨범 선택용 hidden input */}
+            {/* 공용 앨범 선택용 hidden input (한글 주석: 프로필 사진이 아닐 땐 PDF도 선택 가능하게 설정) */}
             <input 
                 type="file" 
                 ref={commonAlbumInputRef} 
                 className="hidden" 
                 onChange={(e) => handleFileChange(e, activeUploadType)} 
-                accept="image/*" 
+                accept={activeUploadType === 'profileImg' ? 'image/*' : 'image/*,application/pdf'} 
             />
             {/* 공용 카메라 촬영용 hidden input */}
             <input 

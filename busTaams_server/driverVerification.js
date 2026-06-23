@@ -142,10 +142,10 @@ function kotsaWorkersQualConfigured() {
 
 /** KOTSA 명세: residentNo = YYMMDD-XXXXXXX (하이픈 포함 14자리 형태) */
 function normalizeKotsaResidentNo(rrn) {
-    // 한글 주석: 하이픈이나 공백 등 숫자가 아닌 모든 문자를 제거하고 숫자 13자리 형태를 보장합니다.
-    const s = String(rrn || '').replace(/[^0-9]/g, '');
-    if (s.length !== 13) return '';
-    return `${s.slice(0, 6)}-${s.slice(6)}`;
+    const s = String(rrn || '').trim();
+    const m = /^(\d{6})-(\d{7})$/.exec(s);
+    if (!m) return '';
+    return `${m[1]}-${m[2]}`;
 }
 
 /** 서버가 DB만으로 조립한 뒷자리(성별+000000) — 실제 진위에는 불가 */
@@ -677,12 +677,11 @@ async function runDriverVerificationsForProfileSetup({
     const koroadOn = isEnvFlagTrue('KOROAD_LICENSE_VERIFY_ENABLED');
     const tsOn = isEnvFlagTrue('TS_QUAL_VERIFY_ENABLED');
 
-    // 한글 주석: 하이픈 포함 여부에 구애받지 않도록 숫자만 추출하여 앞자리 6자리와 뒷자리 첫 번째 자리를 유도합니다.
-    const cleanDigits = String(rrn || '').replace(/[^0-9]/g, '');
-    const rrnFront = cleanDigits.slice(0, 6);
-    const backFirst = cleanDigits.slice(6, 7);
+    const parts = String(rrn || '').trim().split('-');
+    const rrnFront = parts[0];
+    const backFirst = parts[1] ? parts[1].charAt(0) : '';
     const birthYmd =
-        rrnFront.length === 6 && backFirst
+        parts.length >= 2 && rrnFront && rrnFront.length === 6 && backFirst
             ? birthYmdFromRrn(rrnFront, backFirst)
             : '';
 

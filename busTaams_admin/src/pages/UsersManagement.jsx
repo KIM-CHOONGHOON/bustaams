@@ -2,6 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { UserPlus, Shield, User, Clock, X, Save } from 'lucide-react';
 
 const UsersManagement = () => {
+  // 휴대폰 번호 포맷 헬퍼 (010-1234-5678)
+  const formatHpNo = (hp) => {
+    if (!hp) return '';
+    const cleaned = hp.replace(/[^0-9]/g, '');
+    if (cleaned.length === 11) {
+      return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}-${cleaned.slice(7)}`;
+    }
+    if (cleaned.length === 10) {
+      if (cleaned.startsWith('02')) {
+        return `${cleaned.slice(0, 2)}-${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
+      }
+      return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+    }
+    return hp;
+  };
+
   // 상태 관리
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -11,13 +27,13 @@ const UsersManagement = () => {
   // 신규 등록 폼 데이터
   const [regFormData, setRegFormData] = useState({
     adminId: '',
-    password: '',
-    confirmPassword: '',
     adminNm: '',
     deptNm: '',
     hpNo: '',
     email: '',
     role: 'MANAGER',
+    bankNm: '',
+    acctNo: ''
   });
 
   // 수정 폼 데이터 (항상 표시하기 위해 기본값 세팅)
@@ -28,6 +44,9 @@ const UsersManagement = () => {
     deptNm: '',
     hpNo: '',
     email: '',
+    bankNm: '',
+    acctNo: '',
+    role: '' // 등급 정보 보관용
   });
 
   // 관리자 목록 조회
@@ -55,33 +74,58 @@ const UsersManagement = () => {
       adminNm: admin.adminNm,
       status: admin.adminStat || 'ACTIVE',
       deptNm: admin.deptNm || '',
-      hpNo: admin.hpNo || '',
+      hpNo: formatHpNo(admin.hpNo || ''),
       email: admin.email || '',
+      bankNm: admin.bankNm || '',
+      acctNo: admin.acctNo || '',
+      role: admin.role || 'MANAGER'
     });
   };
 
   // 신규 등록 입력 변경
   const handleRegChange = (e) => {
     const { name, value } = e.target;
-    setRegFormData(prev => ({ ...prev, [name]: value }));
+    if (name === 'hpNo') {
+      const cleaned = value.replace(/[^0-9]/g, '');
+      let formatted = cleaned;
+      if (cleaned.length > 3 && cleaned.length <= 7) {
+        formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
+      } else if (cleaned.length > 7) {
+        formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}-${cleaned.slice(7, 11)}`;
+      }
+      setRegFormData(prev => ({ ...prev, hpNo: formatted }));
+    } else {
+      setRegFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   // 수정 입력 변경
   const handleEditChange = (e) => {
     const { name, value } = e.target;
-    setEditFormData(prev => ({ ...prev, [name]: value }));
+    if (name === 'hpNo') {
+      const cleaned = value.replace(/[^0-9]/g, '');
+      let formatted = cleaned;
+      if (cleaned.length > 3 && cleaned.length <= 7) {
+        formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
+      } else if (cleaned.length > 7) {
+        formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}-${cleaned.slice(7, 11)}`;
+      }
+      setEditFormData(prev => ({ ...prev, hpNo: formatted }));
+    } else {
+      setEditFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   // 신규 관리자 등록 처리 (모달 폼 제출)
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
 
-    if (!regFormData.adminId || !regFormData.password || !regFormData.confirmPassword || !regFormData.adminNm) {
-      return alert('아이디, 비밀번호, 비밀번호 확인, 이름은 필수 입력 항목입니다.');
+    if (!regFormData.adminId || !regFormData.adminNm || !regFormData.hpNo) {
+      return alert('아이디, 이름, 휴대폰 번호는 필수 입력 항목입니다.');
     }
 
-    if (regFormData.password !== regFormData.confirmPassword) {
-      return alert('입력하신 비밀번호와 비밀번호 확인이 서로 일치하지 않습니다.');
+    if (regFormData.role === 'SALES' && (!regFormData.bankNm || !regFormData.acctNo)) {
+      return alert('영업사원 등록 시 환급받을 은행명과 계좌번호는 필수입니다.');
     }
 
     setLoading(true);
@@ -93,22 +137,27 @@ const UsersManagement = () => {
       const response = await fetch('/api/admin/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...regFormData, registeredBy }),
+        body: JSON.stringify({ 
+          ...regFormData, 
+          registeredBy,
+          bankNm: regFormData.role === 'SALES' ? regFormData.bankNm : null,
+          acctNo: regFormData.role === 'SALES' ? regFormData.acctNo : null
+        }),
       });
 
       let errorMsg = '관리자 등록에 실패했습니다.';
       const data = await response.json();
       if (response.ok) {
-        alert('신규 관리자가 성공적으로 등록되었습니다.');
+        alert(`신규 사용자가 성공적으로 등록되었습니다.\n\n초기 비밀번호: [ ${data.tempPassword} ] (휴대폰 번호 뒷 4자리)`);
         setRegFormData({
           adminId: '',
-          password: '',
-          confirmPassword: '',
           adminNm: '',
           deptNm: '',
           hpNo: '',
           email: '',
           role: 'MANAGER',
+          bankNm: '',
+          acctNo: ''
         });
         setIsRegModalOpen(false); // 모달 닫기
         fetchAdmins(); // 목록 갱신
@@ -133,8 +182,15 @@ const UsersManagement = () => {
       return alert('수정할 사용자를 목록에서 먼저 선택해주세요.');
     }
 
+    if (editFormData.role === 'SALES' && (!editFormData.bankNm || !editFormData.acctNo)) {
+      return alert('영업사원은 환급받을 은행명과 계좌번호가 필수입니다.');
+    }
+
     setLoading(true);
     try {
+      const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
+      const modifiedBy = adminUser.adminId || 'SYSTEM';
+
       const response = await fetch(`/api/admin/${editFormData.adminId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -144,6 +200,9 @@ const UsersManagement = () => {
           deptNm: editFormData.deptNm,
           hpNo: editFormData.hpNo,
           email: editFormData.email,
+          bankNm: editFormData.role === 'SALES' ? editFormData.bankNm : null,
+          acctNo: editFormData.role === 'SALES' ? editFormData.acctNo : null,
+          modifiedBy
         }),
       });
 
@@ -159,7 +218,9 @@ const UsersManagement = () => {
           adminStat: editFormData.status,
           deptNm: editFormData.deptNm,
           hpNo: editFormData.hpNo,
-          email: editFormData.email
+          email: editFormData.email,
+          bankNm: editFormData.role === 'SALES' ? editFormData.bankNm : null,
+          acctNo: editFormData.role === 'SALES' ? editFormData.acctNo : null
         }));
       } else {
         alert(data.error || '정보 수정에 실패했습니다.');
@@ -263,7 +324,7 @@ const UsersManagement = () => {
                         {admin.deptNm || '미정'}
                       </span>
                     </td>
-                    <td className="py-4 px-4 text-slate-500 text-center">{admin.hpNo || '-'}</td>
+                    <td className="py-4 px-4 text-slate-500 text-center">{formatHpNo(admin.hpNo) || '-'}</td>
                     <td className="py-4 px-4 text-slate-500 text-center">{admin.email || '-'}</td>
                     <td className="py-4 px-4 text-slate-400 text-center">
                       <div className="flex items-center justify-center gap-1.5 py-1">
@@ -370,7 +431,7 @@ const UsersManagement = () => {
               <input
                 type="text"
                 name="hpNo"
-                placeholder="- 없이 휴대폰 번호 입력"
+                placeholder="010-0000-0000"
                 value={editFormData.hpNo}
                 onChange={handleEditChange}
                 disabled={!selectedAdmin}
@@ -396,6 +457,66 @@ const UsersManagement = () => {
               />
             </div>
           </div>
+
+          {/* 영업사원 전용 계좌정보 편집란 (동적 노출) */}
+          {selectedAdmin && editFormData.role === 'SALES' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-emerald-50/30 rounded-2xl border border-emerald-100/50 animate-fadeIn">
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                  환급 은행명 <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  name="bankNm"
+                  value={editFormData.bankNm}
+                  onChange={handleEditChange}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-slate-800"
+                  required
+                >
+                  <option value="">은행 선택</option>
+                  <option value="KB국민은행">KB국민은행</option>
+                  <option value="신한은행">신한은행</option>
+                  <option value="우리은행">우리은행</option>
+                  <option value="하나은행">하나은행</option>
+                  <option value="NH농협은행">NH농협은행</option>
+                  <option value="IBK기업은행">IBK기업은행</option>
+                  <option value="카카오뱅크">카카오뱅크</option>
+                  <option value="토스뱅크">토스뱅크</option>
+                  <option value="케이뱅크">케이뱅크</option>
+                  <option value="SC제일은행">SC제일은행</option>
+                  <option value="KDB산업은행">KDB산업은행</option>
+                  <option value="Sh수협은행">Sh수협은행</option>
+                  <option value="우체국">우체국</option>
+                  <option value="대구은행 (iM뱅크)">대구은행 (iM뱅크)</option>
+                  <option value="부산은행">부산은행</option>
+                  <option value="광주은행">광주은행</option>
+                  <option value="제주은행">제주은행</option>
+                  <option value="전북은행">전북은행</option>
+                  <option value="경남은행">경남은행</option>
+                  <option value="새마을금고">새마을금고</option>
+                  <option value="신협">신협</option>
+                  <option value="상호저축은행">상호저축은행</option>
+                  <option value="지역농·축협">지역농·축협</option>
+                  <option value="한국씨티은행">한국씨티은행</option>
+                  <option value="산림조합">산림조합</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                  환급 계좌번호 <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="acctNo"
+                  placeholder="- 없이 계좌번호 입력"
+                  value={editFormData.acctNo}
+                  onChange={handleEditChange}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-slate-800"
+                  required
+                />
+              </div>
+            </div>
+          )}
 
           {/* 버튼 영역 (사용자 등록 & 저장) */}
           <div className="flex justify-end items-center gap-3 mt-2 border-t border-slate-50 pt-4">
@@ -446,7 +567,7 @@ const UsersManagement = () => {
 
             {/* 모달 바디 */}
             <form onSubmit={handleRegisterSubmit} className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
-              {/* 계정 필수 정보 (아이디, 비번, 비번확인) */}
+              {/* 계정 필수 정보 (아이디, 이름, 휴대폰) */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-bold text-slate-600 flex items-center gap-1">
@@ -465,39 +586,6 @@ const UsersManagement = () => {
 
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-bold text-slate-600 flex items-center gap-1">
-                    비밀번호 <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    name="password"
-                    placeholder="비밀번호 입력"
-                    value={regFormData.password}
-                    onChange={handleRegChange}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
-                    required
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold text-slate-600 flex items-center gap-1">
-                    비밀번호 확인 <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    name="confirmPassword"
-                    placeholder="비밀번호 확인 입력"
-                    value={regFormData.confirmPassword}
-                    onChange={handleRegChange}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* 사용자 기본 정보 (이름, 소속, 등급) */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold text-slate-600 flex items-center gap-1">
                     이름 <span className="text-rose-500">*</span>
                   </label>
                   <input
@@ -512,12 +600,42 @@ const UsersManagement = () => {
                 </div>
 
                 <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold text-slate-600 flex items-center gap-1">
+                    휴대폰 번호 <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="hpNo"
+                    placeholder="010-0000-0000"
+                    value={regFormData.hpNo}
+                    onChange={handleRegChange}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* 사용자 부가 정보 (소속, 이메일, 등급) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="flex flex-col gap-2">
                   <label className="text-xs font-bold text-slate-600">소속 부서</label>
                   <input
                     type="text"
                     name="deptNm"
                     placeholder="예: 운영팀, 영업부"
                     value={regFormData.deptNm}
+                    onChange={handleRegChange}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold text-slate-600">업무용 이메일</label>
+                  <input
+                    type="email"
+                    name="email"
+                    placeholder="example@bustaams.com"
+                    value={regFormData.email}
                     onChange={handleRegChange}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
                   />
@@ -541,32 +659,65 @@ const UsersManagement = () => {
                 </div>
               </div>
 
-              {/* 연락처 정보 (전화번호, 이메일) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold text-slate-600">휴대폰 번호</label>
-                  <input
-                    type="text"
-                    name="hpNo"
-                    placeholder="- 없이 숫자만 입력"
-                    value={regFormData.hpNo}
-                    onChange={handleRegChange}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
-                  />
-                </div>
+              {/* 영업사원 전용 계좌정보 추가 등록 필드 (동적 노출) */}
+              {regFormData.role === 'SALES' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-emerald-50/40 rounded-2xl border border-emerald-100/50 animate-fadeIn">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                      환급 은행명 <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      name="bankNm"
+                      value={regFormData.bankNm}
+                      onChange={handleRegChange}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-slate-800"
+                      required
+                    >
+                      <option value="">은행 선택</option>
+                      <option value="KB국민은행">KB국민은행</option>
+                      <option value="신한은행">신한은행</option>
+                      <option value="우리은행">우리은행</option>
+                      <option value="하나은행">하나은행</option>
+                      <option value="NH농협은행">NH농협은행</option>
+                      <option value="IBK기업은행">IBK기업은행</option>
+                      <option value="카카오뱅크">카카오뱅크</option>
+                      <option value="토스뱅크">토스뱅크</option>
+                      <option value="케이뱅크">케이뱅크</option>
+                      <option value="SC제일은행">SC제일은행</option>
+                      <option value="KDB산업은행">KDB산업은행</option>
+                      <option value="Sh수협은행">Sh수협은행</option>
+                      <option value="우체국">우체국</option>
+                      <option value="대구은행 (iM뱅크)">대구은행 (iM뱅크)</option>
+                      <option value="부산은행">부산은행</option>
+                      <option value="광주은행">광주은행</option>
+                      <option value="제주은행">제주은행</option>
+                      <option value="전북은행">전북은행</option>
+                      <option value="경남은행">경남은행</option>
+                      <option value="새마을금고">새마을금고</option>
+                      <option value="신협">신협</option>
+                      <option value="상호저축은행">상호저축은행</option>
+                      <option value="지역농·축협">지역농·축협</option>
+                      <option value="한국씨티은행">한국씨티은행</option>
+                      <option value="산림조합">산림조합</option>
+                    </select>
+                  </div>
 
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold text-slate-600">업무용 이메일</label>
-                  <input
-                    type="email"
-                    name="email"
-                    placeholder="example@bustaams.com"
-                    value={regFormData.email}
-                    onChange={handleRegChange}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
-                  />
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                      환급 계좌번호 <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="acctNo"
+                      placeholder="- 없이 계좌번호 입력"
+                      value={regFormData.acctNo}
+                      onChange={handleRegChange}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-slate-800"
+                      required
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* 모달 하단 푸터 버튼 */}
               <div className="flex justify-end gap-3 mt-6 border-t border-slate-100 pt-4">

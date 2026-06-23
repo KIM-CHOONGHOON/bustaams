@@ -494,25 +494,39 @@ const BusInfoRegistration = () => {
                                         { key: 'bizReg', title: '사업자 등록증', desc: '유효한 사업자 등록증의 PDF 또는 고화질 사진을 업로드해 주세요.', color: 'bg-[#ffdbcf]', icon: 'badge' },
                                         { key: 'transLic', title: '운송 허가증', desc: '유효한 운송 허가증의 PDF 또는 고화질 사진을 업로드해 주세요.', color: 'bg-[#ffdbca]', icon: 'local_shipping' },
                                         { key: 'insCert', title: '보험 증명서 (책임/종합보험)', desc: '유효한 보험 가입 증명서의 PDF 또는 고화질 사진을 업로드해 주세요.', color: 'bg-[#a1f1e5]', icon: 'verified_user' }
-                                    ].map((doc) => (
-                                        <div key={doc.key} className="bg-[#e6e8ea] rounded-2xl p-1">
-                                            <div className="bg-white rounded-xl p-6 flex flex-col md:flex-row items-center gap-6">
-                                                <div className={`w-16 h-16 rounded-xl ${doc.color} flex items-center justify-center shrink-0 overflow-hidden`}>
-                                                    {previews[doc.key + 'Img'] ? <img src={previews[doc.key + 'Img']} className="w-full h-full object-cover" /> : <span className="material-symbols-outlined text-3xl">{doc.icon}</span>}
+                                    ].map((doc) => {
+                                        // 한글 주석: PDF 형식인지 확인하는 플래그 (파일명 혹은 파일 객체의 type, base64 스키마로 탐지)
+                                        const isPdf = files[doc.key + 'File']?.type === 'application/pdf' || 
+                                                      (previews[doc.key + 'Img'] && previews[doc.key + 'Img'].startsWith('data:application/pdf')) ||
+                                                      (previews[doc.key + 'Img'] && previews[doc.key + 'Img'].endsWith('.pdf'));
+                                        return (
+                                            <div key={doc.key} className="bg-[#e6e8ea] rounded-2xl p-1">
+                                                <div className="bg-white rounded-xl p-6 flex flex-col md:flex-row items-center gap-6">
+                                                    <div className={`w-16 h-16 rounded-xl ${doc.color} flex items-center justify-center shrink-0 overflow-hidden`}>
+                                                        {previews[doc.key + 'Img'] ? (
+                                                            isPdf ? (
+                                                                <span className="material-symbols-outlined text-3xl text-red-500">picture_as_pdf</span>
+                                                            ) : (
+                                                                <img src={previews[doc.key + 'Img']} className="w-full h-full object-cover" />
+                                                            )
+                                                        ) : (
+                                                            <span className="material-symbols-outlined text-3xl">{doc.icon}</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1 text-center md:text-left">
+                                                        <h4 className="font-bold text-[#191c1e]">{doc.title} <span className="text-red-500">*</span></h4>
+                                                        <p className="text-sm text-[#6e7977] mt-1">{doc.desc}</p>
+                                                    </div>
+                                                    <button onClick={() => {
+                                                        setActiveUploadType(doc.key);
+                                                        setShowPhotoBottomSheet(true);
+                                                    }} className="w-full md:w-auto px-6 py-3 rounded-xl bg-[#eceef0] text-[#004e47] font-bold text-sm hover:bg-[#004e47] hover:text-white transition-colors">
+                                                        파일 추가
+                                                    </button>
                                                 </div>
-                                                <div className="flex-1 text-center md:text-left">
-                                                    <h4 className="font-bold text-[#191c1e]">{doc.title} <span className="text-red-500">*</span></h4>
-                                                    <p className="text-sm text-[#6e7977] mt-1">{doc.desc}</p>
-                                                </div>
-                                                <button onClick={() => {
-                                                    setActiveUploadType(doc.key);
-                                                    setShowPhotoBottomSheet(true);
-                                                }} className="w-full md:w-auto px-6 py-3 rounded-xl bg-[#eceef0] text-[#004e47] font-bold text-sm hover:bg-[#004e47] hover:text-white transition-colors">
-                                                    파일 추가
-                                                </button>
                                             </div>
-                                        </div>
-                                    ))
+                                        );
+                                    })
                                 }
                             </div>
                         </section>
@@ -568,13 +582,13 @@ const BusInfoRegistration = () => {
                 </div>
             </main>
 
-            {/* 공용 앨범 선택용 hidden input */}
+            {/* 공용 앨범 선택용 hidden input (한글 주석:차량 사진이 아닐 땐 PDF도 선택 가능하게 설정) */}
             <input 
                 type="file" 
                 ref={commonAlbumInputRef} 
                 className="hidden" 
                 onChange={handleCommonFileChange} 
-                accept="image/*" 
+                accept={activeUploadType === 'vehiclePhotos' ? 'image/*' : 'image/*,application/pdf'} 
                 multiple={activeUploadType === 'vehiclePhotos'}
             />
             {/* 공용 카메라 촬영용 hidden input */}

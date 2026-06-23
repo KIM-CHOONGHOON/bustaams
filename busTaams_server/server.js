@@ -39,8 +39,7 @@ const createUserDeviceTokenRouter = require('./routes/userDeviceToken');
 const { 
     buildPostLoginUserDto, 
     fetchCancelManageForUser, 
-    fetchSubscriptionForDriver,
-    getCurrentYyyyMm
+    fetchSubscriptionForDriver 
 } = require('./lib/loginPayload');
 const createAuthRouter = require('./routes/bt_auth_api');
 const createAuctionTripRouter = require('./routes/bt_auction_trip_api');
@@ -129,15 +128,8 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH && fs.existsSync(path.resolve(__di
 }
 
 // 2. Google Cloud Storage Initialization
-let storageOptions = {};
-const keyPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH 
-    ? path.resolve(process.cwd(), process.env.FIREBASE_SERVICE_ACCOUNT_PATH)
-    : null;
-
-if (keyPath && fs.existsSync(keyPath)) {
-    storageOptions.keyFilename = keyPath;
-}
-const storage = new Storage(storageOptions); 
+// Uses GOOGLE_APPLICATION_CREDENTIALS from environment variables automatically if present
+const storage = new Storage(); 
 const bucketName = process.env.GCS_BUCKET_NAME || 'bustaams-secure-data';
 const bucket = storage.bucket(bucketName);
 
@@ -149,7 +141,6 @@ const SMS_VERIFIED_TTL_MS = 15 * 60 * 1000;
 const appAuthRouter = require('./routes/appAuth');
 const appCustomerRouter = require('./routes/appCustomer');
 const appDriverRouter = require('./routes/appDriver');
-const appChatRouter = require('./routes/appChat');
 
 app.use('/api/app/auth', appAuthRouter);
 app.use('/app/auth', appAuthRouter);
@@ -159,10 +150,6 @@ app.use('/app/customer', appCustomerRouter);
 
 app.use('/api/app/driver', appDriverRouter);
 app.use('/app/driver', appDriverRouter);
-
-app.use('/api/app/chat', appChatRouter);
-app.use('/app/chat', appChatRouter);
-app.use('/api/chat', appChatRouter);
 
 // 🔄 클라이언트 호환성을 위해 /app/... 요청을 내부적으로 /api/... 로 투명하게 Rewrite해 주는 미들웨어 추가!
 app.use((req, res, next) => {
@@ -199,6 +186,10 @@ app.use('/api/common', commonRouter);
 const createNotificationRouter = require('./routes/notification');
 const notificationRouter = createNotificationRouter(pool, app);
 app.use('/api/notifications', notificationRouter); // Rewrite된 경로 대응
+
+// 5-1. 결제(Payment) 라우터 설정 (누락분 마운트)
+const createPaymentRouter = require('./routes/payment');
+createPaymentRouter(pool, app);
 
 // appDriverRouter는 위에서 마운트되었으므로 기존 호환성을 위해 레퍼런스 유지
 app.use('/api/driver', appDriverRouter); // Rewrite된 경로 대응
@@ -421,6 +412,7 @@ async function insertBusFileMaster(connection, {
     fileId, category, gcsPath, buffer, orgFileNmFull, fileExt, fileSize, contentType
 }) {
     const objectKey = String(gcsPath ?? '').trim().replace(/^\/+/, '').replace(/\s+/g, '');
+    
     // 📂 로컬 uploads 디렉토리에 저장
     const localPath = path.join(__dirname, 'uploads', objectKey);
     const localDir = path.dirname(localPath);
@@ -2545,15 +2537,15 @@ function isFullRrnSplitFromParts(split) {
 function formatResidentNoDisplayFromPlain(plain) {
     const split = splitResidentNoPlainForProfileSetup(plain);
     if (isFullRrnSplitFromParts(split)) {
-        return `${split.rrnFront}-${String(split.rrnBack).charAt(0)}******`;
+        return `${split.rrnFront}-${String(split.rrnBack).charAt(0)}●●●●●●`;
     }
     const s = String(plain ?? '').trim();
     const legacyOne = /^(\d{6})-(\d)$/.exec(s);
     if (legacyOne) {
-        return `${legacyOne[1]}-${legacyOne[2]}******`;
+        return `${legacyOne[1]}-${legacyOne[2]}●●●●●●`;
     }
     if (/^\d{6}$/.test(split.rrnFront || '') && String(split.rrnBack || '').length >= 1) {
-        return `${split.rrnFront}-${String(split.rrnBack).charAt(0)}******`;
+        return `${split.rrnFront}-${String(split.rrnBack).charAt(0)}●●●●●●`;
     }
     return '';
 }
@@ -2594,20 +2586,6 @@ app.post('/api/driver/profile-setup', async (req, res) => {
         }
         if (!DRIVER_FEE_POLICY_DTL_CDS.includes(feePolicyTrim)) {
             return res.status(400).json({ error: '유효하지 않은 회원등급(FEE_POLICY)입니다.' });
-        }
-
-        // 한글 주석: 면허 발급일 필수값 및 날짜 유효성 검증
-        if (!licenseIssueDt || !licenseIssueDt.trim()) {
-            return res.status(400).json({ error: '면허 발급일을 입력해 주세요.' });
-        }
-        const todayStr = new Date().toISOString().split('T')[0];
-        if (licenseIssueDt > todayStr) {
-            return res.status(400).json({ error: '면허 발급일은 오늘 이전 날짜여야 합니다.' });
-        }
-
-        // 한글 주석: 버스운전자격증 번호 필수값 검증
-        if (!qualCertNoTrim) {
-            return res.status(400).json({ error: '버스운전자격증 번호를 입력해 주세요.' });
         }
 
         const [uResolve] = await pool.execute(
@@ -2879,6 +2857,7 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                     const { fileExt } = orgFileNmAndExt(hintNm || undefined, parsed);
                     const orgFileNmFull = busModalOrgFileNmWithExtension(hintNm || 'qualification', fileExt);
                     const gcsRelPath = `QUALIFICATION/${seqPadded}.${fileExt}`;
+                    
                     // 📂 로컬 uploads 디렉토리에 저장
                     const localPath = path.join(__dirname, 'uploads', gcsRelPath);
                     const localDir = path.dirname(localPath);
@@ -2901,7 +2880,6 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                                 custId,
                                 QUALIFICATION_DOC_TYPE,
                                 nextSeq,
-
                                 gcsPathForDb,
                                 orgFileNmFull,
                                 fileExt,
@@ -2920,7 +2898,6 @@ app.post('/api/driver/profile-setup', async (req, res) => {
                                 custId,
                                 QUALIFICATION_DOC_TYPE,
                                 nextSeq,
-
                                 gcsPathForDb,
                                 orgFileNmFull,
                                 fileExt
@@ -3007,9 +2984,191 @@ app.post('/api/driver/profile-setup', async (req, res) => {
     }
 });
 
-// --- KG 이니시스 결제 라우터 등록 (한글 주석) ---
-const createPaymentRouter = require('./routes/payment');
-createPaymentRouter(pool, app);
+/* 
+// --- 레거시 KG 이니시스 결제 코드 (routes/payment.js 연동으로 대체되어 주석 처리함) ---
+// --- KG 이니시스 결제 준비 (서명 생성) ---
+app.get('/api/payment/ready', async (req, res) => {
+    try {
+        const { reqId, driverId, amount } = req.query;
+        if (!reqId || !amount) {
+            return res.status(400).json({ error: 'reqId and amount are required' });
+        }
+
+        const mid = (process.env.INI_MID || 'INIpayTest').trim();
+        // 분석 결과: INIpayTest의 정식 PC웹표준 키는 아래 값이 확실합니다.
+        const signKey = 'SU5JTElURV9UUklQTEVERVNfS0VZU1RS'; 
+        
+        // 1. 금액에서 숫자만 남기기
+        let cleanAmount = String(amount).replace(/[^0-9]/g, '');
+        
+        // [안전장치] 테스트 모드일 경우 사고 방지를 위해 금액을 1,000원으로 강제 고정
+        if (mid === 'INIpayTest') {
+            console.log(`[PAY_SAFETY_V2] Test mode detected. Forcing amount from ${cleanAmount} to 1000 KRW.`);
+            cleanAmount = '1000';
+        }
+
+        // 2. 타임스탬프 문자열 변환
+        const timestamp = String(new Date().getTime());
+        const oid = `${reqId}_${timestamp}`;
+
+        // 3. 이니시스 웹 표준 결제 서명 공식
+        const crypto = require('crypto');
+        const signatureStr = `oid=${oid}&price=${cleanAmount}&timestamp=${timestamp}`;
+        
+        // 인코딩 'utf8' 명시 및 대문자 변환 (이니시스 공식 가이드 최적화)
+        const signature = crypto.createHash('sha256').update(signatureStr, 'utf8').digest('hex').toUpperCase();
+        const mKey = crypto.createHash('sha256').update(signKey, 'utf8').digest('hex').toUpperCase();
+
+        console.log(`[PAY_READY] Used SignKey: ${signKey}`);
+        console.log(`[PAY_READY] OID: ${oid}, Price: ${cleanAmount}, TS: ${timestamp}`);
+        console.log(`[PAY_READY] SigStr: ${signatureStr}`);
+        console.log(`[PAY_READY] Sig(UPPER): ${signature}`);
+
+        res.json({
+            mid,
+            oid,
+            timestamp,
+            amount: cleanAmount,
+            signature,
+            mKey,
+            buyertel: '01012345678',
+            buyername: '홍길동'
+        });
+    } catch (error) {
+        console.error('Payment ready error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- KG 이니시스 결제 결과 수신 및 최종 승인 (Return URL) ---
+app.post('/api/payment/return', async (req, res) => {
+    let connection;
+    try {
+        const { resultCode, resultMsg, mid, authUrl, authToken, merchantData } = req.body;
+        console.log('[PAY_RETURN] Received result:', resultCode, resultMsg);
+
+        if (resultCode !== '0000') {
+            return res.send(`
+                <!DOCTYPE html>
+                <html><head><meta charset="utf-8"></head><body>
+                <script>alert("결제 실패: ${resultMsg}"); window.location.href="http://localhost:5173/quotation-list";</script>
+                </body></html>
+            `);
+        }
+
+        // 1. 이니시스 승인 API (Server-to-Server) 호출 준비
+        const timestamp = String(new Date().getTime());
+        // 정식 PC웹표준 테스트 키
+        const signKey = 'SU5JTElURV9UUklQTEVERVNfS0VZU1RS';
+        const crypto = require('crypto');
+        const signatureStr = `authToken=${authToken}&timestamp=${timestamp}`;
+        const signature = crypto.createHash('sha256').update(signatureStr, 'utf8').digest('hex').toUpperCase();
+
+        const authRes = await fetch(authUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                mid,
+                authToken,
+                timestamp,
+                signature,
+                format: 'JSON'
+            })
+        });
+
+        const authText = await authRes.text();
+        console.log('[PAY_AUTH] Raw Result:', authText);
+
+        let authData;
+        try {
+            authData = JSON.parse(authText);
+        } catch (e) {
+            console.error('[PAY_AUTH] Failed to parse Inicis response as JSON:', authText);
+            return res.send(`
+                <html><head><meta charset="utf-8"></head><body>
+                <script>alert("결제 승인 처리 중 오류가 발생했습니다. (포맷 불일치)"); window.close();</script>
+                </body></html>
+            `);
+        }
+        console.log('[PAY_AUTH] Auth Result:', authData.resultCode, authData.resultMsg);
+
+        if (authData.resultCode !== '0000') {
+            return res.send(`
+                <!DOCTYPE html>
+                <html><head><meta charset="utf-8"></head><body>
+                <script>alert("최종 승인 실패: ${authData.resultMsg}"); window.location.href="http://localhost:5173/quotation-list";</script>
+                </body></html>
+            `);
+        }
+
+        // 2. 결제 성공 -> DB 업데이트 (트랜잭션 처리)
+        let reqId, driverId;
+        console.log('[PAY_SUCCESS] Raw MerchantData:', merchantData);
+
+        if (merchantData && merchantData.includes(':')) {
+            // 새로운 단순 문자열 형식 (reqId:driverId)
+            const parts = merchantData.split(':');
+            reqId = parts[0];
+            driverId = parts[1];
+        } else {
+            // 기존 JSON 형식 (혹시 모를 호환성 유지)
+            try {
+                // HTML Entity (&quot; 등) 처리
+                const unescapedData = merchantData.replace(/&quot;/g, '"');
+                const mData = JSON.parse(unescapedData);
+                reqId = mData.reqId;
+                driverId = mData.driverId;
+            } catch (e) {
+                console.error('MerchantData parse error:', e);
+            }
+        }
+        
+        console.log(`[PAY_SUCCESS] Target - ReqId: ${reqId}, DriverId: ${driverId}`);
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        if (reqId && driverId) {
+            // 3. 상태 업데이트 로직
+            // 예약 내역 확정 상태로 변경 (상태가 'BIDDING'인 예약 건만 확정 처리)
+            await connection.execute(
+                `UPDATE TB_BUS_RESERVATION SET DATA_STAT = 'CONFIRM', MOD_DT = NOW() 
+                 WHERE REQ_ID = ? AND DRIVER_ID = ? AND DATA_STAT = 'BIDDING'`,
+                [reqId, driverId]
+            );
+
+            // 전체 요청 상태를 'CONFIRM'으로 변경
+            await connection.execute(
+                `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'CONFIRM', MOD_DT = NOW() WHERE REQ_ID = ?`,
+                [reqId]
+            );
+            
+            console.log(`[PAY_SUCCESS] Updated status for REQ_ID: ${reqId}, DRIVER_ID: ${driverId}`);
+        }
+        
+        await connection.commit();
+
+        res.send(`
+            <!DOCTYPE html>
+            <html><head><meta charset="utf-8"></head><body>
+            <script>alert("결제가 완료되어 예약이 확정되었습니다!"); window.location.href="http://localhost:5173/quotation-list";</script>
+            </body></html>
+        `);
+
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('Payment return error:', error);
+        res.send(`
+            <!DOCTYPE html>
+            <html><head><meta charset="utf-8"></head><body>
+            <script>alert("결제 처리 중 오류 발생: ${error.message}"); window.location.href="http://localhost:5173/quotation-list";</script>
+            </body></html>
+        `);
+    } finally {
+        if (connection) connection.release();
+    }
+});
+*/
 
 // --- 기사 상세 정보 및 리뷰 조회 ---
 app.get('/api/driver/detail/:driverId', async (req, res) => {
@@ -5006,6 +5165,98 @@ app.get('/api/common/codes/:grpCd', async (req, res) => {
     }
 });
 
+// ============================================================
+// 배치 관리 API
+// ============================================================
+
+// Next Batch ID API
+app.get('/api/admin/nextBatchId', async (req, res) => {
+    try {
+        const { cycle, businessType } = req.query;
+        if (!cycle || !businessType) return res.status(400).json({ error: 'Missing parameters' });
+
+        let seqNum = 1;
+        const prefix = `JOB_${cycle}_${businessType}_`;
+        try {
+            const [rows] = await pool.execute(
+                `SELECT MAX(BATCH_JOB_ID) as maxId FROM TB_BATCH_JOB_MST WHERE BATCH_JOB_ID LIKE CONCAT(?, '%')`,
+                [prefix]
+            );
+            if (rows && rows[0] && rows[0].maxId) {
+                const seqStr = rows[0].maxId.replace(prefix, '');
+                const maxSeq = parseInt(seqStr, 10);
+                if (!isNaN(maxSeq)) seqNum = maxSeq + 1;
+            }
+        } catch (dbErr) {}
+
+        res.json({ nextId: `${prefix}${String(seqNum).padStart(5, '0')}` });
+    } catch (error) {
+        console.error('nextBatchId error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// 배치 신규 등록 API
+app.post('/api/admin/newBatchRegistration', async (req, res) => {
+    let connection;
+    try {
+        const data = req.body;
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        await connection.execute(
+            `INSERT INTO TB_BATCH_JOB_MST (BATCH_JOB_ID, BATCH_JOB_NM, JOB_DESC, USE_YN, EXEC_FILE_PATH, EXEC_CYCLE, RETRY_POLICY, MAX_RETRY_CNT, REG_DT)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+            [data.jobId, data.jobName, data.description, data.useYn, data.execPath, data.execCycle, data.retryPolicy, data.maxRetry || 3]
+        );
+
+        await connection.execute(
+            `INSERT INTO TB_BATCH_SCHED (BATCH_JOB_ID, EXEC_TIME, EXEC_MONTH, EXEC_DAY, EXEC_DOW, CALC_RULE, HOLIDAY_RULE, USE_YN, REG_DT)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+            [data.jobId, data.execTime || '00:00:00', data.execMonth || '*', data.execDay || '*', data.execDow || '*', data.calcRule || 'T', data.holidayRule || 'RUN', data.useYn]
+        );
+
+        await connection.commit();
+        res.json({ success: true, message: 'Batch registered successfully' });
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('NewBatchRegistration error:', error.code, error.message);
+        if (error.code === 'ER_DUP_ENTRY') return res.status(409).json({ success: false, message: `이미 존재하는 배치작업 ID입니다: ${req.body.jobId}` });
+        res.status(500).json({ success: false, message: `서버 오류: ${error.message}` });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// 배치 목록 조회 API
+app.get('/api/admin/batch/list', async (req, res) => {
+    try {
+        const [rows] = await pool.execute(`
+            SELECT
+                m.BATCH_JOB_ID AS jobId,
+                m.BATCH_JOB_NM AS jobName,
+                m.EXEC_CYCLE   AS execCycle,
+                m.USE_YN       AS useYn,
+                s.EXEC_TIME    AS execTime,
+                s.CALC_RULE    AS calcRule,
+                s.HOLIDAY_RULE AS holidayRule,
+                s.EXEC_MONTH   AS execMonth,
+                s.EXEC_DAY     AS execDay,
+                s.EXEC_DOW     AS execDow
+            FROM TB_BATCH_JOB_MST m
+            LEFT JOIN TB_BATCH_SCHED s ON m.BATCH_JOB_ID = s.BATCH_JOB_ID
+            ORDER BY m.REG_DT DESC
+        `);
+        res.json(rows);
+    } catch (error) {
+        console.error('Batch list error:', error);
+        if (error.code === 'ER_NO_SUCH_TABLE') return res.json([]);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+const { startScheduler } = require('./batch/scheduler');
+
 app.listen(PORT, () => {
     console.log(`🚀 busTaams REST API Server is running beautifully on http://localhost:${PORT}`);
 });
@@ -5021,10 +5272,14 @@ app.listen(PORT, () => {
         console.log('📡 [1/1] 데이터베이스 연결 시도 중...');
         connection = await pool.getConnection();
         console.log('✅ [1/1] DB 연결 성공!');
+        
+        // Start the Batch Scheduler Daemon
+        startScheduler();
     } catch (e) {
         console.error('⚠️ DB 연결 확인 실패:', e.message);
     } finally {
         if (connection) connection.release();
     }
 })();
+
 

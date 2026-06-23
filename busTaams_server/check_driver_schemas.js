@@ -10,7 +10,7 @@ const pool = mysql.createPool({
 });
 
 async function check() {
-    const tables = ['TB_DRIVER_DETAIL', 'TB_DRIVER_DOCS', 'TB_DRIVER_BUS', 'TB_PARTNER_BIZ_INFO'];
+    const tables = ['TB_DRIVER_DETAIL', 'TB_DRIVER_DOCS', 'TB_DRIVER_BUS'];
     for (const table of tables) {
         try {
             const [rows] = await pool.query(`DESCRIBE ${table}`);

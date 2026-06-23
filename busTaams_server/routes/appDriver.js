@@ -1588,7 +1588,7 @@ router.post('/complete-mission/:id', authenticateToken, async (req, res) => {
         // 상태 업데이트 (DATA_STAT = 'DONE')
         const [result] = await pool.execute(
             `UPDATE TB_BUS_RESERVATION 
-             SET DATA_STAT = 'DONE', MOD_DT = NOW(), MOD_ID = ?
+             SET DATA_STAT = 'DONE', MOD_DT = NOW(), MOD_ID = ?, DONE_DT = NOW()
              WHERE RES_ID = ? AND DRIVER_ID = ?`,
             [custId, id, custId]
         );

@@ -82,7 +82,9 @@ const EstimateDetailDriver = () => {
                     icon: 'success',
                     title: '성공',
                     text: '청약이 정상적으로 제출되었습니다!',
-                    confirmButtonColor: '#004e47'
+                    confirmButtonColor: '#004e47',
+                    showConfirmButton: false,
+                    timer: 1500
                 }).then(() => {
                     navigate('/driver-dashboard');
                 });
