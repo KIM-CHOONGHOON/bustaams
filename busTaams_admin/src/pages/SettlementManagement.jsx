@@ -170,7 +170,14 @@ const SettlementManagement = () => {
   };
 
   const getFeePolicyLabel = (item) => {
-    return item.feePolicyLabel || item.feePolicy || '일반 회원';
+    if (item.feePolicyLabel) return item.feePolicyLabel;
+    if (!item.feePolicy) return '일반 회원';
+    return item.feePolicy.split(', ').map(policy => {
+      if (policy.includes('HIGH')) return '정회원(고급)';
+      if (policy.includes('MIDDLE')) return '정회원(중급)';
+      if (policy.includes('GENERAL') || policy.includes('GENNERAL')) return '정회원(일반)';
+      return '일반 회원';
+    }).join(', ');
   };
 
   const isRegularDriver = (policy) => {
@@ -184,11 +191,13 @@ const SettlementManagement = () => {
   const grossSales = totalBidding + totalSub; // 총 매출규모
 
   const totalDriverPayout = Number(summary.totalDriverPayout || 0); // 정회원 기사에게 지급할 총 환급 수수료 (5.5%)
-  const platformFeeIncome = Number(summary.totalPlatformFee || 0); // 본사 귀속 수수료 (일반 6.6% / 정회원 1.1%)
+  const platformFeeIncome = Number(summary.totalPlatformFee || 0); // 본사 귀속 수수료 (무조건 6.6%)
   
   // 세무 및 원천징수 계산
   const totalSalesCommission = Number(summary.totalSalesCommission || 0); // 영업사원 지급 총 수당
-  const salesTax3_3 = Math.round(totalSalesCommission * 0.033); // 영업사원 수당 원천세 3.3%
+  const salesIncomeTax = Math.floor(totalSalesCommission * 0.03 / 10) * 10; // 소득세 3% (원 단위 절삭)
+  const salesLocalTax = Math.floor((salesIncomeTax * 0.1) / 10) * 10; // 지방소득세 0.3% (원 단위 절삭)
+  const salesTax3_3 = salesIncomeTax + salesLocalTax; // 총 원천세 3.3%
   const salesNetPay = totalSalesCommission - salesTax3_3; // 영업사원 실지급액 (세후)
   
   // 플랫폼 매출액 (본사 귀속 수수료 + 기사 월정액 매출에 대한 10% VAT 포함)
@@ -457,11 +466,11 @@ const SettlementManagement = () => {
                           )}
                         </td>
 
-                        {/* 본사 귀속분 (정회원 건은 1.1%, 일반회원 건은 6.6%) */}
+                         {/* 본사 귀속분 (6.6% 고정) */}
                         <td className="py-4 px-5 text-sm text-emerald-700 font-black whitespace-nowrap">
                           <div>
                             <span>{formatAmt(item.platformFee)}</span>
-                            <span className="text-[9px] text-emerald-600 block">({regular ? '1.1%' : '6.6%'})</span>
+                            <span className="text-[9px] text-emerald-600 block">(6.6%)</span>
                           </div>
                         </td>
 
@@ -471,7 +480,7 @@ const SettlementManagement = () => {
                             <div>
                               <span>{formatAmt(item.salesCommission)}</span>
                               <span className="text-[9px] text-slate-400 font-normal block">
-                                (담당: {item.recomCode} / {regular ? '10.6%' : '6.6%'})
+                                (담당: {item.recomCode} / 0.6%)
                               </span>
                             </div>
                           ) : (

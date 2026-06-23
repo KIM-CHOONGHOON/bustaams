@@ -750,6 +750,37 @@ module.exports = (pool) => {
             const { adminId } = req.params;
             const { role, status, adminNm, deptNm, hpNo, email, modifiedBy, bankNm, acctNo } = req.body;
 
+            // [권한 검증] 대상 관리자(target)와 실행자(modifier)의 등급 조회
+            const targetId = adminId;
+            const modifierId = modifiedBy || 'SYSTEM';
+
+            // 대상 관리자의 등급 조회
+            const [targetRows] = await pool.execute(
+                `SELECT ADMIN_GRADE FROM TB_ADMIN WHERE ADMIN_ID = ?`,
+                [targetId]
+            );
+            if (targetRows.length === 0) {
+                return res.status(404).json({ error: '대상 사용자를 찾을 수 없습니다.' });
+            }
+            const targetGrade = targetRows[0].ADMIN_GRADE;
+
+            // 실행 관리자의 등급 조회
+            let modifierGrade = 'MANAGER'; // 기본값 안전 세팅
+            if (modifierId !== 'SYSTEM') {
+                const [modifierRows] = await pool.execute(
+                    `SELECT ADMIN_GRADE FROM TB_ADMIN WHERE ADMIN_ID = ?`,
+                    [modifierId]
+                );
+                if (modifierRows.length > 0) {
+                    modifierGrade = modifierRows[0].ADMIN_GRADE;
+                }
+            }
+
+            // 최고관리자(SUPER)인 대상을 일반관리자(MANAGER 등)가 변경할 수 없게 차단
+            if (targetGrade === 'SUPER' && modifierGrade !== 'SUPER') {
+                return res.status(403).json({ error: '최고 관리자(SUPER)의 정보 및 상태는 변경할 권한이 없습니다.' });
+            }
+
             const sets = [];
             const params = [];
 
@@ -815,13 +846,13 @@ module.exports = (pool) => {
             const listParams = [];
             const conditions = [`req.DATA_STAT = 'DONE'`];
 
-            // 확정일자 기간 필터 (TB_BUS_RESERVATION.CONFIRM_DT 기준)
+            // 완료일자 기간 필터 (TB_BUS_RESERVATION.DONE_DT 기준)
             if (confirmDtFrom && confirmDtFrom.trim()) {
-                conditions.push(`DATE(br.CONFIRM_DT) >= ?`);
+                conditions.push(`DATE(br.DONE_DT) >= ?`);
                 listParams.push(confirmDtFrom.trim());
             }
             if (confirmDtTo && confirmDtTo.trim()) {
-                conditions.push(`DATE(br.CONFIRM_DT) <= ?`);
+                conditions.push(`DATE(br.DONE_DT) <= ?`);
                 listParams.push(confirmDtTo.trim());
             }
 
@@ -848,7 +879,7 @@ module.exports = (pool) => {
             // 목록 조회
             const listQuery = `
                 SELECT
-                    br.RES_ID                                          as resId,
+                    MIN(br.RES_ID)                                     as resId,
                     br.REQ_ID                                          as reqId,
                     req.TRIP_TITLE                                     as tripTitle,
                     req.START_ADDR                                     as startAddr,
@@ -857,33 +888,24 @@ module.exports = (pool) => {
                     DATE_FORMAT(req.START_DT,    '%Y-%m-%d %H:%i')    as startDt,
                     traveler.USER_NM                                   as travelerName,
                     traveler.HP_NO                                     as travelerPhone,
-                    driver.USER_NM                                     as driverName,
-                    v.VEHICLE_NO                                       as vehicleNo,
-                    br.DRIVER_BIDDING_PRICE                            as driverBiddingPrice,
-                    br.RES_FEE_TOTAL_AMT                               as resFeeTotal,
-                    DATE_FORMAT(br.CONFIRM_DT,   '%Y-%m-%d %H:%i')    as confirmDt,
-                    driver.RECOM_CODE                                  as recomCode,
-                    dd.FEE_POLICY                                      as feePolicy,
-                    CASE 
+                    GROUP_CONCAT(DISTINCT driver.USER_NM SEPARATOR ', ') as driverName,
+                    GROUP_CONCAT(DISTINCT v.VEHICLE_NO SEPARATOR ', ') as vehicleNo,
+                    SUM(br.DRIVER_BIDDING_PRICE)                       as driverBiddingPrice,
+                    SUM(br.RES_FEE_TOTAL_AMT)                          as resFeeTotal,
+                    DATE_FORMAT(MAX(br.DONE_DT),   '%Y-%m-%d %H:%i') as confirmDt,
+                    GROUP_CONCAT(DISTINCT driver.RECOM_CODE SEPARATOR ', ') as recomCode,
+                    GROUP_CONCAT(DISTINCT dd.FEE_POLICY SEPARATOR ', ') as feePolicy,
+                    SUM(CASE 
                         WHEN dd.FEE_POLICY IN ('DRIVER_GENERAL', 'DRIVER_GENNERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH') 
                         THEN br.DRIVER_BIDDING_PRICE * 0.055
                         ELSE 0
-                    END as driverPayout,
-                    CASE 
-                        WHEN dd.FEE_POLICY IN ('DRIVER_GENERAL', 'DRIVER_GENNERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH') 
-                        THEN br.DRIVER_BIDDING_PRICE * 0.011
-                        ELSE br.DRIVER_BIDDING_PRICE * 0.066
-                    END as platformFee,
-                    CASE 
+                    END) as driverPayout,
+                    SUM(br.DRIVER_BIDDING_PRICE * 0.066) as platformFee,
+                    SUM(CASE 
                         WHEN driver.RECOM_CODE IS NOT NULL AND TRIM(driver.RECOM_CODE) != ''
-                        THEN 
-                            CASE 
-                                WHEN dd.FEE_POLICY IN ('DRIVER_GENERAL', 'DRIVER_GENNERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH') 
-                                THEN br.DRIVER_BIDDING_PRICE * 0.106
-                                ELSE br.DRIVER_BIDDING_PRICE * 0.066
-                            END
+                        THEN FLOOR((br.DRIVER_BIDDING_PRICE * 0.006) / 10) * 10
                         ELSE 0
-                    END as salesCommission
+                    END) as salesCommission
                 FROM TB_BUS_RESERVATION br
                 INNER JOIN TB_AUCTION_REQ   req      ON br.REQ_ID      = req.REQ_ID
                 LEFT  JOIN TB_USER          traveler ON req.TRAVELER_ID = traveler.CUST_ID
@@ -891,7 +913,8 @@ module.exports = (pool) => {
                 LEFT  JOIN TB_DRIVER_DETAIL dd       ON br.DRIVER_ID   = dd.CUST_ID
                 LEFT  JOIN TB_BUS_DRIVER_VEHICLE v   ON br.BUS_ID      = v.BUS_ID
                 ${whereClause}
-                ORDER BY br.CONFIRM_DT DESC
+                GROUP BY br.REQ_ID
+                ORDER BY MAX(br.DONE_DT) DESC
             `;
 
             // 누적 합계 조회 (같은 조건)
@@ -906,22 +929,11 @@ module.exports = (pool) => {
                             ELSE 0
                         END
                     ), 0) as totalDriverPayout,
-                    IFNULL(SUM(
-                        CASE 
-                            WHEN dd.FEE_POLICY IN ('DRIVER_GENERAL', 'DRIVER_GENNERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH') 
-                            THEN br.DRIVER_BIDDING_PRICE * 0.011
-                            ELSE br.DRIVER_BIDDING_PRICE * 0.066
-                        END
-                    ), 0) as totalPlatformFee,
+                    IFNULL(SUM(br.DRIVER_BIDDING_PRICE * 0.066), 0) as totalPlatformFee,
                     IFNULL(SUM(
                         CASE 
                             WHEN driver.RECOM_CODE IS NOT NULL AND TRIM(driver.RECOM_CODE) != ''
-                            THEN 
-                                CASE 
-                                    WHEN dd.FEE_POLICY IN ('DRIVER_GENERAL', 'DRIVER_GENNERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH') 
-                                    THEN br.DRIVER_BIDDING_PRICE * 0.106
-                                    ELSE br.DRIVER_BIDDING_PRICE * 0.066
-                                END
+                            THEN FLOOR((br.DRIVER_BIDDING_PRICE * 0.006) / 10) * 10
                             ELSE 0
                         END
                     ), 0) as totalSalesCommission
@@ -1028,13 +1040,7 @@ module.exports = (pool) => {
                     (SELECT COUNT(*) FROM TB_USER WHERE USER_TYPE = 'DRIVER' AND TRIM(RECOM_CODE) = TRIM(a.ADMIN_ID)) as driverCount,
                     (SELECT COUNT(*) FROM TB_BUS_RESERVATION r INNER JOIN TB_USER d ON r.DRIVER_ID = d.CUST_ID AND d.USER_TYPE = 'DRIVER' WHERE TRIM(d.RECOM_CODE) = TRIM(a.ADMIN_ID) ${ymCondition}) as matchCount,
                     (SELECT IFNULL(SUM(r.DRIVER_BIDDING_PRICE), 0) FROM TB_BUS_RESERVATION r INNER JOIN TB_USER d ON r.DRIVER_ID = d.CUST_ID AND d.USER_TYPE = 'DRIVER' WHERE TRIM(d.RECOM_CODE) = TRIM(a.ADMIN_ID) ${ymCondition}) as totalBidding,
-                    (SELECT IFNULL(SUM(
-                        CASE 
-                            WHEN dd.FEE_POLICY IN ('DRIVER_GENERAL', 'DRIVER_GENNERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH') 
-                            THEN r.DRIVER_BIDDING_PRICE * 0.106
-                            ELSE r.DRIVER_BIDDING_PRICE * 0.066
-                        END
-                     ), 0) 
+                    (SELECT IFNULL(SUM(r.DRIVER_BIDDING_PRICE * 0.006), 0) 
                      FROM TB_BUS_RESERVATION r 
                      INNER JOIN TB_USER d ON r.DRIVER_ID = d.CUST_ID AND d.USER_TYPE = 'DRIVER' 
                      LEFT JOIN TB_DRIVER_DETAIL dd ON d.CUST_ID = dd.CUST_ID

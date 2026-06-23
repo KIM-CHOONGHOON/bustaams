@@ -96,7 +96,10 @@ async function runBatch(customExecId = null) {
                 // Update TB_BUS_RESERVATION
                 await conn.execute(`
                     UPDATE TB_BUS_RESERVATION 
-                    SET DATA_STAT = 'DONE', MOD_DT = NOW(), MOD_ID = 'BATCH_DONE'
+                    SET DATA_STAT = 'DONE', 
+                        DONE_DT = NOW(),
+                        MOD_DT = NOW(), 
+                        MOD_ID = 'BATCH_DONE'
                     WHERE REQ_ID = ? AND DATA_STAT = 'CONFIRM'
                 `, [reqId]);
 
