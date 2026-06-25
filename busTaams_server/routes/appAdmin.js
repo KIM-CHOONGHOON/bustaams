@@ -1342,7 +1342,7 @@ module.exports = (pool) => {
 
             // Update user's recomCode
             await pool.execute(
-                `UPDATE TB_USER SET RECOM_CODE = ?, MOD_DT = NOW() WHERE CUST_ID = ? AND USER_TYPE = 'DRIVER'`,
+                `UPDATE TB_USER SET RECOM_CODE = ?, RECOM_ASSIGN_DT = NOW(), MOD_DT = NOW() WHERE CUST_ID = ? AND USER_TYPE = 'DRIVER'`,
                 [recomCode, custId]
             );
 

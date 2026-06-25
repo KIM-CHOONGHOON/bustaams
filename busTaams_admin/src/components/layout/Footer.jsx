@@ -31,6 +31,13 @@ const Footer = () => {
             <span className="w-px h-2.5 bg-slate-200"></span>
             <span>종목: 전자부품, 태양보일러(농업용), 자동차부품, 부가통신</span>
           </div>
+
+          {/* 플랫폼 매칭 및 이행 책임 안내 (추가됨) */}
+          <div className="mt-3 text-slate-400 text-[11px] leading-relaxed max-w-4xl border-t border-slate-100 pt-3">
+            <p>&lt; 청솔테크(주)의 버스탐스 &gt;는 여행자와 버스 기사님을 연결하는 운송 매칭 플랫폼입니다.</p>
+            <p className="mt-1">플랫폼에서 판매되는 모든 상품은 &lt; 청솔테크(주) &gt;에서 책임지고 관리하나, 실제 버스 운행 서비스 및 결제, 현장 서비스의 이행 책임은 거래 당사자(여행자 및 버스 기사)에게 있습니다.</p>
+            <p className="mt-1 font-semibold text-slate-500">불편사항 및 민원 접수 : 담당자 원동일 (02-429-5459)</p>
+          </div>
         </div>
 
         {/* 저작권 표시 */}

@@ -150,6 +150,11 @@ const BustaansAdminHomeScreen = ({ onLoginSuccess }) => {
           <p className="font-label-technical text-label-technical leading-relaxed" style={{ color: '#ffffff' }}>
             (주) 청솔테크&nbsp;&nbsp;|&nbsp;&nbsp;사업자등록번호: 212-81-45502&nbsp;&nbsp;|&nbsp;&nbsp;통신판매 송파구청 1234-1234&nbsp;&nbsp;|&nbsp;&nbsp;대표 : 원동일&nbsp;&nbsp;|&nbsp;&nbsp;주소: 서울특별시 송파구 충민로 66, L-7145호(문정동, 가든파이브라이프)
           </p>
+          <p className="font-label-technical text-label-technical leading-relaxed" style={{ color: '#c8e6d0', fontSize: '12px', marginTop: '4px' }}>
+            &lt; 청솔테크(주)의 버스탐스 &gt;는 여행자와 버스 기사님을 연결하는 운송 매칭 플랫폼입니다.
+            플랫폼에서 판매되는 모든 상품은 &lt; 청솔테크(주) &gt;에서 책임지고 관리하나, 실제 버스 운행 서비스 및 결제, 현장 서비스의 이행 책임은 거래 당사자(여행자 및 버스 기사)에게 있습니다.
+            불편사항 및 민원 접수 : 담당자 원동일 (02-429-5459)
+          </p>
           <p className="font-label-technical text-label-technical" style={{ color: 'rgba(255,255,255,0.8)' }}>
             © 2024 Cheongsol Tech Co., Ltd. All rights reserved.
             &nbsp;&nbsp;|&nbsp;&nbsp;
