@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Play, RefreshCw, AlertCircle, FileText, CheckCircle, Clock, Database, CalendarClock, ListChecks, History, FileSearch, RotateCcw, Bell, Lock, ChevronLeft } from 'lucide-react';
 import BatchTaskList from './BatchTaskList';
+import ScheduleForm from '../../batchScheduleManagement/frontend/ScheduleForm';
 import NewBatchRegistration from './NewBatchRegistration';
 
 const BatchDashBoardModal = ({ isOpen, onClose }) => {
@@ -9,6 +10,7 @@ const BatchDashBoardModal = ({ isOpen, onClose }) => {
   const [stats, setStats] = useState({ total: 0, running: 0, success: 0, fail: 0 });
   const [logs, setLogs] = useState([]);
   const [isExecuting, setIsExecuting] = useState(null);
+  const [scheduleList, setScheduleList] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [jobToEdit, setJobToEdit] = useState(null);
@@ -82,6 +84,16 @@ const BatchDashBoardModal = ({ isOpen, onClose }) => {
 
   useEffect(() => {
     fetchSubViewData();
+  }, [activeView]);
+
+  // Fetch existing schedules when schedule view is active
+  useEffect(() => {
+    if (activeView === 'schedule') {
+      fetch('/schedule/inqueryList')
+        .then(res => res.json())
+        .then(data => setScheduleList(data))
+        .catch(err => console.error('Failed to fetch schedules:', err));
+    }
   }, [activeView]);
 
   if (!isOpen) return null;
@@ -447,6 +459,49 @@ const BatchDashBoardModal = ({ isOpen, onClose }) => {
     
     if (activeView === 'register') {
       return <NewBatchRegistration onBack={() => { setJobToEdit(null); setActiveView('master'); }} jobToEdit={jobToEdit} />;
+    }
+
+    // Special handling for schedule management view
+    if (activeView === 'schedule') {
+      return (
+        <div className="flex-1 flex flex-col p-8 overflow-y-auto space-y-6">
+          {/* Schedule list (if any) */}
+          {scheduleList.length > 0 && (
+            <div className="mb-4">
+              <h4 className="text-lg font-bold mb-2">등록된 스케줄 목록</h4>
+              <ul className="list-disc list-inside text-sm text-slate-700">
+                {scheduleList.map((item, idx) => (
+                  <li key={idx}>{item.BATCH_JOB_NM || item.id}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {/* Schedule form */}
+          <ScheduleForm
+            onCancel={() => setActiveView('home')}
+            onSubmit={async (data) => {
+              try {
+                const res = await fetch('/schedule/inqueryList', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(data),
+                });
+                if (!res.ok) throw new Error('Failed to save schedule');
+                alert('스케줄이 성공적으로 저장되었습니다.');
+                // Refresh list after save
+                fetch('/schedule/inqueryList')
+                  .then(r => r.json())
+                  .then(d => setScheduleList(d))
+                  .catch(e => console.error('Refresh list error:', e));
+              } catch (e) {
+                console.error(e);
+                alert('스케줄 저장에 실패했습니다.');
+              }
+              setActiveView('home');
+            }}
+          />
+        </div>
+      );
     }
 
     return (
