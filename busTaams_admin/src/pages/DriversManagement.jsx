@@ -210,7 +210,12 @@ const DriversManagement = () => {
 
   const handleRegisterRecom = async (recomCode) => {
     if (!selectedDriverForRecom) return;
-    if (!window.confirm(`선택한 영업사원(${recomCode})을 추천인으로 등록하시겠습니까?`)) return;
+    const isEdit = !!selectedDriverForRecom.recomCode;
+    const confirmMessage = isEdit 
+      ? `추천인을 기존 ${selectedDriverForRecom.recomCode}에서 ${recomCode}(으)로 변경하시겠습니까?`
+      : `선택한 영업사원(${recomCode})을 추천인으로 등록하시겠습니까?`;
+      
+    if (!window.confirm(confirmMessage)) return;
     setRecomLoading(true);
     try {
       const response = await fetch(`/api/admin/drivers/${selectedDriverForRecom.custId}/recommender`, {
@@ -219,17 +224,17 @@ const DriversManagement = () => {
         body: JSON.stringify({ recomCode })
       });
       if (response.ok) {
-        alert('추천인이 성공적으로 등록되었습니다.');
+        alert(isEdit ? '추천인이 성공적으로 변경되었습니다.' : '추천인이 성공적으로 등록되었습니다.');
         setSelectedDriverForRecom(null);
         setRecomSearchKeyword('');
         fetchDrivers(); // 리스트 갱신
       } else {
         const errorData = await response.json();
-        alert(errorData.error || '추천인 등록 중 오류가 발생했습니다.');
+        alert(errorData.error || '추천인 등록/변경 중 오류가 발생했습니다.');
       }
     } catch (error) {
       console.error('Failed to register recommender:', error);
-      alert('추천인 등록 통신 오류가 발생했습니다.');
+      alert('추천인 등록/변경 통신 오류가 발생했습니다.');
     } finally {
       setRecomLoading(false);
     }
@@ -434,16 +439,25 @@ const DriversManagement = () => {
                     {/* 추천인 아이디 */}
                     <td className="py-4 px-6 text-center">
                       {driver.recomCode ? (
-                        <span className="px-2.5 py-1 bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold font-mono shadow-sm">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedDriverForRecom(driver);
+                          }}
+                          className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-black font-mono shadow-xs transition-all active:scale-95 cursor-pointer inline-flex items-center gap-1.5"
+                          title="추천인 변경"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
                           {driver.recomCode}
-                        </span>
+                          <span className="text-[10px] text-blue-400 font-normal">변경</span>
+                        </button>
                       ) : (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedDriverForRecom(driver);
                           }}
-                          className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95"
+                          className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
                         >
                           추천인 등록
                         </button>
@@ -1212,7 +1226,7 @@ const DriversManagement = () => {
             <div className="p-5 border-b border-slate-100 flex items-center justify-between shrink-0">
               <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
                 <Users size={18} className="text-emerald-500" />
-                추천 영업사원 등록
+                {selectedDriverForRecom.recomCode ? '추천 영업사원 변경' : '추천 영업사원 등록'}
               </h3>
               <button 
                 onClick={() => {
@@ -1226,9 +1240,14 @@ const DriversManagement = () => {
             </div>
             
             <div className="p-5 bg-slate-50 border-b border-slate-100 shrink-0">
-              <p className="text-xs text-slate-500 font-bold mb-2">
+              <p className="text-xs text-slate-500 font-bold mb-1">
                 기사명: <span className="text-slate-900 font-black">{selectedDriverForRecom.userNm}</span> ({selectedDriverForRecom.userId})
               </p>
+              {selectedDriverForRecom.recomCode && (
+                <p className="text-xs text-slate-500 font-bold mb-2">
+                  기존 추천인 ID: <span className="text-emerald-600 font-black">{selectedDriverForRecom.recomCode}</span>
+                </p>
+              )}
               <div className="relative">
                 <input 
                   type="text"

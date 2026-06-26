@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { pool, getNextId, getBucket, bucketName } = require('../db');
 const bcrypt = require('bcrypt');
+const fs = require('fs');
+const path = require('path');
 const { randomUUID } = require('crypto');
 const jwt = require('jsonwebtoken');
 const { decrypt, encrypt } = require('../crypto');
@@ -234,28 +236,34 @@ router.post('/register', async (req, res) => {
         // 1. CUST_ID 채번 (10자리, 0 패딩)
         const custId = await getNextId('TB_USER', 'CUST_ID', 10);
 
-        // 2. 전자 서명 처리 (GCS 업로드 및 TB_FILE_MASTER 등록)
+        // 2. 전자 서명 처리 (로컬 업로드 및 TB_FILE_MASTER 등록)
         let signFileId = null;
         if (signatureBase64 && signatureBase64.startsWith('data:image')) {
-            const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20);
-            const fileName = `signatures/${fileId}.png`;
-            const file = getBucket().file(fileName);
+            const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20, connection);
+            const fileName = `${fileId}.png`;
+            const relativeFolder = 'uploads/signatures';
+            const absoluteFolder = path.join(__dirname, '..', relativeFolder);
+            
+            // 디렉터리 생성
+            if (!fs.existsSync(absoluteFolder)) {
+                fs.mkdirSync(absoluteFolder, { recursive: true });
+            }
+            
+            const absoluteFilePath = path.join(absoluteFolder, fileName);
+            const relativeFilePath = `${relativeFolder}/${fileName}`;
             const buffer = Buffer.from(signatureBase64.split(',')[1], 'base64');
             
-            // GCS 업로드
-            await file.save(buffer, {
-                metadata: { contentType: 'image/png' }
-            });
+            // 로컬 파일 저장
+            fs.writeFileSync(absoluteFilePath, buffer);
 
-            const gcsPath = `https://storage.googleapis.com/${bucketName}/${fileName}`;
             signFileId = fileId;
 
             // TB_FILE_MASTER 삽입 (REG_ID 제거, MOD_ID를 CUST_ID로 설정, FILE_SIZE 추가)
             const fileQuery = `
                 INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, MOD_ID)
-                VALUES (?, 'SIGNATURE', ?, ?, ?, 'png', ?, ?)
+                VALUES (?, 'SIGNATURE', 'local', ?, ?, 'png', ?, ?)
             `;
-            await connection.execute(fileQuery, [fileId, bucketName, gcsPath, `${userId}_signature.png`, buffer.length, custId]);
+            await connection.execute(fileQuery, [fileId, relativeFilePath, `${userId}_signature.png`, buffer.length, custId]);
         }
 
         // 3. TB_USER 삽입 (REG_ID 제거, CUST_ID, RESIDENT_NO_ENC, RECOM_CODE 추가)

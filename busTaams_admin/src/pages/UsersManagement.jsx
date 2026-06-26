@@ -348,6 +348,9 @@ const UsersManagement = () => {
           {!selectedAdmin && (
             <span className="text-xs text-amber-500 font-bold ml-2">* 목록에서 관리자를 클릭하시면 수정할 데이터가 아래에 표시됩니다.</span>
           )}
+          {selectedAdmin && editFormData.role === 'SUPER' && JSON.parse(localStorage.getItem('adminUser') || '{}').role !== 'SUPER' && (
+            <span className="text-xs text-rose-500 font-black ml-2 animate-pulse">[경고] 최고 관리자(SUPER) 등급 정보는 일반 관리자가 변경할 수 없습니다.</span>
+          )}
         </div>
 
         <form onSubmit={handleEditSubmit} className="flex flex-col gap-6">
@@ -377,9 +380,9 @@ const UsersManagement = () => {
                 placeholder="이름 입력"
                 value={editFormData.adminNm}
                 onChange={handleEditChange}
-                disabled={!selectedAdmin}
+                disabled={!selectedAdmin || (editFormData.role === 'SUPER' && JSON.parse(localStorage.getItem('adminUser') || '{}').role !== 'SUPER')}
                 className={`w-full border rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${
-                  selectedAdmin ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-slate-100/50 border-slate-100 text-slate-400 cursor-not-allowed'
+                  selectedAdmin && !(editFormData.role === 'SUPER' && JSON.parse(localStorage.getItem('adminUser') || '{}').role !== 'SUPER') ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-slate-100/50 border-slate-100 text-slate-400 cursor-not-allowed'
                 }`}
                 required
               />
@@ -394,9 +397,9 @@ const UsersManagement = () => {
                 placeholder="소속 부서 입력"
                 value={editFormData.deptNm}
                 onChange={handleEditChange}
-                disabled={!selectedAdmin}
+                disabled={!selectedAdmin || (editFormData.role === 'SUPER' && JSON.parse(localStorage.getItem('adminUser') || '{}').role !== 'SUPER')}
                 className={`w-full border rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${
-                  selectedAdmin ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-slate-100/50 border-slate-100 text-slate-400 cursor-not-allowed'
+                  selectedAdmin && !(editFormData.role === 'SUPER' && JSON.parse(localStorage.getItem('adminUser') || '{}').role !== 'SUPER') ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-slate-100/50 border-slate-100 text-slate-400 cursor-not-allowed'
                 }`}
               />
             </div>
@@ -410,9 +413,9 @@ const UsersManagement = () => {
                 name="status"
                 value={editFormData.status}
                 onChange={handleEditChange}
-                disabled={!selectedAdmin}
+                disabled={!selectedAdmin || (editFormData.role === 'SUPER' && JSON.parse(localStorage.getItem('adminUser') || '{}').role !== 'SUPER')}
                 className={`w-full border rounded-xl px-3 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${
-                  selectedAdmin ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-slate-100/50 border-slate-100 text-slate-400 cursor-not-allowed'
+                  selectedAdmin && !(editFormData.role === 'SUPER' && JSON.parse(localStorage.getItem('adminUser') || '{}').role !== 'SUPER') ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-slate-100/50 border-slate-100 text-slate-400 cursor-not-allowed'
                 }`}
                 required
               >
@@ -434,9 +437,9 @@ const UsersManagement = () => {
                 placeholder="010-0000-0000"
                 value={editFormData.hpNo}
                 onChange={handleEditChange}
-                disabled={!selectedAdmin}
+                disabled={!selectedAdmin || (editFormData.role === 'SUPER' && JSON.parse(localStorage.getItem('adminUser') || '{}').role !== 'SUPER')}
                 className={`w-full border rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${
-                  selectedAdmin ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-slate-100/50 border-slate-100 text-slate-400 cursor-not-allowed'
+                  selectedAdmin && !(editFormData.role === 'SUPER' && JSON.parse(localStorage.getItem('adminUser') || '{}').role !== 'SUPER') ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-slate-100/50 border-slate-100 text-slate-400 cursor-not-allowed'
                 }`}
               />
             </div>
@@ -450,9 +453,9 @@ const UsersManagement = () => {
                 placeholder="example@bustaams.com"
                 value={editFormData.email}
                 onChange={handleEditChange}
-                disabled={!selectedAdmin}
+                disabled={!selectedAdmin || (editFormData.role === 'SUPER' && JSON.parse(localStorage.getItem('adminUser') || '{}').role !== 'SUPER')}
                 className={`w-full border rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 ${
-                  selectedAdmin ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-slate-100/50 border-slate-100 text-slate-400 cursor-not-allowed'
+                  selectedAdmin && !(editFormData.role === 'SUPER' && JSON.parse(localStorage.getItem('adminUser') || '{}').role !== 'SUPER') ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-slate-100/50 border-slate-100 text-slate-400 cursor-not-allowed'
                 }`}
               />
             </div>
