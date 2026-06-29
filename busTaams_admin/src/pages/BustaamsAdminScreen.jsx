@@ -7,6 +7,7 @@
  */
 import React, { useState } from 'react';
 import LoginModal from '../components/LoginModal';
+import TermsSelectModal from '../components/TermsSelectModal';
 import busLogo from '../assets/BUSTAAMS_IMAGE_LOGO.png';
 
 import textLogo from '../assets/bustaams_header_logo.png';
@@ -18,6 +19,7 @@ import bgImage from '../assets/bustaams_bg.png';
 const BustaamsAdminScreen = ({ onLoginSuccess }) => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [footerVisible, setFooterVisible] = useState(false);
+  const [isTermsOpen, setIsTermsOpen] = useState(false);
 
   const openLogin  = () => setShowLoginModal(true);
   const closeLogin = () => setShowLoginModal(false);
@@ -200,7 +202,15 @@ const BustaamsAdminScreen = ({ onLoginSuccess }) => {
             {/* 오른쪽: 링크 + 저작권 */}
             <div className="flex flex-col items-end gap-1" style={{ color: '#c8e6d0', fontSize: '13px', lineHeight: '22px' }}>
               <div className="flex gap-4">
-                <a href="#" className="hover:text-white transition-colors">약관 조회</a>
+                <button 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setIsTermsOpen(true);
+                  }}
+                  className="hover:text-white transition-colors cursor-pointer outline-none bg-transparent border-none p-0 font-inherit"
+                >
+                  약관 조회
+                </button>
                 <span>|</span>
                 <a href="#" className="hover:text-white transition-colors">1:1 문의</a>
               </div>
@@ -220,6 +230,12 @@ const BustaamsAdminScreen = ({ onLoginSuccess }) => {
           }}
         />
       )}
+
+      {/* ── 약관 선택 모달 ────────────────────────────── */}
+      <TermsSelectModal
+        isOpen={isTermsOpen}
+        onClose={() => setIsTermsOpen(false)}
+      />
     </div>
   );
 };
