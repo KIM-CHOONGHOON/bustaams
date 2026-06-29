@@ -222,17 +222,24 @@ const Login = () => {
         </div>
       </main>
 
-      <footer className="w-full px-6 py-12 max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8 border-t border-transparent">
-        <div className="flex flex-col md:flex-row items-center gap-8">
-          <div 
-            onClick={handleCheckVehicle} 
-            className="text-teal-900/40 font-black tracking-tighter font-headline text-xl cursor-pointer hover:text-teal-900/60 transition-colors"
-          >
-            busTaams
-          </div>
+      <footer className="w-full px-6 py-12 max-w-7xl mx-auto flex flex-col items-center gap-6 border-t border-outline/10 text-center">
+        <div 
+          onClick={handleCheckVehicle} 
+          className="text-teal-900/40 font-black tracking-tighter font-headline text-xl cursor-pointer hover:text-teal-900/60 transition-colors"
+        >
+          busTaams
         </div>
-        <div className="text-xs font-bold text-outline uppercase tracking-widest text-[10px]">
-          © 2000 (주)청솔테크
+        <div className="text-[11px] font-medium text-outline/80 leading-relaxed space-y-1 max-w-3xl mx-auto">
+          <p className="font-bold text-on-surface/80 text-[12px]">(주)청솔테크</p>
+          <p>대표자: 원동일 | 대표번호: 010-8306-2459 | 사업자등록번호: 212-81-45502 | 법인등록번호: 110111-1871486</p>
+          <p>주소: 서울특별시 송파구 충민로 66, L-7145호 (문정동, 가든파이브라이프) | 이메일: tong45502@hometax.go.kr</p>
+          <p>업태: 제조, 서비스 | 종목: 전자부품, 태양보일러(농업용), 자동차부품, 부가통신</p>
+          <p className="pt-1 text-on-surface/70 font-semibold">&lt; 청솔테크(주)의 버스탐스 &gt;는 여행자와 버스 기사님을 연결하는 운송 매칭 플랫폼입니다.</p>
+          <p className="pt-1 text-outline/60 text-[10px] leading-normal">
+            플랫폼에서 판매되는 모든 상품은 &lt; 청솔테크(주) &gt;에서 책임지고 관리하나, 실제 버스 운행 서비스 및 결제, 현장 서비스의 이행 책임은 거래 당사자(여행자 및 버스 기사)에게 있습니다.
+          </p>
+          <p className="pt-1 font-bold text-on-surface/80">불편사항 및 민원 접수 : 담당자 원동일 (02-429-5459)</p>
+          <p className="pt-2 text-[10px] text-outline/40 font-bold uppercase tracking-wider">© (주)청솔테크. All rights reserved.</p>
         </div>
       </footer>
       <div className="fixed top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-secondary opacity-20"></div>

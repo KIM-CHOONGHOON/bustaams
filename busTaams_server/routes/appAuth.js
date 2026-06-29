@@ -4,8 +4,6 @@ const { pool, getNextId, getBucket, bucketName } = require('../db');
 const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcrypt');
-const fs = require('fs');
-const path = require('path');
 const { randomUUID } = require('crypto');
 const jwt = require('jsonwebtoken');
 const { decrypt, encrypt } = require('../crypto');
@@ -286,13 +284,13 @@ router.post('/register', async (req, res) => {
             await connection.execute(fileQuery, [fileId, gcsPath, `${userId}_signature.png`, buffer.length, custId]);
         }
 
-        // 3. TB_USER 삽입 (REG_ID 제거, CUST_ID, RESIDENT_NO_ENC, RECOM_CODE 추가)
+        // 3. TB_USER 삽입 (REG_ID 제거, CUST_ID, RESIDENT_NO_ENC, RECOM_CODE, RECOM_ASSIGN_DT 추가)
         const userQuery = `
             INSERT INTO TB_USER (
                 CUST_ID, USER_ID, EMAIL, PASSWORD, USER_NM, HP_NO, SNS_TYPE, 
                 SMS_AUTH_YN, USER_TYPE, JOIN_DT, USER_STAT, SIGNATURE_FILE_ID,
-                RESIDENT_NO_ENC, RECOM_CODE, MOD_ID
-            ) VALUES (?, ?, ?, ?, ?, ?, 'NONE', ?, ?, NOW(), 'ACTIVE', ?, ?, ?, ?)
+                RESIDENT_NO_ENC, RECOM_CODE, RECOM_ASSIGN_DT, MOD_ID
+            ) VALUES (?, ?, ?, ?, ?, ?, 'NONE', ?, ?, NOW(), 'ACTIVE', ?, ?, ?, ?, ?)
         `;
         
         await connection.execute(userQuery, [
@@ -307,6 +305,7 @@ router.post('/register', async (req, res) => {
             signFileId, // SIGNATURE_FILE_ID
             finalUserType === 'DRIVER' ? encrypt(residentNo) : null,
             recomCode || null,
+            (finalUserType === 'DRIVER' && recomCode) ? new Date() : null, // 기사 가입 시 추천인 지정일자 기록
             custId  // MOD_ID
         ]);
 

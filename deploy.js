@@ -93,12 +93,17 @@ conn.on('ready', () => {
     // 순차적 배포 흐름 제어
     (async () => {
       try {
-        console.log('\n--- [1] 프론트엔드 빌드 아티팩트 업로드 시작 (관리자 페이지만 진행, 사용자 앱 제외) ---');
+        console.log('\n--- [1] 프론트엔드 빌드 아티팩트 업로드 시작 (관리자 및 사용자 앱 모두 진행) ---');
         if (!fs.existsSync(LOCAL_ADMIN_DIST)) {
           throw new Error('로컬 관리자 dist 폴더가 존재하지 않습니다. 먼저 busTaams_admin 폴더에서 npm run build를 완료해야 합니다.');
         }
+        if (!fs.existsSync(LOCAL_APP_DIST)) {
+          throw new Error('로컬 사용자 앱 dist 폴더가 존재하지 않습니다. 먼저 busTaams_app 폴더에서 npm run build를 완료해야 합니다.');
+        }
         await uploadDir(LOCAL_ADMIN_DIST, REMOTE_ADMIN_DIR);
-        console.log('✔ 관리자 페이지 업로드 완료! (사용자 앱은 업로드에서 안전하게 제외됨)');
+        console.log('✔ 관리자 페이지 업로드 완료!');
+        await uploadDir(LOCAL_APP_DIST, REMOTE_APP_DIR);
+        console.log('✔ 사용자 앱 페이지 업로드 완료!');
         
         console.log('\n--- [2] 백엔드 소스 코드 업로드 시작 (node_modules 제외) ---');
         await uploadDir(LOCAL_SERVER_DIR, REMOTE_SERVER_DIR, EXCLUDE_SERVER_LIST);

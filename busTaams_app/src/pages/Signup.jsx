@@ -482,7 +482,7 @@ const Signup = () => {
         <div className="bg-slate-50 font-body text-on-background min-h-screen flex flex-col items-center py-12 px-6">
             <header className="w-full max-w-md flex justify-between items-center mb-8">
                 <div className="flex items-center gap-3">
-                    <img src="/assets/BUSTAAMS_IMAGE_LOGO.png" alt="busTaams Logo" className="w-10 h-10 object-contain rounded-xl shadow-sm" />
+                    <img src="/app/assets/BUSTAAMS_IMAGE_LOGO.png" alt="busTaams Logo" className="w-10 h-10 object-contain rounded-xl shadow-sm" />
                     <div className="text-primary font-black tracking-tighter font-headline text-3xl">busTaams</div>
                 </div>
                 <button className="text-outline font-bold text-xs">고객지원</button>
