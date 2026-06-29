@@ -1788,7 +1788,7 @@ router.post('/reservation/complete', authenticateToken, async (req, res) => {
         // 3. 관련 예약 상태 변경 (TB_BUS_RESERVATION -> DONE)
         // CONFIRM 상태인 것만 DONE으로 변경
         await connection.execute(
-            'UPDATE TB_BUS_RESERVATION SET DATA_STAT = "DONE", DONE_DT = NOW() WHERE REQ_ID = ? AND DATA_STAT = "CONFIRM"',
+            'UPDATE TB_BUS_RESERVATION SET DATA_STAT = "DONE", DONE_DT = NOW(), MOD_DT = NOW() WHERE REQ_ID = ? AND DATA_STAT = "CONFIRM"',
             [reqId]
         );
 

@@ -13,9 +13,11 @@ const SSH_CONFIG = {
 };
 
 const REMOTE_APP_DIR = '/var/www/bustaams/app';
+const REMOTE_ADMIN_DIR = '/var/www/bustaams/admin';
 const REMOTE_SERVER_DIR = '/var/www/bustaams/server';
 
 const LOCAL_APP_DIST = path.join(__dirname, 'busTaams_app', 'dist');
+const LOCAL_ADMIN_DIST = path.join(__dirname, 'busTaams_admin', 'dist');
 const LOCAL_SERVER_DIR = path.join(__dirname, 'busTaams_server');
 
 // 백엔드 업로드 시 제외할 파일 및 폴더 목록
@@ -91,12 +93,12 @@ conn.on('ready', () => {
     // 순차적 배포 흐름 제어
     (async () => {
       try {
-        console.log('\n--- [1] 프론트엔드 빌드 아티팩트 업로드 시작 ---');
-        if (!fs.existsSync(LOCAL_APP_DIST)) {
-          throw new Error('로컬 프론트엔드 dist 폴더가 존재하지 않습니다. 먼저 npm run build를 완료해야 합니다.');
+        console.log('\n--- [1] 프론트엔드 빌드 아티팩트 업로드 시작 (관리자 페이지만 진행, 사용자 앱 제외) ---');
+        if (!fs.existsSync(LOCAL_ADMIN_DIST)) {
+          throw new Error('로컬 관리자 dist 폴더가 존재하지 않습니다. 먼저 busTaams_admin 폴더에서 npm run build를 완료해야 합니다.');
         }
-        await uploadDir(LOCAL_APP_DIST, REMOTE_APP_DIR);
-        console.log('✔ 프론트엔드 업로드 완료!');
+        await uploadDir(LOCAL_ADMIN_DIST, REMOTE_ADMIN_DIR);
+        console.log('✔ 관리자 페이지 업로드 완료! (사용자 앱은 업로드에서 안전하게 제외됨)');
         
         console.log('\n--- [2] 백엔드 소스 코드 업로드 시작 (node_modules 제외) ---');
         await uploadDir(LOCAL_SERVER_DIR, REMOTE_SERVER_DIR, EXCLUDE_SERVER_LIST);
