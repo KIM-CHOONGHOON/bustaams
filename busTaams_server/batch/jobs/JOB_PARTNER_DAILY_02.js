@@ -77,7 +77,7 @@ async function runBatch(customExecId = null) {
                   WHERE u.USER_TYPE = 'DRIVER'
                     AND TRIM(u.RECOM_CODE) = TRIM(a.ADMIN_ID)
                     AND (
-                        u.REG_DT >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+                        u.JOIN_DT >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
                         OR (u.RECOM_ASSIGN_DT IS NOT NULL AND u.RECOM_ASSIGN_DT >= DATE_SUB(NOW(), INTERVAL 6 MONTH))
                     )
               )

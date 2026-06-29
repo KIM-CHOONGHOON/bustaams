@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import LoginModal from '../components/LoginModal';
+import TermsSelectModal from '../components/TermsSelectModal';
 import googlePlayLogo from '../assets/Google_Play_logo.png';
 import busLogoIcon from '../assets/BUSTAAMS_IMAGE_LOGO.png';
 import bustaaamsAppInstall from '../assets/버스탐스_앱_설치.png';
@@ -15,6 +16,7 @@ const LOGO_URL =
 const BustaansAdminHomeScreen = ({ onLoginSuccess }) => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [headerShadow,   setHeaderShadow]   = useState(false);
+  const [isTermsOpen,    setIsTermsOpen]    = useState(false);
 
   // 스크롤 시 헤더 그림자 토글
   useEffect(() => {
@@ -158,7 +160,16 @@ const BustaansAdminHomeScreen = ({ onLoginSuccess }) => {
           <p className="font-label-technical text-label-technical" style={{ color: 'rgba(255,255,255,0.8)' }}>
             © 2024 Cheongsol Tech Co., Ltd. All rights reserved.
             &nbsp;&nbsp;|&nbsp;&nbsp;
-            <a href="#" onClick={handleAnchorClick} style={{ color: 'rgba(255,255,255,0.8)' }} className="hover:underline transition-all">약관 조회</a>
+            <button 
+              onClick={(e) => {
+                e.preventDefault();
+                setIsTermsOpen(true);
+              }}
+              style={{ color: 'rgba(255,255,255,0.8)', border: 'none', background: 'none', padding: 0, font: 'inherit', cursor: 'pointer' }}
+              className="hover:underline transition-all"
+            >
+              약관 조회
+            </button>
             &nbsp;&nbsp;|&nbsp;&nbsp;
             <a href="#" onClick={handleAnchorClick} style={{ color: 'rgba(255,255,255,0.8)' }} className="hover:underline transition-all">버스탐스 안내</a>
             &nbsp;&nbsp;|&nbsp;&nbsp;
@@ -174,6 +185,12 @@ const BustaansAdminHomeScreen = ({ onLoginSuccess }) => {
           onLoginSuccess={onLoginSuccess}
         />
       )}
+
+      {/* ── 약관 선택 모달 ────────────────────────────────────────── */}
+      <TermsSelectModal
+        isOpen={isTermsOpen}
+        onClose={() => setIsTermsOpen(false)}
+      />
     </div>
   );
 };

@@ -399,12 +399,20 @@ router.get('/profile', authenticateToken, async (req, res) => {
             [custId]
         );
 
+        // 2-1. TB_PARTNER_BIZ_INFO 사업자 정보 조회 (추가됨)
+        const [bizRows] = await pool.execute(
+            'SELECT BIZ_NO as bizNo, BIZ_NM as bizNm, CEO_NM as ceoNm FROM TB_PARTNER_BIZ_INFO WHERE TARGET_TYPE = "DRIVER" AND TARGET_ID = ?',
+            [custId]
+        );
+
         // 3. TB_DRIVER_DOCS 인증 서류 정보 (면허증, 자격증 등)
         const [docRows] = await pool.execute(
             `SELECT DOC_TYPE, LICENSE_TYPE_CD, DOC_NO_ENC, DATE_FORMAT(ISSUE_DT, '%Y-%m-%d') as issueDt, INFO_STAT_CD, 
-                    CASE WHEN GCS_PATH IS NOT NULL THEN CONCAT('/api/common/display-image?path=', GCS_PATH) ELSE NULL END as filePath, 
+                    CASE WHEN GCS_PATH IS NOT NULL THEN CONCAT('/api/common/display-image?path=', f.GCS_PATH) ELSE NULL END as filePath, 
                     APPROVE_STAT as approveStat
-             FROM TB_DRIVER_DOCS WHERE CUST_ID = ? ORDER BY REG_DT DESC`,
+             FROM TB_DRIVER_DOCS d
+             LEFT JOIN TB_FILE_MASTER f ON d.GCS_PATH = f.GCS_PATH
+             WHERE d.CUST_ID = ? ORDER BY d.REG_DT DESC`,
             [custId]
         );
 
@@ -449,7 +457,10 @@ router.get('/profile', authenticateToken, async (req, res) => {
             ...(detailRows.length > 0 ? detailRows[0] : {}),
             residentNo: residentNoDisplay,
             profileImg: userData.userImage,
-            pendingPolicy: pendingPolicy // 다음달 변경 신청된 요금제 (없으면 null)
+            pendingPolicy: pendingPolicy, // 다음달 변경 신청된 요금제 (없으면 null)
+            bizNo: bizRows.length > 0 ? bizRows[0].bizNo : '',
+            bizNm: bizRows.length > 0 ? bizRows[0].bizNm : '',
+            ceoNm: bizRows.length > 0 ? bizRows[0].ceoNm : ''
         };
 
         // 서류 데이터 매핑 (가장 최근 것 기준)
