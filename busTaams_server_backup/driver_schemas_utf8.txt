@@ -1,0 +1,412 @@
+--- TB_DRIVER_DETAIL ---
+[
+  {
+    "Field": "USER_UUID",
+    "Type": "binary(16)",
+    "Null": "NO",
+    "Key": "PRI",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "ZIPCODE",
+    "Type": "varchar(10)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "ADDRESS",
+    "Type": "varchar(255)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "DETAIL_ADDRESS",
+    "Type": "varchar(255)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "REG_DT",
+    "Type": "datetime",
+    "Null": "YES",
+    "Key": "",
+    "Default": "CURRENT_TIMESTAMP",
+    "Extra": "DEFAULT_GENERATED"
+  },
+  {
+    "Field": "REG_ID",
+    "Type": "varchar(30)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "MOD_DT",
+    "Type": "datetime",
+    "Null": "YES",
+    "Key": "",
+    "Default": "CURRENT_TIMESTAMP",
+    "Extra": "DEFAULT_GENERATED"
+  },
+  {
+    "Field": "MOD_ID",
+    "Type": "varchar(30)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  }
+]
+
+--- TB_DRIVER_DOCS ---
+[
+  {
+    "Field": "DOC_ID",
+    "Type": "bigint",
+    "Null": "NO",
+    "Key": "PRI",
+    "Default": null,
+    "Extra": "auto_increment"
+  },
+  {
+    "Field": "USER_UUID",
+    "Type": "binary(16)",
+    "Null": "NO",
+    "Key": "MUL",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "DOC_TYPE",
+    "Type": "enum('LICENSE','QUALIFICATION','APTITUDE','BIZ_REG','TRANSPORT_PERMIT','INSURANCE')",
+    "Null": "NO",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "FILE_UUID",
+    "Type": "binary(16)",
+    "Null": "NO",
+    "Key": "MUL",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "LICENSE_TYPE_CD",
+    "Type": "varchar(30)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "DOC_NO_ENC",
+    "Type": "varchar(255)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "ISSUE_DT",
+    "Type": "date",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "EXP_DT",
+    "Type": "date",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "INFO_STAT_CD",
+    "Type": "varchar(300)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "APPROVE_STAT",
+    "Type": "enum('WAIT','APPROVE','REJECT')",
+    "Null": "YES",
+    "Key": "",
+    "Default": "WAIT",
+    "Extra": ""
+  },
+  {
+    "Field": "REJECT_REASON",
+    "Type": "text",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "APPROVER_ID",
+    "Type": "varchar(50)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "APPROVE_DT",
+    "Type": "datetime",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "REG_DT",
+    "Type": "datetime",
+    "Null": "YES",
+    "Key": "",
+    "Default": "CURRENT_TIMESTAMP",
+    "Extra": "DEFAULT_GENERATED"
+  },
+  {
+    "Field": "REG_ID",
+    "Type": "varchar(30)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "MOD_DT",
+    "Type": "datetime",
+    "Null": "YES",
+    "Key": "",
+    "Default": "CURRENT_TIMESTAMP",
+    "Extra": "DEFAULT_GENERATED"
+  },
+  {
+    "Field": "MOD_ID",
+    "Type": "varchar(30)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  }
+]
+
+--- TB_DRIVER_BUS ---
+[
+  {
+    "Field": "BUS_UUID",
+    "Type": "binary(16)",
+    "Null": "NO",
+    "Key": "PRI",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "USER_UUID",
+    "Type": "binary(16)",
+    "Null": "NO",
+    "Key": "MUL",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "BUS_NO",
+    "Type": "varchar(20)",
+    "Null": "NO",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "BUS_MODEL",
+    "Type": "varchar(50)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "MANUFACTURE_YEAR",
+    "Type": "year",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "BUS_TYPE_CD",
+    "Type": "varchar(20)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "BUS_SIZE",
+    "Type": "varchar(20)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "TOTAL_SEATS",
+    "Type": "int",
+    "Null": "NO",
+    "Key": "",
+    "Default": "45",
+    "Extra": ""
+  },
+  {
+    "Field": "HAS_REFRIGERATOR",
+    "Type": "enum('Y','N')",
+    "Null": "YES",
+    "Key": "",
+    "Default": "N",
+    "Extra": ""
+  },
+  {
+    "Field": "HAS_WIFI",
+    "Type": "enum('Y','N')",
+    "Null": "YES",
+    "Key": "",
+    "Default": "N",
+    "Extra": ""
+  },
+  {
+    "Field": "HAS_USB_PORT",
+    "Type": "enum('Y','N')",
+    "Null": "YES",
+    "Key": "",
+    "Default": "N",
+    "Extra": ""
+  },
+  {
+    "Field": "HAS_MONITOR",
+    "Type": "enum('Y','N')",
+    "Null": "YES",
+    "Key": "",
+    "Default": "N",
+    "Extra": ""
+  },
+  {
+    "Field": "INSUR_EXP_DT",
+    "Type": "date",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "INSPECT_EXP_DT",
+    "Type": "date",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "MIC_YN",
+    "Type": "enum('Y','N')",
+    "Null": "YES",
+    "Key": "",
+    "Default": "N",
+    "Extra": ""
+  },
+  {
+    "Field": "KITCHEN_YN",
+    "Type": "enum('Y','N')",
+    "Null": "YES",
+    "Key": "",
+    "Default": "N",
+    "Extra": ""
+  },
+  {
+    "Field": "WATER_YN",
+    "Type": "enum('Y','N')",
+    "Null": "YES",
+    "Key": "",
+    "Default": "N",
+    "Extra": ""
+  },
+  {
+    "Field": "CURTAIN_YN",
+    "Type": "enum('Y','N')",
+    "Null": "YES",
+    "Key": "",
+    "Default": "N",
+    "Extra": ""
+  },
+  {
+    "Field": "AIR_PURIFIER_YN",
+    "Type": "enum('Y','N')",
+    "Null": "YES",
+    "Key": "",
+    "Default": "N",
+    "Extra": ""
+  },
+  {
+    "Field": "CAR_SEAT_YN",
+    "Type": "enum('Y','N')",
+    "Null": "YES",
+    "Key": "",
+    "Default": "N",
+    "Extra": ""
+  },
+  {
+    "Field": "AEBS_YN",
+    "Type": "enum('Y','N')",
+    "Null": "YES",
+    "Key": "",
+    "Default": "N",
+    "Extra": ""
+  },
+  {
+    "Field": "REG_DT",
+    "Type": "datetime",
+    "Null": "YES",
+    "Key": "",
+    "Default": "CURRENT_TIMESTAMP",
+    "Extra": "DEFAULT_GENERATED"
+  },
+  {
+    "Field": "REG_ID",
+    "Type": "varchar(30)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "MOD_DT",
+    "Type": "datetime",
+    "Null": "YES",
+    "Key": "",
+    "Default": "CURRENT_TIMESTAMP",
+    "Extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"
+  },
+  {
+    "Field": "MOD_ID",
+    "Type": "varchar(30)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  }
+]
+

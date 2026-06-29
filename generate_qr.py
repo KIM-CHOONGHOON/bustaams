@@ -1,7 +1,7 @@
 import qrcode
 
 # QR코드에 담을 새로운 URL
-target_url = "https://bustaams.cafe24.com/app"
+target_url = "https://play.google.com/store/apps/details?id=com.bustaams.app&pcampaignid=web_share"
 # 교체 대상 이미지 파일 경로
 dest_path = r"c:\Users\LG\AI자동화\project_bustaams\busTaams_app\public\assets\signup_qr.png"
 

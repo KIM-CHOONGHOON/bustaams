@@ -59,13 +59,11 @@ const MyPerformanceManagement = () => {
 
   const totalFee = completedTrips.reduce((sum, item) => {
     if (!item) return sum;
-    const isRegular = ['DRIVER_GENERAL', 'DRIVER_GENNERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH'].includes(item.feePolicy);
-    const rate = isRegular ? 0.106 : 0.066;
-    return sum + Math.floor(Number(item.biddingPrice || 0) * rate);
+    return sum + Math.floor(Number(item.biddingPrice || 0) * 0.006);
   }, 0);
 
-  const businessTax = Math.floor(totalFee * 0.03); // 사업소득세 3%
-  const localTax = Math.floor(businessTax * 0.1);  // 지방소득세 (사업소득세의 10% = 총수당의 0.3%)
+  const businessTax = Math.floor(totalFee * 0.03 / 10) * 10; // 사업소득세 3% (원 단위 절삭)
+  const localTax = Math.floor(businessTax * 0.1 / 10) * 10;  // 지방소득세 (사업소득세의 10% = 총수당의 0.3%)
   const netPayout = totalFee - businessTax - localTax; // 실지급액
 
   // 진행 상태 배지 컴포넌트
@@ -230,7 +228,7 @@ const MyPerformanceManagement = () => {
           <div className="bg-slate-800/40 rounded-2xl p-4 border border-slate-700/30">
             <p className="text-xs text-slate-400 font-bold">① 총 수당금액 (세전)</p>
             <p className="text-lg font-black text-white mt-1.5">{formatAmt(totalFee)}</p>
-            <p className="text-[10px] text-slate-500 mt-1">일반(6.6%) / 정회원(10.6%) 적용 합계</p>
+            <p className="text-[10px] text-slate-500 mt-1">영업 수당 (0.6%) 적용 합계</p>
           </div>
           <div className="bg-slate-800/40 rounded-2xl p-4 border border-slate-700/30">
             <p className="text-xs text-slate-400 font-bold">② 사업소득세 (3.0%)</p>
@@ -289,10 +287,8 @@ const MyPerformanceManagement = () => {
               ) : (
                 performanceList.map((item) => {
                   if (!item) return null;
-                  const isRegular = ['DRIVER_GENERAL', 'DRIVER_GENNERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH'].includes(item.feePolicy);
-                  const rateLabel = isRegular ? '정회원 (10.6%)' : '일반 (6.6%)';
-                  const rateVal = isRegular ? 0.106 : 0.066;
-                  const itemComm = Math.floor(Number(item.biddingPrice || 0) * rateVal);
+                  const rateLabel = '영업 수당 (0.6%)';
+                  const itemComm = Math.floor(Number(item.biddingPrice || 0) * 0.006);
                   return (
                     <tr 
                       key={item.resId} 

@@ -1,0 +1,66 @@
+[
+  {
+    "Field": "FILE_UUID",
+    "Type": "binary(16)",
+    "Null": "NO",
+    "Key": "PRI",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "FILE_CATEGORY",
+    "Type": "enum('SIGNATURE','LICENSE','BUS_PHOTO','DOCS')",
+    "Null": "NO",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "GCS_BUCKET_NM",
+    "Type": "varchar(100)",
+    "Null": "YES",
+    "Key": "",
+    "Default": "bustaams-secure-data",
+    "Extra": ""
+  },
+  {
+    "Field": "GCS_PATH",
+    "Type": "varchar(255)",
+    "Null": "NO",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "ORG_FILE_NM",
+    "Type": "varchar(255)",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "FILE_EXT",
+    "Type": "char(5)",
+    "Null": "YES",
+    "Key": "",
+    "Default": "png",
+    "Extra": ""
+  },
+  {
+    "Field": "FILE_SIZE",
+    "Type": "bigint",
+    "Null": "YES",
+    "Key": "",
+    "Default": null,
+    "Extra": ""
+  },
+  {
+    "Field": "REG_DT",
+    "Type": "datetime",
+    "Null": "YES",
+    "Key": "",
+    "Default": "CURRENT_TIMESTAMP",
+    "Extra": "DEFAULT_GENERATED"
+  }
+]
