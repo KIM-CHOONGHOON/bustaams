@@ -118,17 +118,17 @@ const CustomerDashboard = () => {
     return (
         <div className="bg-background text-on-background min-h-screen pb-32 font-body">
             {/* TopAppBar */}
-            <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl shadow-[0px_40px_60px_rgba(0,104,95,0.06)] h-16 flex items-center justify-between px-6">
-                <div className="flex items-center gap-3">
-                    <img src="/app/assets/BUSTAAMS_IMAGE_LOGO.png" alt="BUSTAAMS Logo" className="w-8 h-8 object-contain rounded-xl" />
-                    <h1 className="text-2xl font-black text-teal-800 italic font-headline tracking-tight text-[22px]">BUSTAAMS</h1>
+            <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl shadow-[0px_40px_60px_rgba(0,104,95,0.06)] h-16 flex items-center justify-between px-3 md:px-6">
+                <div className="flex items-center gap-1.5 md:gap-3 shrink-0">
+                    <img src="/app/assets/BUSTAAMS_IMAGE_LOGO.png" alt="BUSTAAMS Logo" className="w-7 h-7 md:w-8 md:h-8 object-contain rounded-xl" />
+                    <h1 className="text-sm md:text-2xl font-black text-teal-800 italic font-headline tracking-tight text-[14px] md:text-[22px]">BUSTAAMS</h1>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5 md:gap-4 shrink-0">
                     <button 
                         onClick={() => navigate('/notifications')}
-                        className="p-2 rounded-full hover:bg-slate-100/50 transition-colors relative"
+                        className="p-1 md:p-2 rounded-full hover:bg-slate-100/50 transition-colors relative"
                     >
-                        <span className="material-symbols-outlined text-slate-500">notifications</span>
+                        <span className="material-symbols-outlined text-slate-500 text-[20px] md:text-[24px]">notifications</span>
                         {unreadCount > 0 && (
                             <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 rounded-full border-2 border-white text-[9px] text-white font-bold flex items-center justify-center">
                                 {unreadCount > 99 ? '99+' : unreadCount}
@@ -139,13 +139,14 @@ const CustomerDashboard = () => {
                         profileImage={profileImage} 
                         imageVersion={imageVersion} 
                         onClick={() => navigate('/profile-customer')} 
+                        className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors"
                     />
                     <button 
                         onClick={handleLogout}
-                        className="p-2 rounded-full hover:bg-red-50 transition-colors group"
+                        className="p-1 md:p-2 rounded-full hover:bg-red-50 transition-colors group"
                         title="로그아웃"
                     >
-                        <span className="material-symbols-outlined text-slate-500 group-hover:text-red-500">logout</span>
+                        <span className="material-symbols-outlined text-slate-500 group-hover:text-red-500 text-[20px] md:text-[24px]">logout</span>
                     </button>
                 </div>
             </header>

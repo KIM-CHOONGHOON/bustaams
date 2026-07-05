@@ -877,13 +877,15 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
                 DATE_FORMAT(db.INSURANCE_EXP_DT, '%Y-%m-%d') as insuranceExpDt,
                 DATE_FORMAT(db.LAST_INSPECT_DT, '%Y-%m-%d') as lastInspectDt,
                 db.VEHICLE_PHOTOS_JSON as busPhotos,
-                f.GCS_PATH as driverImageRaw
+                f.GCS_PATH as driverImageRaw,
+                COALESCE(res.FEE_POLICY, dd.FEE_POLICY, 'DRIVER') as feePolicy
             FROM TB_AUCTION_REQ_BUS rb
             LEFT JOIN TB_COMMON_CODE cc ON cc.GRP_CD = 'BUS_TYPE' AND cc.DTL_CD = rb.BUS_TYPE_CD
             LEFT JOIN TB_BUS_RESERVATION res ON rb.REQ_ID = res.REQ_ID AND rb.REQ_BUS_SEQ = res.REQ_BUS_SEQ AND res.DATA_STAT IN ('AUCTION','BIDDING','CONFIRM','DONE')
             LEFT JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID
             LEFT JOIN TB_FILE_MASTER f ON u.PROFILE_FILE_ID = f.FILE_ID
             LEFT JOIN TB_BUS_DRIVER_VEHICLE db ON res.BUS_ID = db.BUS_ID
+            LEFT JOIN TB_DRIVER_DETAIL dd ON res.DRIVER_ID = dd.CUST_ID
             WHERE rb.REQ_ID = ?
             ORDER BY rb.REQ_BUS_SEQ ASC, res.DRIVER_BIDDING_PRICE ASC
         `, [reqId]);
@@ -925,12 +927,19 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
 
         bidRows.forEach(row => {
             if (!unitMap[row.unitSeq]) {
+                // 기사의 등급 FEE_POLICY 에따라 DRIVER 인 경우는 6.6%를 그외의 등급일 경우는 2.2%를 결제
+                let dynamicResFee = row.unitResFee || 0;
+                if (row.price && row.feePolicy) {
+                    const rate = row.feePolicy === 'DRIVER' ? 0.066 : 0.022;
+                    dynamicResFee = Math.floor(Number(row.price) * rate);
+                }
+
                 unitMap[row.unitSeq] = {
                     unitSeq: row.unitSeq,
                     busType: row.busType,
                     unitStat: row.unitStat,
                     unitReqAmt: row.unitReqAmt,
-                    unitResFee: row.unitResFee || 0,
+                    unitResFee: dynamicResFee,
                     estimates: []
                 };
                 units.push(unitMap[row.unitSeq]);

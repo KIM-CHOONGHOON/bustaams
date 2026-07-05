@@ -725,7 +725,7 @@ const ApprovalListCustomer = () => {
                                     <span className="text-xl font-bold text-slate-300 italic">₩{totalReqAmt.toLocaleString()}</span>
                                 </div>
                                 <div className="bg-secondary/10 p-4 rounded-2xl border border-secondary/20">
-                                    <p className="text-[10px] font-black text-secondary uppercase tracking-[0.3em] mb-1">총 예약금 결제 금액 (6.6%)</p>
+                                    <p className="text-[10px] font-black text-secondary uppercase tracking-[0.3em] mb-1">총 예약금 결제 금액</p>
                                     <div className="flex justify-between items-baseline">
                                         <span className="text-4xl font-black tracking-tighter text-secondary italic">₩{totalResFee.toLocaleString()}</span>
                                     </div>
@@ -743,7 +743,7 @@ const ApprovalListCustomer = () => {
                                             전체 승인 및 예약금 결제하기
                                         </button>
                                         <p className="text-[10px] text-slate-400 font-bold text-center uppercase tracking-tighter italic leading-relaxed">
-                                            * 전체 금액의 6.6% 예약금이 선결제됩니다.<br />
+                                            * 차량별 기사 등급에 따른 예약금이 선결제됩니다.<br />
                                             * 승인 시 기사님들에게 예약 확정 알림이 전송됩니다.
                                         </p>
                                     </div>

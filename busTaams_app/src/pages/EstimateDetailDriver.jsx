@@ -16,9 +16,13 @@ const EstimateDetailDriver = () => {
         const fetchData = async () => {
             setLoading(true);
             try {
-                const profRes = await getDriverProfile();
-                if (profRes.success && profRes.data) {
-                    setUserProfileImg(profRes.data.driver?.profileImg || '');
+                try {
+                    const profRes = await getDriverProfile();
+                    if (profRes.success && profRes.data) {
+                        setUserProfileImg(profRes.data.driver?.profileImg || '');
+                    }
+                } catch (profErr) {
+                    console.error('Fetch driver profile error (non-fatal):', profErr);
                 }
 
                 const res = await request(`/app/driver/auctions/${id}`);

@@ -77,14 +77,15 @@ conn.on('ready', () => {
         } else if (stats.isFile()) {
           console.log(`전송 중: ${localPath} -> ${remotePath}`);
           await new Promise((resolve, reject) => {
-            sftp.fastPut(localPath, remotePath, (putErr) => {
-              if (putErr) {
-                console.error(`❌ 파일 전송 실패: ${localPath}`, putErr);
-                reject(putErr);
-              } else {
-                resolve();
-              }
-            });
+            // 한글 주석: fastPut은 윈도우-리눅스 환경에서 간혹 덮어쓰기 누락 현상이 있으므로 안전한 스트림 전송 방식으로 처리합니다.
+            const readStream = fs.createReadStream(localPath);
+            const writeStream = sftp.createWriteStream(remotePath);
+            
+            readStream.on('error', (err) => reject(err));
+            writeStream.on('error', (err) => reject(err));
+            writeStream.on('close', () => resolve());
+            
+            readStream.pipe(writeStream);
           });
         }
       }

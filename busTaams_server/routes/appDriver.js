@@ -408,7 +408,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
         // 3. TB_DRIVER_DOCS 인증 서류 정보 (면허증, 자격증 등)
         const [docRows] = await pool.execute(
             `SELECT DOC_TYPE, LICENSE_TYPE_CD, DOC_NO_ENC, DATE_FORMAT(ISSUE_DT, '%Y-%m-%d') as issueDt, INFO_STAT_CD, 
-                    CASE WHEN GCS_PATH IS NOT NULL THEN CONCAT('/api/common/display-image?path=', f.GCS_PATH) ELSE NULL END as filePath, 
+                    CASE WHEN d.GCS_PATH IS NOT NULL THEN CONCAT('/api/common/display-image?path=', f.GCS_PATH) ELSE NULL END as filePath, 
                     APPROVE_STAT as approveStat
              FROM TB_DRIVER_DOCS d
              LEFT JOIN TB_FILE_MASTER f ON d.GCS_PATH = f.GCS_PATH
@@ -1279,10 +1279,11 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
         const resId = await getNextId('TB_BUS_RESERVATION', 'RES_ID', 10, connection);
         console.log(`[BID_PROCESS] Generated RES_ID: ${resId} for reqBusSeq: ${reqBusSeq}`);
 
-        // 수수료 계산 (마스터 로직과 동일하게 6.6%, 5.5%, 1.1%)
-        const feeTotal = Math.floor(busAmt * 0.066);
-        const feeRefund = Math.floor(busAmt * 0.055);
-        const feeAttribution = Math.floor(busAmt * 0.011);
+        // 수수료 계산 (FEE_POLICY에 따라 DRIVER = 6.6%, 그 외 = 2.2%)
+        const feeRate = feePolicy === 'DRIVER' ? 0.066 : 0.022;
+        const feeTotal = Math.floor(busAmt * feeRate);
+        const feeRefund = Math.floor(feeTotal * (5.5 / 6.6));
+        const feeAttribution = feeTotal - feeRefund;
 
         await connection.execute(
             `INSERT INTO TB_BUS_RESERVATION (

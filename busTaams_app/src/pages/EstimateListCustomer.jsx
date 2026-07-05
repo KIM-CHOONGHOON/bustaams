@@ -356,6 +356,7 @@ const EstimateListCustomer = () => {
                                         <div className="bg-primary/5 p-6 rounded-2xl flex flex-col sm:flex-row items-center gap-4 border border-primary/10 animate-in zoom-in duration-300">
                                             <div className="flex-grow w-full relative">
                                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black">₩</span>
+                                                {/* 한글 주석: input-field 클래스는 전역 패딩(px-4)을 강제하여 pl-10 스타일이 무시되므로 제거합니다. */}
                                                 <input 
                                                     type="text"
                                                     value={tempAmount}
@@ -363,7 +364,7 @@ const EstimateListCustomer = () => {
                                                         const value = e.target.value.replace(/[^0-9]/g, '');
                                                         setTempAmount(value ? Number(value).toLocaleString() : '');
                                                     }}
-                                                    className="w-full pl-10 pr-4 py-3 rounded-xl border-2 border-primary border-indigo-200 focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none font-black text-primary bg-indigo-50/50 transition-all placeholder:text-slate-300 input-field"
+                                                    className="w-full pl-10 pr-4 py-3 rounded-xl border-2 border-primary border-indigo-200 focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none font-black text-primary bg-indigo-50/50 transition-all placeholder:text-slate-300"
                                                     placeholder="수정할 금액을 입력하세요"
                                                 />
                                             </div>

@@ -103,28 +103,28 @@ const DriverDashboard = () => {
     return (
         <div className="bg-background text-on-background min-h-screen pb-40 font-body">
             {/* TopAppBar */}
-            <header className="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-xl shadow-teal-900/5 flex items-center justify-between px-6 h-16 w-full">
-                <div className="flex items-center gap-3">
-                    <img src="/app/assets/BUSTAAMS_IMAGE_LOGO.png" alt="busTaams Logo" className="w-8 h-8 object-contain rounded-xl" />
-                    <div className="w-10 h-10 rounded-xl bg-surface-container-highest overflow-hidden border border-slate-100 flex items-center justify-center">
+            <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-xl shadow-teal-900/5 flex items-center justify-between px-3 md:px-6 h-16">
+                <div className="flex items-center gap-1.5 md:gap-3 shrink-0">
+                    <img src="/app/assets/BUSTAAMS_IMAGE_LOGO.png" alt="busTaams Logo" className="w-7 h-7 md:w-8 md:h-8 object-contain rounded-xl" />
+                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-surface-container-highest overflow-hidden border border-slate-100 flex items-center justify-center shrink-0">
                         {userImage ? (
                             <img alt="Driver profile" className="w-full h-full object-cover" src={userImage} />
                         ) : (
-                            <span className="material-symbols-outlined text-slate-300">person</span>
+                            <span className="material-symbols-outlined text-slate-300 text-[18px] md:text-[24px]">person</span>
                         )}
                     </div>
                     <div className="flex flex-col text-left">
-                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">프리미엄 파트너</span>
-                        <span className="font-headline font-bold text-teal-900 tracking-tight">{userName} 기사님</span>
+                        <span className="text-[8px] md:text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-none">프리미엄 파트너</span>
+                        <span className="font-headline font-bold text-teal-900 tracking-tight text-[11px] md:text-[16px] mt-0.5">{userName} 기사님</span>
                     </div>
                 </div>
-                <div className="text-xl font-extrabold text-teal-900 tracking-tighter font-headline hidden md:block italic">BUS TAAMS</div>
-                <div className="flex items-center gap-4">
+                <div className="text-xl font-extrabold text-teal-900 tracking-tighter font-headline hidden lg:block italic shrink-0">BUS TAAMS</div>
+                <div className="flex items-center gap-1.5 md:gap-4 shrink-0">
                     <button 
                         onClick={() => navigate('/notifications')}
-                        className="relative text-teal-800 hover:opacity-80 transition-opacity p-2"
+                        className="relative text-teal-800 hover:opacity-80 transition-opacity p-1 md:p-2"
                     >
-                        <span className="material-symbols-outlined">notifications</span>
+                        <span className="material-symbols-outlined text-[20px] md:text-[24px]">notifications</span>
                         {unreadCount > 0 && (
                             <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-secondary rounded-full border-2 border-white text-[9px] text-white font-bold flex items-center justify-center">
                                 {unreadCount > 99 ? '99+' : unreadCount}
@@ -133,10 +133,10 @@ const DriverDashboard = () => {
                     </button>
                     <button 
                         onClick={handleLogout}
-                        className="p-2 rounded-xl hover:bg-red-50 transition-colors group"
+                        className="p-1 md:p-2 rounded-xl hover:bg-red-50 transition-colors group"
                         title="로그아웃"
                     >
-                        <span className="material-symbols-outlined text-teal-800 group-hover:text-red-500">logout</span>
+                        <span className="material-symbols-outlined text-teal-800 group-hover:text-red-500 text-[20px] md:text-[24px]">logout</span>
                     </button>
                 </div>
             </header>

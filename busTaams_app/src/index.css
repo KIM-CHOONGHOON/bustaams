@@ -108,5 +108,16 @@
   @apply w-full bg-surface-container-high border-none rounded-xl py-4 px-4 focus:ring-2 focus:ring-primary/20 focus:bg-surface-container-highest transition-all text-on-surface placeholder:text-outline/50 font-medium;
 }
 
+/* 모바일 기기 상단 메뉴(상태 표시줄) 겹침 방지 설정 (한글 주석) */
+body {
+  padding-top: env(safe-area-inset-top, 24px);
+}
+
+header.fixed, header.absolute {
+  padding-top: env(safe-area-inset-top, 24px) !important;
+  box-sizing: border-box !important;
+}
+
+
 
 

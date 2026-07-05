@@ -42,10 +42,18 @@ function encrypt(plainText) {
  */
 function decrypt(encryptedText) {
     if (!encryptedText || !encryptedText.includes(':')) return encryptedText;
-    const [ivHex, authTagHex, cipherHex] = encryptedText.split(':');
-    const decipher = crypto.createDecipheriv(ALGORITHM, KEY, Buffer.from(ivHex, 'hex'));
-    decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
-    return decipher.update(Buffer.from(cipherHex, 'hex'), undefined, 'utf8') + decipher.final('utf8');
+    try {
+        const [ivHex, authTagHex, cipherHex] = encryptedText.split(':');
+        if (!ivHex || !authTagHex || !cipherHex) {
+            return encryptedText;
+        }
+        const decipher = crypto.createDecipheriv(ALGORITHM, KEY, Buffer.from(ivHex, 'hex'));
+        decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
+        return decipher.update(Buffer.from(cipherHex, 'hex'), undefined, 'utf8') + decipher.final('utf8');
+    } catch (err) {
+        console.error('[Crypto Decrypt] Failed to decrypt value. Returning original text. Error:', err.message);
+        return encryptedText;
+    }
 }
 
 /** TB_USER.RESIDENT_NO_ENC 전용 (동작은 encrypt와 동일) */

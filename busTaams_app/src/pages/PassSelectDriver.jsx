@@ -15,7 +15,7 @@ const PassSelectDriver = () => {
     const plans = [
         {
             id: 'DRIVER_GENNERAL',
-            name: '일반',
+            name: '브론즈',
             price: '300,000',
             desc: '안정적인 시작을 위한 선택',
             features: [
@@ -27,7 +27,7 @@ const PassSelectDriver = () => {
         },
         {
             id: 'DRIVER_MIDDLE',
-            name: '중급',
+            name: '골드',
             price: '500,000',
             desc: '본격적인 비즈니스 확장',
             features: [
@@ -39,7 +39,7 @@ const PassSelectDriver = () => {
         },
         {
             id: 'DRIVER_HIGH',
-            name: '고급',
+            name: '플레티넘',
             price: '800,000',
             desc: '베스트 밸류 (BEST VALUE)',
             features: [
