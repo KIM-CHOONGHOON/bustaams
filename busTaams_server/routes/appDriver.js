@@ -2194,12 +2194,19 @@ router.post('/cancel-mission/:id', authenticateToken, memoryUpload.single('reaso
         // 슬롯 상태 변경 (다시 경매로 돌릴지 취소로 할지 고민이나, 여기서는 취소로 처리)
         await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'DRIVER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND BUS_TYPE_CD = (SELECT SERVICE_CLASS FROM TB_BUS_DRIVER_VEHICLE WHERE BUS_ID = (SELECT BUS_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?))', [custId, reqId, resId]);
 
+        // 기사 회원 등급 조회
+        const [driverDetailRows] = await connection.execute(
+            'SELECT FEE_POLICY FROM TB_DRIVER_DETAIL WHERE CUST_ID = ?',
+            [custId]
+        );
+        const feePolicy = driverDetailRows.length > 0 ? driverDetailRows[0].FEE_POLICY : null;
+
         // 💰 위약금/정산 관리 테이블에 기사 취소 정보 적재 (기사 회원 등급 조회 및 트랜잭션 연동, 한글 주석)
         await connection.execute(
-            `INSERT INTO TB_BUS_PENALTY_DEPOSIT (YYYYMMDD, RES_ID, DATA_STAT, PENALTY_DEPOSIT_YN, REG_ID, MOD_ID)
-             VALUES (DATE_FORMAT(NOW(), '%Y%m%d'), ?, 'DRIVER_CANCEL', 'N', ?, ?)
-             ON DUPLICATE KEY UPDATE DATA_STAT = 'DRIVER_CANCEL', MOD_DT = NOW(), MOD_ID = ?`,
-            [resId, custId, custId, custId]
+            `INSERT INTO TB_BUS_PENALTY_DEPOSIT (YYYYMMDD, RES_ID, DATA_STAT, PENALTY_DEPOSIT_YN, FEE_POLICY, REG_ID, MOD_ID)
+             VALUES (DATE_FORMAT(NOW(), '%Y%m%d'), ?, 'DRIVER_CANCEL', 'N', ?, ?, ?)
+             ON DUPLICATE KEY UPDATE DATA_STAT = 'DRIVER_CANCEL', FEE_POLICY = ?, MOD_DT = NOW(), MOD_ID = ?`,
+            [resId, feePolicy, custId, custId, feePolicy, custId]
         );
 
         // 패널티 적용 (9회까지 당일부터 1주일, 10회부터 당일부터 9999-12-31 무기한 제한 설정) (한글 주석)
@@ -2710,7 +2717,7 @@ router.get('/settlement-history', authenticateToken, async (req, res) => {
                 r.RES_FEE_TOTAL_AMT,
                 r.RES_FEE_REFUND_AMT,
                 r.RES_FEE_ATTRIBUTION_AMT,
-                r.FEE_POLICY, -- 예약 테이블(TB_BUS_RESERVATION)의 FEE_POLICY 이용
+                p.FEE_POLICY, -- 위약금/정산 관리 테이블(TB_BUS_PENALTY_DEPOSIT)의 FEE_POLICY 이용
                 req.TRIP_TITLE,
                 req.START_ADDR,
                 req.END_ADDR,

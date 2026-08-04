@@ -2,7 +2,7 @@
   "expo": {
     "name": "busTaams",
     "slug": "bustaams",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -12,6 +12,7 @@
     },
     "android": {
       "package": "com.bustaams.app",
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -27,6 +28,17 @@
         "projectId": "c1c70574-ee4a-4b03-84ff-82f3be4e522d"
       }
     },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
+      "./withAndroidQueries.js"
+    ],
     "owner": "dohuni"
   }
 }

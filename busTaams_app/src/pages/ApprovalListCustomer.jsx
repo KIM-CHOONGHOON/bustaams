@@ -33,7 +33,10 @@ const ApprovalListCustomer = () => {
     };
 
     const fetchEstimates = async () => {
-        if (!reqId) return;
+        if (!reqId) {
+            setLoading(false);
+            return;
+        }
         try {
             const result = await api.get(`/app/customer/estimate-list/${reqId}`);
             if (result.success) {
@@ -48,6 +51,11 @@ const ApprovalListCustomer = () => {
     };
 
     useEffect(() => {
+        const errorMsg = searchParams.get('payError') || searchParams.get('error');
+        if (errorMsg) {
+            setTimeout(() => notify.error('결제 실패', errorMsg), 500);
+        }
+        
         fetchDashboardData();
         fetchEstimates();
     }, [reqId]);
@@ -215,8 +223,7 @@ const ApprovalListCustomer = () => {
             // 3. 전화번호 정제: 하이픈 제거 (이니시스 모바일 필수)
             const cleanMobile = (data.buyertel || '').replace(/[^0-9]/g, '');
 
-            // 모바일과 PC 기기 구분 분기 처리 (한글 주석)
-            // userAgent, 터치 포인트 지원 유무, 화면 가로 폭(1024px 미만)을 종합적으로 고려하여 모바일 결제창 로드 보장
+            // 모바일과 PC 기기 구분 분기 처리
             const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
                 (navigator.maxTouchPoints && navigator.maxTouchPoints > 1) ||
                 window.innerWidth < 1024;
@@ -236,7 +243,7 @@ const ApprovalListCustomer = () => {
                 form.P_MOBILE.value = cleanMobile;
                 form.P_EMAIL.value = data.buyeremail;
                 form.P_NEXT_URL.value = data.returnUrl;
-                form.P_RESERVED.value = "twotrs=Y&app_scheme=bustaams://&cp_cls=euc-kr&vbank_receipt=Y";
+                form.P_RESERVED.value = "vbank_receipt=Y";
                 form.P_INI_PAYMENT.value = "CARD";
                 form.P_CHARSET.value = "euc-kr";
 
@@ -355,7 +362,7 @@ const ApprovalListCustomer = () => {
                 <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl shadow-[0_20px_40px_rgba(0,104,95,0.04)] py-4">
                     <div className="flex items-center justify-between px-6 max-w-7xl mx-auto w-full">
                         <div className="flex items-center gap-4">
-                            <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-xl scale-95 active:scale-90 duration-200">
+                            <button onClick={() => navigate('/customer-dashboard')} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-xl scale-95 active:scale-90 duration-200">
                                 <span className="material-symbols-outlined">arrow_back</span>
                             </button>
                             <h1 className="text-xl font-bold text-teal-900 tracking-tight">승인 상세 화면</h1>
@@ -373,7 +380,7 @@ const ApprovalListCustomer = () => {
                 <div className="flex flex-col items-center justify-center pt-32 p-6 text-center">
                     <span className="material-symbols-outlined text-6xl text-slate-200 mb-4">error</span>
                     <h2 className="text-2xl font-black text-teal-900 mb-2">요청 정보를 찾을 수 없습니다.</h2>
-                    <button onClick={() => navigate(-1)} className="mt-4 px-8 py-3 bg-primary text-white rounded-xl font-black transition-all hover:bg-slate-900 active:scale-95 btn-primary">뒤로 가기</button>
+                    <button onClick={() => navigate('/customer-dashboard')} className="mt-4 px-8 py-3 bg-primary text-white rounded-xl font-black transition-all hover:bg-slate-900 active:scale-95 btn-primary">대시보드로 가기</button>
                 </div>
             </div>
         );

@@ -1323,7 +1323,7 @@ router.post('/approve-all', authenticateToken, async (req, res) => {
         // (실제로는 사용자가 선택한 견적들이 있어야 하지만, 요청에 따라 전체 승인 처리)
 
         const [bids] = await pool.execute(`
-            SELECT RES_ID, REQ_BUS_SEQ, DRIVER_ID 
+            SELECT ANY_VALUE(RES_ID) as RES_ID, REQ_BUS_SEQ, ANY_VALUE(DRIVER_ID) as DRIVER_ID 
             FROM TB_BUS_RESERVATION 
             WHERE REQ_ID = ? AND DATA_STAT = 'BIDDING'
             GROUP BY REQ_BUS_SEQ

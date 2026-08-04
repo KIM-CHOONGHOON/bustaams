@@ -629,7 +629,7 @@ const Signup = () => {
             ];
 
             const res = await registerUser({
-                userId, email, userName, password, phoneNo,
+                userId: userId.trim(), email, userName, password, phoneNo,
                 userType: userType === 'customer' ? 'TRAVELER' : 'DRIVER',
                 signatureBase64: signature,
                 termsData,

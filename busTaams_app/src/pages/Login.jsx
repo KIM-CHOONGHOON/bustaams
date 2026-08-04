@@ -87,7 +87,9 @@ const Login = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-        const response = await login(formData.userId, formData.password);
+        const trimmedUserId = formData.userId.trim();
+        const trimmedPassword = formData.password.trim();
+        const response = await login(trimmedUserId, trimmedPassword);
         if (response.success) {
             localStorage.setItem('accessToken', response.token);
             localStorage.setItem('user', JSON.stringify(response.user));

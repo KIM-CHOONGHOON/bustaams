@@ -50,9 +50,9 @@ module.exports = function createPaymentRouter(pool, app) {
         } else if (type === 'REQ') {
             // 전체 승인 로직 (reqId)
             const [bids] = await connection.execute(`
-                SELECT RES_ID, REQ_BUS_SEQ 
+                SELECT ANY_VALUE(RES_ID) as RES_ID, REQ_BUS_SEQ 
                 FROM TB_BUS_RESERVATION 
-                WHERE REQ_ID = ? AND DATA_STAT = 'BIDDING'
+                WHERE REQ_ID = ? AND DATA_STAT IN ('BIDDING', 'CONFIRM')
                 GROUP BY REQ_BUS_SEQ
             `, [targetId]);
 
@@ -101,7 +101,7 @@ module.exports = function createPaymentRouter(pool, app) {
                 .digest('hex');
 
             const host = req.get('x-forwarded-host') || req.get('host');
-            const protocol = req.get('x-forwarded-proto') || req.protocol;
+            const protocol = host.includes('cafe24.com') ? 'https' : (req.get('x-forwarded-proto') || req.protocol);
             // P_NEXT_URL은 반드시 백엔드 API 주소여야 함 (이니시스 POST 수신용)
             const returnUrl = `${protocol}://${host}/api/payment/mobile-return`;
 
@@ -139,12 +139,16 @@ module.exports = function createPaymentRouter(pool, app) {
             // Referer가 있으면 해당 오리진을 사용, 없으면 프로토콜+호스트 사용
             const referer = req.get('referer');
             let frontOrigin = '';
-            if (referer) {
+            const hostHeader = req.get('x-forwarded-host') || req.get('host');
+            
+            if (hostHeader.includes('cafe24.com')) {
+                frontOrigin = 'https://bustaams.cafe24.com';
+            } else if (referer) {
                 const url = new URL(referer);
                 frontOrigin = url.origin;
             } else {
-                // 기본적으로 프론트엔드가 5174 포트를 사용한다고 가정 (또는 환경변수 활용 권장)
-                frontOrigin = `${req.get('x-forwarded-proto') || req.protocol}://${(req.get('x-forwarded-host') || req.get('host')).split(':')[0]}:5174`;
+                // 로컬 개발 환경용 (Vite)
+                frontOrigin = `${req.get('x-forwarded-proto') || req.protocol}://${hostHeader.split(':')[0]}:5174`;
             }
 
             const finalUrl = redirectPath.startsWith('http') ? redirectPath : `${frontOrigin}${redirectPath}`;
@@ -172,8 +176,8 @@ module.exports = function createPaymentRouter(pool, app) {
                         <p class="sub">잠시 후 이동합니다...</p>
                     </div>
                     <script>
-                        if ("${msg}") alert("${msg.replace(/"/g, '\\"').replace(/\n/g, '\\n')}");
-                        window.location.href = "${finalUrl}";
+                        // WebView 멈춤 현상 방지를 위해 alert 제거, 직접 리다이렉트
+                        window.location.replace("${finalUrl}");
                     </script>
                 </body>
                 </html>
@@ -185,7 +189,7 @@ module.exports = function createPaymentRouter(pool, app) {
             const { P_STATUS, P_RMESG1, P_TID, P_REQ_URL, P_MID, P_OID } = req.body;
 
             if (P_STATUS !== '00') {
-                return sendHtmlResponse(`결제 인증 실패: ${P_RMESG1}`, '/approval-list');
+                return sendHtmlResponse(`결제 인증 실패: ${P_RMESG1}`, `/app/approval-list?payError=${encodeURIComponent(P_RMESG1)}`);
             }
 
             try {
@@ -225,25 +229,25 @@ module.exports = function createPaymentRouter(pool, app) {
                         const parts = oid.split('_');
                         const type = parts[1];
                         const targetId = parts[2];
-                        let redirectPath = '/customer-dashboard';
+                        let redirectPath = '/app/customer-dashboard';
                         
                         if (type === 'REQ') {
-                            redirectPath = `/customer/approval-list?reqId=${targetId}&payResult=success`;
+                            redirectPath = `/app/approval-list?reqId=${targetId}&payResult=success`;
                         } else if (type === 'RES') {
                             // 단건의 경우 해당 reqId를 찾아야 하므로 일단 대시보드로 보내거나 상세로 보냄
-                            redirectPath = `/customer-dashboard?payResult=success&resId=${targetId}`;
+                            redirectPath = `/app/customer-dashboard?payResult=success&resId=${targetId}`;
                         }
 
                         sendHtmlResponse('결제가 성공적으로 완료되었습니다.', redirectPath);
                     } catch (dbErr) {
                         await connection.rollback();
                         console.error('>>> [Payment DB Update Error (Mobile)]:', dbErr);
-                        sendHtmlResponse(`결제 성공했으나 데이터 업데이트 중 오류가 발생했습니다. (오류: ${dbErr.message})`, '/customer-dashboard');
+                        sendHtmlResponse(`결제 성공했으나 데이터 업데이트 중 오류가 발생했습니다. (오류: ${dbErr.message})`, '/app/customer-dashboard');
                     } finally {
                         connection.release();
                     }
                 } else {
-                    sendHtmlResponse(`모바일 결제 승인 실패: ${msg || '알 수 없는 오류'}`, '/approval-list');
+                    sendHtmlResponse(`모바일 결제 승인 실패: ${msg || '알 수 없는 오류'}`, `/app/approval-list?payError=${encodeURIComponent(msg || '알 수 없는 오류')}`);
                 }
             } catch (err) {
                 console.error('Mobile Approval Critical Error:', err);
@@ -256,7 +260,7 @@ module.exports = function createPaymentRouter(pool, app) {
         const { resultCode, resultMsg, authToken, authUrl, mid } = req.body;
 
         if (resultCode !== '0000') {
-            return sendHtmlResponse(`결제 인증 실패: ${resultMsg}`, '/approval-list');
+            return sendHtmlResponse(`결제 인증 실패: ${resultMsg}`, `/app/approval-list?payError=${encodeURIComponent(resultMsg)}`);
         }
 
         try {
@@ -297,12 +301,12 @@ module.exports = function createPaymentRouter(pool, app) {
                 } catch (dbErr) {
                     await connection.rollback();
                     console.error('>>> [Payment DB Update Error (PC)]:', dbErr);
-                    sendHtmlResponse(`결제 성공했으나 데이터 업데이트 중 오류가 발생했습니다. (오류: ${dbErr.message})`, '/customer-dashboard');
+                    sendHtmlResponse(`결제 성공했으나 데이터 업데이트 중 오류가 발생했습니다. (오류: ${dbErr.message})`, '/app/customer-dashboard');
                 } finally {
                     connection.release();
                 }
             } else {
-                sendHtmlResponse(`결제 승인 실패: ${result.resultMsg}`, '/approval-list');
+                sendHtmlResponse(`결제 승인 실패: ${result.resultMsg}`, `/app/approval-list?payError=${encodeURIComponent(result.resultMsg)}`);
             }
         } catch (err) {
             console.error('PC Approval Critical Error:', err);

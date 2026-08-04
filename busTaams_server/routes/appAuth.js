@@ -126,6 +126,8 @@ router.post('/register', async (req, res) => {
             firebaseToken, residentNo, recomCode
         } = req.body;
 
+    if (userId) userId = userId.trim();
+
     console.log(`[Registration] Request received for user: ${userId}`);
 
     // 0. SMS 인증 토큰 검증 (Firebase 대신 서버 자체 발행 토큰 사용)
@@ -446,7 +448,9 @@ router.post('/register', async (req, res) => {
  */
 router.post('/login', async (req, res) => {
     try {
-        const { userId, password } = req.body;
+        let { userId, password } = req.body;
+        if (userId) userId = userId.trim();
+        if (password) password = password.trim();
         console.log(`[App Login] Attempt for user: ${userId}`);
         
         // USER_ID 컬럼이 평문으로 저장되어 있으므로 직접 쿼리 가능 (속도 향상)
