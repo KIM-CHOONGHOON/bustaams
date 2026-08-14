@@ -773,12 +773,11 @@ const DriverInfoRegistration = () => {
             <main className="max-w-7xl mx-auto px-6 pt-24 pb-32">
                 <section className="grid grid-cols-1 md:grid-cols-12 gap-8 mb-16">
                     <div className="col-span-12 md:col-span-8">
-                        <p className="font-headline font-bold text-[#9d4300] uppercase tracking-[0.2em] mb-4 text-sm">온보딩</p>
-                        <h2 className="font-headline text-5xl md:text-7xl font-extrabold text-[#004e47] leading-tight tracking-tighter mb-6">
-                            기사님 등록을 <br />환영합니다.
+                        <h2 className="font-headline text-4xl md:text-5xl font-extrabold text-[#004e47] leading-tight tracking-tight mb-6">
+                            회원정보 등록하고 <br />단독 운송 기회를 선점 하세요!
                         </h2>
-                        <p className="text-[#3e4947] text-lg max-w-xl font-medium leading-relaxed">
-                            자격 증명을 확인하여 독점 버스 경매 및 대규모 운송 계약에 참여하세요. 전문적인 파트너십이 여기서 시작됩니다.
+                        <p className="text-[#3e4947] text-lg max-w-xl font-bold leading-relaxed text-teal-800">
+                            여행 정보 확인 후 선착순 1인 단독 청약 진행
                         </p>
                     </div>
                 </section>
@@ -1232,9 +1231,13 @@ const DriverInfoRegistration = () => {
 
                         {/* Footer Action */}
                         <div className="flex flex-col md:flex-row items-center justify-between gap-6 pt-4 text-left">
-                            <div className="flex items-center gap-3 text-[#3e4947]">
-                                <span className="material-symbols-outlined text-[#00685f]">info</span>
-                                <p className="text-xs font-medium max-w-xs">운영팀은 일반적으로 24~48시간 이내에 검토를 완료합니다. 승인 시 알림을 보내드립니다.</p>
+                            <div className="flex items-start gap-3 text-[#3e4947]">
+                                <span className="material-symbols-outlined text-[#00685f] mt-1">info</span>
+                                <div className="text-xs font-bold max-w-md leading-relaxed">
+                                    <p className="text-red-600">면허증.자격증.경력증명서 사진은 필수 등록해야 합니다.</p>
+                                    <p className="text-[#3e4947] mt-1">등록한 사진은 운영팀에서 48시간내에 검토 완료 합니다.</p>
+                                    <p className="text-[#3e4947]">검토 완료 안내를 PUSH MESSAGE로 보내 드립니다.</p>
+                                </div>
                             </div>
                             <button onClick={handleSubmit} disabled={submitting} className="w-full md:w-auto px-12 py-4 rounded-xl bg-gradient-to-br from-[#004e47] to-[#00685f] text-white font-headline font-extrabold text-lg shadow-[0_20px_40px_-10px_rgba(0,104,95,0.3)] hover:shadow-[0_25px_50px_-12px_rgba(0,104,95,0.4)] active:scale-95 transition-all duration-300">
                                 {submitting ? '처리 중...' : '검토 요청하기'}

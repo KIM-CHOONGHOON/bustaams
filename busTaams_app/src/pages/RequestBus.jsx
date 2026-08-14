@@ -181,8 +181,9 @@ const RequestBus = () => {
 
     // 동적으로 카카오맵 SDK 로드 (중복 로드 방지 및 타이밍 개선 적용)
     useEffect(() => {
-        const kakaoApiKey = import.meta.env.VITE_KAKAO_JAVASCRIPT_KEY;
-        console.log('KAKAO KEY =', import.meta.env.VITE_KAKAO_JAVASCRIPT_KEY);
+        // 카카오 지도 API 키 취득 (기본 폴백 키 포함, 한글 주석)
+        const kakaoApiKey = import.meta.env.VITE_KAKAO_JAVASCRIPT_KEY || 'fdbe7b320906be89ddd194a26a1c6487';
+        console.log('KAKAO KEY =', kakaoApiKey);
 
         if (!kakaoApiKey || kakaoApiKey === 'undefined' || kakaoApiKey === 'null') {
             console.error('VITE_KAKAO_JAVASCRIPT_KEY가 유효하지 않거나 없습니다. 현재 값:', kakaoApiKey);
@@ -274,10 +275,30 @@ const RequestBus = () => {
         } else {
             setIsSearching(false);
             setSearchResults([]);
-            notify.error(
-                '오류',
-                '카카오 지도 API가 로드되지 않았습니다. JavaScript 키, 도메인 등록, .env 설정을 확인하세요.'
-            );
+            // 카카오 지도 API 미로드 시 Daum 우편번호 서비스 자동 실행 (한글 주석)
+            openDaumPostcode();
+        }
+    };
+
+    // 다음 우편번호 / 도로명주소 팝업 띄우기 함수 (한글 주석)
+    const openDaumPostcode = () => {
+        const runPostcode = () => {
+            new window.daum.Postcode({
+                oncomplete: (data) => {
+                    const fullAddr = data.buildingName ? `${data.address} (${data.buildingName})` : data.address;
+                    handlePlaceSelect({ place_name: fullAddr, address_name: data.address });
+                }
+            }).open();
+        };
+
+        if (window.daum && window.daum.Postcode) {
+            runPostcode();
+        } else {
+            const script = document.createElement('script');
+            script.src = 'https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
+            script.onload = runPostcode;
+            script.onerror = () => notify.error('오류', '우편번호 서비스를 불러올 수 없습니다.');
+            document.body.appendChild(script);
         }
     };
 
@@ -521,10 +542,9 @@ const RequestBus = () => {
                 if (res.isConfirmed) {
                     if (type === 'dep') {
                         setDepDateTime(res.value);
-                        if (!arrDateTime) {
-                            const selectedDate = res.value.split(' ')[0];
-                            setArrDateTime(`${selectedDate} 18:00`);
-                        }
+                        // 출발일시가 변경되면 도착일시는 출발일자의 18:00으로 기본 세팅 (한글 주석)
+                        const selectedDate = res.value.split(' ')[0];
+                        setArrDateTime(`${selectedDate} 18:00`);
                     } else {
                         setArrDateTime(res.value);
                     }
@@ -599,15 +619,18 @@ const RequestBus = () => {
                                     </div>
                                 ))
                             ) : (
-                                <div className="flex flex-col items-center justify-center py-20 text-slate-400 space-y-2">
-                                    <span className="material-symbols-outlined text-4xl">location_off</span>
-                                    <p className="text-sm font-bold">검색 결과가 없습니다.</p>
-                                    <p className="text-xs opacity-70">원하시는 장소명을 입력하신 후 검색해 보세요!</p>
-                                    {!isKakaoLoaded && (
-                                        <p className="text-[10px] text-red-600 font-semibold mt-4 bg-red-50 px-3 py-1 rounded-full">
-                                            카카오 지도 API가 로드되지 않았습니다.
-                                        </p>
-                                    )}
+                                <div className="flex flex-col items-center justify-center py-12 text-slate-400 space-y-3">
+                                    <span className="material-symbols-outlined text-4xl text-teal-600">travel_explore</span>
+                                    <p className="text-sm font-bold text-slate-700">원하시는 장소나 건물명을 입력 후 검색해 보세요.</p>
+                                    <p className="text-xs opacity-70">우편번호 또는 도로명 주소로도 직접 검색하실 수 있습니다.</p>
+                                    <button 
+                                        type="button"
+                                        onClick={openDaumPostcode}
+                                        className="mt-2 px-6 py-3.5 bg-[#004e47] hover:bg-teal-900 text-white rounded-xl font-bold text-xs shadow-md transition-all flex items-center gap-2 active:scale-95"
+                                    >
+                                        <span className="material-symbols-outlined text-lg">markunread_mailbox</span>
+                                        우편번호 / 도로명 주소로 직접 찾기
+                                    </button>
                                 </div>
                             )}
                         </div>

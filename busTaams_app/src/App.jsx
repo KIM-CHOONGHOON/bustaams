@@ -38,6 +38,7 @@ import FailBidDetailDriver from './pages/FailBidDetailDriver';
 import ChatListDriver from './pages/ChatListDriver';
 import SettlementHistoryDriver from './pages/SettlementHistoryDriver';
 import ArchiveListDriver from './pages/ArchiveListDriver';
+import CompanyInfoFooter from './components/CompanyInfoFooter';
 import ChatListCustomer from './pages/ChatListCustomer';
 import PassSelectDriver from './pages/PassSelectDriver';
 import CardMembershipMgmtDriver from './pages/CardMembershipMgmtDriver';
@@ -193,6 +194,7 @@ function App() {
         <Route path="/chat-room/:id" element={<Chat />} />
         <Route path="/notifications" element={<NotificationList />} />
       </Routes>
+      <CompanyInfoFooter />
     </Router>
   );
 }

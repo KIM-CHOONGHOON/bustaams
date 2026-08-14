@@ -350,14 +350,13 @@ const BusInfoRegistration = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
                     {/* Left Column */}
                     <div className="lg:col-span-4 flex flex-col gap-6 text-left">
-                        <span className="text-[#9d4300] font-bold tracking-[0.2em] uppercase text-sm">기사 전용</span>
                         <h2 className="font-headline text-5xl font-extrabold text-[#004e47] leading-[1.1] tracking-tight">버스 정보 등록</h2>
                         <p className="text-[#3e4947] text-lg leading-relaxed max-w-sm">
                             승객에게 최고의 신뢰를 제공하기 위해 차량의 모든 제원과 서류를 꼼꼼히 등록해 주세요.
                         </p>
                         <div className="mt-8 p-6 bg-[#f2f4f6] rounded-xl border-l-4 border-[#9d4300]">
                             <p className="text-sm font-semibold text-[#9d4300] mb-2">필독 안내</p>
-                            <p className="text-sm text-[#3e4947] leading-relaxed">모든 날짜 형식은 <span className="font-bold">YYYY-MM-DD</span> 형식을 지켜주세요. 허위 정보 기재 시 서비스 이용이 제한될 수 있습니다.</p>
+                            <p className="text-sm text-[#3e4947] leading-relaxed">허위 정보 기재시 서비스 이용이 제한 될 수 있습니다.</p>
                         </div>
                     </div>
 

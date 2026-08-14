@@ -4,6 +4,7 @@ import api, { getImageUrl } from '../api';
 import { notify } from '../utils/toast';
 import BottomNavCustomer from '../components/BottomNavCustomer';
 import Avatar from '../components/Avatar';
+import Swal from 'sweetalert2';
 
 const ApprovalListCustomer = () => {
     const navigate = useNavigate();
@@ -55,7 +56,7 @@ const ApprovalListCustomer = () => {
         if (errorMsg) {
             setTimeout(() => notify.error('결제 실패', errorMsg), 500);
         }
-        
+
         fetchDashboardData();
         fetchEstimates();
     }, [reqId]);
@@ -139,25 +140,23 @@ const ApprovalListCustomer = () => {
     //};
 
     const handleApproveAll = async () => {
-        const totalResFee = units.reduce(
-            (acc, unit) => acc + (Number(unit.unitResFee) || 0),
-            0
-        );
+        // 차량 수량당 33,000원 고정 이용대금 계산 (한글 주석)
+        const totalResFee = (units.length || 1) * 33000;
 
         const today = new Date();
-        const bankEndDate = new Date('2026-06-03T23:59:59');
+        const bankEndDate = new Date('2026-08-13T23:59:59');
 
         // 2026년 5월 23일까지는 무통장 입금
         if (today <= bankEndDate) {
             const confirmed = await notify.confirm(
                 '전체 승인',
-                `진행 중인 모든 청약을 승인하시겠습니까?\n\n예약금: ${totalResFee.toLocaleString()}원`
+                `진행 중인 모든 청약을 승인하시겠습니까?\n\n플랫폼 이용대금 (차량당 33,000원): ${totalResFee.toLocaleString()}원`
             );
 
             if (!confirmed) return;
 
             await notify.info(
-                '예약금 입금 안내',
+                '이용대금 입금 안내',
                 `은행명 : IBK기업은행\n계좌번호 : 088-038608-04-011\n예금주 : (주)청솔테크\n입금금액 : ${totalResFee.toLocaleString()}원\n* 입금 확인 후 예약이 승인됩니다.`
             );
 
@@ -179,18 +178,61 @@ const ApprovalListCustomer = () => {
             return;
         }
 
-        // 2026년 5월 31일부터는 카드결제
-        const confirmed = await notify.confirm(
-            '전체 승인 및 카드결제',
-            `진행 중인 모든 청약을 승인하고 예약금 (6.6%)인 총 ${totalResFee.toLocaleString()}원을 카드결제 하시겠습니까?`
-        );
+        // 카드결제 시 (한글 주석)
+        const { value: isConfirmed } = await Swal.fire({
+            title: '데이터 이용료 카드 결제',
+            html: `
+                <div style="text-align: left; font-family: 'Pretendard', sans-serif; font-size: 14px; line-height: 1.6; color: #1e293b; padding: 5px;">
+                    <div style="margin-bottom: 12px; font-weight: 500;">
+                        • 파트너(기사) 매칭 및 예약 진행을 위한 데이터 이용료 결제 단계입니다.
+                    </div>
+                    <div style="margin-bottom: 8px; font-weight: 500;">
+                        • 결제 금액 : ₩33,000원 (VAT 포함) × ${units.length}대
+                    </div>
+                    <div style="margin-bottom: 20px; font-size: 16px; font-weight: 800; color: #e11d48;">
+                        • 총 금액 : ₩${totalResFee.toLocaleString()}원 (VAT 포함)
+                    </div>
+                    
+                    <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; margin-top: 16px;">
+                        <div style="font-weight: 800; margin-bottom: 10px; color: #0f766e; font-size: 15px;">
+                            - 핵심 및 환불 안내:
+                        </div>
+                        <ul style="padding-left: 18px; margin-bottom: 20px; list-style-type: disc; font-size: 13px; color: #475569;">
+                            <li style="margin-bottom: 8px;">'결제하기' 클릭 시 즉시 카드 승인 및 결제가 진행됩니다.</li>
+                            <li style="margin-bottom: 8px;">결제 완료 직후에는 기사님의 연락처가 노출되지 않으며, 다음 화면에서 '최종 확정(Confirm)'을 완료해야 상대방 정보가 공개됩니다.</li>
+                            <li style="margin-bottom: 8px; font-weight: bold; color: #0284c7;">[전액 환불 안내] 결제 완료 후 최종 확정을 하기 전에 일정을 취소하시거나 매칭이 무산될 경우, 결제하신 이용료는 100% 전액 환불 됩니다.</li>
+                        </ul>
+                    </div>
 
-        if (!confirmed) return;
+                    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 12px; display: flex; align-items: flex-start; gap: 10px; margin-top: 10px;">
+                        <input type="checkbox" id="payAgreeCheck" style="margin-top: 3px; cursor: pointer; width: 16px; height: 16px; min-width: 16px;" />
+                        <label for="payAgreeCheck" style="font-size: 12px; font-weight: bold; color: #0f172a; cursor: pointer; user-select: none; line-height: 1.4;">
+                            [필수] 결제 진행 동의 및 최종 확정 전 100% 전액 환불 안내를 확인하였습니다.
+                        </label>
+                    </div>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: '결재하기',
+            cancelButtonText: '취소',
+            confirmButtonColor: '#00685f',
+            cancelButtonColor: '#94a3b8',
+            preConfirm: () => {
+                const checkbox = document.getElementById('payAgreeCheck');
+                if (!checkbox || !checkbox.checked) {
+                    Swal.showValidationMessage('필수 동의 항목에 체크해주셔야 결제가 진행됩니다.');
+                    return false;
+                }
+                return true;
+            }
+        });
+
+        if (!isConfirmed) return;
 
         initiatePayment({
             reqId: reqId,
             price: totalResFee,
-            goodname: `${tripSummary.title} 예약금 결제`,
+            goodname: `${tripSummary.title} 이용대금 결제`,
             buyername: customerProfile?.custNm || '구매자',
             buyertel: customerProfile?.phoneNo || '010-0000-0000',
             buyeremail: customerProfile?.email || 'test@example.com'
@@ -318,10 +360,13 @@ const ApprovalListCustomer = () => {
 
     const getBusStatusDisplay = (status) => {
         const config = {
-            'AUCTION': { label: '청약대기중..', color: 'bg-slate-100 text-slate-400' },
-            'BIDDING': { label: '승인대기중..', color: 'bg-orange-100 text-orange-700' },
-            'CONFIRM': { label: '예약 확정..', color: 'bg-teal-100 text-teal-700' },
-            'DONE': { label: '운행 종료..', color: 'bg-slate-100 text-slate-500' },
+            'AUCTION': { label: '입찰 대기중', color: 'bg-slate-100 text-slate-400' },
+            'CUSTOMER_PAY_WAIT': { label: '고객 결제 대기', color: 'bg-orange-100 text-orange-700' },
+            'DRIVER_PAY_WAIT': { label: '기사 결제 대기', color: 'bg-purple-100 text-purple-700' },
+            'FINAL_APPROVAL_WAIT': { label: '최종 승인 대기', color: 'bg-amber-100 text-amber-700' },
+            'CANCEL_UNPENDING': { label: '미결제 자동취소', color: 'bg-rose-100 text-rose-700' },
+            'CONFIRM': { label: '예약 확정', color: 'bg-teal-100 text-teal-700' },
+            'DONE': { label: '운행 종료', color: 'bg-slate-100 text-slate-500' },
             'TRAVELER_CANCEL': { label: '여행자 버스 예약 전체 취소', color: 'bg-red-100 text-red-700' },
             'DRIVER_CANCEL': { label: '버스 기사 응찰 취소', color: 'bg-red-100 text-red-700' },
             'BUS_CHANGE': { label: '여행자 버스 변경 요청', color: 'bg-purple-100 text-purple-700' },
@@ -387,7 +432,7 @@ const ApprovalListCustomer = () => {
     }
 
     const totalReqAmt = units.reduce((acc, unit) => acc + (Number(unit.unitReqAmt) || 0), 0);
-    const totalResFee = units.reduce((acc, unit) => acc + (Number(unit.unitResFee) || 0), 0);
+    const totalResFee = (units.length || 1) * 33000;
 
     return (
         <div className="bg-background text-on-surface min-h-screen pb-32 font-body text-left">
@@ -732,7 +777,7 @@ const ApprovalListCustomer = () => {
                                     <span className="text-xl font-bold text-slate-300 italic">₩{totalReqAmt.toLocaleString()}</span>
                                 </div>
                                 <div className="bg-secondary/10 p-4 rounded-2xl border border-secondary/20">
-                                    <p className="text-[10px] font-black text-secondary uppercase tracking-[0.3em] mb-1">총 예약금 결제 금액</p>
+                                    <p className="text-[10px] font-black text-secondary uppercase tracking-[0.3em] mb-1">총 플랫폼 이용대금 (차량당 33,000원)</p>
                                     <div className="flex justify-between items-baseline">
                                         <span className="text-4xl font-black tracking-tighter text-secondary italic">₩{totalResFee.toLocaleString()}</span>
                                     </div>
@@ -740,18 +785,18 @@ const ApprovalListCustomer = () => {
                             </div>
 
                             <div className="space-y-4 pt-10">
-                                {tripSummary.status === 'BIDDING' && (
+                                {tripSummary.status === 'CUSTOMER_PAY_WAIT' && (
                                     <div className="space-y-3">
                                         <button
                                             onClick={handleApproveAll}
                                             className="w-full py-5 bg-secondary text-white rounded-xl font-black text-sm tracking-widest uppercase shadow-xl shadow-secondary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 group btn-primary"
                                         >
                                             <span className="material-symbols-outlined text-xl group-hover:rotate-12 transition-transform">task_alt</span>
-                                            전체 승인 및 예약금 결제하기
+                                            전체 승인 및 이용대금 결제하기
                                         </button>
                                         <p className="text-[10px] text-slate-400 font-bold text-center uppercase tracking-tighter italic leading-relaxed">
-                                            * 차량별 기사 등급에 따른 예약금이 선결제됩니다.<br />
-                                            * 승인 시 기사님들에게 예약 확정 알림이 전송됩니다.
+                                            * 차량 수량당 고정 33,000원의 플랫폼 이용대금이 반영됩니다.<br />
+                                            * 승인 시 기사님들에게 승인 확정 알림이 전송됩니다.
                                         </p>
                                     </div>
                                 )}

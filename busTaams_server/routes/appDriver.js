@@ -14,6 +14,72 @@ const { processBankbookOcr, processBizRegOcr } = require('../services/ocrService
 
 const JWT_SECRET_KEY = process.env.JWT_SECRET || 'bustaams-dev-secret-key-2026';
 
+// 💰 기사 데이터 이용료 동적 계산 헬퍼 함수 (한글 주석)
+async function calculateDriverDynamicFee(connection, custId, biddingPrice) {
+    try {
+        // 1. TB_MOM_MEMBER에서 기사의 현재 월(YYYYMM)의 사용 현황 및 회원등급 조회
+        const [momRows] = await connection.execute(
+            `SELECT FEE_POLICY, BASIC_CNT, USE_CNT 
+             FROM TB_MOM_MEMBER 
+             WHERE CUST_ID = ? AND YYYYMM = DATE_FORMAT(NOW(), '%Y%m')`,
+            [custId]
+        );
+
+        let feePolicy = 'DRIVER'; // 기본값 (일반 기사)
+        let basicCnt = 0;
+        let useCnt = 0;
+
+        if (momRows.length > 0) {
+            feePolicy = momRows[0].FEE_POLICY;
+            basicCnt = momRows[0].BASIC_CNT;
+            useCnt = momRows[0].USE_CNT;
+        } else {
+            // 월 정보가 없으면 TB_DRIVER_DETAIL에서 기사 등급 조회
+            const [driverRows] = await connection.execute(
+                "SELECT FEE_POLICY FROM TB_DRIVER_DETAIL WHERE CUST_ID = ?",
+                [custId]
+            );
+            if (driverRows.length > 0) {
+                feePolicy = driverRows[0].FEE_POLICY;
+            }
+        }
+
+        // 등급별 한도 설정 (Bronze: 10, Gold: 20, Platinum: 30)
+        if (feePolicy === 'DRIVER_GENERAL') {
+            basicCnt = 10;
+        } else if (feePolicy === 'DRIVER_MIDDLE') {
+            basicCnt = 20;
+        } else if (feePolicy === 'DRIVER_HIGH') {
+            basicCnt = 30;
+        }
+
+        let feeRate = 0.033; // 기본 수수료 3.3% (일반 기사 - 일반일 경우는 무조건 건당 3.3%)
+
+        if (['DRIVER_GENERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH'].includes(feePolicy)) {
+            if (useCnt < basicCnt) {
+                feeRate = 0.022; // 한도 내 2.2%
+            } else {
+                feeRate = 0.033; // 한도 초과 시 3.3%
+            }
+        }
+
+        const feeTotalAmt = Math.floor(biddingPrice * feeRate);
+
+        return {
+            feePolicy,
+            feeRate,
+            feeTotalAmt
+        };
+    } catch (err) {
+        console.error('[calculateDriverDynamicFee] Error:', err);
+        return {
+            feePolicy: 'DRIVER',
+            feeRate: 0.033,
+            feeTotalAmt: Math.floor(biddingPrice * 0.033)
+        };
+    }
+}
+
 // 인증 미들웨어
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -150,17 +216,19 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
             });
         }
 
-        // 5. 기타 통계 및 상세 수익 계산
+        // 5. 5개 단계별 세부 통계 계산 (한글 주석)
         const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
         const [statsRows] = await pool.execute(
             `SELECT 
-                (SELECT COUNT(*) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'BIDDING') as countBidding,
+                (SELECT COUNT(*) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'CUSTOMER_PAY_WAIT') as countCustomerWait,
+                (SELECT COUNT(*) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'DRIVER_PAY_WAIT') as countDriverPayWait,
+                (SELECT COUNT(*) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'FINAL_APPROVAL_WAIT') as countFinalApprovalWait,
                 (SELECT COUNT(*) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'CONFIRM') as countConfirmed,
                 (SELECT COUNT(*) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'DONE') as countDone,
                 (SELECT SUM(DRIVER_BIDDING_PRICE) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'DONE' AND DATE_FORMAT(MOD_DT, '%Y-%m') = ?) as monthlyProfit,
                 (SELECT SUM(DRIVER_BIDDING_PRICE) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'CONFIRM') as pendingProfit,
                 (SELECT SUM(DRIVER_BIDDING_PRICE) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'DONE') as totalProfit`,
-            [custId, custId, custId, custId, currentMonth, custId, custId]
+            [custId, custId, custId, custId, custId, custId, currentMonth, custId, custId]
         );
 
         // 6. 오늘의 운행 (Today's Schedule)
@@ -212,9 +280,12 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
                 userImage,
                 isDriverInfoRegistered,
                 isBusInfoRegistered,
-                countBidding: statsRows[0].countBidding,
-                countConfirmed: statsRows[0].countConfirmed,
-                countDone: statsRows[0].countDone,
+                countBidding: statsRows[0].countCustomerWait || 0, // 기존 호환용
+                countCustomerWait: statsRows[0].countCustomerWait || 0,
+                countDriverPayWait: statsRows[0].countDriverPayWait || 0,
+                countFinalApprovalWait: statsRows[0].countFinalApprovalWait || 0,
+                countConfirmed: statsRows[0].countConfirmed || 0,
+                countDone: statsRows[0].countDone || 0,
                 monthlyProfit: statsRows[0].monthlyProfit || 0,
                 pendingProfit: statsRows[0].pendingProfit || 0,
                 totalProfit: statsRows[0].totalProfit || 0,
@@ -1216,13 +1287,13 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
         const newStartDt = reqRows[0].START_DT;
         const newEndDt = reqRows[0].END_DT;
 
-        // [추가] 해당 기사의 동일 일정 중복 예약 검증 (BIDDING, CONFIRM 상태 대상)
+        // [추가] 해당 기사의 동일 일정 중복 예약 검증 (CUSTOMER_PAY_WAIT, DRIVER_PAY_WAIT, FINAL_APPROVAL_WAIT, CONFIRM 상태 대상)
         const [duplicateRows] = await connection.execute(
             `SELECT 1 
              FROM TB_BUS_RESERVATION b
              JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID
              WHERE b.DRIVER_ID = ? 
-               AND b.DATA_STAT IN ('BIDDING', 'CONFIRM')
+               AND b.DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'CONFIRM')
                AND r.START_DT < ? 
                AND r.END_DT > ?
              LIMIT 1`,
@@ -1263,9 +1334,9 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
             throw new Error('청약 데이터 오류가 발생했습니다. (SEQ=0)');
         }
 
-        // 3. TB_AUCTION_REQ_BUS 상태 업데이트 (BIDDING) - 원자적 상태 체크 추가
+        // 3. TB_AUCTION_REQ_BUS 상태 업데이트 (CUSTOMER_PAY_WAIT) - 원자적 상태 체크 추가
         const [updateResult] = await connection.execute(
-            `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'BIDDING', MOD_ID = ?, MOD_DT = NOW() 
+            `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'CUSTOMER_PAY_WAIT', MOD_ID = ?, MOD_DT = NOW() 
              WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT IN ('AUCTION', 'BUS_CHANGE', 'DRIVER_CANCEL')`,
             [custId, reqId, reqBusSeq]
         );
@@ -1290,7 +1361,7 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
                 RES_ID, REQ_ID, REQ_BUS_SEQ, TRAVELER_ID, DRIVER_ID, BUS_ID, 
                 DRIVER_BIDDING_PRICE, RES_FEE_TOTAL_AMT, RES_FEE_REFUND_AMT, RES_FEE_ATTRIBUTION_AMT,
                 DATA_STAT, REG_ID, MOD_ID, FEE_POLICY
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'BIDDING', ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'CUSTOMER_PAY_WAIT', ?, ?, ?)`,
             [resId, reqId, reqBusSeq, travelerId, custId, busId, busAmt, feeTotal, feeRefund, feeAttribution, custId, custId, feePolicy]
         );
         console.log(`[BID_PROCESS] Reservation inserted successfully for resId: ${resId}`);
@@ -1303,7 +1374,7 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
 
         if (pendingRows[0].count === 0) {
             await connection.execute(
-                "UPDATE TB_AUCTION_REQ SET DATA_STAT = 'BIDDING', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?",
+                "UPDATE TB_AUCTION_REQ SET DATA_STAT = 'CUSTOMER_PAY_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?",
                 [custId, reqId]
             );
         }
@@ -1328,6 +1399,146 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
         if (connection) await connection.rollback();
         console.error('Bid submission error:', err);
         res.status(400).json({ success: false, error: err.message });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+/**
+ * 💳 [App] 기사 이용대금 결제 완료 처리 API (한글 주석)
+ * 고객 1차 선택/결제 후, 기사가 본인 이용대금(수수료)을 결제하여 배차를 확정하는 API
+ */
+router.post('/pay', authenticateToken, async (req, res) => {
+    let connection;
+    try {
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        const userId = req.user.userId;
+        const { resId, reqId, payId } = req.body;
+
+        if (!resId && !reqId) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, error: '예약 ID 또는 요청 ID가 필요합니다.' });
+        }
+
+        // 1. CUST_ID 조회
+        const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        const custId = uRows.length > 0 ? uRows[0].CUST_ID : userId;
+
+        // 2. 예약 건의 운송 요금(DRIVER_BIDDING_PRICE) 조회
+        let biddingPrice = 0;
+        if (resId) {
+            const [priceRows] = await connection.execute(
+                'SELECT DRIVER_BIDDING_PRICE FROM TB_BUS_RESERVATION WHERE RES_ID = ?',
+                [resId]
+            );
+            biddingPrice = priceRows.length > 0 ? Number(priceRows[0].DRIVER_BIDDING_PRICE) : 0;
+        } else if (reqId) {
+            const [priceRows] = await connection.execute(
+                'SELECT DRIVER_BIDDING_PRICE FROM TB_BUS_RESERVATION WHERE REQ_ID = ? AND (DRIVER_ID = ? OR DRIVER_ID = ?)',
+                [reqId, custId, userId]
+            );
+            biddingPrice = priceRows.length > 0 ? Number(priceRows[0].DRIVER_BIDDING_PRICE) : 0;
+        }
+
+        // 동적 데이터 이용료 계산
+        const dynamic = await calculateDriverDynamicFee(connection, custId, biddingPrice);
+        console.log(`[Driver Pay] CustID: ${custId}, resId: ${resId}, reqId: ${reqId}, payAmt (Dynamic): ${dynamic.feeTotalAmt}, feeRate: ${dynamic.feeRate}`);
+
+        // 3. TB_BUS_RESERVATION 기사 결제 완료 업데이트 및 상태를 'FINAL_APPROVAL_WAIT' (고객 최종 승인대기)로 변경
+        let updateSql = `
+            UPDATE TB_BUS_RESERVATION 
+            SET DRIVER_PAY_STAT = 'Y',
+                DRIVER_PAY_AMT = ?,
+                DRIVER_PAY_DT = NOW(),
+                DRIVER_PAY_ID = ?,
+                DRIVER_FEE_RATE = ?,
+                DATA_STAT = 'FINAL_APPROVAL_WAIT',
+                MOD_ID = ?,
+                MOD_DT = NOW()
+            WHERE (DRIVER_ID = ? OR DRIVER_ID = ?)
+        `;
+        let params = [dynamic.feeTotalAmt, payId || `PAY-DRIVER-${Date.now()}`, dynamic.feeRate, custId, custId, userId];
+
+        if (resId) {
+            updateSql += ` AND RES_ID = ?`;
+            params.push(resId);
+        } else if (reqId) {
+            updateSql += ` AND REQ_ID = ?`;
+            params.push(reqId);
+        }
+
+        const [resResult] = await connection.execute(updateSql, params);
+
+        if (resResult.affectedRows === 0) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, error: '결제 대상 청약 건을 찾을 수 없습니다.' });
+        }
+
+        // 4. TB_AUCTION_REQ_BUS 및 TB_AUCTION_REQ 상태도 'FINAL_APPROVAL_WAIT'로 변경
+        if (resId) {
+            const [bRows] = await connection.execute('SELECT REQ_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [resId]);
+            if (bRows.length > 0) {
+                const { REQ_ID: rId, REQ_BUS_SEQ: uSeq } = bRows[0];
+                await connection.execute(
+                    `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'FINAL_APPROVAL_WAIT', MOD_ID = ?, MOD_DT = NOW() 
+                     WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?`,
+                    [custId, rId, uSeq]
+                );
+                await connection.execute(
+                    `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'FINAL_APPROVAL_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
+                    [custId, rId]
+                );
+            }
+        } else if (reqId) {
+            await connection.execute(
+                `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'FINAL_APPROVAL_WAIT', MOD_ID = ?, MOD_DT = NOW() 
+                 WHERE REQ_ID = ? AND DATA_STAT = 'DRIVER_PAY_WAIT'`,
+                [custId, reqId]
+            );
+            await connection.execute(
+                `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'FINAL_APPROVAL_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
+                [custId, reqId]
+            );
+        }
+
+        // 5. TB_MOM_MEMBER 사용량(USE_CNT) 증가 처리
+        const now = new Date();
+        const yyyyMM = now.getFullYear().toString() + String(now.getMonth() + 1).padStart(2, '0');
+        let basicCnt = 0;
+        if (dynamic.feePolicy === 'DRIVER_GENERAL') {
+            basicCnt = 10;
+        } else if (dynamic.feePolicy === 'DRIVER_MIDDLE') {
+            basicCnt = 20;
+        } else if (dynamic.feePolicy === 'DRIVER_HIGH') {
+            basicCnt = 30;
+        }
+
+        if (['DRIVER_GENERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH'].includes(dynamic.feePolicy)) {
+            await connection.execute(
+                `INSERT INTO TB_MOM_MEMBER (
+                    CUST_ID, YYYYMM, FEE_POLICY, BASIC_CNT, USE_CNT, REMAINING_CNT, REG_DT, REG_ID, MOD_DT, MOD_ID
+                 ) VALUES (?, ?, ?, ?, 1, ?, NOW(), ?, NOW(), ?)
+                 ON DUPLICATE KEY UPDATE
+                    USE_CNT = USE_CNT + 1,
+                    REMAINING_CNT = IF(BASIC_CNT > USE_CNT, BASIC_CNT - USE_CNT, 0),
+                    MOD_DT = NOW(),
+                    MOD_ID = ?`,
+                [custId, yyyyMM, dynamic.feePolicy, basicCnt, basicCnt - 1, custId, custId, custId, custId]
+            );
+        }
+
+        await connection.commit();
+
+        res.json({
+            success: true,
+            message: '기사 이용대금 결제가 성공적으로 완료되었습니다. 고객 최종 승인대기 상태로 변경되었습니다.'
+        });
+    } catch (err) {
+        if (connection) await connection.rollback();
+        console.error('[Driver Pay Error]', err);
+        res.status(500).json({ success: false, error: '기사 이용대금 결제 처리 중 오류가 발생했습니다.' });
     } finally {
         if (connection) connection.release();
     }
@@ -1417,17 +1628,27 @@ router.get('/upcoming-trips', authenticateToken, async (req, res) => {
 
 
 /**
- * [App] 승인 대기 목록 조회
- * 기사가 입찰한 건들 중 아직 여행자가 확정하지 않은(BIDDING 상태) 건들을 조회
+ * [App] 기사 응찰/승인/결제 대기 목록 조회 (한글 주석)
+ * GET /app/driver/bids/waiting?tab=customer_wait | driver_pay | final_approval_wait
  */
 router.get('/bids/waiting', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
+        const { tab } = req.query; // 'customer_wait' | 'driver_pay' | 'final_approval_wait'
 
         // 1. CUST_ID 조회
         const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
         if (uRows.length === 0) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
         const custId = uRows[0].CUST_ID;
+
+        let statusFilter = "b.DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT')";
+        if (tab === 'customer_wait') {
+            statusFilter = "b.DATA_STAT = 'CUSTOMER_PAY_WAIT'";
+        } else if (tab === 'driver_pay') {
+            statusFilter = "b.DATA_STAT = 'DRIVER_PAY_WAIT'";
+        } else if (tab === 'final_approval_wait') {
+            statusFilter = "b.DATA_STAT = 'FINAL_APPROVAL_WAIT'";
+        }
 
         const [rows] = await pool.execute(`
             SELECT 
@@ -1444,6 +1665,9 @@ router.get('/bids/waiting', authenticateToken, async (req, res) => {
                 DATE_FORMAT(r.START_DT, '%Y.%m.%d') as startDt,
                 DATE_FORMAT(r.END_DT, '%Y.%m.%d') as endDt,
                 b.DRIVER_BIDDING_PRICE as price,
+                b.RES_FEE_TOTAL_AMT as feeTotalAmt,
+                b.DRIVER_FEE_RATE as driverFeeRate,
+                b.DRIVER_PAY_STAT as driverPayStat,
                 COALESCE(db.SERVICE_CLASS, '차종 미정') as busTypeNm,
                 db.MODEL_NM as busModel,
                 b.DATA_STAT as status
@@ -1452,11 +1676,12 @@ router.get('/bids/waiting', authenticateToken, async (req, res) => {
                 ON b.REQ_ID = r.REQ_ID
             LEFT JOIN TB_BUS_DRIVER_VEHICLE db 
                 ON b.BUS_ID = db.BUS_ID
-            WHERE b.DRIVER_ID = ? AND b.DATA_STAT = 'BIDDING'
+            WHERE (b.DRIVER_ID = ? OR b.DRIVER_ID = ?) AND ${statusFilter}
             ORDER BY b.REG_DT DESC
-        `, [custId]);
+        `, [custId, userId]);
 
-        const processedRows = rows.map(row => {
+        const processedRows = [];
+        for (const row of rows) {
             const endAddr = row.endAddrVia || row.endAddrMaster;
             const fullPath = [
                 { label: '출발지', addr: row.startAddrVia || row.startAddr },
@@ -1465,12 +1690,18 @@ router.get('/bids/waiting', authenticateToken, async (req, res) => {
                 ...(row.endVia ? row.endVia.split(',').map(v => ({ label: '도착 경유지', addr: v })) : []),
                 { label: '최종 도착지', addr: endAddr }
             ];
-            return {
+
+            // 실시간 동적 요금 계산 적용
+            const dynamic = await calculateDriverDynamicFee(pool, custId, row.price);
+
+            processedRows.push({
                 ...row,
                 endAddr,
-                fullPath
-            };
-        });
+                fullPath,
+                feeTotalAmt: dynamic.feeTotalAmt,
+                driverFeeRate: dynamic.feeRate * 100 // 퍼센트 표시 (예: 2.2 또는 3.3 또는 6.6)
+            });
+        }
 
         res.json({ success: true, data: processedRows });
     } catch (err) {
@@ -2300,7 +2531,7 @@ router.post('/cancel-bid/:id', authenticateToken, async (req, res) => {
 
         // 2. 예약(입찰) 정보 확인 (본인의 입찰 대기중인 건인지 확인)
         const [resRows] = await connection.execute(
-            'SELECT REQ_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ? AND DRIVER_ID = ? AND DATA_STAT = \'BIDDING\'',
+            'SELECT REQ_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ? AND DRIVER_ID = ? AND DATA_STAT = \'CUSTOMER_PAY_WAIT\'',
             [resId, custId]
         );
         if (resRows.length === 0) {

@@ -14,8 +14,8 @@ const API_PATH = '/api/DriversListOfBids';
 /** 본 목록에 나오는 DATA_STAT 만 매핑 */
 function statusPresentation(dataStat) {
     const u = String(dataStat || '').toUpperCase();
-    if (u === 'BIDDING') {
-        return { statusLabelKo: '응찰 등록', statusCategory: 'bidding' };
+    if (u === 'CUSTOMER_PAY_WAIT') {
+        return { statusLabelKo: '고객 결제 대기', statusCategory: 'bidding' };
     }
     if (u === 'CONFIRM') {
         return { statusLabelKo: '예약확정', statusCategory: 'confirm' };
@@ -62,7 +62,7 @@ function createDriversListOfBidsHandler(pool) {
                 ? `r.DRIVER_ID = ? AND r.${statCol} = 'DRIVER_CANCEL'`
                 : `
             r.DRIVER_ID = ?
-            AND r.${statCol} IN ('BIDDING', 'CONFIRM')
+            AND r.${statCol} IN ('CUSTOMER_PAY_WAIT', 'CONFIRM')
             AND NOT (
                 r.${statCol} = 'CONFIRM'
                 AND ar.START_DT IS NOT NULL

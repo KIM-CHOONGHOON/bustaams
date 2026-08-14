@@ -35,7 +35,7 @@ SELECT res.RES_ID AS resId,
  WHERE res.REQ_ID = ?
    AND res.RES_ID = ?
    AND res.DRIVER_ID = ?
-   AND res.DATA_STAT IN ('BIDDING','CONFIRM')
+    AND res.DATA_STAT IN ('CUSTOMER_PAY_WAIT','CONFIRM')
  LIMIT 1`;
 
 const SQL_MESSAGES_BASE = `
@@ -83,7 +83,7 @@ module.exports = function createCommonLiveChatRouter(pool) {
         return String(cid).trim();
     }
 
-    /** DATA_STAT IN ('BIDDING','CONFIRM'), 기사 매칭 */
+    /** DATA_STAT IN ('CUSTOMER_PAY_WAIT','CONFIRM'), 기사 매칭 */
     async function fetchReservationForChat(connection, driverCustId, reqId, resId) {
         const [rows] = await connection.execute(SQL_RES_FOR_DRIVER, [reqId, resId, driverCustId]);
         return rows[0] || null;
@@ -120,8 +120,8 @@ module.exports = function createCommonLiveChatRouter(pool) {
                    FROM TB_BUS_RESERVATION res
                    INNER JOIN TB_AUCTION_REQ r ON r.REQ_ID = res.REQ_ID
                     AND res.DRIVER_ID = ?
-                    AND res.DATA_STAT IN ('BIDDING','CONFIRM')
-                    AND res.RES_ID = (
+                     AND res.DATA_STAT IN ('CUSTOMER_PAY_WAIT','CONFIRM')
+                     AND res.RES_ID = (
                         SELECT b.RES_ID FROM TB_BUS_RESERVATION b
                          WHERE b.REQ_ID = res.REQ_ID AND b.DRIVER_ID = res.DRIVER_ID
                          ORDER BY b.MOD_DT DESC, b.RES_ID DESC

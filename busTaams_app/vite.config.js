@@ -12,7 +12,19 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
-      '/app': {
+      '/app/customer': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
+      '/app/driver': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
+      '/app/auth': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
+      '/app/common': {
         target: 'http://localhost:8080',
         changeOrigin: true,
       },

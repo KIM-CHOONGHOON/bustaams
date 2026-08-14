@@ -178,7 +178,7 @@ function mountCancellationOfBid(app, pool) {
                     });
                 }
                 const preStat = String(pre.dataStat || '').toUpperCase();
-                if (preStat !== 'BIDDING' && preStat !== 'CONFIRM') {
+                if (preStat !== 'CUSTOMER_PAY_WAIT' && preStat !== 'CONFIRM') {
                     return res.status(409).json({
                         error: MSGS.NOT_BIDDING_OR_CONFIRM,
                         errorCode: 'NOT_BIDDING_OR_CONFIRM',

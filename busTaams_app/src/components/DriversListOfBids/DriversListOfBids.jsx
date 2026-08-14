@@ -55,10 +55,10 @@ function statusBadgeClass(category) {
     return 'bg-slate-200 text-slate-700';
 }
 
-/** 목록: 응찰 등록(BIDDING)·예약 확정(CONFIRM) 행만 취소 가능 */
+/** 목록: 고객 결제 대기(CUSTOMER_PAY_WAIT)·예약 확정(CONFIRM) 행만 취소 가능 */
 function canCancelBidRow(row) {
     const s = String(row?.dataStat || '').toUpperCase();
-    return s === 'BIDDING' || s === 'CONFIRM';
+    return s === 'CUSTOMER_PAY_WAIT' || s === 'CONFIRM';
 }
 
 /** @param {{ open: boolean, onClose: () => void, driverId: string, variant?: 'active' | 'cancelled' }} props */

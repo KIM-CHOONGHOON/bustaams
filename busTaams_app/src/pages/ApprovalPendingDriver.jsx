@@ -1,14 +1,126 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { request, getDriverProfile } from '../api';
 import BottomNavDriver from '../components/BottomNavDriver';
 import { notify } from '../utils/toast';
 
 const ApprovalPendingDriver = () => {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const tabParam = searchParams.get('tab') || 'customer_wait';
+    const [activeTab, setActiveTab] = useState(tabParam);
+
     const [bids, setBids] = useState([]);
     const [loading, setLoading] = useState(true);
     const [userImage, setUserImage] = useState('');
+    const [driverProfile, setDriverProfile] = useState(null);
+
+    useEffect(() => {
+        const queryTab = searchParams.get('tab');
+        if (queryTab && queryTab !== activeTab) {
+            setActiveTab(queryTab);
+        }
+    }, [searchParams]);
+
+    // KG 이니시스 카드 결제 창 호출 함수 (한글 주석)
+    const initiateDriverPayment = async (bid) => {
+        try {
+            // 1. 서버에서 결제 준비 데이터 가져오기 (isDriver: true 전달)
+            const res = await request('/payment/ready', {
+                method: 'POST',
+                body: JSON.stringify({
+                    resId: bid.id,
+                    reqId: bid.reqId,
+                    price: bid.feeTotalAmt,
+                    isDriver: true,
+                    goodname: `${bid.title} 데이터 이용료 결제`,
+                    buyername: driverProfile?.driver?.custNm || '기사님',
+                    buyertel: driverProfile?.driver?.phoneNo || '010-0000-0000',
+                    buyeremail: driverProfile?.driver?.email || 'driver@example.com'
+                })
+            });
+
+            const data = res;
+
+            // 2. 폼 데이터 설정
+            const form = document.getElementById('SendPayForm');
+            if (!form) {
+                notify.error('오류 발생', '결제 폼을 찾을 수 없습니다.');
+                return;
+            }
+
+            const finalGoodName = `BusTaams_Fee`;
+            const cleanBuyerName = `Driver`;
+            const cleanMobile = (data.buyertel || '').replace(/[^0-9]/g, '');
+
+            const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+                (navigator.maxTouchPoints && navigator.maxTouchPoints > 1) ||
+                window.innerWidth < 1024;
+
+            if (isMobile) {
+                console.log('>>> [Driver Payment] Launching Mobile Payment Page:', data.oid);
+                form.action = "https://mobile.inicis.com/smart/payment/";
+                form.target = "_self";
+                form.method = "POST";
+
+                form.P_MID.value = data.mid;
+                form.P_OID.value = data.oid;
+                form.P_AMT.value = data.price;
+                form.P_GOODS.value = finalGoodName;
+                form.P_UNAME.value = cleanBuyerName;
+                form.P_MOBILE.value = cleanMobile;
+                form.P_EMAIL.value = data.buyeremail;
+                form.P_NEXT_URL.value = data.returnUrl;
+                form.P_RESERVED.value = "vbank_receipt=Y";
+                form.P_INI_PAYMENT.value = "CARD";
+                form.P_CHARSET.value = "euc-kr";
+
+                form.submit();
+            } else {
+                console.log('>>> [Driver Payment] Launching PC Web Standard Pay:', data.oid);
+                form.removeAttribute('action');
+                form.removeAttribute('target');
+                form.method = "POST";
+
+                form.version.value = "1.0";
+                form.mid.value = data.mid;
+                form.oid.value = data.oid;
+                form.price.value = data.price;
+                form.timestamp.value = data.timestamp;
+                form.signature.value = data.signature;
+                form.mKey.value = data.mKey;
+                form.currency.value = "WON";
+                form.goodname.value = finalGoodName;
+                form.buyername.value = cleanBuyerName;
+                form.buyertel.value = cleanMobile;
+                form.buyeremail.value = data.buyeremail;
+                form.returnUrl.value = `${window.location.origin}/api/payment/return`;
+                form.closeUrl.value = `${window.location.origin}/close-payment`;
+                form.gopaymethod.value = "Card";
+
+                window.INIStdPay.pay(form);
+            }
+        } catch (error) {
+            console.error('Driver payment initiation error:', error);
+            notify.error('오류 발생', error.message || '결제 요청 중 오류가 발생했습니다.');
+        }
+    };
+
+    // 기사 이용대금 결제 처리 함수 (한글 주석)
+    const handleDriverPay = async (bid) => {
+        const feeAmt = bid.feeTotalAmt || Math.floor((bid.price || 0) * 0.022);
+        const confirmed = await notify.confirm(
+            '데이터 이용료 결재 및 배차 확정',
+            `'${bid.title}' 건의 데이터 이용료 ${feeAmt.toLocaleString()}원을 결제하고 배차를 확정하시겠습니까?`,
+            '결재 및 배차 확정',
+            '취소'
+        );
+
+        if (!confirmed) return;
+
+        // PG 카드결제 창 띄우기
+        await initiateDriverPayment(bid);
+    };
 
     // 입찰 취소 처리 함수 (한글 주석)
     const handleCancelBid = async (id) => {
@@ -22,19 +134,13 @@ const ApprovalPendingDriver = () => {
         if (!confirmed) return;
 
         try {
-            const token = localStorage.getItem('accessToken');
-            if (!token) {
-                navigate('/login');
-                return;
-            }
-
             const result = await request(`/app/driver/cancel-bid/${id}`, {
                 method: 'POST'
             });
 
             if (result.success) {
                 await notify.success('입찰 취소 완료', '입찰이 성공적으로 취소되었습니다.');
-                navigate('/driver-dashboard');
+                fetchData();
             } else {
                 await notify.error('입찰 취소 실패', result.error || '오류가 발생했습니다.');
             }
@@ -44,29 +150,34 @@ const ApprovalPendingDriver = () => {
         }
     };
 
-    useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            try {
-                // 프로필 정보 조회
-                const profRes = await getDriverProfile();
-                if (profRes.success && profRes.data) {
-                    setUserImage(profRes.data.driver?.profileImg || '');
-                }
+    const handleTabChange = (newTab) => {
+        setActiveTab(newTab);
+        setSearchParams({ tab: newTab });
+    };
 
-                // 승인 대기 목록 조회
-                const res = await request('/app/driver/bids/waiting');
-                if (res.success) {
-                    setBids(res.data);
-                }
-            } catch (err) {
-                console.error('Fetch waiting bids error:', err);
-            } finally {
-                setLoading(false);
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            const profRes = await getDriverProfile();
+            if (profRes.success && profRes.data) {
+                setDriverProfile(profRes.data);
+                setUserImage(profRes.data.driver?.profileImg || '');
             }
-        };
+
+            const res = await request(`/app/driver/bids/waiting?tab=${activeTab}`);
+            if (res.success) {
+                setBids(res.data);
+            }
+        } catch (err) {
+            console.error('Fetch waiting bids error:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
         fetchData();
-    }, []);
+    }, [activeTab]);
 
     return (
         <div className="bg-[#f7f9fb] text-[#191c1e] min-h-screen pb-32 font-body text-left">
@@ -89,15 +200,37 @@ const ApprovalPendingDriver = () => {
                 </div>
             </header>
 
-            <main className="pt-28 px-6 max-w-7xl mx-auto">
+            <main className="pt-24 px-6 max-w-7xl mx-auto">
+                {/* 3개 단계 탭 선택 바 (한글 주석) */}
+                <div className="flex bg-slate-100 p-1.5 rounded-2xl mb-8 border border-slate-200/60 shadow-inner">
+                    <button 
+                        onClick={() => handleTabChange('customer_wait')}
+                        className={`flex-1 py-3 px-3 rounded-xl text-xs md:text-sm font-bold transition-all ${activeTab === 'customer_wait' ? 'bg-white text-[#004e47] shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                        승인대기 목록
+                    </button>
+                    <button 
+                        onClick={() => handleTabChange('driver_pay')}
+                        className={`flex-1 py-3 px-3 rounded-xl text-xs md:text-sm font-bold transition-all ${activeTab === 'driver_pay' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                        결제 대기 목록
+                    </button>
+                    <button 
+                        onClick={() => handleTabChange('final_approval_wait')}
+                        className={`flex-1 py-3 px-3 rounded-xl text-xs md:text-sm font-bold transition-all ${activeTab === 'final_approval_wait' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                        고객 최종 승인대기 목록
+                    </button>
+                </div>
+
                 {/* Editorial Header Section */}
-                <section className="mb-12">
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
-                        <div className="md:col-span-12 text-left">
-                            <p className="text-[#3e4947] text-sm font-medium leading-relaxed">
-                                여행 승인을 기다리는 청약 입니다.<br/>승인 완료시 실시간 알림 문자 드립니다.
-                            </p>
-                        </div>
+                <section className="mb-8">
+                    <div className="text-left">
+                        <p className="text-[#3e4947] text-sm font-medium leading-relaxed">
+                            {activeTab === 'customer_wait' && '기사님이 제출하신 응찰 건입니다. 고객님의 1차 선택 및 데이터 이용료 결재를 기다리는 중입니다.'}
+                            {activeTab === 'driver_pay' && '고객 결제 완료! 데이터 이용료를 결재하시면 배차가 최종 확정됩니다.'}
+                            {activeTab === 'final_approval_wait' && '기사 데이터 이용료 결재가 완료되었습니다. 고객님의 최종 승인 버튼 클릭을 기다리는 중입니다.'}
+                        </p>
                     </div>
                 </section>
 
@@ -197,13 +330,28 @@ const ApprovalPendingDriver = () => {
                                 </div>
 
                                 <div className="relative z-10 flex flex-col gap-3">
-                                    <button 
-                                        onClick={() => handleCancelBid(bid.id)}
-                                        className="w-full bg-red-50 text-red-600 py-4 rounded-xl font-black text-sm italic uppercase tracking-[0.1em] shadow-xl shadow-red-900/5 hover:bg-red-100 hover:text-red-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2 border border-red-100"
-                                    >
-                                        <span className="material-symbols-outlined text-lg">cancel</span>
-                                        입찰 취소
-                                    </button>
+                                    {activeTab === 'driver_pay' ? (
+                                        <button 
+                                            onClick={() => handleDriverPay(bid)}
+                                            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-black text-sm active:scale-95 transition-all shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2"
+                                        >
+                                            <span className="material-symbols-outlined text-lg">payment</span>
+                                            데이터 이용료 결재 및 배차 확정
+                                        </button>
+                                    ) : activeTab === 'final_approval_wait' ? (
+                                        <div className="w-full bg-emerald-50 border border-emerald-200 text-emerald-700 py-4 rounded-xl font-black text-sm flex items-center justify-center gap-2">
+                                            <span className="material-symbols-outlined text-lg">verified</span>
+                                            고객 최종 승인 대기 중
+                                        </div>
+                                    ) : (
+                                        <button 
+                                            onClick={() => handleCancelBid(bid.id)}
+                                            className="w-full bg-red-50 text-red-600 py-4 rounded-xl font-black text-sm italic uppercase tracking-[0.1em] shadow-xl shadow-red-900/5 hover:bg-red-100 hover:text-red-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2 border border-red-100"
+                                        >
+                                            <span className="material-symbols-outlined text-lg">cancel</span>
+                                            입찰 취소
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -228,6 +376,39 @@ const ApprovalPendingDriver = () => {
             </main>
 
             <BottomNavDriver activeTab="approval" />
+
+            {/* 이니시스 결제용 숨김 폼 */}
+            <form id="SendPayForm" name="SendPayForm" method="POST" acceptCharset="euc-kr" style={{ display: 'none' }}>
+                {/* PC 웹표준 필드 */}
+                <input type="hidden" name="version" value="1.0" />
+                <input type="hidden" name="mid" value="" />
+                <input type="hidden" name="oid" value="" />
+                <input type="hidden" name="price" value="" />
+                <input type="hidden" name="timestamp" value="" />
+                <input type="hidden" name="signature" value="" />
+                <input type="hidden" name="mKey" value="" />
+                <input type="hidden" name="currency" value="WON" />
+                <input type="hidden" name="goodname" value="" />
+                <input type="hidden" name="buyername" value="" />
+                <input type="hidden" name="buyertel" value="" />
+                <input type="hidden" name="buyeremail" value="" />
+                <input type="hidden" name="returnUrl" value="" />
+                <input type="hidden" name="closeUrl" value={`${window.location.origin}/close-payment`} />
+                <input type="hidden" name="gopaymethod" value="Card" />
+
+                {/* 모바일 필드 (P_ 접두사) */}
+                <input type="hidden" name="P_MID" value="" />
+                <input type="hidden" name="P_OID" value="" />
+                <input type="hidden" name="P_AMT" value="" />
+                <input type="hidden" name="P_GOODS" value="" />
+                <input type="hidden" name="P_UNAME" value="" />
+                <input type="hidden" name="P_MOBILE" value="" />
+                <input type="hidden" name="P_EMAIL" value="" />
+                <input type="hidden" name="P_NEXT_URL" value="" />
+                <input type="hidden" name="P_RESERVED" value="" />
+                <input type="hidden" name="P_INI_PAYMENT" value="" />
+                <input type="hidden" name="P_CHARSET" value="euc-kr" />
+            </form>
         </div>
     );
 };

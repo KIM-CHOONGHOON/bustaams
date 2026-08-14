@@ -27,7 +27,7 @@ const EstimateDetailDriver = () => {
 
                 const res = await request(`/app/driver/auctions/${id}`);
                 if (res.success) {
-                    // [추가] 해당 청약이 'AUCTION' 또는 'BUS_CHANGE' 상태가 아닌 경우(예: BIDDING, CONFIRM, DONE 등) 진입을 원천 차단합니다.
+                    // [추가] 해당 청약이 'AUCTION' 또는 'BUS_CHANGE' 상태가 아닌 경우(예: CUSTOMER_PAY_WAIT, CONFIRM, DONE 등) 진입을 원천 차단합니다.
                     const allowedStatuses = ['AUCTION', 'BUS_CHANGE'];
                     if (!allowedStatuses.includes(res.data.reqStatus)) {
                         Swal.fire({

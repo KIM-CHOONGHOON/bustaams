@@ -97,27 +97,43 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
         const logMsg = `\n[${new Date().toISOString()}] Dashboard Call - UserID: ${userId}, CustID: ${custId}`;
         fs.appendFileSync('debug_stats.log', logMsg);
 
-        // 2. 통계 조회 (진행중, 승인대기)
+        // 2. 통계 조회 (4단계: 청약진행, 고객결제대기, 기사결제대기(배차확정중), 고객최종승인대기)
         console.log(`[Dashboard Debug] UserID: ${userId}, CustID: ${custId}`);
         const [statsRows] = await pool.execute(`
             SELECT 
                 COUNT(DISTINCT CASE 
                     WHEN r.DATA_STAT IN ('AUCTION', 'BUS_CHANGE') 
-                    AND NOT EXISTS (SELECT 1 FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING')
-                    AND NOT EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING')
+                    AND NOT EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'CONFIRM'))
+                    AND NOT EXISTS (SELECT 1 FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT'))
                     THEN r.REQ_ID END) as countProgressing,
+                
                 COUNT(DISTINCT CASE 
-                    WHEN r.DATA_STAT = 'BIDDING' 
-                    OR (r.DATA_STAT IN ('AUCTION', 'BUS_CHANGE') AND (
-                        EXISTS (SELECT 1 FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING')
-                        OR EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING')
-                    ))
-                    THEN r.REQ_ID END) as countWaitingApproval
+                    WHEN r.DATA_STAT = 'CUSTOMER_PAY_WAIT' 
+                    OR EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'CUSTOMER_PAY_WAIT')
+                    OR EXISTS (SELECT 1 FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'CUSTOMER_PAY_WAIT')
+                    THEN r.REQ_ID END) as countCustomerPayWait,
+
+                COUNT(DISTINCT CASE 
+                    WHEN r.DATA_STAT = 'DRIVER_PAY_WAIT' 
+                    OR EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'DRIVER_PAY_WAIT')
+                    THEN r.REQ_ID END) as countDriverPayWait,
+
+                COUNT(DISTINCT CASE 
+                    WHEN r.DATA_STAT = 'FINAL_APPROVAL_WAIT' 
+                    OR EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'FINAL_APPROVAL_WAIT')
+                    THEN r.REQ_ID END) as countFinalApprovalWait
             FROM TB_AUCTION_REQ r
             WHERE TRIM(r.TRAVELER_ID) = ? OR TRIM(r.TRAVELER_ID) = ?
         `, [custId, userId]);
 
-        const stats = statsRows[0] || { countProgressing: 0, countWaitingApproval: 0 };
+        const rawStats = statsRows[0] || {};
+        const stats = {
+            countProgressing: rawStats.countProgressing || 0,
+            countCustomerPayWait: rawStats.countCustomerPayWait || 0,
+            countWaitingApproval: rawStats.countCustomerPayWait || 0, // 기존 프론트 호환용
+            countDriverPayWait: rawStats.countDriverPayWait || 0,
+            countFinalApprovalWait: rawStats.countFinalApprovalWait || 0
+        };
         fs.appendFileSync('debug_stats.log', ` | Result: ${JSON.stringify(stats)}`);
         console.log(`[Dashboard Debug] Final Stats Result:`, stats);
 
@@ -701,19 +717,27 @@ router.get('/pending-requests', authenticateToken, async (req, res) => {
         if (type === 'progress') {
             statusFilter = `
                 r.DATA_STAT IN ('AUCTION', 'BUS_CHANGE') 
-                AND NOT EXISTS (SELECT 1 FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING')
-                AND NOT EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING')
+                AND NOT EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'CONFIRM'))
+                AND NOT EXISTS (SELECT 1 FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT'))
             `;
-        } else if (type === 'waiting') {
+        } else if (type === 'customer_pay' || type === 'waiting') {
             statusFilter = `
-                r.DATA_STAT = 'BIDDING' 
-                OR (r.DATA_STAT IN ('AUCTION', 'BUS_CHANGE') AND (
-                    EXISTS (SELECT 1 FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING')
-                    OR EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING')
-                ))
+                r.DATA_STAT = 'CUSTOMER_PAY_WAIT' 
+                OR EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'CUSTOMER_PAY_WAIT')
+                OR EXISTS (SELECT 1 FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'CUSTOMER_PAY_WAIT')
+            `;
+        } else if (type === 'driver_pay') {
+            statusFilter = `
+                r.DATA_STAT = 'DRIVER_PAY_WAIT' 
+                OR EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'DRIVER_PAY_WAIT')
+            `;
+        } else if (type === 'final_approval') {
+            statusFilter = `
+                r.DATA_STAT = 'FINAL_APPROVAL_WAIT' 
+                OR EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'FINAL_APPROVAL_WAIT')
             `;
         } else {
-            statusFilter = "r.DATA_STAT IN ('AUCTION', 'BIDDING', 'BUS_CHANGE')";
+            statusFilter = "r.DATA_STAT IN ('AUCTION', 'CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'BUS_CHANGE')";
         }
 
         const sql = `
@@ -758,6 +782,96 @@ router.get('/pending-requests', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error('[Pending Requests] Error:', error);
         res.status(500).json({ success: false, error: '견적 목록을 불러오는 중 오류가 발생했습니다.' });
+    }
+});
+
+// 7-1. 고객 최종 승인 처리 API
+router.post('/final-approve', authenticateToken, async (req, res) => {
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+        const userId = req.user.userId;
+        const { reqId, resId } = req.body;
+
+        if (!reqId && !resId) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, error: '요청 ID 또는 예약 ID가 필요합니다.' });
+        }
+
+        console.log(`[Customer Final Approve] UserID: ${userId}, reqId: ${reqId}, resId: ${resId}`);
+
+        // 1. TB_BUS_RESERVATION 업데이트 (CUSTOMER_FINAL_APPROVAL_YN = 'Y', DATA_STAT = 'CONFIRM')
+        if (resId) {
+            await connection.execute(`
+                UPDATE TB_BUS_RESERVATION 
+                SET CUSTOMER_FINAL_APPROVAL_YN = 'Y',
+                    CUSTOMER_FINAL_APPROVAL_DT = NOW(),
+                    DATA_STAT = 'CONFIRM',
+                    CONFIRM_DT = NOW(),
+                    MOD_ID = ?,
+                    MOD_DT = NOW()
+                WHERE RES_ID = ?
+            `, [userId, resId]);
+
+            // 2. TB_AUCTION_REQ_BUS 및 TB_AUCTION_REQ 상태 동시 업데이트를 위해 REQ_ID, REQ_BUS_SEQ 조회 후 업데이트
+            const [bRows] = await connection.execute('SELECT REQ_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [resId]);
+            if (bRows.length > 0) {
+                const { REQ_ID: rId, REQ_BUS_SEQ: uSeq } = bRows[0];
+                await connection.execute(`
+                    UPDATE TB_AUCTION_REQ_BUS 
+                    SET DATA_STAT = 'CONFIRM',
+                        MOD_ID = ?,
+                        MOD_DT = NOW()
+                    WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?
+                `, [userId, rId, uSeq]);
+
+                await connection.execute(`
+                    UPDATE TB_AUCTION_REQ 
+                    SET DATA_STAT = 'CONFIRM',
+                        MOD_ID = ?,
+                        MOD_DT = NOW()
+                    WHERE REQ_ID = ?
+                `, [userId, rId]);
+            }
+        } else if (reqId) {
+            await connection.execute(`
+                UPDATE TB_BUS_RESERVATION 
+                SET CUSTOMER_FINAL_APPROVAL_YN = 'Y',
+                    CUSTOMER_FINAL_APPROVAL_DT = NOW(),
+                    DATA_STAT = 'CONFIRM',
+                    CONFIRM_DT = NOW(),
+                    MOD_ID = ?,
+                    MOD_DT = NOW()
+                WHERE REQ_ID = ? AND DATA_STAT = 'FINAL_APPROVAL_WAIT'
+            `, [userId, reqId]);
+
+            // 2. TB_AUCTION_REQ_BUS 상태도 CONFIRM으로 업데이트
+            await connection.execute(`
+                UPDATE TB_AUCTION_REQ_BUS 
+                SET DATA_STAT = 'CONFIRM',
+                    MOD_ID = ?,
+                    MOD_DT = NOW()
+                WHERE REQ_ID = ? AND DATA_STAT = 'FINAL_APPROVAL_WAIT'
+            `, [userId, reqId]);
+
+            // 3. TB_AUCTION_REQ 상태도 CONFIRM으로 업데이트
+            await connection.execute(`
+                UPDATE TB_AUCTION_REQ 
+                SET DATA_STAT = 'CONFIRM',
+                    MOD_ID = ?,
+                    MOD_DT = NOW()
+                WHERE REQ_ID = ?
+            `, [userId, reqId]);
+        }
+
+        await connection.commit();
+        res.json({ success: true, message: '최종 승인이 성공적으로 완료되었습니다. 예약 확정 메뉴에서 확인하실 수 있습니다.' });
+    } catch (err) {
+        await connection.rollback();
+        console.error('[Customer Final Approve Error]', err);
+        res.status(500).json({ success: false, error: '최종 승인 처리 중 오류가 발생했습니다.' });
+    } finally {
+        connection.release();
     }
 });
 
@@ -881,7 +995,7 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
                 COALESCE(res.FEE_POLICY, dd.FEE_POLICY, 'DRIVER') as feePolicy
             FROM TB_AUCTION_REQ_BUS rb
             LEFT JOIN TB_COMMON_CODE cc ON cc.GRP_CD = 'BUS_TYPE' AND cc.DTL_CD = rb.BUS_TYPE_CD
-            LEFT JOIN TB_BUS_RESERVATION res ON rb.REQ_ID = res.REQ_ID AND rb.REQ_BUS_SEQ = res.REQ_BUS_SEQ AND res.DATA_STAT IN ('AUCTION','BIDDING','CONFIRM','DONE')
+            LEFT JOIN TB_BUS_RESERVATION res ON rb.REQ_ID = res.REQ_ID AND rb.REQ_BUS_SEQ = res.REQ_BUS_SEQ AND res.DATA_STAT IN ('AUCTION','CUSTOMER_PAY_WAIT','DRIVER_PAY_WAIT','FINAL_APPROVAL_WAIT','CONFIRM','DONE')
             LEFT JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID
             LEFT JOIN TB_FILE_MASTER f ON u.PROFILE_FILE_ID = f.FILE_ID
             LEFT JOIN TB_BUS_DRIVER_VEHICLE db ON res.BUS_ID = db.BUS_ID
@@ -927,12 +1041,9 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
 
         bidRows.forEach(row => {
             if (!unitMap[row.unitSeq]) {
-                // 기사의 등급 FEE_POLICY 에따라 DRIVER 인 경우는 6.6%를 그외의 등급일 경우는 2.2%를 결제
-                let dynamicResFee = row.unitResFee || 0;
-                if (row.price && row.feePolicy) {
-                    const rate = row.feePolicy === 'DRIVER' ? 0.066 : 0.022;
-                    dynamicResFee = Math.floor(Number(row.price) * rate);
-                }
+                // 차량 수량당 고정 이용대금 33,000원 적용 (한글 주석)
+                const FIXED_FEE_PER_UNIT = 33000;
+                let dynamicResFee = FIXED_FEE_PER_UNIT;
 
                 unitMap[row.unitSeq] = {
                     unitSeq: row.unitSeq,
@@ -1050,7 +1161,7 @@ router.post('/request-bus-change', authenticateToken, async (req, res) => {
         const [drivers] = await connection.execute(`
             SELECT DISTINCT DRIVER_ID 
             FROM TB_BUS_RESERVATION 
-            WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT IN ('BIDDING', 'CONFIRM')
+            WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'CONFIRM')
         `, [reqId, busSeq]);
 
         const [reqInfo] = await connection.execute(`
@@ -1319,13 +1430,13 @@ router.post('/approve-bid', authenticateToken, async (req, res) => {
 router.post('/approve-all', authenticateToken, async (req, res) => {
     const { reqId } = req.body;
     try {
-        // 현재 BIDDING 상태인 모든 차량에 대해, 각 차량별로 첫 번째 입찰을 승인하는 예시 로직
+        // 현재 CUSTOMER_PAY_WAIT 상태인 모든 차량에 대해, 각 차량별로 첫 번째 입찰을 승인하는 예시 로직
         // (실제로는 사용자가 선택한 견적들이 있어야 하지만, 요청에 따라 전체 승인 처리)
 
         const [bids] = await pool.execute(`
             SELECT ANY_VALUE(RES_ID) as RES_ID, REQ_BUS_SEQ, ANY_VALUE(DRIVER_ID) as DRIVER_ID 
             FROM TB_BUS_RESERVATION 
-            WHERE REQ_ID = ? AND DATA_STAT = 'BIDDING'
+            WHERE REQ_ID = ? AND DATA_STAT = 'CUSTOMER_PAY_WAIT'
             GROUP BY REQ_BUS_SEQ
         `, [reqId]);
 
@@ -1510,7 +1621,9 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
                 TRAVELER_ID as ownerId,
                 CASE 
                     WHEN DATA_STAT = 'AUCTION' THEN '견적대기중..'
-                    WHEN DATA_STAT = 'BIDDING' THEN '승인대기중...'
+                    WHEN DATA_STAT = 'CUSTOMER_PAY_WAIT' THEN '고객 결제 대기'
+                    WHEN DATA_STAT = 'DRIVER_PAY_WAIT' THEN '기사 결제 대기'
+                    WHEN DATA_STAT = 'FINAL_APPROVAL_WAIT' THEN '최종 승인 대기'
                     WHEN DATA_STAT = 'CONFIRM' THEN '예약 확정...'
                     WHEN DATA_STAT = 'DONE' THEN '운행 종료...'
                     WHEN DATA_STAT = 'TRAVELER_CANCEL' THEN '전체 취소'
@@ -1608,7 +1721,7 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
                 rb.DATA_STAT as status,
                 rb.RES_BUS_AMT as price,
                 (SELECT COUNT(*) FROM TB_BUS_RESERVATION b 
-                 WHERE b.REQ_ID = rb.REQ_ID AND b.REQ_BUS_SEQ = rb.REQ_BUS_SEQ AND b.DATA_STAT = 'BIDDING') as bidCount,
+                 WHERE b.REQ_ID = rb.REQ_ID AND b.REQ_BUS_SEQ = rb.REQ_BUS_SEQ AND b.DATA_STAT = 'CUSTOMER_PAY_WAIT') as bidCount,
                 res.DRIVER_ID as driverId,
                 u_driver.USER_NM as driverName,
                 u_driver.HP_NO as driverHp,
@@ -1854,7 +1967,7 @@ router.get('/received-bids', authenticateToken, async (req, res) => {
             FROM TB_BUS_RESERVATION b
             JOIN TB_USER u ON b.DRIVER_ID COLLATE utf8mb4_unicode_ci = u.CUST_ID COLLATE utf8mb4_unicode_ci
             JOIN TB_BUS_DRIVER_VEHICLE db ON b.BUS_ID COLLATE utf8mb4_unicode_ci = db.BUS_ID COLLATE utf8mb4_unicode_ci
-            WHERE b.REQ_ID COLLATE utf8mb4_unicode_ci = ? AND b.DATA_STAT IN ('BIDDING', 'CONFIRM')
+            WHERE b.REQ_ID COLLATE utf8mb4_unicode_ci = ? AND b.DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'CONFIRM')
         `;
         const params = [reqId];
 
@@ -2418,7 +2531,7 @@ router.post('/confirm-bid', authenticateToken, async (req, res) => {
         } else if (totalConfirmed > 0) {
             // 일부 차량만 예약 확정
             await connection.execute(
-                "UPDATE TB_AUCTION_REQ SET DATA_STAT = 'BIDDING', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?",
+                "UPDATE TB_AUCTION_REQ SET DATA_STAT = 'CUSTOMER_PAY_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?",
                 [custId, reqId]
             );
         }
@@ -2724,7 +2837,7 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
         const [drivers] = await connection.execute(`
             SELECT DISTINCT DRIVER_ID 
             FROM TB_BUS_RESERVATION 
-            WHERE REQ_ID = ? AND DATA_STAT IN ('BIDDING', 'CONFIRM')
+            WHERE REQ_ID = ? AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'CONFIRM')
         `, [reqId]);
 
         const [reqInfo] = await connection.execute(`
@@ -3264,6 +3377,12 @@ router.post('/payment-bank', authenticateToken, async (req, res) => {
         // TB_AUCTION_REQ 테이블의 PAYMENT_STS 컬럼을 "1"로 업데이트합니다.
         await pool.execute(
             'UPDATE TB_AUCTION_REQ SET PAYMENT_STS = "1", MOD_DT = NOW() WHERE REQ_ID = ?',
+            [reqId]
+        );
+
+        // 고객의 환불정책 동의 일자 업데이트 (한글 주석)
+        await pool.execute(
+            'UPDATE TB_BUS_RESERVATION SET CUSTOMER_REFUND_AGREE_DT = NOW() WHERE REQ_ID = ?',
             [reqId]
         );
 

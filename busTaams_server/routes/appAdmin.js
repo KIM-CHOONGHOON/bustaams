@@ -318,30 +318,38 @@ module.exports = (pool) => {
             connection = await pool.getConnection();
             await connection.beginTransaction();
 
-            // 0. TB_BUS_RESERVATION에서 상태가 'BIDDING'인 기사의 ID를 조회
+            // 0. TB_BUS_RESERVATION에서 상태가 'CUSTOMER_PAY_WAIT'인 기사의 ID 및 개수 조회
             const [bidRows] = await connection.execute(
                 `SELECT DRIVER_ID FROM TB_BUS_RESERVATION 
-                 WHERE REQ_ID = ? AND DATA_STAT = 'BIDDING' LIMIT 1`,
+                 WHERE REQ_ID = ? AND DATA_STAT = 'CUSTOMER_PAY_WAIT'`,
+                [reqId]
+            );
+            const busCount = bidRows.length || 1;
+            const totalPayAmt = busCount * 33000;
+
+            // 1. TB_AUCTION_REQ 상태를 DRIVER_PAY_WAIT으로 업데이트하고 PAYMENT_STS를 '2'로 변경
+            await connection.execute(
+                `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'DRIVER_PAY_WAIT', PAYMENT_STS = '2', MOD_DT = NOW() WHERE REQ_ID = ?`,
                 [reqId]
             );
 
-            // 1. TB_AUCTION_REQ 상태를 CONFIRM으로 업데이트하고 PAYMENT_STS를 '2'로 변경
+            // 2. TB_AUCTION_REQ_BUS 상태를 DRIVER_PAY_WAIT으로 업데이트
             await connection.execute(
-                `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'CONFIRM', PAYMENT_STS = '2', MOD_DT = NOW() WHERE REQ_ID = ?`,
+                `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'DRIVER_PAY_WAIT', MOD_DT = NOW() WHERE REQ_ID = ? AND DATA_STAT = 'CUSTOMER_PAY_WAIT'`,
                 [reqId]
             );
 
-            // 2. TB_AUCTION_REQ_BUS 상태를 CONFIRM으로 업데이트
+            // 3. TB_BUS_RESERVATION 상태 및 결제 완료 정보를 DRIVER_PAY_WAIT으로 업데이트 (상태가 'CUSTOMER_PAY_WAIT'인 예약 건만 확정 처리)
             await connection.execute(
-                `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'CONFIRM', MOD_DT = NOW() WHERE REQ_ID = ?`,
-                [reqId]
-            );
-
-            // 3. TB_BUS_RESERVATION 상태 및 확정일시를 CONFIRM으로 업데이트 (상태가 'BIDDING'인 예약 건만 확정 처리)
-            await connection.execute(
-                `UPDATE TB_BUS_RESERVATION SET DATA_STAT = 'CONFIRM', CONFIRM_DT = NOW(), MOD_DT = NOW() 
-                 WHERE REQ_ID = ? AND DATA_STAT = 'BIDDING'`,
-                [reqId]
+                `UPDATE TB_BUS_RESERVATION 
+                 SET DATA_STAT = 'DRIVER_PAY_WAIT', 
+                     CUSTOMER_PAY_STAT = 'Y', 
+                     CUSTOMER_PAY_AMT = ?, 
+                     CUSTOMER_PAY_DT = NOW(), 
+                     CUSTOMER_PAY_ID = 'BANK-TRANSFER',
+                     MOD_DT = NOW() 
+                 WHERE REQ_ID = ? AND DATA_STAT = 'CUSTOMER_PAY_WAIT'`,
+                [totalPayAmt, reqId]
             );
 
             // 4. 매칭된 기사 정보가 존재하면 TB_MOM_MEMBER 횟수 차감 및 데이터 갱신

@@ -375,7 +375,7 @@ function createAuctionTripRouter(pool, admin, bucket, bucketName) {
 
             // 3. 버스 및 예약 상태 업데이트 전, 기사 응찰 횟수 원복
             const [bidders] = await connection.execute(
-                'SELECT DRIVER_ID FROM TB_BUS_RESERVATION WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT IN (\'BIDDING\', \'CONFIRM\', \'DONE\')',
+                'SELECT DRIVER_ID FROM TB_BUS_RESERVATION WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT IN (\'CUSTOMER_PAY_WAIT\', \'CONFIRM\', \'DONE\')',
                 [reqId, reqBusSeq]
             );
             for (const bidder of bidders) {
@@ -385,7 +385,7 @@ function createAuctionTripRouter(pool, admin, bucket, bucketName) {
             }
 
             await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?', [secureModId, reqId, reqBusSeq]);
-            await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT IN (\'BIDDING\', \'CONFIRM\', \'DONE\')', [secureModId, reqId, reqBusSeq]);
+            await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT IN (\'CUSTOMER_PAY_WAIT\', \'CONFIRM\', \'DONE\')', [secureModId, reqId, reqBusSeq]);
 
             // 4. 패널티 반영 (TB_USER_CANCEL_MANAGE)
             const penaltyColumn = isLastBus ? 'CANCEL_TRAVELER_ALL_CNT' : 'CANCEL_TRAVELER_PARTIAL_BUS_CNT';
@@ -442,7 +442,7 @@ function createAuctionTripRouter(pool, admin, bucket, bucketName) {
 
             // 4. 기존 예약 데이터를 'BUS_CHANGE'로 무효화 전, 기사 응찰 횟수 원복
             const [bidders] = await connection.execute(
-                'SELECT DRIVER_ID FROM TB_BUS_RESERVATION WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT IN (\'BIDDING\', \'CONFIRM\', \'DONE\')',
+                'SELECT DRIVER_ID FROM TB_BUS_RESERVATION WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT IN (\'CUSTOMER_PAY_WAIT\', \'CONFIRM\', \'DONE\')',
                 [reqId, reqBusSeq]
             );
             for (const bidder of bidders) {
@@ -452,7 +452,7 @@ function createAuctionTripRouter(pool, admin, bucket, bucketName) {
             }
 
             await connection.execute(
-                'UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'BUS_CHANGE\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT IN (\'BIDDING\', \'CONFIRM\', \'DONE\')',
+                'UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'BUS_CHANGE\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT IN (\'CUSTOMER_PAY_WAIT\', \'CONFIRM\', \'DONE\')',
                 [secureModId, reqId, reqBusSeq]
             );
 
@@ -476,11 +476,11 @@ function createAuctionTripRouter(pool, admin, bucket, bucketName) {
                 SELECT r.REQ_ID, ab.REQ_BUS_SEQ, r.TRIP_TITLE, r.START_ADDR, r.END_ADDR, r.TRAVELER_ID,
                        r.START_DT, r.END_DT, r.PASSENGER_CNT, r.DATA_STAT, r.REG_DT, ab.BUS_TYPE_CD,
                        ab.RES_BUS_AMT as UNIT_REQ_AMT, ab.DATA_STAT as BUS_STAT,
-                       (SELECT res.DATA_STAT FROM TB_BUS_RESERVATION res WHERE res.REQ_ID = r.REQ_ID AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED) AND res.DATA_STAT IN ('AUCTION', 'BIDDING') ORDER BY res.REG_DT DESC LIMIT 1) as RES_STAT,
-                       (SELECT res.RES_ID FROM TB_BUS_RESERVATION res WHERE res.REQ_ID = r.REQ_ID AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED) AND res.DATA_STAT IN ('AUCTION', 'BIDDING') LIMIT 1) as RES_ID,
-                       (SELECT u.USER_NM FROM TB_BUS_RESERVATION res LEFT JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID WHERE res.REQ_ID = r.REQ_ID AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED) AND res.DATA_STAT IN ('AUCTION', 'BIDDING') LIMIT 1) as DRIVER_NM,
-                       (SELECT u.PROFILE_FILE_ID FROM TB_BUS_RESERVATION res LEFT JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID WHERE res.REQ_ID = r.REQ_ID AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED) AND res.DATA_STAT IN ('AUCTION', 'BIDDING') LIMIT 1) as PROFILE_PHOTO_ID,
-                       (SELECT res.DRIVER_ID FROM TB_BUS_RESERVATION res WHERE res.REQ_ID = r.REQ_ID AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED) AND res.DATA_STAT IN ('AUCTION', 'BIDDING') LIMIT 1) as DRIVER_ID
+                       (SELECT res.DATA_STAT FROM TB_BUS_RESERVATION res WHERE res.REQ_ID = r.REQ_ID AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED) AND res.DATA_STAT IN ('AUCTION', 'CUSTOMER_PAY_WAIT') ORDER BY res.REG_DT DESC LIMIT 1) as RES_STAT,
+                       (SELECT res.RES_ID FROM TB_BUS_RESERVATION res WHERE res.REQ_ID = r.REQ_ID AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED) AND res.DATA_STAT IN ('AUCTION', 'CUSTOMER_PAY_WAIT') LIMIT 1) as RES_ID,
+                       (SELECT u.USER_NM FROM TB_BUS_RESERVATION res LEFT JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID WHERE res.REQ_ID = r.REQ_ID AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED) AND res.DATA_STAT IN ('AUCTION', 'CUSTOMER_PAY_WAIT') LIMIT 1) as DRIVER_NM,
+                       (SELECT u.PROFILE_FILE_ID FROM TB_BUS_RESERVATION res LEFT JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID WHERE res.REQ_ID = r.REQ_ID AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED) AND res.DATA_STAT IN ('AUCTION', 'CUSTOMER_PAY_WAIT') LIMIT 1) as PROFILE_PHOTO_ID,
+                       (SELECT res.DRIVER_ID FROM TB_BUS_RESERVATION res WHERE res.REQ_ID = r.REQ_ID AND CAST(res.REQ_BUS_SEQ AS UNSIGNED) = CAST(ab.REQ_BUS_SEQ AS UNSIGNED) AND res.DATA_STAT IN ('AUCTION', 'CUSTOMER_PAY_WAIT') LIMIT 1) as DRIVER_ID
                 FROM TB_AUCTION_REQ r
                 INNER JOIN TB_AUCTION_REQ_BUS ab ON r.REQ_ID = ab.REQ_ID
                 WHERE r.TRAVELER_ID = ? AND r.DATA_STAT NOT IN ('TRAVELER_CANCEL', 'BUS_CHANGE') AND ab.DATA_STAT NOT IN ('BUS_CHANGE', 'TRAVELER_CANCEL', 'BUS_CANCEL')

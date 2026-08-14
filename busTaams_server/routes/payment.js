@@ -3,10 +3,74 @@ const crypto = require('crypto');
 const axios = require('axios');
 const iconv = require('iconv-lite');
 const router = express.Router();
+const { sendNotification } = require('../services/notificationService');
 
 // 이니시스 설정 (.env에서 가져옴)
 const MID = process.env.INICIS_MID || 'INIpayTest';
 const SIGN_KEY = process.env.INICIS_SIGN_KEY || 'SU5JTElURV9UUklQTEVERVNfS0VZU1RS';
+
+// 💰 기사 데이터 이용료 동적 계산 헬퍼 함수 (한글 주석)
+async function calculateDriverDynamicFee(connection, custId, biddingPrice) {
+    try {
+        const [momRows] = await connection.execute(
+            `SELECT FEE_POLICY, BASIC_CNT, USE_CNT 
+             FROM TB_MOM_MEMBER 
+             WHERE CUST_ID = ? AND YYYYMM = DATE_FORMAT(NOW(), '%Y%m')`,
+            [custId]
+        );
+
+        let feePolicy = 'DRIVER';
+        let basicCnt = 0;
+        let useCnt = 0;
+
+        if (momRows.length > 0) {
+            feePolicy = momRows[0].FEE_POLICY;
+            basicCnt = momRows[0].BASIC_CNT;
+            useCnt = momRows[0].USE_CNT;
+        } else {
+            const [driverRows] = await connection.execute(
+                "SELECT FEE_POLICY FROM TB_DRIVER_DETAIL WHERE CUST_ID = ?",
+                [custId]
+            );
+            if (driverRows.length > 0) {
+                feePolicy = driverRows[0].FEE_POLICY;
+            }
+        }
+
+        if (feePolicy === 'DRIVER_GENERAL') {
+            basicCnt = 10;
+        } else if (feePolicy === 'DRIVER_MIDDLE') {
+            basicCnt = 20;
+        } else if (feePolicy === 'DRIVER_HIGH') {
+            basicCnt = 30;
+        }
+
+        let feeRate = 0.033; // 일반 기사는 3.3%
+
+        if (['DRIVER_GENERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH'].includes(feePolicy)) {
+            if (useCnt < basicCnt) {
+                feeRate = 0.022;
+            } else {
+                feeRate = 0.033;
+            }
+        }
+
+        const feeTotalAmt = Math.floor(biddingPrice * feeRate);
+
+        return {
+            feePolicy,
+            feeRate,
+            feeTotalAmt
+        };
+    } catch (err) {
+        console.error('[calculateDriverDynamicFee] Error:', err);
+        return {
+            feePolicy: 'DRIVER',
+            feeRate: 0.033,
+            feeTotalAmt: Math.floor(biddingPrice * 0.033)
+        };
+    }
+}
 
 module.exports = function createPaymentRouter(pool, app) {
     const router = express.Router();
@@ -23,66 +87,264 @@ module.exports = function createPaymentRouter(pool, app) {
     /**
      * 결제 완료 후 공통 DB 업데이트 처리
      */
-    const updateDBAfterPayment = async (oid, connection) => {
-        console.log(`>>> [updateDBAfterPayment] Starting for OID: ${oid}`);
-        // oid 파싱: BUS_RES_{resId}_{ts} 또는 BUS_REQ_{reqId}_{ts}
+    /**
+     * 결제 완료 후 공통 DB 업데이트 처리
+     */
+    const sendDriverPaymentPushNotification = async (connection, reqId, unitSeq, resId) => {
+        try {
+            // 1. 여행 제목(trip title) 조회
+            const [reqRows] = await connection.execute(
+                `SELECT TRIP_TITLE FROM TB_AUCTION_REQ WHERE REQ_ID = ?`,
+                [reqId]
+            );
+            const tripTitle = reqRows.length > 0 ? reqRows[0].TRIP_TITLE : '요청하신 여행';
+
+            // 2. 해당 버스기사의 USER_ID 및 CUST_ID 조회
+            const [resRows] = await connection.execute(
+                `SELECT r.DRIVER_ID, u.USER_ID 
+                 FROM TB_BUS_RESERVATION r
+                 JOIN TB_USER u ON r.DRIVER_ID = u.CUST_ID
+                 WHERE r.RES_ID = ?`,
+                [resId]
+            );
+
+            if (resRows.length > 0) {
+                const driverCustId = resRows[0].DRIVER_ID;
+                const driverUserId = resRows[0].USER_ID;
+
+                // push message 발송
+                console.log(`>>> [Push Notification] Sending payment completed push to driver ${driverUserId} (${driverCustId}) for reqId: ${reqId}, unitSeq: ${unitSeq}`);
+                
+                await sendNotification(pool, {
+                    custId: driverCustId,
+                    title: `[데이터 이용료 결제 요청]`,
+                    body: `"${tripTitle}"의 여행자님의 데이터 이용료가 결제되었습니다. 기사님께서도 데이터 이용료 결제 해주세요.`,
+                    link: `/app/driver/bids/waiting?tab=driver_pay`, // 기사 결제 대기 목록으로 링크
+                    type: 'SYSTEM'
+                });
+            }
+        } catch (pushErr) {
+            console.error('>>> [Push Notification Error] Failed to send driver payment push notification:', pushErr);
+        }
+    };
+
+    const updateDBAfterPayment = async (oid, connection, tid, amt) => {
+        console.log(`>>> [updateDBAfterPayment] Starting for OID: ${oid}, TID: ${tid}, Amt: ${amt}`);
+        // oid 파싱: BUS_RES_{resId}_{ts} 또는 BUS_REQ_{reqId}_{ts} 또는 BUS_DRV_{resId}_{ts}
         const parts = oid.split('_');
-        const type = parts[1]; // RES 또는 REQ
+        const type = parts[1]; // RES 또는 REQ 또는 DRV
         const targetId = parts[2]; // resId 또는 reqId
 
+        // 8월 17일까지 테스트 기간인 경우 데이터베이스에는 원래 가격으로 기록
+        let finalAmt = Number(amt) || 33000;
+        const now = new Date();
+        const limitDate = new Date('2026-08-17T23:59:59');
+
         if (type === 'RES') {
-            // 단건 승인 로직 (resId)
+            if (now <= limitDate && finalAmt === 1100) {
+                console.log(`>>> [TEST PAYMENT OVERRIDE] Restoring database recorded amount to 33,000 KRW (paid: 1,100 KRW)`);
+                finalAmt = 33000;
+            }
+            // 고객 단건 승인 및 결제 완료 처리 -> 상태를 'DRIVER_PAY_WAIT'으로 변경하고 고객 결제 정보를 저장합니다.
+            console.log(`>>> [updateDBAfterPayment RES] Updating customer payment to DRIVER_PAY_WAIT for RES_ID: ${targetId}`);
+            
             const [bidRows] = await connection.execute('SELECT REQ_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [targetId]);
             if (bidRows.length > 0) {
                 const { REQ_ID: reqId, REQ_BUS_SEQ: unitSeq } = bidRows[0];
-                await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = "CONFIRM", CONFIRM_DT = NOW() WHERE RES_ID = ?', [targetId]);
-                await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = "CONFIRM" WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?', [reqId, unitSeq]);
 
-                // 모든 차량 확정 확인
-                const [busStats] = await connection.execute(
-                    'SELECT COUNT(*) as total, SUM(CASE WHEN DATA_STAT = "CONFIRM" THEN 1 ELSE 0 END) as confirmed FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ?',
+                // 1. TB_BUS_RESERVATION 결제 정보 적재 및 상태 전이
+                await connection.execute(
+                    `UPDATE TB_BUS_RESERVATION 
+                     SET DATA_STAT = 'DRIVER_PAY_WAIT',
+                         CUSTOMER_PAY_STAT = 'Y',
+                         CUSTOMER_PAY_AMT = ?,
+                         CUSTOMER_PAY_DT = NOW(),
+                         CUSTOMER_PAY_ID = ?,
+                         MOD_DT = NOW() 
+                     WHERE RES_ID = ? AND DATA_STAT = 'CUSTOMER_PAY_WAIT'`,
+                    [finalAmt, tid || `PAY-CUST-${Date.now()}`, targetId]
+                );
+
+                // 2. TB_AUCTION_REQ_BUS 상태를 DRIVER_PAY_WAIT으로 변경
+                await connection.execute(
+                    `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'DRIVER_PAY_WAIT', MOD_DT = NOW() 
+                     WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT = 'CUSTOMER_PAY_WAIT'`,
+                    [reqId, unitSeq]
+                );
+
+                // 3. TB_AUCTION_REQ 마스터 상태도 DRIVER_PAY_WAIT으로 변경
+                await connection.execute(
+                    `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'DRIVER_PAY_WAIT', MOD_DT = NOW() WHERE REQ_ID = ?`,
                     [reqId]
                 );
-                if (busStats[0].total > 0 && busStats[0].total === busStats[0].confirmed) {
-                    await connection.execute('UPDATE TB_AUCTION_REQ SET DATA_STAT = "CONFIRM", MOD_DT = NOW() WHERE REQ_ID = ?', [reqId]);
-                }
+
+                // 4. 해당 버스 기사에게 PUSH 알림 전송
+                await sendDriverPaymentPushNotification(connection, reqId, unitSeq, targetId);
             }
         } else if (type === 'REQ') {
-            // 전체 승인 로직 (reqId)
-            const [bids] = await connection.execute(`
-                SELECT ANY_VALUE(RES_ID) as RES_ID, REQ_BUS_SEQ 
-                FROM TB_BUS_RESERVATION 
-                WHERE REQ_ID = ? AND DATA_STAT IN ('BIDDING', 'CONFIRM')
-                GROUP BY REQ_BUS_SEQ
-            `, [targetId]);
-
-            for (const bid of bids) {
-                await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = "CONFIRM", CONFIRM_DT = NOW() WHERE RES_ID = ?', [bid.RES_ID]);
-                await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = "CONFIRM" WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?', [targetId, bid.REQ_BUS_SEQ]);
+            if (now <= limitDate && finalAmt === 1100) {
+                console.log(`>>> [TEST PAYMENT OVERRIDE] Restoring database recorded amount to 33,000 KRW (paid: 1,100 KRW)`);
+                finalAmt = 33000;
             }
-            await connection.execute('UPDATE TB_AUCTION_REQ SET DATA_STAT = "CONFIRM" WHERE REQ_ID = ?', [targetId]);
+            // 고객 전체 승인 및 결제 완료 처리 -> 상태를 'DRIVER_PAY_WAIT'으로 변경하고 고객 결제 정보를 저장합니다.
+            console.log(`>>> [updateDBAfterPayment REQ] Updating customer payment to DRIVER_PAY_WAIT for REQ_ID: ${targetId}`);
+            
+            // 1. TB_BUS_RESERVATION 결제 정보 적재 및 상태 전이
+            await connection.execute(
+                `UPDATE TB_BUS_RESERVATION 
+                 SET DATA_STAT = 'DRIVER_PAY_WAIT',
+                     CUSTOMER_PAY_STAT = 'Y',
+                     CUSTOMER_PAY_AMT = ?,
+                     CUSTOMER_PAY_DT = NOW(),
+                     CUSTOMER_PAY_ID = ?,
+                     MOD_DT = NOW() 
+                 WHERE REQ_ID = ? AND DATA_STAT = 'CUSTOMER_PAY_WAIT'`,
+                [finalAmt, tid || `PAY-CUST-${Date.now()}`, targetId]
+            );
+
+            // 2. TB_AUCTION_REQ 상태를 DRIVER_PAY_WAIT으로 변경
+            await connection.execute(
+                `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'DRIVER_PAY_WAIT', MOD_DT = NOW() WHERE REQ_ID = ?`,
+                [targetId]
+            );
+
+            // 3. TB_AUCTION_REQ_BUS 상태를 DRIVER_PAY_WAIT으로 변경
+            await connection.execute(
+                `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'DRIVER_PAY_WAIT', MOD_DT = NOW() 
+                 WHERE REQ_ID = ? AND DATA_STAT = 'CUSTOMER_PAY_WAIT'`,
+                [targetId]
+            );
+
+            // 4. 전체 예약 건에 연동된 기사들에게 각각 PUSH 알림 전송
+            const [bids] = await connection.execute(
+                `SELECT RES_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE REQ_ID = ?`,
+                [targetId]
+            );
+            for (const bid of bids) {
+                await sendDriverPaymentPushNotification(connection, targetId, bid.REQ_BUS_SEQ, bid.RES_ID);
+            }
+        } else if (type === 'DRV') {
+            // 기사 데이터 이용료 결제 완료 처리 -> 상태를 'FINAL_APPROVAL_WAIT'으로 변경하고 기사의 결제 정보를 저장합니다.
+            console.log(`>>> [updateDBAfterPayment DRV] Updating driver payment to FINAL_APPROVAL_WAIT for RES_ID: ${targetId}`);
+
+            const [priceRows] = await connection.execute(
+                'SELECT REQ_ID, DRIVER_ID, DRIVER_BIDDING_PRICE FROM TB_BUS_RESERVATION WHERE RES_ID = ?',
+                [targetId]
+            );
+            if (priceRows.length > 0) {
+                const { REQ_ID: reqId, DRIVER_ID: driverId, DRIVER_BIDDING_PRICE: biddingPriceStr } = priceRows[0];
+                const biddingPrice = Number(biddingPriceStr) || 0;
+
+                // 동적 계산 수수료 산출
+                const dynamic = await calculateDriverDynamicFee(connection, driverId, biddingPrice);
+
+                // 2. TB_BUS_RESERVATION 기사 결제 완료 업데이트 및 상태를 'FINAL_APPROVAL_WAIT' (고객 최종 승인대기)로 변경
+                await connection.execute(
+                    `UPDATE TB_BUS_RESERVATION 
+                     SET DRIVER_PAY_STAT = 'Y',
+                         DRIVER_PAY_AMT = ?,
+                         DRIVER_PAY_DT = NOW(),
+                         DRIVER_PAY_ID = ?,
+                         DRIVER_FEE_RATE = ?,
+                         DATA_STAT = 'FINAL_APPROVAL_WAIT',
+                         MOD_ID = ?,
+                         MOD_DT = NOW()
+                     WHERE RES_ID = ?`,
+                    [dynamic.feeTotalAmt, tid || `PAY-DRIVER-${Date.now()}`, dynamic.feeRate, driverId, targetId]
+                );
+
+                // 3. TB_AUCTION_REQ_BUS 상태도 'FINAL_APPROVAL_WAIT'로 변경
+                const [bRows] = await connection.execute('SELECT REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [targetId]);
+                if (bRows.length > 0) {
+                    const { REQ_BUS_SEQ: uSeq } = bRows[0];
+                    await connection.execute(
+                        `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'FINAL_APPROVAL_WAIT', MOD_ID = ?, MOD_DT = NOW() 
+                         WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?`,
+                        [driverId, reqId, uSeq]
+                    );
+                }
+
+                // 4. TB_AUCTION_REQ 마스터 상태도 'FINAL_APPROVAL_WAIT'로 변경
+                await connection.execute(
+                    `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'FINAL_APPROVAL_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
+                    [driverId, reqId]
+                );
+
+                // 5. TB_MOM_MEMBER 사용량(USE_CNT) 증가 처리
+                const yyyyMM = now.getFullYear().toString() + String(now.getMonth() + 1).padStart(2, '0');
+                let basicCnt = 0;
+                if (dynamic.feePolicy === 'DRIVER_GENERAL') {
+                    basicCnt = 10;
+                } else if (dynamic.feePolicy === 'DRIVER_MIDDLE') {
+                    basicCnt = 20;
+                } else if (dynamic.feePolicy === 'DRIVER_HIGH') {
+                    basicCnt = 30;
+                }
+
+                if (['DRIVER_GENERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH'].includes(dynamic.feePolicy)) {
+                    await connection.execute(
+                        `INSERT INTO TB_MOM_MEMBER (
+                            CUST_ID, YYYYMM, FEE_POLICY, BASIC_CNT, USE_CNT, REMAINING_CNT, REG_DT, REG_ID, MOD_DT, MOD_ID
+                         ) VALUES (?, ?, ?, ?, 1, ?, NOW(), ?, NOW(), ?)
+                         ON DUPLICATE KEY UPDATE
+                            USE_CNT = USE_CNT + 1,
+                            REMAINING_CNT = IF(BASIC_CNT > USE_CNT, BASIC_CNT - USE_CNT, 0),
+                            MOD_DT = NOW(),
+                            MOD_ID = ?`,
+                        [driverId, yyyyMM, dynamic.feePolicy, basicCnt, basicCnt - 1, driverId, driverId, driverId, driverId]
+                    );
+                }
+            }
         }
     };
 
     router.post('/ready', async (req, res) => {
         console.log('>>> [Payment Ready] Requested:', req.body);
         try {
-            let { price, goodname, buyername, buyertel, buyeremail, resId, reqId } = req.body;
-            // price = 1000; // 실제 금액 사용을 위해 하드코딩 주석 처리 또는 제거
+            let { price, goodname, buyername, buyertel, buyeremail, resId, reqId, isDriver } = req.body;
+
+            // 기사 수수료 결제 준비인 경우 동적 수수료 실시간 산출
+            if (isDriver && resId) {
+                const [bidRows] = await pool.execute(
+                    'SELECT DRIVER_BIDDING_PRICE, DRIVER_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?',
+                    [resId]
+                );
+                if (bidRows.length > 0) {
+                    const biddingPrice = Number(bidRows[0].DRIVER_BIDDING_PRICE) || 0;
+                    const driverId = bidRows[0].DRIVER_ID;
+                    const dynamic = await calculateDriverDynamicFee(pool, driverId, biddingPrice);
+                    price = dynamic.feeTotalAmt;
+                }
+            }
 
             if (!price) {
                 console.warn('>>> [Payment Ready] Missing price');
                 return res.status(400).json({ error: '결제 금액(price)이 필요합니다.' });
             }
 
+            // 8월 17일까지 테스트 기간인 경우 카드 결제 요청 금액을 1,100원으로 오버라이드
+            const now = new Date();
+            const limitDate = new Date('2026-08-17T23:59:59');
+            if (now <= limitDate) {
+                console.log(`>>> [TEST PAYMENT OVERRIDE] Overriding price ${price} to 1,100 KRW until ${limitDate.toLocaleDateString()}`);
+                price = 1100;
+            }
+
             const timestamp = new Date().getTime();
             
             // 주문번호(oid) 생성: 결제 대상 정보를 포함하여 생성
             let oid = '';
-            if (resId) {
+            if (isDriver) {
+                oid = `BUS_DRV_${resId}_${timestamp}`;
+            } else if (resId) {
                 oid = `BUS_RES_${resId}_${timestamp}`;
             } else if (reqId) {
                 oid = `BUS_REQ_${reqId}_${timestamp}`;
+                // 고객의 환불정책 동의 일자 업데이트 (한글 주석)
+                await pool.execute(
+                    'UPDATE TB_BUS_RESERVATION SET CUSTOMER_REFUND_AGREE_DT = NOW() WHERE REQ_ID = ?',
+                    [reqId]
+                );
             } else {
                 oid = `BUS_PAY_${timestamp}`;
             }
@@ -187,9 +449,11 @@ module.exports = function createPaymentRouter(pool, app) {
         // 1. 모바일 결제 처리 (P_STATUS가 있는 경우)
         if (req.body.P_STATUS !== undefined) {
             const { P_STATUS, P_RMESG1, P_TID, P_REQ_URL, P_MID, P_OID } = req.body;
+            const isDriver = P_OID && P_OID.startsWith('BUS_DRV_');
 
             if (P_STATUS !== '00') {
-                return sendHtmlResponse(`결제 인증 실패: ${P_RMESG1}`, `/app/approval-list?payError=${encodeURIComponent(P_RMESG1)}`);
+                const errorRedirect = isDriver ? `/app/approval-pending-driver?tab=driver_pay&payError=${encodeURIComponent(P_RMESG1)}` : `/app/approval-list?payError=${encodeURIComponent(P_RMESG1)}`;
+                return sendHtmlResponse(`결제 인증 실패: ${P_RMESG1}`, errorRedirect);
             }
 
             try {
@@ -222,32 +486,23 @@ module.exports = function createPaymentRouter(pool, app) {
                     const connection = await pool.getConnection();
                     try {
                         await connection.beginTransaction();
-                        await updateDBAfterPayment(oid, connection);
+                        await updateDBAfterPayment(oid, connection, tid, amt);
                         await connection.commit();
 
-                        // oid에서 reqId 또는 resId 추출 (예: BUS_REQ_123_timestamp)
-                        const parts = oid.split('_');
-                        const type = parts[1];
-                        const targetId = parts[2];
-                        let redirectPath = '/app/customer-dashboard';
-                        
-                        if (type === 'REQ') {
-                            redirectPath = `/app/approval-list?reqId=${targetId}&payResult=success`;
-                        } else if (type === 'RES') {
-                            // 단건의 경우 해당 reqId를 찾아야 하므로 일단 대시보드로 보내거나 상세로 보냄
-                            redirectPath = `/app/customer-dashboard?payResult=success&resId=${targetId}`;
-                        }
-
+                        // 결제 성공 시 메인 대시보드로 화면 전환
+                        const redirectPath = isDriver ? '/app/driver-dashboard?payResult=success' : '/app/customer-dashboard?payResult=success';
                         sendHtmlResponse('결제가 성공적으로 완료되었습니다.', redirectPath);
                     } catch (dbErr) {
                         await connection.rollback();
                         console.error('>>> [Payment DB Update Error (Mobile)]:', dbErr);
-                        sendHtmlResponse(`결제 성공했으나 데이터 업데이트 중 오류가 발생했습니다. (오류: ${dbErr.message})`, '/app/customer-dashboard');
+                        const redirectPath = isDriver ? '/app/driver-dashboard' : '/app/customer-dashboard';
+                        sendHtmlResponse(`결제 성공했으나 데이터 업데이트 중 오류가 발생했습니다. (오류: ${dbErr.message})`, redirectPath);
                     } finally {
                         connection.release();
                     }
                 } else {
-                    sendHtmlResponse(`모바일 결제 승인 실패: ${msg || '알 수 없는 오류'}`, `/app/approval-list?payError=${encodeURIComponent(msg || '알 수 없는 오류')}`);
+                    const errorRedirect = isDriver ? `/app/approval-pending-driver?tab=driver_pay&payError=${encodeURIComponent(msg || '알 수 없는 오류')}` : `/app/approval-list?payError=${encodeURIComponent(msg || '알 수 없는 오류')}`;
+                    sendHtmlResponse(`모바일 결제 승인 실패: ${msg || '알 수 없는 오류'}`, errorRedirect);
                 }
             } catch (err) {
                 console.error('Mobile Approval Critical Error:', err);
@@ -258,9 +513,11 @@ module.exports = function createPaymentRouter(pool, app) {
 
         // 2. PC 웹표준 결제 처리
         const { resultCode, resultMsg, authToken, authUrl, mid } = req.body;
+        const isDriver = (req.body.orderNumber && req.body.orderNumber.startsWith('BUS_DRV_')) || (req.body.MOID && req.body.MOID.startsWith('BUS_DRV_'));
 
         if (resultCode !== '0000') {
-            return sendHtmlResponse(`결제 인증 실패: ${resultMsg}`, `/app/approval-list?payError=${encodeURIComponent(resultMsg)}`);
+            const errorRedirect = isDriver ? `/app/approval-pending-driver?tab=driver_pay&payError=${encodeURIComponent(resultMsg)}` : `/app/approval-list?payError=${encodeURIComponent(resultMsg)}`;
+            return sendHtmlResponse(`결제 인증 실패: ${resultMsg}`, errorRedirect);
         }
 
         try {
@@ -287,26 +544,23 @@ module.exports = function createPaymentRouter(pool, app) {
                 const connection = await pool.getConnection();
                 try {
                     await connection.beginTransaction();
-                    await updateDBAfterPayment(result.MOID, connection);
+                    await updateDBAfterPayment(result.MOID, connection, result.TID, result.TotPrice);
                     await connection.commit();
 
-                    const oid = result.MOID;
-                    const parts = oid.split('_');
-                    const targetId = parts[2];
-                    const redirectPath = parts[1] === 'REQ' 
-                        ? `/customer/approval-list?reqId=${targetId}&payResult=success`
-                        : `/customer-dashboard?payResult=success`;
-
+                    // 결제 성공 시 메인 대시보드로 화면 전환
+                    const redirectPath = isDriver ? '/app/driver-dashboard?payResult=success' : '/app/customer-dashboard?payResult=success';
                     sendHtmlResponse('결제가 성공적으로 완료되었습니다.', redirectPath);
                 } catch (dbErr) {
                     await connection.rollback();
                     console.error('>>> [Payment DB Update Error (PC)]:', dbErr);
-                    sendHtmlResponse(`결제 성공했으나 데이터 업데이트 중 오류가 발생했습니다. (오류: ${dbErr.message})`, '/app/customer-dashboard');
+                    const redirectPath = isDriver ? '/app/driver-dashboard' : '/app/customer-dashboard';
+                    sendHtmlResponse(`결제 성공했으나 데이터 업데이트 중 오류가 발생했습니다. (오류: ${dbErr.message})`, redirectPath);
                 } finally {
                     connection.release();
                 }
             } else {
-                sendHtmlResponse(`결제 승인 실패: ${result.resultMsg}`, `/app/approval-list?payError=${encodeURIComponent(result.resultMsg)}`);
+                const errorRedirect = isDriver ? `/app/approval-pending-driver?tab=driver_pay&payError=${encodeURIComponent(result.resultMsg || '알 수 없는 오류')}` : `/app/approval-list?payError=${encodeURIComponent(result.resultMsg || '알 수 없는 오류')}`;
+                sendHtmlResponse(`결제 승인 실패: ${result.resultMsg}`, errorRedirect);
             }
         } catch (err) {
             console.error('PC Approval Critical Error:', err);

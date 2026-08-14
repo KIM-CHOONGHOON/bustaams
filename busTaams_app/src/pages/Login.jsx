@@ -23,10 +23,10 @@ const Login = () => {
       confirmButtonText: '확인',
       cancelButtonText: '취소',
       customClass: {
-          popup: 'rounded-[2.5rem] border-none shadow-2xl p-8',
-          title: 'font-black text-2xl text-[#1D3557] mb-2',
-          confirmButton: 'bg-primary text-white px-8 py-4 rounded-full font-bold shadow-lg mx-2 active:scale-95 transition-all',
-          cancelButton: 'bg-gray-100 text-gray-500 px-8 py-4 rounded-full font-bold mx-2 active:scale-95 transition-all'
+        popup: 'rounded-[2.5rem] border-none shadow-2xl p-8',
+        title: 'font-black text-2xl text-[#1D3557] mb-2',
+        confirmButton: 'bg-primary text-white px-8 py-4 rounded-full font-bold shadow-lg mx-2 active:scale-95 transition-all',
+        cancelButton: 'bg-gray-100 text-gray-500 px-8 py-4 rounded-full font-bold mx-2 active:scale-95 transition-all'
       },
       buttonsStyling: false,
       inputValidator: (value) => {
@@ -48,8 +48,8 @@ const Login = () => {
               icon: 'info',
               confirmButtonText: '확인',
               customClass: {
-                  popup: 'rounded-[2.5rem]',
-                  confirmButton: 'bg-primary text-white px-8 py-4 rounded-full font-bold'
+                popup: 'rounded-[2.5rem]',
+                confirmButton: 'bg-primary text-white px-8 py-4 rounded-full font-bold'
               },
               buttonsStyling: false
             });
@@ -60,8 +60,8 @@ const Login = () => {
               icon: 'success',
               confirmButtonText: '확인',
               customClass: {
-                  popup: 'rounded-[2.5rem]',
-                  confirmButton: 'bg-primary text-white px-8 py-4 rounded-full font-bold'
+                popup: 'rounded-[2.5rem]',
+                confirmButton: 'bg-primary text-white px-8 py-4 rounded-full font-bold'
               },
               buttonsStyling: false
             });
@@ -84,64 +84,86 @@ const Login = () => {
     document.body.removeChild(link);
   };
 
+  const handleShowCompanyInfo = () => {
+    Swal.fire({
+      title: '회사 정보 및 플랫폼 면책 고지',
+      html: `
+        <div style="text-align: left; font-size: 13px; line-height: 1.6; color: #1e293b; font-family: 'Pretendard', sans-serif;">
+          <p style="margin-bottom: 8px;"><strong>대표자:</strong> 원동일 | <strong>대표번호:</strong> 010-8306-2459</p>
+          <p style="margin-bottom: 8px;"><strong>사업자등록번호:</strong> 212-81-45502</p>
+          <p style="margin-bottom: 8px;"><strong>법인등록번호:</strong> 110111-1871486</p>
+          <p style="margin-bottom: 8px;"><strong>통신판매업:</strong> 제 2026-서울송파-1822호</p>
+          <p style="margin-bottom: 8px;"><strong>주소:</strong> 서울특별시 송파구 충민로 66, L-7145호 (문정동, 가든파이브라이프)</p>
+          <p style="margin-bottom: 8px;"><strong>이메일:</strong> tong45502@hometax.go.kr</p>
+          <p style="margin-bottom: 12px;"><strong>업태:</strong> 제조, 서비스 | <strong>종목:</strong> 전자부품, 태양보일러(농업용), 자동차부품, 부가통신</p>
+          <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 12px 0;" />
+          <p style="font-weight: bold; color: #00685f; margin-bottom: 6px;">&lt; 청솔테크(주)의 버스탐스 &gt;는 여행자와 버스 기사님을 연결하는 운송 매칭 플랫폼입니다.</p>
+          <p style="font-size: 11px; color: #64748b; margin-bottom: 10px;">
+            플랫폼에서 판매되는 모든 상품은 &lt; 청솔테크(주) &gt;에서 책임지고 관리하나, 실제 버스 운행 서비스 및 결제, 현장 서비스의 이행 책임은 거래 당사자(여행자 및 버스 기사)에게 있습니다.
+          </p>
+          <p style="font-weight: bold; margin-bottom: 8px;">불편사항 및 민원 접수 : 담당자 원동일 (02-429-5459)</p>
+          <p style="font-size: 11px; color: #94a3b8; text-align: center; margin-top: 15px;">© (주)청솔테크. All rights reserved.</p>
+        </div>
+      `,
+      confirmButtonText: '확인',
+      confirmButtonColor: '#00685f',
+      customClass: {
+        popup: 'rounded-[1.5rem]'
+      }
+    });
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-        const trimmedUserId = formData.userId.trim();
-        const trimmedPassword = formData.password.trim();
-        const response = await login(trimmedUserId, trimmedPassword);
-        if (response.success) {
-            localStorage.setItem('accessToken', response.token);
-            localStorage.setItem('user', JSON.stringify(response.user));
-            
-            // FCM 토큰 등록 시도 (실패하더라도 로그인 흐름에 영향이 없도록 안전하게 감싸줍니다)
-            try {
-                requestFirebaseToken();
-            } catch (fcmError) {
-                console.error('FCM 토큰 등록 프로세스 시작 오류:', fcmError);
-            }
+      const trimmedUserId = formData.userId.trim();
+      const trimmedPassword = formData.password.trim();
+      const response = await login(trimmedUserId, trimmedPassword);
+      if (response.success) {
+        localStorage.setItem('accessToken', response.token);
+        localStorage.setItem('user', JSON.stringify(response.user));
 
-            // 로그인 성공 알림창이 닫힌 뒤에 안전하게 페이지 이동이 되도록 await 처리합니다.
-            await notify.success('로그인 성공', '오늘도 탁월한 선택을 환영합니다.');
-
-            const userType = response.user.userType;
-            if (userType === 'DRIVER') {
-                navigate('/driver-dashboard');
-            } else {
-                navigate('/customer-dashboard');
-            }
+        // FCM 토큰 등록 시도 (실패하더라도 로그인 흐름에 영향이 없도록 안전하게 감싸줍니다)
+        try {
+          requestFirebaseToken();
+        } catch (fcmError) {
+          console.error('FCM 토큰 등록 프로세스 시작 오류:', fcmError);
         }
+
+        // 로그인 성공 알림창이 닫힌 뒤에 안전하게 페이지 이동이 되도록 await 처리합니다.
+        await notify.success('로그인 성공', '오늘도 탁월한 선택을 환영합니다.');
+
+        const userType = response.user.userType;
+        if (userType === 'DRIVER') {
+          navigate('/driver-dashboard');
+        } else {
+          navigate('/customer-dashboard');
+        }
+      }
     } catch (error) {
-        notify.error('로그인 실패', error.message || '인증 정보가 일치하지 않습니다.');
+      notify.error('로그인 실패', error.message || '인증 정보가 일치하지 않습니다.');
     }
   };
 
   return (
     <div className="bg-background font-body text-on-background min-h-screen flex flex-col overflow-x-hidden">
-      <header className="flex justify-between items-center w-full px-6 pt-8 pb-4 max-w-7xl mx-auto z-10">
+      <header className="flex justify-between items-center w-full px-6 pt-2 pb-0 max-w-7xl mx-auto z-10">
         <div className="flex items-center gap-3">
           <img src="/app/assets/BUSTAAMS_IMAGE_LOGO.png" alt="busTaams Logo" className="w-14 h-14 object-contain rounded-xl shadow-sm" />
           <div className="text-teal-900 font-black tracking-tighter font-headline text-3xl">BUSTAAMS</div>
-          <div 
-            onClick={handleDownloadQR} 
-            className="w-[40px] h-[40px] lg:w-[48px] lg:h-[48px] ml-2 flex-shrink-0 bg-white p-1 rounded-lg shadow-sm border border-outline/10 flex items-center justify-center cursor-pointer hover:scale-105 active:scale-95 transition-transform"
-            title="busTaams 앱 다운로드 QR코드 (클릭 시 다운로드)"
-          >
-            <img src="/app/assets/signup_qr.png" alt="App Download QR" className="w-full h-full object-contain" />
-          </div>
         </div>
         <div className="flex items-center gap-4">
         </div>
       </header>
 
-      <main className="flex-grow flex items-center justify-center px-6 py-12 lg:py-24">
+      <main className="flex-grow flex items-start justify-center px-6 pt-4 pb-12 lg:pt-8 lg:pb-16">
         <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-0 lg:gap-16 items-center">
           <section className="lg:col-span-7 hidden lg:block space-y-8">
             <div className="relative rounded-3xl overflow-hidden shadow-[0_40px_60px_-15px_rgba(0,104,95,0.12)]">
               <img className="w-full h-[600px] object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB2_JILn7mpxcPVWf7f25BXFRPeS5wXBWwaTbiej9aujPjZq15DdC1zA7K-Vxv1v_2DCsNShqOivhNMumvzYVNldsL-2clBJbzQMB4RVm6A3mBWXxgkS8JTn9ze4LuHvLD0mJH-rCqGT7cjQQ5G3TG4hJHkxByQYbHAuRO9evHsoUVpZaR5uS-vB5KkE7MjpBss83OkUkGiT92jiXSr3ArqnXoekBUOgbv91fZ2Td3aMNvWBLQsWektJOJdzdDyVHuT6eHr6ZhVYgY" alt="Bus" />
               <div className="absolute inset-0 bg-gradient-to-t from-primary/80 to-transparent flex flex-col justify-end p-12">
                 <h2 className="font-headline font-extrabold text-5xl text-white tracking-tight leading-tight mb-4 text-[42px]">
-                  이동의 미학, <br/>키네틱 갤러리.
+                  이동의 미학, <br />키네틱 갤러리.
                 </h2>
                 <p className="text-primary-fixed text-lg max-w-md font-medium opacity-90 text-[16px]">
                   럭셔리 버스 경매의 품격을 경험하십시오. 모든 차량은 하나의 걸작이며, 모든 입찰은 탁월함을 향한 진보입니다.
@@ -152,27 +174,33 @@ const Login = () => {
 
           <section className="lg:col-span-5 w-full">
             <div className="space-y-6">
-              <div>
-                <p className="text-xl lg:text-2xl font-black uppercase tracking-widest text-primary italic">전세버스 예약</p>
+
+              <div className="flex items-center gap-4">
+                <div className="flex-1 rounded-2xl overflow-hidden shadow-md">
+                  <img src="/app/assets/login_banner.png" alt="Promotion Banner" className="w-full h-auto object-cover" />
+                </div>
+                <div 
+                  onClick={handleDownloadQR}
+                  className="w-[90px] h-[90px] lg:w-[105px] lg:h-[105px] shrink-0 bg-white p-2 rounded-2xl shadow-md border border-outline/10 flex flex-col items-center justify-center cursor-pointer hover:scale-105 active:scale-95 transition-transform"
+                  title="busTaams 앱 다운로드 QR코드 (클릭 시 다운로드)"
+                >
+                  <img src="/app/assets/signup_qr.png" alt="App Download QR" className="w-full h-full object-contain" />
+                </div>
               </div>
-              <div className="rounded-2xl overflow-hidden shadow-md">
-                <img src="/app/assets/login_banner.png" alt="Promotion Banner" className="w-full h-auto object-cover" />
-              </div>
-              <div>
-                <h1 className="font-headline font-extrabold text-xl lg:text-2xl text-on-surface tracking-normal text-[22px]">귀하의  방문을  환영합니다.</h1>
-              </div>
+
+
               <form onSubmit={handleLogin} className="space-y-6">
                 <div className="space-y-2">
                   <label className="block text-sm font-bold text-on-surface-variant ml-1" htmlFor="user-id">아이디</label>
                   <div className="relative">
                     <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline">badge</span>
-                    <input 
-                      className="w-full bg-surface-container-high border-none rounded-xl py-4 pl-12 pr-4 focus:ring-0 focus:bg-surface-container-highest transition-all text-on-surface placeholder:text-outline/50 font-medium" 
-                      id="user-id" 
-                      placeholder="BT-000000" 
+                    <input
+                      className="w-full bg-surface-container-high border-none rounded-xl py-4 pl-12 pr-4 focus:ring-0 focus:bg-surface-container-highest transition-all text-on-surface placeholder:text-outline/50 font-medium"
+                      id="user-id"
+                      placeholder="BT-000000"
                       type="text"
                       value={formData.userId}
-                      onChange={(e) => setFormData({...formData, userId: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
                     />
                   </div>
                 </div>
@@ -183,15 +211,15 @@ const Login = () => {
                   </div>
                   <div className="relative">
                     <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline">lock</span>
-                    <input 
-                      className="w-full bg-surface-container-high border-none rounded-xl py-4 pl-12 pr-4 focus:ring-0 focus:bg-surface-container-highest transition-all text-on-surface placeholder:text-outline/50 font-medium" 
-                      id="password" 
-                      placeholder="••••••••••••" 
+                    <input
+                      className="w-full bg-surface-container-high border-none rounded-xl py-4 pl-12 pr-4 focus:ring-0 focus:bg-surface-container-highest transition-all text-on-surface placeholder:text-outline/50 font-medium"
+                      id="password"
+                      placeholder="••••••••••••"
                       type={showPassword ? "text" : "password"}
                       value={formData.password}
-                      onChange={(e) => setFormData({...formData, password: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     />
-                    <span 
+                    <span
                       className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline cursor-pointer hover:text-primary"
                       onClick={() => setShowPassword(!showPassword)}
                     >
@@ -201,7 +229,7 @@ const Login = () => {
                 </div>
                 <div className="flex items-center justify-between py-2">
                   <label className="relative flex items-center cursor-pointer group">
-                    <input className="peer sr-only" type="checkbox"/>
+                    <input className="peer sr-only" type="checkbox" />
                     <div className="w-6 h-6 bg-surface-container-high rounded-lg peer-checked:bg-primary transition-all flex items-center justify-center">
                       <span className="material-symbols-outlined text-white text-sm scale-0 peer-checked:scale-100 transition-transform">check</span>
                     </div>
@@ -213,10 +241,32 @@ const Login = () => {
                     안전한 로그인
                   </button>
                 </div>
-                <div className="flex items-center justify-center gap-4 mt-6 text-sm font-bold">
-                  <button type="button" onClick={() => navigate('/signup')} className="text-on-surface-variant hover:text-primary transition-colors">회원가입</button>
-                  <div className="w-[1px] h-3 bg-outline/30"></div>
-                  <button type="button" onClick={() => navigate('/find-account')} className="text-on-surface-variant hover:text-primary transition-colors">아이디 / 비밀번호 찾기</button>
+                <div className="flex flex-col items-center gap-2 mt-4">
+                  <div className="flex items-center justify-center gap-4 text-sm font-bold">
+                    <button type="button" onClick={() => navigate('/signup')} className="text-on-surface-variant hover:text-primary transition-colors">회원가입</button>
+                    <div className="w-[1px] h-3 bg-outline/30"></div>
+                    <button type="button" onClick={() => navigate('/find-account')} className="text-on-surface-variant hover:text-primary transition-colors">아이디 / 비밀번호 찾기</button>
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <div>
+                      <span 
+                        onClick={handleCheckVehicle} 
+                        className="text-slate-300 hover:text-teal-800 font-black tracking-tighter font-headline text-lg cursor-pointer transition-colors"
+                        title="차량 가입 여부 확인"
+                      >
+                        busTaams
+                      </span>
+                    </div>
+                    <div>
+                      <button 
+                        type="button"
+                        onClick={handleShowCompanyInfo}
+                        className="text-[11px] font-bold text-slate-400 hover:text-teal-800 transition-colors underline"
+                      >
+                        (주)청솔테크 회사정보 확인
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </form>
             </div>
@@ -224,30 +274,6 @@ const Login = () => {
         </div>
       </main>
 
-      <footer className="w-full px-6 py-12 max-w-7xl mx-auto flex flex-col items-start gap-6 border-t border-outline/10 text-left">
-        <div 
-          onClick={handleCheckVehicle} 
-          className="text-teal-900/40 font-black tracking-tighter font-headline text-xl cursor-pointer hover:text-teal-900/60 transition-colors"
-        >
-          busTaams
-        </div>
-        <div className="text-[11px] font-medium text-outline/80 leading-relaxed space-y-3 max-w-3xl text-left">
-          {/* 한글 주석: 사용자의 요청에 따라 회사 정보 및 플랫폼 면책 고지 문구를 왼쪽 정렬하여 줄바꿈 표시합니다. */}
-          <p>대표자: 원동일 | 대표번호: 010-8306-2459</p>
-          <p>사업자등록번호: 212-81-45502</p>
-          <p>법인등록번호: 110111-1871486</p>
-          <p>통신판매업: 제 2026-서울송파-1822호</p>
-          <p>주소: 서울특별시 송파구 충민로 66, L-7145호 (문정동, 가든파이브라이프)</p>
-          <p>이메일: tong45502@hometax.go.kr</p>
-          <p>업태: 제조, 서비스 | 종목: 전자부품, 태양보일러(농업용), 자동차부품, 부가통신</p>
-          <p className="pt-2 text-on-surface/70 font-semibold">&lt; 청솔테크(주)의 버스탐스 &gt;는 여행자와 버스 기사님을 연결하는 운송 매칭 플랫폼입니다.</p>
-          <p className="pt-1 text-outline/60 text-[10px] leading-normal">
-            플랫폼에서 판매되는 모든 상품은 &lt; 청솔테크(주) &gt;에서 책임지고 관리하나, 실제 버스 운행 서비스 및 결제, 현장 서비스의 이행 책임은 거래 당사자(여행자 및 버스 기사)에게 있습니다.
-          </p>
-          <p className="pt-1 font-bold text-on-surface/80">불편사항 및 민원 접수 : 담당자 원동일 (02-429-5459)</p>
-          <p className="pt-2 text-[10px] text-outline/40 font-bold uppercase tracking-wider">© (주)청솔테크. All rights reserved.</p>
-        </div>
-      </footer>
       <div className="fixed top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-secondary opacity-20"></div>
     </div>
   );

@@ -38,10 +38,13 @@ const EstimateDetailCustomer = () => {
 
     const getBusStatusDisplay = (status) => {
         const config = {
-            'AUCTION': { label: '청약대기중..', color: 'bg-slate-100 text-slate-400' },
-            'BIDDING': { label: '승인대기중..', color: 'bg-orange-100 text-orange-700' },
-            'CONFIRM': { label: '예약 확정..', color: 'bg-teal-100 text-teal-700' },
-            'DONE': { label: '운행 종료..', color: 'bg-slate-100 text-slate-500' },
+            'AUCTION': { label: '입찰 대기중', color: 'bg-slate-100 text-slate-400' },
+            'CUSTOMER_PAY_WAIT': { label: '고객 결제 대기', color: 'bg-orange-100 text-orange-700' },
+            'DRIVER_PAY_WAIT': { label: '기사 결제 대기', color: 'bg-purple-100 text-purple-700' },
+            'FINAL_APPROVAL_WAIT': { label: '최종 승인 대기', color: 'bg-amber-100 text-amber-700' },
+            'CANCEL_UNPENDING': { label: '미결제 자동취소', color: 'bg-rose-100 text-rose-700' },
+            'CONFIRM': { label: '예약 확정', color: 'bg-teal-100 text-teal-700' },
+            'DONE': { label: '운행 종료', color: 'bg-slate-100 text-slate-500' },
             'TRAVELER_CANCEL': { label: '여행자 버스 예약 전체 취소', color: 'bg-red-100 text-red-700' },
             'DRIVER_CANCEL': { label: '버스 기사 응찰 취소', color: 'bg-red-100 text-red-700' },
             'BUS_CHANGE': { label: '여행자 버스 변경 요청', color: 'bg-purple-100 text-purple-700' },
@@ -143,8 +146,8 @@ const EstimateDetailCustomer = () => {
                                 <div className="grid grid-cols-2 gap-8 py-6 border-y border-slate-100">
                                     <div>
                                         <p className="text-slate-300 text-[10px] font-black uppercase tracking-widest mb-1">상태</p>
-                                        <span className={`px-4 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest ${getBusStatusDisplay(bid.status || 'BIDDING').color}`}>
-                                            {getBusStatusDisplay(bid.status || 'BIDDING').label}
+                                        <span className={`px-4 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest ${getBusStatusDisplay(bid.status || 'CUSTOMER_PAY_WAIT').color}`}>
+                                            {getBusStatusDisplay(bid.status || 'CUSTOMER_PAY_WAIT').label}
                                         </span>
                                     </div>
                                     <div>

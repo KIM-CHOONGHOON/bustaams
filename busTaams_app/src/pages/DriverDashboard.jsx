@@ -4,11 +4,14 @@ import api, { getNotifications, logout } from '../api';
 import Swal from 'sweetalert2';
 import { notify } from '../utils/toast';
 import BottomNavDriver from '../components/BottomNavDriver';
+import CompanyInfoFooter from '../components/CompanyInfoFooter';
 
 const DriverDashboard = () => {
     const navigate = useNavigate();
     const [stats, setStats] = useState({ 
-        countBidding: 0, 
+        countCustomerWait: 0, 
+        countDriverPayWait: 0, 
+        countFinalApprovalWait: 0, 
         countConfirmed: 0, 
         countDone: 0, 
         countAuctions: 0, 
@@ -32,7 +35,9 @@ const DriverDashboard = () => {
                 const res = await api.get('/app/driver/dashboard');
                 if (res.success) {
                     setStats({
-                        countBidding: res.data.countBidding || 0,
+                        countCustomerWait: res.data.countCustomerWait || 0,
+                        countDriverPayWait: res.data.countDriverPayWait || 0,
+                        countFinalApprovalWait: res.data.countFinalApprovalWait || 0,
                         countConfirmed: res.data.countConfirmed || 0,
                         countDone: res.data.countDone || 0,
                         countAuctions: res.data.countAuctions || 0,
@@ -87,17 +92,19 @@ const DriverDashboard = () => {
         });
     };
 
-    // 빠른 메뉴 버튼 배열 순서 변경 (등록 관련 메뉴를 사용성 개선을 위해 맨 뒤로 이동)
+    // 5단계 프로세스 및 컬러 스타일이 적용된 빠른 메뉴 구성 (한글 주석)
     const quickMenus = [
-        { icon: 'format_list_bulleted', label: '청약 요청 목록', path: '/estimate-list-driver' },
-        { icon: 'pending_actions', label: '승인 대기 목록', path: '/approval-pending-driver' },
-        { icon: 'calendar_month', label: '운행 예정 목록', path: '/upcoming-trips-driver' },
-        { icon: 'task_alt', label: '운행 완료 리스트', path: '/completed-trips-driver' },
-        { icon: 'chat', label: '실시간 채팅', path: '/chat-list-driver' },
-        { icon: 'credit_card', label: '카드/회비 관리', path: '/membership-card-mgmt' },
-        { icon: 'settings_suggest', label: '요금제 선택', path: '/pass-select-driver' },
-        { icon: 'badge', label: '기사 정보 등록', path: '/driver-certification' },
-        { icon: 'directions_bus', label: '버스 정보 등록', path: '/bus-certification' },
+        { icon: 'format_list_bulleted', label: '청약요청목록', path: '/estimate-list-driver?tab=opportunities', border: 'border-teal-500', iconBg: 'bg-teal-50', iconColor: 'text-teal-600' },
+        { icon: 'pending_actions', label: '승인대기 목록', path: '/approval-pending-driver?tab=customer_wait', border: 'border-amber-500', iconBg: 'bg-amber-50', iconColor: 'text-amber-600' },
+        { icon: 'payment', label: '결제 대기 목록', path: '/approval-pending-driver?tab=driver_pay', border: 'border-blue-500', iconBg: 'bg-blue-50', iconColor: 'text-blue-600' },
+        { icon: 'verified', label: '고객 최종 승인대기 목록', path: '/approval-pending-driver?tab=final_approval_wait', border: 'border-emerald-500', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600' },
+        { icon: 'calendar_month', label: '운행 예정 목록', path: '/upcoming-trips-driver', border: 'border-indigo-500', iconBg: 'bg-indigo-50', iconColor: 'text-indigo-600' },
+        { icon: 'task_alt', label: '운행 완료 리스트', path: '/completed-trips-driver', border: 'border-slate-500', iconBg: 'bg-slate-100', iconColor: 'text-slate-600' },
+        { icon: 'chat', label: '실시간 채팅', path: '/chat-list-driver', border: 'border-cyan-500', iconBg: 'bg-cyan-50', iconColor: 'text-cyan-600' },
+        { icon: 'credit_card', label: '카드/회비 관리', path: '/membership-card-mgmt', border: 'border-purple-500', iconBg: 'bg-purple-50', iconColor: 'text-purple-600' },
+        { icon: 'settings_suggest', label: '요금제 선택', path: '/pass-select-driver', border: 'border-rose-500', iconBg: 'bg-rose-50', iconColor: 'text-rose-600' },
+        { icon: 'badge', label: '기사 정보 등록', path: '/driver-certification', border: 'border-orange-500', iconBg: 'bg-orange-50', iconColor: 'text-orange-600' },
+        { icon: 'directions_bus', label: '버스 정보 등록', path: '/bus-certification', border: 'border-emerald-600', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-700' },
     ];
 
     return (
@@ -142,6 +149,56 @@ const DriverDashboard = () => {
             </header>
 
             <main className="pt-24 px-6 max-w-7xl mx-auto space-y-12">
+                {/* 실시간 진행현황 5단계 배너 카드 (한글 주석) */}
+                <section className="relative overflow-hidden rounded-2xl bg-teal-900 text-white p-6 md:p-10 shadow-xl text-left animate-in fade-in slide-in-from-bottom duration-500">
+                    <div className="absolute top-0 right-0 w-1/2 h-full opacity-10 pointer-events-none flex items-center justify-end pr-8">
+                        <span className="material-symbols-outlined text-[150px] text-white">local_shipping</span>
+                    </div>
+                    <div className="relative z-10 space-y-6">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold uppercase tracking-wider bg-white/20 px-3 py-1 rounded-full text-white/90 backdrop-blur-sm">실시간 청약 5단계 진행현황</span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
+                            <button 
+                                onClick={() => navigate('/estimate-list-driver?tab=opportunities')} 
+                                className="p-4 rounded-xl font-bold transition-all text-xs md:text-sm shadow-lg flex flex-col items-center justify-center gap-1.5 bg-white text-teal-900 hover:bg-slate-50 hover:translate-y-[-2px] active:scale-95"
+                            >
+                                <span className="material-symbols-outlined text-[22px]">format_list_bulleted</span>
+                                <span className="text-center">{stats.countAuctions}건 청약요청</span>
+                            </button>
+                            <button 
+                                onClick={() => navigate('/approval-pending-driver?tab=customer_wait')} 
+                                className="p-4 rounded-xl font-bold transition-all text-xs md:text-sm shadow-lg flex flex-col items-center justify-center gap-1.5 bg-amber-500 text-white hover:bg-amber-600 hover:translate-y-[-2px] active:scale-95"
+                            >
+                                <span className="material-symbols-outlined text-[22px]">pending_actions</span>
+                                <span className="text-center">{stats.countCustomerWait}건 승인대기</span>
+                            </button>
+                            <button 
+                                onClick={() => navigate('/approval-pending-driver?tab=driver_pay')} 
+                                className="p-4 rounded-xl font-bold transition-all text-xs md:text-sm shadow-lg flex flex-col items-center justify-center gap-1.5 bg-blue-600 text-white hover:bg-blue-700 hover:translate-y-[-2px] active:scale-95"
+                            >
+                                <span className="material-symbols-outlined text-[22px]">payment</span>
+                                <span className="text-center">{stats.countDriverPayWait}건 결제대기</span>
+                            </button>
+                            <button 
+                                onClick={() => navigate('/approval-pending-driver?tab=final_approval_wait')} 
+                                className="p-4 rounded-xl font-bold transition-all text-xs md:text-sm shadow-lg flex flex-col items-center justify-center gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 hover:translate-y-[-2px] active:scale-95"
+                            >
+                                <span className="material-symbols-outlined text-[22px]">verified</span>
+                                <span className="text-center">{stats.countFinalApprovalWait}건 최종 승인대기</span>
+                            </button>
+                            <button 
+                                onClick={() => navigate('/upcoming-trips-driver')} 
+                                className="p-4 rounded-xl font-bold transition-all text-xs md:text-sm shadow-lg flex flex-col items-center justify-center gap-1.5 bg-indigo-600 text-white hover:bg-indigo-700 hover:translate-y-[-2px] active:scale-95 col-span-2 sm:col-span-1"
+                            >
+                                <span className="material-symbols-outlined text-[22px]">calendar_month</span>
+                                <span className="text-center">{stats.countConfirmed}건 운행예정</span>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
                 {/* Active Opportunities Hero */}
                 <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-end text-left">
                     <div className="lg:col-span-4 space-y-4">
@@ -227,13 +284,13 @@ const DriverDashboard = () => {
                                     <button 
                                         key={idx}
                                         onClick={() => !isDisabled && navigate(menu.path)}
-                                        className={`group bg-slate-50 p-5 rounded-2xl transition-all duration-300 flex flex-col items-center text-center gap-3 shadow-sm border border-transparent ${
+                                        className={`group bg-white p-5 rounded-2xl transition-all duration-300 flex flex-col items-center text-center gap-3 shadow-sm border-l-4 ${menu.border || 'border-teal-500'} ${
                                             isDisabled 
-                                            ? 'opacity-40 cursor-not-allowed grayscale' 
-                                            : 'hover:bg-white hover:shadow-xl hover:translate-y-[-2px] hover:border-slate-100'
+                                            ? 'opacity-40 cursor-not-allowed grayscale border-slate-200' 
+                                            : 'hover:shadow-xl hover:translate-y-[-3px] hover:border-teal-700'
                                         }`}
                                     >
-                                        <div className={`w-12 h-12 rounded-xl bg-white flex items-center justify-center transition-all shadow-sm ${!isDisabled && 'group-hover:bg-primary group-hover:text-white rotate-3 group-hover:rotate-0'}`}>
+                                        <div className={`w-12 h-12 rounded-xl ${menu.iconBg || 'bg-teal-50'} ${menu.iconColor || 'text-teal-600'} flex items-center justify-center transition-all shadow-sm ${!isDisabled && 'group-hover:scale-110'}`}>
                                             <span className="material-symbols-outlined">{menu.icon}</span>
                                         </div>
                                         <span className={`text-[11px] font-black uppercase tracking-tight ${isDisabled ? 'text-slate-300' : 'text-on-surface'}`}>{menu.label}</span>
@@ -327,6 +384,8 @@ const DriverDashboard = () => {
 
 
             </main>
+
+            <CompanyInfoFooter forceShow={true} />
 
             <BottomNavDriver activeTab="home" />
         </div>

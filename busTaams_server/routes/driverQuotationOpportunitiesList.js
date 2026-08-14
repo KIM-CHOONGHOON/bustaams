@@ -3,7 +3,7 @@
  * GET /api/driver/quotation-opportunities?driverUuid=
  * GET /api/list-of-traveler-quotations?driverUuid=  (호환 별칭)
  *
- * TB_AUCTION_REQ.DATA_STAT IN ('AUCTION','BIDDING'), DATE(START_DT) > CURDATE()
+ * TB_AUCTION_REQ.DATA_STAT IN ('AUCTION','CUSTOMER_PAY_WAIT'), DATE(START_DT) > CURDATE()
  * + 기사별 재응찰 제외 · 동일 출발일 CONFIRM 제외
  * 기사 식별: TB_BUS_RESERVATION.DRIVER_ID = TB_USER.CUST_ID.
  */
@@ -53,7 +53,7 @@ async function runArchList(connection, driverId, extraCols) {
              FROM TB_AUCTION_REQ r
              LEFT JOIN TB_AUCTION_REQ_BUS b ON b.REQ_ID = r.REQ_ID
              LEFT JOIN TB_AUCTION_REQ_VIA v ON v.REQ_ID = r.REQ_ID
-             WHERE r.DATA_STAT IN ('AUCTION','BIDDING')
+             WHERE r.DATA_STAT IN ('AUCTION','CUSTOMER_PAY_WAIT')
                AND DATE(r.START_DT) > CURDATE()
              ${blocks}
              GROUP BY r.REQ_ID, r.TRIP_TITLE, r.START_ADDR, r.END_ADDR,
@@ -81,7 +81,7 @@ const DEMO_ITEMS = [
         startAddr: '제주 국제공항',
         endAddr: '서귀포 중문 관광단지',
         reqAmt: 2380000,
-        dataStat: 'BIDDING',
+        dataStat: 'CUSTOMER_PAY_WAIT',
         expireDt: '2024-05-23T23:59:00',
         regDt: '2024-05-20T10:00:00',
         waypointCount: 2,
@@ -99,7 +99,7 @@ const DEMO_ITEMS = [
         startAddr: '서울 강남역',
         endAddr: '부산 해운대',
         reqAmt: 1200000,
-        dataStat: 'BIDDING',
+        dataStat: 'CUSTOMER_PAY_WAIT',
         expireDt: '2024-05-31T23:59:00',
         regDt: '2024-05-28T09:00:00',
         waypointCount: 0,

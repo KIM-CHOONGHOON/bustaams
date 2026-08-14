@@ -109,7 +109,7 @@ const BidDetailDriver = () => {
                     <div className="flex items-baseline justify-between text-left">
                         <h2 className="font-headline font-black text-3xl text-primary italic uppercase tracking-tighter text-left">고객 요청 요약</h2>
                         <span className="text-[10px] font-black text-secondary bg-secondary/10 px-4 py-1.5 rounded-xl uppercase tracking-widest italic">
-                            {bidData.DATA_STAT === 'BIDDING' ? '승인 대기 중' : '운행 예정'}
+                            {bidData.DATA_STAT === 'CUSTOMER_PAY_WAIT' ? '고객 결제 대기' : '운행 예정'}
                         </span>
                     </div>
 

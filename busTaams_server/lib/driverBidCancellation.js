@@ -142,7 +142,7 @@ async function executeDriverBidCancellation(connection, bucket, p) {
            FROM TB_BUS_RESERVATION
           WHERE RES_ID = ? AND REQ_ID = ? AND REQ_BUS_SEQ = ?
             AND DRIVER_ID = ?
-            AND DATA_STAT IN ('BIDDING', 'CONFIRM')
+            AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'CONFIRM')
           LIMIT 1
           FOR UPDATE`,
         [resId, reqId, reqBusSeq, driverCustId]
@@ -158,7 +158,7 @@ async function executeDriverBidCancellation(connection, bucket, p) {
                 MOD_ID = ?
           WHERE RES_ID = ? AND REQ_ID = ? AND REQ_BUS_SEQ = ?
             AND DRIVER_ID = ?
-            AND DATA_STAT IN ('BIDDING', 'CONFIRM')`,
+            AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'CONFIRM')`,
         [modId, resId, reqId, reqBusSeq, driverCustId]
     );
     if (uRes.affectedRows !== 1) {

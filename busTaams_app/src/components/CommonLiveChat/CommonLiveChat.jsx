@@ -336,7 +336,7 @@ const CommonLiveChat = ({ open, onClose, driverId, initialReqId, initialResId })
           <aside className="w-[min(100%,320px)] shrink-0 bg-surface-container-low flex flex-col border-r border-outline-variant/10">
             <div className="p-6 pb-3">
               <h2 className="text-xl font-extrabold font-headline tracking-tighter text-on-surface">대화 상대</h2>
-              <p className="text-[11px] text-outline mt-1">TB_BUS_RESERVATION · BIDDING/CONFIRM. 선택 시 대화방이 준비됩니다.</p>
+              <p className="text-[11px] text-outline mt-1">TB_BUS_RESERVATION · CUSTOMER_PAY_WAIT/CONFIRM. 선택 시 대화방이 준비됩니다.</p>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-6 max-h-[26.5rem]">
               {loadingPartners && (

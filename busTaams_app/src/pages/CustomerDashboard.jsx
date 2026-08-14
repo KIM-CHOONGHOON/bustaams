@@ -5,10 +5,16 @@ import Swal from 'sweetalert2';
 import { notify } from '../utils/toast';
 import BottomNavCustomer from '../components/BottomNavCustomer';
 import Avatar from '../components/Avatar';
+import CompanyInfoFooter from '../components/CompanyInfoFooter';
 
 const CustomerDashboard = () => {
     const navigate = useNavigate();
-    const [stats, setStats] = useState({ progressing: 0, waiting: 0 });
+    const [stats, setStats] = useState({ 
+        progressing: 0, 
+        customerPayWait: 0, 
+        driverPayWait: 0, 
+        finalApprovalWait: 0 
+    });
     const [userName, setUserName] = useState('사용자');
     const [profileImage, setProfileImage] = useState(null);
     const [imageVersion, setImageVersion] = useState(Date.now());
@@ -33,7 +39,9 @@ const CustomerDashboard = () => {
                 if (statsRes.success && statsRes.stats) {
                     setStats({
                         progressing: statsRes.stats.countProgressing || 0,
-                        waiting: statsRes.stats.countWaitingApproval || 0
+                        customerPayWait: statsRes.stats.countCustomerPayWait ?? statsRes.stats.countWaitingApproval ?? 0,
+                        driverPayWait: statsRes.stats.countDriverPayWait || 0,
+                        finalApprovalWait: statsRes.stats.countFinalApprovalWait || 0
                     });
                     if (statsRes.user && statsRes.user.userNm) {
                         setUserName(statsRes.user.userNm);
@@ -172,28 +180,44 @@ const CustomerDashboard = () => {
                     </div>
                 )}
 
-                <section className="relative overflow-hidden rounded-2xl bg-primary text-white p-8 md:p-12 shadow-xl">
+                <section className="relative overflow-hidden rounded-2xl bg-primary text-white p-6 md:p-10 shadow-xl">
                     <div className="absolute top-0 right-0 w-1/2 h-full opacity-20 pointer-events-none">
                         <img alt="Bus" className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDGum5KlJoZ1QYpw5IUtpBjkmHm85WskANrUTCg5K2pp6oBoHGfm904xF0Sha_OV2yNjGAHuI_C5we-RplZzy8FNTllgSB3jrLud6xKDIt-Yn1sUdijX3D970Qn4JoiC3v5tfqVRs4VFH5cP0XqOp47pfFy5EjuwG7xK79EZy2twkr6P2kJi5Pb6AtubxOcGzAlSiIl5ew5i1lqDMgmBcs_lw4egfP7RyHxYkREFQYcVBJXOIo4hSks6H2AOFsHQmbzkLX3Ckbqzmg" />
                     </div>
-                    <div className="relative z-10 space-y-8">
+                    <div className="relative z-10 space-y-6">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold uppercase tracking-wider bg-white/20 px-3 py-1 rounded-full text-white/90 backdrop-blur-sm">실시간 청약 4단계 진행현황</span>
+                        </div>
 
-
-                        {/* 버튼 내부 텍스트에 건수를 표시하고 0건일 때도 클릭 가능하도록 비활성화 가드 제거 (한글 주석) */}
-                        <div className="flex flex-wrap gap-4">
+                        {/* 4단계 상태 카드 버튼 그룹 (한글 주석) */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
                             <button 
                                 onClick={() => navigate('/estimate-request-list?type=progress')} 
-                                className="flex-1 px-6 py-4 rounded-xl font-bold transition-all text-[13px] shadow-lg flex flex-col items-center justify-center gap-1.5 bg-white text-primary hover:bg-slate-50 hover:translate-y-[-2px] active:scale-95"
+                                className="p-4 rounded-xl font-bold transition-all text-xs md:text-sm shadow-lg flex flex-col items-center justify-center gap-1.5 bg-white text-primary hover:bg-slate-50 hover:translate-y-[-2px] active:scale-95"
                             >
-                                <span className="material-symbols-outlined text-[20px]">near_me</span>
-                                <span>{stats.progressing}건 청약진행중</span>
+                                <span className="material-symbols-outlined text-[22px]">near_me</span>
+                                <span className="text-center">{stats.progressing}건 청약진행중</span>
                             </button>
                             <button 
-                                onClick={() => navigate('/estimate-request-list?type=waiting')} 
-                                className="flex-1 px-6 py-4 rounded-xl font-bold transition-all text-[13px] shadow-lg flex flex-col items-center justify-center gap-1.5 bg-secondary text-white hover:opacity-90 hover:translate-y-[-2px] active:scale-95"
+                                onClick={() => navigate('/estimate-request-list?type=customer_pay')} 
+                                className="p-4 rounded-xl font-bold transition-all text-xs md:text-sm shadow-lg flex flex-col items-center justify-center gap-1.5 bg-amber-500 text-white hover:bg-amber-600 hover:translate-y-[-2px] active:scale-95"
                             >
-                                <span className="material-symbols-outlined text-[20px]">pending_actions</span>
-                                <span>{stats.waiting}건 승인대기중</span>
+                                <span className="material-symbols-outlined text-[22px]">payment</span>
+                                <span className="text-center">{stats.customerPayWait}건 결제대기중</span>
+                            </button>
+                            <button 
+                                onClick={() => navigate('/estimate-request-list?type=driver_pay')} 
+                                className="p-4 rounded-xl font-bold transition-all text-xs md:text-sm shadow-lg flex flex-col items-center justify-center gap-1.5 bg-blue-600 text-white hover:bg-blue-700 hover:translate-y-[-2px] active:scale-95"
+                            >
+                                <span className="material-symbols-outlined text-[22px]">directions_bus</span>
+                                <span className="text-center">{stats.driverPayWait}건 기사 결제대기</span>
+                            </button>
+                            <button 
+                                onClick={() => navigate('/estimate-request-list?type=final_approval')} 
+                                className="p-4 rounded-xl font-bold transition-all text-xs md:text-sm shadow-lg flex flex-col items-center justify-center gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 hover:translate-y-[-2px] active:scale-95"
+                            >
+                                <span className="material-symbols-outlined text-[22px]">verified</span>
+                                <span className="text-center">{stats.finalApprovalWait}건 최종 승인대기</span>
                             </button>
                         </div>
                     </div>
@@ -201,59 +225,101 @@ const CustomerDashboard = () => {
 
                 <section className="space-y-6">
                     <h3 className="text-xl font-bold text-on-surface">빠른 서비스</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4 md:gap-6">
-                        <div onClick={handleRequestBus} className={`cursor-pointer bg-white p-6 rounded-2xl shadow-sm border-l-4 border-secondary hover:translate-y-[-4px] transition-all ${restriction ? 'opacity-60 grayscale-[0.5]' : ''}`}>
-                            <div className="w-12 h-12 rounded-xl bg-secondary/10 flex items-center justify-center mb-4 text-secondary">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
+                        {/* 1. 버스요청등록 (한글 주석) */}
+                        <div onClick={handleRequestBus} className={`cursor-pointer bg-white p-5 rounded-2xl shadow-sm border-l-4 border-secondary hover:translate-y-[-4px] transition-all ${restriction ? 'opacity-60 grayscale-[0.5]' : ''}`}>
+                            <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center mb-3 text-secondary">
                                 <span className="material-symbols-outlined">add_task</span>
                             </div>
-                            <h4 className="font-bold text-on-surface text-[14px]">버스 요청 등록</h4>
+                            <h4 className="font-bold text-on-surface text-[13px]">버스요청등록</h4>
                             <p className="text-[10px] text-on-surface-variant mt-1">새로운 일정 생성</p>
                         </div>
-                        <div onClick={() => navigate('/reservation-list')} className="cursor-pointer bg-white p-6 rounded-2xl shadow-sm hover:translate-y-[-4px] transition-all">
-                            <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center mb-4 text-indigo-600">
+                        
+                        {/* 2. 결제대기 (한글 주석) */}
+                        <div onClick={() => navigate('/estimate-request-list?type=customer_pay')} className="cursor-pointer bg-white p-5 rounded-2xl shadow-sm border-l-4 border-amber-500 hover:translate-y-[-4px] transition-all">
+                            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center mb-3 text-amber-600">
+                                <span className="material-symbols-outlined">payment</span>
+                            </div>
+                            <h4 className="font-bold text-on-surface text-[13px]">결제대기</h4>
+                            <p className="text-[10px] text-on-surface-variant mt-1">이용대금 결제하기</p>
+                        </div>
+
+                        {/* 3. 기사결제대기 (한글 주석) */}
+                        <div onClick={() => navigate('/estimate-request-list?type=driver_pay')} className="cursor-pointer bg-white p-5 rounded-2xl shadow-sm border-l-4 border-blue-500 hover:translate-y-[-4px] transition-all">
+                            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center mb-3 text-blue-600">
+                                <span className="material-symbols-outlined">directions_bus</span>
+                            </div>
+                            <h4 className="font-bold text-on-surface text-[13px]">기사결제대기</h4>
+                            <p className="text-[10px] text-on-surface-variant mt-1">배차 확정 진행</p>
+                        </div>
+
+                        {/* 4. 고객 최종승인 (한글 주석) */}
+                        <div onClick={() => navigate('/estimate-request-list?type=final_approval')} className="cursor-pointer bg-white p-5 rounded-2xl shadow-sm border-l-4 border-emerald-500 hover:translate-y-[-4px] transition-all">
+                            <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center mb-3 text-emerald-600">
+                                <span className="material-symbols-outlined">verified</span>
+                            </div>
+                            <h4 className="font-bold text-on-surface text-[13px]">고객 최종승인</h4>
+                            <p className="text-[10px] text-on-surface-variant mt-1">최종 예약 확정하기</p>
+                        </div>
+
+                        {/* 5. 예약리스트 (한글 주석) */}
+                        <div onClick={() => navigate('/reservation-list')} className="cursor-pointer bg-white p-5 rounded-2xl shadow-sm hover:translate-y-[-4px] transition-all">
+                            <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center mb-3 text-indigo-600">
                                 <span className="material-symbols-outlined">event_note</span>
                             </div>
-                            <h4 className="font-bold text-on-surface text-[14px]">예약 리스트</h4>
+                            <h4 className="font-bold text-on-surface text-[13px]">예약리스트</h4>
                             <p className="text-[10px] text-on-surface-variant mt-1">나의 예약 현황</p>
                         </div>
-                        <div onClick={() => navigate('/order-history')} className="cursor-pointer bg-white p-6 rounded-2xl shadow-sm hover:translate-y-[-4px] transition-all">
-                            <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-4 text-slate-600">
+
+                        {/* 6. 과거여행이력 (한글 주석) */}
+                        <div onClick={() => navigate('/order-history')} className="cursor-pointer bg-white p-5 rounded-2xl shadow-sm hover:translate-y-[-4px] transition-all">
+                            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center mb-3 text-slate-600">
                                 <span className="material-symbols-outlined">history</span>
                             </div>
-                            <h4 className="font-bold text-on-surface text-[14px]">과거 여행 이력</h4>
+                            <h4 className="font-bold text-on-surface text-[13px]">과거여행이력</h4>
                             <p className="text-[10px] text-on-surface-variant mt-1">지난 여행 확인</p>
                         </div>
-                        <div onClick={() => navigate('/review-pending-list')} className="cursor-pointer bg-white p-6 rounded-2xl shadow-sm hover:translate-y-[-4px] transition-all">
-                            <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center mb-4 text-orange-600">
+
+                        {/* 7. 평점 및 감사글 (한글 주석) */}
+                        <div onClick={() => navigate('/review-pending-list')} className="cursor-pointer bg-white p-5 rounded-2xl shadow-sm hover:translate-y-[-4px] transition-all">
+                            <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center mb-3 text-orange-600">
                                 <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1"}}>star</span>
                             </div>
-                            <h4 className="font-bold text-on-surface text-[14px]">평점 및 감사글</h4>
+                            <h4 className="font-bold text-on-surface text-[13px]">평점 및 감사글</h4>
                             <p className="text-[10px] text-on-surface-variant mt-1">이용 후기 작성</p>
                         </div>
-                        <div onClick={() => navigate('/inquiry-list')} className="cursor-pointer bg-white p-6 rounded-2xl shadow-sm hover:translate-y-[-4px] transition-all">
-                            <div className="w-12 h-12 rounded-xl bg-teal-50 flex items-center justify-center mb-4 text-teal-600">
+
+                        {/* 8. 1:1문의 (한글 주석) */}
+                        <div onClick={() => navigate('/inquiry-list')} className="cursor-pointer bg-white p-5 rounded-2xl shadow-sm hover:translate-y-[-4px] transition-all">
+                            <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center mb-3 text-teal-600">
                                 <span className="material-symbols-outlined">contact_support</span>
                             </div>
-                            <h4 className="font-bold text-on-surface text-[14px]">1:1 문의</h4>
+                            <h4 className="font-bold text-on-surface text-[13px]">1:1문의</h4>
                             <p className="text-[10px] text-on-surface-variant mt-1">고객 지원 센터</p>
                         </div>
-                        <div onClick={() => navigate('/chat-list-customer')} className="cursor-pointer bg-white p-6 rounded-2xl shadow-sm hover:translate-y-[-4px] transition-all">
-                            <div className="w-12 h-12 rounded-xl bg-teal-100/50 flex items-center justify-center mb-4 text-[#00685f]">
+
+                        {/* 9. 실시간 채팅 (한글 주석) */}
+                        <div onClick={() => navigate('/chat-list-customer')} className="cursor-pointer bg-white p-5 rounded-2xl shadow-sm hover:translate-y-[-4px] transition-all">
+                            <div className="w-10 h-10 rounded-xl bg-teal-100/50 flex items-center justify-center mb-3 text-[#00685f]">
                                 <span className="material-symbols-outlined">chat</span>
                             </div>
-                            <h4 className="font-bold text-on-surface text-[14px]">실시간 채팅</h4>
+                            <h4 className="font-bold text-on-surface text-[13px]">실시간 채팅</h4>
                             <p className="text-[10px] text-on-surface-variant mt-1">기사님과 대화</p>
                         </div>
-                        <div onClick={() => navigate('/user-profile')} className="cursor-pointer bg-white p-6 rounded-2xl shadow-sm hover:translate-y-[-4px] transition-all">
-                            <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-4 text-slate-600">
+
+                        {/* 10. 회원정보관리 (한글 주석) */}
+                        <div onClick={() => navigate('/user-profile')} className="cursor-pointer bg-white p-5 rounded-2xl shadow-sm hover:translate-y-[-4px] transition-all">
+                            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center mb-3 text-slate-600">
                                 <span className="material-symbols-outlined">manage_accounts</span>
                             </div>
-                            <h4 className="font-bold text-on-surface text-[14px]">회원정보관리</h4>
+                            <h4 className="font-bold text-on-surface text-[13px]">회원정보관리</h4>
                             <p className="text-[10px] text-on-surface-variant mt-1">프로필 및 보안</p>
                         </div>
                     </div>
                 </section>
             </main>
+
+            <CompanyInfoFooter forceShow={true} />
 
             <BottomNavCustomer />
 
