@@ -773,12 +773,12 @@ const DriverInfoRegistration = () => {
             <main className="max-w-7xl mx-auto px-6 pt-24 pb-32">
                 <section className="grid grid-cols-1 md:grid-cols-12 gap-8 mb-16">
                     <div className="col-span-12 md:col-span-8">
-                        <h2 className="font-headline text-4xl md:text-5xl font-extrabold text-[#004e47] leading-tight tracking-tight mb-6">
-                            회원정보 등록하고 <br />단독 운송 기회를 선점 하세요!
-                        </h2>
-                        <p className="text-[#3e4947] text-lg max-w-xl font-bold leading-relaxed text-teal-800">
-                            여행 정보 확인 후 선착순 1인 단독 청약 진행
-                        </p>
+                        {/* 한글 주석: 홍보 문구 영역을 지정된 이미지로 교체 */}
+                        <img 
+                            src="/app/assets/회원정보등록.png" 
+                            alt="회원정보 등록하고 단독 운송 기회를 선점하세요! 여행 정보 확인 후 선착순 1인 단독 청약 진행" 
+                            className="max-w-full h-auto object-contain rounded-xl"
+                        />
                     </div>
                 </section>
 

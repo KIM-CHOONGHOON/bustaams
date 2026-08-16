@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead, deleteNotification } from '../api';
+import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead, deleteNotification, request } from '../api';
 
 const NotificationList = () => {
   const navigate = useNavigate();
@@ -34,6 +34,31 @@ const NotificationList = () => {
       }
       
       if (notif.LINK) {
+        // 한글 주석: 결제 완료 알림 등의 경우 실시간 여정 상태에 따라 분기 라우팅 수행
+        try {
+          const url = new URL(notif.LINK, window.location.origin);
+          const reqId = url.searchParams.get('reqId');
+          const resId = url.searchParams.get('resId');
+          
+          if (reqId && resId) {
+            const statusRes = await request(`/app/driver/bids/status?reqId=${reqId}&resId=${resId}`);
+            if (statusRes.success && statusRes.status) {
+              const status = statusRes.status;
+              if (status === 'DRIVER_PAY_WAIT') {
+                navigate(`/approval-pending-driver?tab=driver_pay`);
+              } else if (status === 'FINAL_APPROVAL_WAIT') {
+                navigate(`/approval-pending-driver?tab=final_approval_wait`);
+              } else if (status === 'CONFIRM') {
+                navigate(`/upcoming-trip-detail-driver/${resId}`);
+              } else {
+                navigate(notif.LINK);
+              }
+              return;
+            }
+          }
+        } catch (routeErr) {
+          console.error('동적 라우팅 파싱 에러:', routeErr);
+        }
         navigate(notif.LINK);
       }
     } catch (error) {

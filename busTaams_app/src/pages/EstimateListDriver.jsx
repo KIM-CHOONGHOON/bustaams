@@ -82,13 +82,7 @@ const EstimateListDriver = () => {
                 </div>
             </header>
 
-            <main className="pt-32 px-6 max-w-7xl mx-auto space-y-16 animate-in fade-in slide-in-from-bottom duration-700 text-left">
-                {/* Header Section */}
-                <section className="space-y-6 text-left">
-                    <p className="text-slate-500 text-sm font-medium tracking-tight leading-relaxed max-w-xl text-left">
-                        엄선된 운송 기회. 기사님을 기다리는 새로운 여행들을 확인하고 최고의 서비스를 제안해 보세요.
-                    </p>
-                </section>
+            <main className="pt-24 px-6 max-w-7xl mx-auto space-y-16 animate-in fade-in slide-in-from-bottom duration-700 text-left">
 
                 {/* Auction Cards Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-left">
@@ -105,55 +99,31 @@ const EstimateListDriver = () => {
                                         </div>
                                     </div>
                                     <div className="pt-4 border-t border-slate-50 space-y-4">
-                                        {/* 일정 */}
-                                        <div className="flex items-start gap-2">
-                                            <span className="material-symbols-outlined text-teal-600 text-sm mt-0.5">event</span>
-                                            <div className="flex flex-col text-left">
-                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">{auction.startDate} ~</p>
-                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none">{auction.endDate}</p>
-                                            </div>
+                                        {/* 운행 일정 */}
+                                        <div className="flex items-center gap-2 mt-4 mb-6 text-left">
+                                            <span className="material-symbols-outlined text-teal-600 text-base">event</span>
+                                            <p className="text-sm font-semibold text-slate-500 tracking-wide">
+                                                {auction.startDate ? auction.startDate.split(' ')[0].replace(/\./g, '-') : ''} ~ {auction.endDate ? auction.endDate.split(' ')[0].replace(/\./g, '-') : ''}
+                                            </p>
                                         </div>
 
-                                        {/* 여행 경로 */}
-                                        {(() => {
-                                            const formatAddr = (addr) => {
-                                                if (!addr) return '';
-                                                const parts = addr.split(' ');
-                                                if (parts.length >= 3 && (parts[2].endsWith('구') || parts[2].endsWith('군'))) {
-                                                    return parts.slice(0, 3).join(' ');
-                                                }
-                                                return parts.slice(0, 2).join(' ');
-                                            };
-
-                                            return (
-                                                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100/50 space-y-4">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="flex-1">
-                                                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">출발</p>
-                                                            <p className="font-bold text-xs text-slate-700">{formatAddr(auction.startAddr)}</p>
-                                                        </div>
-                                                        <div className="px-4 text-slate-200">
-                                                            <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                                                        </div>
-                                                        {auction.roundTrip ? (
-                                                            <>
-                                                                <div className="flex-1 text-center">
-                                                                    <p className="text-[8px] font-black text-teal-500 uppercase tracking-tighter mb-0.5">목적지</p>
-                                                                    <p className="font-bold text-xs text-slate-700">{formatAddr(auction.roundTrip)}</p>
-                                                                </div>
-                                                                <div className="px-4 text-slate-200">
-                                                                    <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                                                                </div>
-                                                            </>
-                                                        ) : null}
-                                                        <div className="flex-1 text-right">
-                                                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">도착</p>
-                                                            <p className="font-bold text-xs text-slate-700">{formatAddr(auction.endAddr)}</p>
-                                                        </div>
-                                                    </div>
+                                        {/* 운행 경로 세로 Bento 스타일 */}
+                                        <div className="space-y-5 text-left py-2 mb-6">
+                                            <div className="flex flex-col text-left">
+                                                <p className="text-xs font-bold text-slate-400 mb-1">출발</p>
+                                                <p className="font-black text-base text-slate-800">{auction.startAddr}</p>
+                                            </div>
+                                            {auction.roundTrip && (
+                                                <div className="flex flex-col text-left">
+                                                    <p className="text-xs font-bold text-teal-600 mb-1">목적지</p>
+                                                    <p className="font-black text-base text-slate-800">{auction.roundTrip}</p>
                                                 </div>
-                                            );
-                                        })()}
+                                            )}
+                                            <div className="flex flex-col text-left">
+                                                <p className="text-xs font-bold text-slate-400 mb-1">도착</p>
+                                                <p className="font-black text-base text-slate-800">{auction.endAddr}</p>
+                                            </div>
+                                        </div>
 
                                         {/* 등록 경과 시간 */}
                                         <div className="flex items-center gap-2 text-slate-400">

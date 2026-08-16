@@ -10,8 +10,8 @@ const SSH_CONFIG = {
 const conn = new Client();
 
 conn.on('ready', () => {
-  console.log('SSH Connection Ready. Fetching logs...');
-  conn.exec('pm2 logs bustaams-backend --lines 100 --raw', (err, stream) => {
+  console.log('SSH Connection Ready. Fetching backend error logs...');
+  conn.exec('tail -n 200 /root/.pm2/logs/bustaams-backend-error.log', (err, stream) => {
     if (err) {
       console.error('Command execution failed:', err);
       conn.end();

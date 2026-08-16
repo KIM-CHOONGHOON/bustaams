@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
+const axios = require('axios');
 const { pool, getNextId, getBucket, bucketName } = require('../db');
 const { authenticateToken } = require('../middleware/auth');
 const { encrypt, decrypt } = require('../crypto');
@@ -10,6 +12,43 @@ const fs = require('fs');
 const admin = require('firebase-admin');
 const { sendNotification } = require('../services/notificationService');
 
+
+// 💰 이니시스 카드 결제 취소 (환불) 요청 헬퍼 함수
+async function cancelInicisPayment({ tid, msg, clientIp }) {
+    try {
+        const mid = process.env.INICIS_MID || 'INIpayTest';
+        const apiKey = process.env.INICIS_BILL_API_KEY || 'rKnPljRn5m6J9Mzz';
+        const timestamp = new Date().toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
+
+        const type = 'Refund';
+        const paymethod = 'Card';
+        const hashDataStr = apiKey + type + paymethod + timestamp + clientIp + mid + tid;
+        const hashData = crypto.createHash('sha256').update(hashDataStr).digest('hex');
+
+        const params = {
+            type,
+            paymethod,
+            timestamp,
+            clientIp,
+            mid,
+            tid,
+            msg: msg || '고객 여행 취소',
+            hashData
+        };
+
+        const response = await axios.post('https://iniapi.inicis.com/api/v1/refund', params, {
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log('>>> [Inicis Refund Response]:', response.data);
+        return response.data;
+    } catch (err) {
+        console.error('>>> [Inicis Refund Error]:', err);
+        throw err;
+    }
+}
 
 /**
  * 💰 기사의 멤버십 정보 및 등급에 따라 저장할 FEE_POLICY를 판별하여 반환하는 헬퍼 함수 (한글 주석)
@@ -63,6 +102,15 @@ const upload = multer({ storage: storage });
 // GCS 업로드를 위한 메모리 스토리지 설정
 const memoryStorage = multer.memoryStorage();
 const memoryUpload = multer({ storage: memoryStorage });
+
+// 📂 클라이언트가 전송한 Content-Type에 맞춰 Multer 미들웨어를 조건부 구동하는 헬퍼 미들웨어
+const uploadOrPass = (req, res, next) => {
+    const contentType = req.headers['content-type'] || '';
+    if (contentType.includes('multipart/form-data')) {
+        return memoryUpload.single('file')(req, res, next);
+    }
+    next();
+};
 
 /**
  * [App 전용 고객 서비스]
@@ -2820,7 +2868,7 @@ router.get('/reservations', authenticateToken, async (req, res) => {
 
 
 // 11. 전체 견적 요청 취소 (상세 사유 및 증빙 서류 포함)
-router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), async (req, res) => {
+router.post('/cancel-request', authenticateToken, uploadOrPass, async (req, res) => {
     const connection = await pool.getConnection();
     try {
         await connection.beginTransaction();
@@ -2983,6 +3031,81 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
             ) VALUES (?, ?, 'CANCEL_REASON', ?, ?, ?, ?, ?)
         `, [custId, histSeq, cancelCode || '06', cancelReasonText || '', gcsPath, custId, custId]);
 
+        // 💰 카드 결제 완료된 건이 있는지 조회하여 카드 취소(환불) 진행 (여행자 & 기사 결제 건 모두 포함)
+        const [paymentInfo] = await connection.execute(`
+            SELECT RES_ID, DRIVER_ID,
+                   CUSTOMER_PAY_STAT, CUSTOMER_PAY_ID, CUSTOMER_PAY_AMT,
+                   DRIVER_PAY_STAT, DRIVER_PAY_ID, DRIVER_PAY_AMT
+            FROM TB_BUS_RESERVATION 
+            WHERE REQ_ID = ? AND DATA_STAT NOT IN ('TRAVELER_CANCEL', 'DONE')
+        `, [reqId]);
+
+        let refundTotalAmt = 0; // 여행자 총 환불액
+        let driverRefundMap = {}; // 기사별 환불액 맵 (FCM 발송용)
+
+        if (paymentInfo.length > 0) {
+            for (const p of paymentInfo) {
+                // 1. 여행자 결제 건 카드 취소
+                if (p.CUSTOMER_PAY_STAT === 'Y' && p.CUSTOMER_PAY_ID) {
+                    try {
+                        const refundResult = await cancelInicisPayment({
+                            tid: p.CUSTOMER_PAY_ID,
+                            msg: '고객 여행 취소 (여행자 환불)',
+                            clientIp: '127.0.0.1'
+                        });
+                        console.log(`>>> [Traveler Card Refund Success] ResId: ${p.RES_ID}, TID: ${p.CUSTOMER_PAY_ID}, Result:`, refundResult);
+                        
+                        if (refundResult && (refundResult.resultCode === '00' || refundResult.resultCode === '0000')) {
+                            refundTotalAmt += Number(p.CUSTOMER_PAY_AMT || 0);
+                        }
+
+                        // 환불 상태 DB 기록
+                        await connection.execute(`
+                            UPDATE TB_BUS_RESERVATION 
+                            SET CUSTOMER_PAY_STAT = 'C',
+                                CUSTOMER_REFUND_DT = NOW(),
+                                CUSTOMER_REFUND_AMT = ?,
+                                MOD_DT = NOW()
+                            WHERE RES_ID = ?
+                        `, [p.CUSTOMER_PAY_AMT, p.RES_ID]);
+                    } catch (refundErr) {
+                        console.error(`>>> [Traveler Card Refund Failed] ResId: ${p.RES_ID}, Error:`, refundErr);
+                    }
+                }
+
+                // 2. 버스 기사 결제 건 카드 취소 (데이터 이용료 환불)
+                if (p.DRIVER_PAY_STAT === 'Y' && p.DRIVER_PAY_ID) {
+                    try {
+                        const refundResult = await cancelInicisPayment({
+                            tid: p.DRIVER_PAY_ID,
+                            msg: '고객 여행 취소 (기사 데이터이용료 환불)',
+                            clientIp: '127.0.0.1'
+                        });
+                        console.log(`>>> [Driver Card Refund Success] ResId: ${p.RES_ID}, TID: ${p.DRIVER_PAY_ID}, Result:`, refundResult);
+                        
+                        if (refundResult && (refundResult.resultCode === '00' || refundResult.resultCode === '0000')) {
+                            const amt = Number(p.DRIVER_PAY_AMT || 0);
+                            if (p.DRIVER_ID) {
+                                driverRefundMap[p.DRIVER_ID] = (driverRefundMap[p.DRIVER_ID] || 0) + amt;
+                            }
+                        }
+
+                        // 환불 상태 DB 기록
+                        await connection.execute(`
+                            UPDATE TB_BUS_RESERVATION 
+                            SET DRIVER_PAY_STAT = 'C',
+                                DRIVER_REFUND_DT = NOW(),
+                                DRIVER_REFUND_AMT = ?,
+                                MOD_DT = NOW()
+                            WHERE RES_ID = ?
+                        `, [p.DRIVER_PAY_AMT, p.RES_ID]);
+                    } catch (refundErr) {
+                        console.error(`>>> [Driver Card Refund Failed] ResId: ${p.RES_ID}, Error:`, refundErr);
+                    }
+                }
+            }
+        }
+
         // 5. 기존 상태 변경 로직 (전체 요청, 차량 유닛, 응찰 정보)
         await connection.execute('UPDATE TB_AUCTION_REQ SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?', [custId, reqId]);
         await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?', [custId, reqId]);
@@ -3017,28 +3140,60 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
         res.json({ success: true, message: '여행 취소 처리가 완료되었습니다.' });
 
         // [알림 발송] 트랜잭션 커밋 완료 후 비동기로 기사에게 푸시 메시지 발송
-        if (drivers.length > 0 && reqInfo.length > 0) {
+        if (reqInfo.length > 0) {
             const tripTitle = reqInfo[0].TRIP_TITLE;
-            
-            // 이전 상태가 CONFIRM(예약 확정)인 경우 '여행 취소' 문구 적용
-            const isConfirmed = currentReqStat === 'CONFIRM';
-            const title = isConfirmed 
-                ? '[여행 취소] 고객님이 예약을 취소했습니다.' 
-                : '[전체 취소] 고객님이 청약을 취소했습니다.';
-            const body = isConfirmed
-                ? `여정: ${tripTitle}\n확정되었던 예약이 취소되었습니다. 환불 및 상세 내용을 확인해 주세요.`
-                : `여정: ${tripTitle}\n요청하신 전체 여행 청약이 취소되었습니다.`;
-            const link = `/estimate-detail-driver/${reqId}`;
 
-            drivers.forEach(driver => {
-                sendNotification(pool, {
-                    custId: driver.DRIVER_ID,
-                    title,
-                    body,
-                    link,
-                    type: 'SYSTEM'
-                }).catch(err => console.error(`[Notification] 전체 취소 알림 발송 실패 (기사 ID: ${driver.DRIVER_ID}):`, err));
-            });
+            // 1. 기사들에게 발송하는 푸시
+            if (drivers.length > 0) {
+                // 한글 주석: 결제 대기, 최종 승인 대기, 기사 결제 대기 중 취소 시 푸시 메시지 내용 분기
+                const isConfirmed = currentReqStat === 'CONFIRM';
+                const isPendingState = ['CUSTOMER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'DRIVER_PAY_WAIT'].includes(currentReqStat);
+                
+                drivers.forEach(driver => {
+                    let title = '';
+                    let body = '';
+
+                    const driverRefundAmt = driverRefundMap[driver.DRIVER_ID] || 0;
+                    if (driverRefundAmt > 0) {
+                        title = '[결제 취소 완료] 청약 취소 및 환불 안내';
+                        body = `여행자가 "${tripTitle}" 여행을 취소했습니다. 기사님께서 결제하셨던 데이터 이용료 ₩${driverRefundAmt.toLocaleString()}원이 자동 결제 취소(환불)되었습니다.`;
+                    } else if (isPendingState) {
+                        title = '[여행 취소] 여행자 취소 알림';
+                        body = `여행자가 "${tripTitle}" 여행에 대해 취소를 했습니다.`;
+                    } else if (isConfirmed) {
+                        title = '[여행 취소] 고객님이 예약을 취소했습니다.';
+                        body = `여정: ${tripTitle}\n확정되었던 예약이 취소되었습니다. 환불 및 상세 내용을 확인해 주세요.`;
+                    } else {
+                        title = '[전체 취소] 고객님이 청약을 취소했습니다.';
+                        body = `여정: ${tripTitle}\n요청하신 전체 여행 청약이 취소되었습니다.`;
+                    }
+                    const link = `/estimate-detail-driver/${reqId}`;
+
+                    sendNotification(pool, {
+                        custId: driver.DRIVER_ID,
+                        title,
+                        body,
+                        link,
+                        type: 'SYSTEM'
+                    }).catch(err => console.error(`[Notification] 전체 취소 알림 발송 실패 (기사 ID: ${driver.DRIVER_ID}):`, err));
+                });
+            }
+
+            // 2. 고객 본인에게 발송하는 푸시 (결제 취소 안내)
+            const customerTitle = '[결제 취소 완료] 여행 예약이 취소되었습니다.';
+            let customerBody = `"${tripTitle}" 여행 일정이 성공적으로 취소되었습니다.`;
+            if (refundTotalAmt > 0) {
+                customerBody = `"${tripTitle}" 여행 예약이 취소되었으며, 결제하신 카드 대금 ₩${refundTotalAmt.toLocaleString()}원이 자동 결제 취소(환불)되었습니다.`;
+            }
+            const customerLink = `/app/estimate-request-list?type=cancel`;
+
+            sendNotification(pool, {
+                custId: custId,
+                title: customerTitle,
+                body: customerBody,
+                link: customerLink,
+                type: 'CANCEL'
+            }).catch(err => console.error(`[Notification] 고객 본인 취소 알림 발송 실패 (고객 ID: ${custId}):`, err));
         }
     } catch (error) {
         if (connection) await connection.rollback();

@@ -102,17 +102,7 @@ const ReservationList = () => {
                 </div>
             </header>
 
-            <main className="pt-28 pb-32 px-6 max-w-5xl mx-auto text-left">
-                {/* Editorial Header Section */}
-                <section className="mb-12">
-                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 text-left">
-                        <div className="max-w-xl text-left">
-                            <span className="text-secondary font-bold tracking-widest uppercase text-[10px] mb-2 block">여행 컨시어지</span>
-                            <h2 className="text-5xl md:text-6xl font-extrabold font-headline text-on-surface tracking-tighter text-[40px]">내 예약 내역</h2>
-                        </div>
-                    </div>
-                    <div className="mt-6 h-1 w-24 bg-primary rounded-full"></div>
-                </section>
+            <main className="pt-24 pb-32 px-6 max-w-5xl mx-auto text-left">
 
                 <div className="grid grid-cols-1 gap-8">
                     {loading ? (
@@ -147,28 +137,42 @@ const ReservationList = () => {
                                         <div>
                                             <div className="flex justify-between items-start mb-4 text-left">
                                                 <div className="text-left w-full">
-                                                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1 text-left">운행 노선</p>
-                                                    <h3 className="text-xl font-headline font-bold text-on-surface flex flex-wrap items-center gap-2 leading-tight">
-                                                        <span className="text-teal-900">{res.from}</span>
-                                                        <span className="material-symbols-outlined text-primary text-sm">arrow_forward</span>
-                                                        {res.viaAddr && (
-                                                            <>
-                                                                <span className="text-teal-700">{res.viaAddr}</span>
-                                                                <span className="material-symbols-outlined text-primary text-sm">arrow_forward</span>
-                                                            </>
-                                                        )}
-                                                        <span className="text-teal-900">{res.to}</span>
+                                                    {/* 여행 제목 */}
+                                                    <h3 className="text-2xl font-black font-headline text-slate-800 leading-tight tracking-tight mb-2">
+                                                        {res.title || '나의 여행 일정'}
                                                     </h3>
+                                                    
+                                                    {/* 운행 일정 */}
+                                                    <div className="flex items-center gap-2 mt-4 mb-6 text-left">
+                                                        <span className="material-symbols-outlined text-teal-600 text-base">event</span>
+                                                        <p className="text-sm font-semibold text-slate-500 tracking-wide">
+                                                            {res.startDt ? res.startDt.split(' ')[0].replace(/\./g, '-') : ''} ~ {res.endDt ? res.endDt.split(' ')[0].replace(/\./g, '-') : ''}
+                                                        </p>
+                                                    </div>
+
+                                                    {/* 운행 경로 세로 Bento 스타일 */}
+                                                    <div className="space-y-5 text-left py-2 mb-6">
+                                                        <div className="flex flex-col text-left">
+                                                            <p className="text-xs font-bold text-slate-400 mb-1">출발</p>
+                                                            <p className="font-black text-base text-slate-800">{res.startAddr}</p>
+                                                        </div>
+                                                        {res.routeDetail?.via && (
+                                                            <div className="flex flex-col text-left">
+                                                                <p className="text-xs font-bold text-teal-600 mb-1">목적지</p>
+                                                                <p className="font-black text-base text-slate-800">{res.routeDetail.via}</p>
+                                                            </div>
+                                                        )}
+                                                        <div className="flex flex-col text-left">
+                                                            <p className="text-xs font-bold text-slate-400 mb-1">도착</p>
+                                                            <p className="font-black text-base text-slate-800">{res.endAddr}</p>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-6 pt-6 border-t border-slate-50 text-left">
+                                            <div className="grid grid-cols-2 gap-6 pt-6 border-t border-slate-50 text-left">
                                                 <div className="text-left">
                                                     <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">차량 정보</p>
                                                     <p className="text-on-surface font-semibold text-sm">{res.busType || '정보 없음'}</p>
-                                                </div>
-                                                <div className="text-left">
-                                                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">운행 일자</p>
-                                                    <p className="text-on-surface font-semibold text-sm">{res.date}</p>
                                                 </div>
                                                 <div className="text-left">
                                                     <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">청약요금</p>

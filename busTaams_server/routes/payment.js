@@ -119,7 +119,7 @@ module.exports = function createPaymentRouter(pool, app) {
                     custId: driverCustId,
                     title: `[데이터 이용료 결제 요청]`,
                     body: `"${tripTitle}"의 여행자님의 데이터 이용료가 결제되었습니다. 기사님께서도 데이터 이용료 결제 해주세요.`,
-                    link: `/app/driver/bids/waiting?tab=driver_pay`, // 기사 결제 대기 목록으로 링크
+                    link: `/app/driver/bids/waiting?tab=driver_pay&reqId=${reqId}&resId=${resId}`, // 기사 결제 대기 목록으로 링크 (동적 분기용 파라미터 탑재)
                     type: 'SYSTEM'
                 });
             }

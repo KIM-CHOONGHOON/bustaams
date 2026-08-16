@@ -204,9 +204,6 @@ const CardMembershipMgmtDriver = () => {
                             >
                                 카드 정보 변경하기
                             </button>
-                            <button className="w-full bg-white text-primary border-2 border-primary/10 py-4 rounded-xl font-bold text-xs uppercase tracking-[0.2em] active:scale-95 transition-all hover:bg-primary/5">
-                                고객센터 연결
-                            </button>
                         </div>
                     </div>
                 </div>

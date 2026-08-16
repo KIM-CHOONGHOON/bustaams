@@ -226,9 +226,9 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
                 (SELECT COUNT(*) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'CONFIRM') as countConfirmed,
                 (SELECT COUNT(*) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'DONE') as countDone,
                 (SELECT SUM(DRIVER_BIDDING_PRICE) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'DONE' AND DATE_FORMAT(MOD_DT, '%Y-%m') = ?) as monthlyProfit,
-                (SELECT SUM(DRIVER_BIDDING_PRICE) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'CONFIRM') as pendingProfit,
+                (SELECT SUM(b.DRIVER_BIDDING_PRICE) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND b.DATA_STAT = 'CONFIRM' AND DATE_FORMAT(r.START_DT, '%Y-%m') = ?) as pendingProfit,
                 (SELECT SUM(DRIVER_BIDDING_PRICE) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'DONE') as totalProfit`,
-            [custId, custId, custId, custId, custId, custId, currentMonth, custId, custId]
+            [custId, custId, custId, custId, custId, custId, currentMonth, custId, currentMonth, custId]
         );
 
         // 6. 오늘의 운행 (Today's Schedule)
@@ -3104,6 +3104,33 @@ router.post('/ocr/bizreg', authenticateToken, memoryUpload.single('bizRegImg'), 
     } catch (err) {
         console.error('[OCR BizReg API] Error:', err);
         res.status(500).json({ error: '사업자 등록증 분석 중 오류 발생: ' + err.message });
+    }
+});
+
+/**
+ * [App] 기사 알림 연동용 여정/예약 상태 조회 API
+ * 한글 주석: 알림 클릭 시 결제/최종 승인/운행예정 상세 화면으로의 동적 분기를 위해 여정의 현재 상태(DATA_STAT)를 반환합니다.
+ */
+router.get('/bids/status', authenticateToken, async (req, res) => {
+    try {
+        const { reqId, resId } = req.query;
+        if (!reqId || !resId) {
+            return res.status(400).json({ success: false, error: 'reqId와 resId는 필수 파라미터입니다.' });
+        }
+
+        const [rows] = await pool.execute(
+            'SELECT DATA_STAT FROM TB_BUS_RESERVATION WHERE RES_ID = ? AND REQ_ID = ?',
+            [resId, reqId]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, error: '해당 예약건을 찾을 수 없습니다.' });
+        }
+
+        res.json({ success: true, status: rows[0].DATA_STAT });
+    } catch (err) {
+        console.error('[Fetch Bid Status API] Error:', err);
+        res.status(500).json({ success: false, error: '서버 내부 오류가 발생했습니다.' });
     }
 });
 

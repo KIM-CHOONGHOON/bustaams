@@ -92,19 +92,13 @@ const DriverDashboard = () => {
         });
     };
 
-    // 5단계 프로세스 및 컬러 스타일이 적용된 빠른 메뉴 구성 (한글 주석)
     const quickMenus = [
-        { icon: 'format_list_bulleted', label: '청약요청목록', path: '/estimate-list-driver?tab=opportunities', border: 'border-teal-500', iconBg: 'bg-teal-50', iconColor: 'text-teal-600' },
-        { icon: 'pending_actions', label: '승인대기 목록', path: '/approval-pending-driver?tab=customer_wait', border: 'border-amber-500', iconBg: 'bg-amber-50', iconColor: 'text-amber-600' },
-        { icon: 'payment', label: '결제 대기 목록', path: '/approval-pending-driver?tab=driver_pay', border: 'border-blue-500', iconBg: 'bg-blue-50', iconColor: 'text-blue-600' },
-        { icon: 'verified', label: '고객 최종 승인대기 목록', path: '/approval-pending-driver?tab=final_approval_wait', border: 'border-emerald-500', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600' },
-        { icon: 'calendar_month', label: '운행 예정 목록', path: '/upcoming-trips-driver', border: 'border-indigo-500', iconBg: 'bg-indigo-50', iconColor: 'text-indigo-600' },
-        { icon: 'task_alt', label: '운행 완료 리스트', path: '/completed-trips-driver', border: 'border-slate-500', iconBg: 'bg-slate-100', iconColor: 'text-slate-600' },
-        { icon: 'chat', label: '실시간 채팅', path: '/chat-list-driver', border: 'border-cyan-500', iconBg: 'bg-cyan-50', iconColor: 'text-cyan-600' },
-        { icon: 'credit_card', label: '카드/회비 관리', path: '/membership-card-mgmt', border: 'border-purple-500', iconBg: 'bg-purple-50', iconColor: 'text-purple-600' },
-        { icon: 'settings_suggest', label: '요금제 선택', path: '/pass-select-driver', border: 'border-rose-500', iconBg: 'bg-rose-50', iconColor: 'text-rose-600' },
-        { icon: 'badge', label: '기사 정보 등록', path: '/driver-certification', border: 'border-orange-500', iconBg: 'bg-orange-50', iconColor: 'text-orange-600' },
-        { icon: 'directions_bus', label: '버스 정보 등록', path: '/bus-certification', border: 'border-emerald-600', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-700' },
+        { icon: 'task_alt', label: '운행 완료 리스트', desc: '지난 일정 확인', path: '/completed-trips-driver', iconBg: 'bg-slate-100', iconColor: 'text-slate-600' },
+        { icon: 'chat', label: '실시간 채팅', desc: '고객과 대화', path: '/chat-list-driver', iconBg: 'bg-cyan-50', iconColor: 'text-cyan-600' },
+        { icon: 'credit_card', label: '카드/회비 관리', desc: '결제 수단 및 멤버십', path: '/membership-card-mgmt', iconBg: 'bg-purple-50', iconColor: 'text-purple-600' },
+        { icon: 'settings_suggest', label: '요금제 선택', desc: '이용권 구매 및 관리', path: '/pass-select-driver', iconBg: 'bg-rose-50', iconColor: 'text-rose-600' },
+        { icon: 'badge', label: '기사 정보 등록', desc: '파트너 인증', path: '/driver-certification', iconBg: 'bg-orange-50', iconColor: 'text-orange-600' },
+        { icon: 'directions_bus', label: '버스 정보 등록', desc: '차량 인증', path: '/bus-certification', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-700' },
     ];
 
     return (
@@ -265,7 +259,7 @@ const DriverDashboard = () => {
                         <h3 className="font-headline font-bold text-xl tracking-tight text-teal-900 flex items-center gap-3">
                             <span className="w-8 h-[2px] bg-teal-800"></span> 빠른 메뉴
                         </h3>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                        <div className="flex flex-col gap-3">
                             {quickMenus.map((menu, idx) => {
                                 const isDriverInfoReg = registrationStatus.isDriverInfoRegistered;
                                 const isBusInfoReg = registrationStatus.isBusInfoRegistered;
@@ -281,20 +275,28 @@ const DriverDashboard = () => {
                                 }
 
                                 return (
-                                    <button 
+                                    <div 
                                         key={idx}
                                         onClick={() => !isDisabled && navigate(menu.path)}
-                                        className={`group bg-white p-5 rounded-2xl transition-all duration-300 flex flex-col items-center text-center gap-3 shadow-sm border-l-4 ${menu.border || 'border-teal-500'} ${
+                                        className={`cursor-pointer bg-white px-5 py-4 rounded-[20px] shadow-sm border border-slate-100/70 flex items-center justify-between transition-all duration-300 ${
                                             isDisabled 
-                                            ? 'opacity-40 cursor-not-allowed grayscale border-slate-200' 
-                                            : 'hover:shadow-xl hover:translate-y-[-3px] hover:border-teal-700'
+                                            ? 'opacity-45 cursor-not-allowed grayscale' 
+                                            : 'hover:translate-y-[-2px] hover:shadow-md'
                                         }`}
                                     >
-                                        <div className={`w-12 h-12 rounded-xl ${menu.iconBg || 'bg-teal-50'} ${menu.iconColor || 'text-teal-600'} flex items-center justify-center transition-all shadow-sm ${!isDisabled && 'group-hover:scale-110'}`}>
-                                            <span className="material-symbols-outlined">{menu.icon}</span>
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-12 h-12 rounded-full ${menu.iconBg || 'bg-slate-100'} ${menu.iconColor || 'text-slate-600'} flex items-center justify-center`}>
+                                                <span className="material-symbols-outlined text-2xl">{menu.icon}</span>
+                                            </div>
+                                            <div className="text-left flex items-baseline">
+                                                <span className={`font-extrabold text-base ${isDisabled ? 'text-slate-400' : 'text-slate-800'}`}>{menu.label}</span>
+                                                {menu.desc && (
+                                                    <span className="text-xs font-semibold text-slate-400 ml-2">{menu.desc}</span>
+                                                )}
+                                            </div>
                                         </div>
-                                        <span className={`text-[11px] font-black uppercase tracking-tight ${isDisabled ? 'text-slate-300' : 'text-on-surface'}`}>{menu.label}</span>
-                                    </button>
+                                        <span className="material-symbols-outlined text-slate-300 text-xl">chevron_right</span>
+                                    </div>
                                 );
                             })}
                         </div>

@@ -199,7 +199,7 @@ const ApprovalListCustomer = () => {
                         </div>
                         <ul style="padding-left: 18px; margin-bottom: 20px; list-style-type: disc; font-size: 13px; color: #475569;">
                             <li style="margin-bottom: 8px;">'결제하기' 클릭 시 즉시 카드 승인 및 결제가 진행됩니다.</li>
-                            <li style="margin-bottom: 8px;">결제 완료 직후에는 기사님의 연락처가 노출되지 않으며, 다음 화면에서 '최종 확정(Confirm)'을 완료해야 상대방 정보가 공개됩니다.</li>
+                            <li style="margin-bottom: 8px;">결제 완료 직후에는 기사님의 연락처가 노출되지 않으며, 다음 화면에서 여행자의 '최종 확정(Confirm)'을 완료해야 상대방 정보가 공개됩니다.</li>
                             <li style="margin-bottom: 8px; font-weight: bold; color: #0284c7;">[전액 환불 안내] 결제 완료 후 최종 확정을 하기 전에 일정을 취소하시거나 매칭이 무산될 경우, 결제하신 이용료는 100% 전액 환불 됩니다.</li>
                         </ul>
                     </div>
@@ -795,7 +795,6 @@ const ApprovalListCustomer = () => {
                                             전체 승인 및 이용대금 결제하기
                                         </button>
                                         <p className="text-[10px] text-slate-400 font-bold text-center uppercase tracking-tighter italic leading-relaxed">
-                                            * 차량 수량당 고정 33,000원의 플랫폼 이용대금이 반영됩니다.<br />
                                             * 승인 시 기사님들에게 승인 확정 알림이 전송됩니다.
                                         </p>
                                     </div>

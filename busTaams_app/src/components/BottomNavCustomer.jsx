@@ -6,11 +6,11 @@ const BottomNavCustomer = () => {
   const location = useLocation();
 
   const navItems = [
-    { id: 'home', icon: 'home', path: '/customer-dashboard', name: '홈' },
+    { id: 'home', icon: 'home', path: '/customer-dashboard', name: '메인화면' },
     { id: 'request', icon: 'add_task', path: '/request-bus', name: '요청등록' },
     { id: 'reservations', icon: 'confirmation_number', path: '/reservation-list', name: '예약목록' },
-    { id: 'reviews', icon: 'star', path: '/review-pending-list', name: '평점' },
-    { id: 'inquiry', icon: 'support_agent', path: '/inquiry-list', name: '문의' },
+    { id: 'reviews', icon: 'star', path: '/review-pending-list', name: '평점리뷰' },
+    { id: 'inquiry', icon: 'support_agent', path: '/inquiry-list', name: '문의관리' },
     { id: 'profile', icon: 'person', path: '/user-profile', name: '내 정보' }
   ];
 
@@ -26,8 +26,8 @@ const BottomNavCustomer = () => {
             onClick={() => navigate(item.path)}
             className={`flex flex-col items-center justify-center transition-all duration-300 ${
               active 
-                ? 'bg-teal-700 text-white rounded-full px-5 py-2' 
-                : 'text-slate-500 px-4 py-2 hover:text-teal-700'
+                ? 'bg-teal-700 text-white rounded-full px-3 py-1.5 md:px-5 md:py-2' 
+                : 'text-slate-500 px-2 py-1.5 md:px-4 md:py-2 hover:text-teal-700'
             }`}
           >
             <span 
@@ -36,7 +36,7 @@ const BottomNavCustomer = () => {
             >
               {item.icon}
             </span>
-            <span className="font-semibold text-[9px] uppercase tracking-widest mt-0.5">
+            <span className="font-semibold text-[8px] md:text-[9px] uppercase tracking-wider mt-0.5 whitespace-nowrap">
               {item.name}
             </span>
           </button>

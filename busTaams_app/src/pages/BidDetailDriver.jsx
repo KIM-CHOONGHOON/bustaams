@@ -186,14 +186,8 @@ const BidDetailDriver = () => {
                     <div className="bg-white rounded-2xl p-8 shadow-2xl shadow-teal-900/5 space-y-8 border border-white text-left">
                         <div className="space-y-4 text-left group">
                             <label className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500 px-4 block italic">현재 입찰 금액</label>
-                            <div className="relative text-left">
-                                <span className="absolute left-8 top-1/2 -translate-y-1/2 font-black text-slate-200 text-3xl italic">₩</span>
-                                <input 
-                                    className="w-full bg-slate-50 border-4 border-transparent rounded-xl py-6 pl-16 pr-8 font-headline text-4xl font-black text-primary focus:outline-none transition-all italic tracking-tighter" 
-                                    value={Number(bidData.price || 0).toLocaleString()} 
-                                    readOnly
-                                    type="text" 
-                                />
+                            <div className="text-left font-headline text-2xl md:text-3xl font-black text-primary italic py-2 pl-4">
+                                ₩{Number(bidData.price || 0).toLocaleString()}
                             </div>
                         </div>
 

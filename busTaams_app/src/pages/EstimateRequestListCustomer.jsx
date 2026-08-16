@@ -206,54 +206,31 @@ const EstimateRequestListCustomer = () => {
                                         </div>
                                     </div>
                                     
-                                    <div className="flex items-start gap-2">
-                                        <span className="material-symbols-outlined text-teal-600 text-sm mt-0.5">event</span>
-                                        <div className="flex flex-col text-left">
-                                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">{req.startDt} ~</p>
-                                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none">{req.endDt}</p>
-                                        </div>
+                                    {/* 운행 일정 */}
+                                    <div className="flex items-center gap-2 mt-4 mb-6 text-left">
+                                        <span className="material-symbols-outlined text-teal-600 text-base">event</span>
+                                        <p className="text-sm font-semibold text-slate-500 tracking-wide">
+                                            {req.startDt ? req.startDt.split(' ')[0].replace(/\./g, '-') : ''} ~ {req.endDt ? req.endDt.split(' ')[0].replace(/\./g, '-') : ''}
+                                        </p>
                                     </div>
 
-                                    {/* Helper for address formatting */}
-                                    {(() => {
-                                        const formatAddr = (addr) => {
-                                            if (!addr) return '';
-                                            const parts = addr.split(' ');
-                                            if (parts.length >= 3 && (parts[2].endsWith('구') || parts[2].endsWith('군'))) {
-                                                return parts.slice(0, 3).join(' ');
-                                            }
-                                            return parts.slice(0, 2).join(' ');
-                                        };
-
-                                        return (
-                                            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100/50 space-y-4">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex-1">
-                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">출발</p>
-                                                        <p className="font-bold text-xs text-slate-700">{formatAddr(req.startAddr)}</p>
-                                                    </div>
-                                                    <div className="px-4 text-slate-200">
-                                                        <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                                                    </div>
-                                                    {req.roundAddr ? (
-                                                        <>
-                                                            <div className="flex-1 text-center">
-                                                                <p className="text-[8px] font-black text-teal-500 uppercase tracking-tighter mb-0.5">목적지</p>
-                                                                <p className="font-bold text-xs text-slate-700">{formatAddr(req.roundAddr)}</p>
-                                                            </div>
-                                                            <div className="px-4 text-slate-200">
-                                                                <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                                                            </div>
-                                                        </>
-                                                    ) : null}
-                                                    <div className="flex-1 text-right">
-                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">도착</p>
-                                                        <p className="font-bold text-xs text-slate-700">{formatAddr(req.endAddr)}</p>
-                                                    </div>
-                                                </div>
+                                    {/* 운행 경로 세로 Bento 스타일 */}
+                                    <div className="space-y-5 text-left py-2 mb-6">
+                                        <div className="flex flex-col text-left">
+                                            <p className="text-xs font-bold text-slate-400 mb-1">출발</p>
+                                            <p className="font-black text-base text-slate-800">{req.startAddr}</p>
+                                        </div>
+                                        {req.roundAddr && (
+                                            <div className="flex flex-col text-left">
+                                                <p className="text-xs font-bold text-teal-600 mb-1">목적지</p>
+                                                <p className="font-black text-base text-slate-800">{req.roundAddr}</p>
                                             </div>
-                                        );
-                                    })()}
+                                        )}
+                                        <div className="flex flex-col text-left">
+                                            <p className="text-xs font-bold text-slate-400 mb-1">도착</p>
+                                            <p className="font-black text-base text-slate-800">{req.endAddr}</p>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* Vehicle & Matching Section */}

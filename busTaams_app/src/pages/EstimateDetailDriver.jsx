@@ -231,14 +231,8 @@ const EstimateDetailDriver = () => {
                                         <label className="text-[11px] font-black uppercase tracking-[0.4em] text-slate-400 italic">확정 청약 금액</label>
                                         <span className="text-[10px] font-black text-secondary uppercase tracking-[0.3em]">KRW</span>
                                     </div>
-                                    <div className="relative text-left">
-                                        {/* 한글 주석: 원화 기호와 금액의 정렬 맞춤 */}
-                                        <span className="absolute left-0 top-1/2 -translate-y-1/2 font-black text-[#004e47] text-4xl italic">₩</span>
-                                        <input 
-                                            className="w-full bg-transparent border-none py-2 pl-11 pr-2 font-headline text-5xl font-black text-[#004e47] focus:outline-none italic cursor-not-allowed" 
-                                            value={Number(auction.price).toLocaleString()} 
-                                            readOnly 
-                                        />
+                                    <div className="text-left font-headline text-2xl md:text-3xl font-black text-[#004e47] italic py-2">
+                                        ₩{Number(auction.price).toLocaleString()}
                                     </div>
                                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2">
                                         고객이 제시한 고정 금액으로 청약이 진행됩니다.
