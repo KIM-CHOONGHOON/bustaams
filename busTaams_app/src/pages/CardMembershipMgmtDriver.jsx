@@ -129,16 +129,7 @@ const CardMembershipMgmtDriver = () => {
             </header>
 
             <main className="pt-24 px-6 max-w-lg mx-auto space-y-12 animate-in fade-in slide-in-from-bottom duration-1000 text-left">
-                {/* Hero Header */}
-                <header className="space-y-4">
-                    <span className="text-secondary font-headline font-bold tracking-widest uppercase text-[10px] mb-2 block">Account Usage & Billing</span>
-                    <h2 className="font-headline font-extrabold text-4xl text-primary leading-tight tracking-tight">
-                        결제 내역 및 <br/>멤버십 관리
-                    </h2>
-                    <p className="text-on-surface-variant text-sm leading-relaxed max-w-[80%]">
-                        월간 운영비를 검토하고 관리하세요. 등록된 카드로 매월 자동 결제가 진행됩니다.
-                    </p>
-                </header>
+
 
                 {/* Main Card Section */}
                 <section className="relative group overflow-hidden rounded-2xl bg-gradient-to-br from-primary to-primary-container p-8 shadow-2xl shadow-primary/20 text-white">

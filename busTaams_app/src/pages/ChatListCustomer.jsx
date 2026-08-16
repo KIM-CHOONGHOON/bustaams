@@ -105,9 +105,6 @@ const ChatListCustomer = () => {
                 <section>
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                         <div className="max-w-xl">
-                            <h2 className="font-headline font-extrabold text-5xl md:text-6xl text-[#004e47] tracking-tight leading-[1.1] mb-4">
-                                메시지 목록
-                            </h2>
                             <p className="font-body text-[#3e4947] text-lg max-w-sm">
                                 매칭된 버스 기사님들과 실시간 대화를 나누고 세부 운송 내용을 조율하세요.
                             </p>

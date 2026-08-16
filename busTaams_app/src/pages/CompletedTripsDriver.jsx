@@ -61,20 +61,7 @@ const CompletedTripsDriver = () => {
             </header>
 
             <main className="pt-24 px-6 max-w-7xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom duration-1000 text-left">
-                {/* 헤더 섹션 */}
-                <section className="grid grid-cols-1 md:grid-cols-12 gap-8 items-end text-left">
-                    <div className="md:col-span-7 space-y-4 text-left">
-                        <span className="text-[#9D4300] font-black tracking-[0.4em] uppercase text-[10px] block px-2 italic">운행 완료 기록</span>
-                        <h2 className="font-headline text-5xl md:text-7xl font-black text-[#004E47] leading-[1.1] tracking-tighter italic uppercase text-left">
-                            운행 완료 <span className="text-[#9D4300] underline decoration-[#9D4300]/20 underline-offset-[12px]">목록</span>
-                        </h2>
-                    </div>
-                    <div className="md:col-span-5 md:pl-12 text-left border-l-4 border-slate-100">
-                        <p className="text-slate-400 text-lg font-bold italic tracking-tight leading-relaxed text-left">
-                            성공적으로 완료된 모든 운행 내역과 최종 정산 금액을 확인하세요.
-                        </p>
-                    </div>
-                </section>
+
 
                 {loading ? (
                     <div className="flex flex-col items-center justify-center py-20">

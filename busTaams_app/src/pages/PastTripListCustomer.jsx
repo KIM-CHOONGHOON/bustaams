@@ -75,15 +75,7 @@ const PastTripListCustomer = () => {
                 </div>
             </header>
 
-            <main className="max-w-7xl mx-auto px-6 py-10 pb-40">
-                {/* Editorial Header */}
-                <div className="mb-16 animate-in fade-in slide-in-from-bottom duration-1000">
-                    <p className="font-headline font-black text-secondary uppercase tracking-[0.5em] text-[10px] mb-6">Contract History</p>
-                    <h2 className="font-headline font-black text-5xl md:text-[70px] text-primary leading-[0.9] tracking-tighter max-w-4xl">
-                        나의 과거 여행 이력<span className="text-secondary">.</span>
-                    </h2>
-                    <div className="h-2 w-32 bg-gradient-to-r from-secondary to-orange-200 mt-10 rounded-full shadow-lg shadow-secondary/20"></div>
-                </div>
+            <main className="max-w-7xl mx-auto px-6 pt-24 pb-40">
 
                 {loading ? (
                     <div className="flex flex-col items-center justify-center py-20 opacity-30">

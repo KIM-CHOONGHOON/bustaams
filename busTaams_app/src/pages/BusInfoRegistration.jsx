@@ -350,7 +350,6 @@ const BusInfoRegistration = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
                     {/* Left Column */}
                     <div className="lg:col-span-4 flex flex-col gap-6 text-left">
-                        <h2 className="font-headline text-5xl font-extrabold text-[#004e47] leading-[1.1] tracking-tight">버스 정보 등록</h2>
                         <p className="text-[#3e4947] text-lg leading-relaxed max-w-sm">
                             승객에게 최고의 신뢰를 제공하기 위해 차량의 모든 제원과 서류를 꼼꼼히 등록해 주세요.
                         </p>
