@@ -103,13 +103,13 @@ const UpcomingTripsDriver = () => {
                                             <div className="flex items-start gap-2">
                                                 <span className="material-symbols-outlined text-teal-600 text-sm mt-0.5">event</span>
                                                 <div className="flex flex-col text-left">
-                                                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">
-                                                        {trip.startDt ? trip.startDt.replace(/[-/]/g, '.') : ''} ~
-                                                    </p>
-                                                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none">
-                                                        {trip.endDt ? trip.endDt.replace(/[-/]/g, '.') : ''}
-                                                    </p>
-                                                </div>
+                                                     <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">
+                                                         {trip.startDt ? `${trip.startDt.split(' ')[0].replace(/[-/]/g, '.')} ${trip.startDt.split(' ')[1] || ''} ~` : ''}
+                                                     </p>
+                                                     <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+                                                         {trip.endDt ? `${trip.endDt.split(' ')[0].replace(/[-/]/g, '.')} ${trip.endDt.split(' ')[1] || ''}` : ''}
+                                                     </p>
+                                                 </div>
                                             </div>
 
                                             {/* 운행 경로 */}
