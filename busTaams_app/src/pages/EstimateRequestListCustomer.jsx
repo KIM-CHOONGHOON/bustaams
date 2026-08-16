@@ -143,7 +143,7 @@ const EstimateRequestListCustomer = () => {
                         <button onClick={() => navigate(-1)} className="text-teal-700 hover:bg-slate-100 transition-colors p-2 rounded-xl scale-95 active:scale-90 duration-200">
                             <span className="material-symbols-outlined text-2xl">arrow_back</span>
                         </button>
-                        <h1 className="text-xl font-bold text-teal-900 tracking-tight">{info.title}</h1>
+                        <h1 className="text-xl font-bold text-teal-900 tracking-tight">{typeParam === 'progress' ? '' : info.title}</h1>
                     </div>
                     <div className="flex items-center gap-4">
                         <div 
@@ -174,16 +174,7 @@ const EstimateRequestListCustomer = () => {
                 </div>
             </header>
 
-            <main className="max-w-4xl mx-auto px-6 pt-24 pb-32">
-                {/* Header Section */}
-                <section className="mb-8 space-y-2">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-white shadow-sm border border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                        <span className={`w-2 h-2 rounded-full ${typeParam === 'progress' ? 'bg-teal-500' : 'bg-orange-500'}`}></span>
-                        {info.chip}
-                    </div>
-                    <h2 className="text-3xl font-black tracking-tight text-slate-900">{info.title}</h2>
-                    <p className="text-slate-500 font-medium">{info.subtitle}</p>
-                </section>
+            <main className="max-w-4xl mx-auto px-6 pt-16 pb-32">
 
                 {/* List Section */}
                 {loading ? (
@@ -207,11 +198,12 @@ const EstimateRequestListCustomer = () => {
                                     </div>
                                     
                                     {/* 운행 일정 */}
-                                    <div className="flex items-center gap-2 mt-4 mb-6 text-left">
-                                        <span className="material-symbols-outlined text-teal-600 text-base">event</span>
-                                        <p className="text-sm font-semibold text-slate-500 tracking-wide">
-                                            {req.startDt ? `${req.startDt.split(' ')[0].replace(/\./g, '-')} ${req.startDt.split(' ')[1] || ''}` : ''} ~ {req.endDt ? `${req.endDt.split(' ')[0].replace(/\./g, '-')} ${req.endDt.split(' ')[1] || ''}` : ''}
-                                        </p>
+                                    <div className="flex items-start gap-2 mt-4 mb-6 text-left">
+                                        <span className="material-symbols-outlined text-teal-600 text-base mt-0.5">event</span>
+                                        <div className="text-sm font-semibold text-slate-500 tracking-wide space-y-1">
+                                            <p>{req.startDt ? `${req.startDt.split(' ')[0].replace(/\./g, '-')} ${req.startDt.split(' ')[1] || ''}` : ''} ~</p>
+                                            <p>{req.endDt ? `${req.endDt.split(' ')[0].replace(/\./g, '-')} ${req.endDt.split(' ')[1] || ''}` : ''}</p>
+                                        </div>
                                     </div>
 
                                     {/* 운행 경로 세로 Bento 스타일 */}

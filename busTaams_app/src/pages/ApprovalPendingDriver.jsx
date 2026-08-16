@@ -261,12 +261,12 @@ const ApprovalPendingDriver = () => {
                                             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic mb-1">
                                                 운행 일정
                                             </p>
-                                            <p className="text-lg font-black text-[#1E293B] leading-snug">
-                                                {bid.startDt ? bid.startDt.split(' ')[0].replace(/[-/]/g, '.') : ''} -
-                                            </p>
-                                            <p className="text-lg font-black text-[#1E293B] leading-snug">
-                                                {bid.endDt ? bid.endDt.split(' ')[0].replace(/[-/]/g, '.') : ''}
-                                            </p>
+                                             <p className="text-lg font-black text-[#1E293B] leading-snug">
+                                                 {bid.startDt ? `${bid.startDt.split(' ')[0].replace(/[-/]/g, '.')} ${bid.startDt.split(' ')[1] || ''} -` : ''}
+                                             </p>
+                                             <p className="text-lg font-black text-[#1E293B] leading-snug">
+                                                 {bid.endDt ? `${bid.endDt.split(' ')[0].replace(/[-/]/g, '.')} ${bid.endDt.split(' ')[1] || ''}` : ''}
+                                             </p>
                                         </div>
                                     </div>
 

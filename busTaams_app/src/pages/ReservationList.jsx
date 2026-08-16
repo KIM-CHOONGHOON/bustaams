@@ -143,11 +143,12 @@ const ReservationList = () => {
                                                     </h3>
                                                     
                                                     {/* 운행 일정 */}
-                                                    <div className="flex items-center gap-2 mt-4 mb-6 text-left">
-                                                        <span className="material-symbols-outlined text-teal-600 text-base">event</span>
-                                                        <p className="text-sm font-semibold text-slate-500 tracking-wide">
-                                                            {res.startDt ? res.startDt.split(' ')[0].replace(/\./g, '-') : ''} ~ {res.endDt ? res.endDt.split(' ')[0].replace(/\./g, '-') : ''}
-                                                        </p>
+                                                    <div className="flex items-start gap-2 mt-4 mb-6 text-left">
+                                                        <span className="material-symbols-outlined text-teal-600 text-base mt-0.5">event</span>
+                                                        <div className="text-sm font-semibold text-slate-500 tracking-wide space-y-1">
+                                                            <p>{res.startDt ? `${res.startDt.split(' ')[0].replace(/\./g, '-')} ${res.startDt.split(' ')[1] || ''} ~` : ''}</p>
+                                                            <p>{res.endDt ? `${res.endDt.split(' ')[0].replace(/\./g, '-')} ${res.endDt.split(' ')[1] || ''}` : ''}</p>
+                                                        </div>
                                                     </div>
 
                                                     {/* 운행 경로 세로 Bento 스타일 */}

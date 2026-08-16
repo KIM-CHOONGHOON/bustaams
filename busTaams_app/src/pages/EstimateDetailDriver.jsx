@@ -163,10 +163,10 @@ const EstimateDetailDriver = () => {
                                         운행 일정
                                     </p>
                                     <p className="text-lg font-black text-[#1E293B] leading-snug">
-                                        {auction.startDate ? auction.startDate.split(' ')[0].replace(/[-/]/g, '.') : ''} -
+                                        {auction.startDate ? `${auction.startDate.split(' ')[0].replace(/[-/]/g, '.')} ${auction.startDate.split(' ')[1] || ''} -` : ''}
                                     </p>
                                     <p className="text-lg font-black text-[#1E293B] leading-snug">
-                                        {auction.endDate ? auction.endDate.split(' ')[0].replace(/[-/]/g, '.') : ''}
+                                        {auction.endDate ? `${auction.endDate.split(' ')[0].replace(/[-/]/g, '.')} ${auction.endDate.split(' ')[1] || ''}` : ''}
                                     </p>
                                 </div>
                             </div>

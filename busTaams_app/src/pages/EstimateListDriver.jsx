@@ -100,11 +100,12 @@ const EstimateListDriver = () => {
                                     </div>
                                     <div className="pt-4 border-t border-slate-50 space-y-4">
                                         {/* 운행 일정 */}
-                                        <div className="flex items-center gap-2 mt-4 mb-6 text-left">
-                                            <span className="material-symbols-outlined text-teal-600 text-base">event</span>
-                                            <p className="text-sm font-semibold text-slate-500 tracking-wide">
-                                                {auction.startDate ? auction.startDate.split(' ')[0].replace(/\./g, '-') : ''} ~ {auction.endDate ? auction.endDate.split(' ')[0].replace(/\./g, '-') : ''}
-                                            </p>
+                                        <div className="flex items-start gap-2 mt-4 mb-6 text-left">
+                                            <span className="material-symbols-outlined text-teal-600 text-base mt-0.5">event</span>
+                                            <div className="text-sm font-semibold text-slate-500 tracking-wide space-y-1">
+                                                <p>{auction.startDate ? `${auction.startDate.split(' ')[0].replace(/\./g, '-')} ${auction.startDate.split(' ')[1] || ''} ~` : ''}</p>
+                                                <p>{auction.endDate ? `${auction.endDate.split(' ')[0].replace(/\./g, '-')} ${auction.endDate.split(' ')[1] || ''}` : ''}</p>
+                                            </div>
                                         </div>
 
                                         {/* 운행 경로 세로 Bento 스타일 */}
