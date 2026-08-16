@@ -210,7 +210,7 @@ const EstimateRequestListCustomer = () => {
                                     <div className="flex items-center gap-2 mt-4 mb-6 text-left">
                                         <span className="material-symbols-outlined text-teal-600 text-base">event</span>
                                         <p className="text-sm font-semibold text-slate-500 tracking-wide">
-                                            {req.startDt ? req.startDt.split(' ')[0].replace(/\./g, '-') : ''} ~ {req.endDt ? req.endDt.split(' ')[0].replace(/\./g, '-') : ''}
+                                            {req.startDt ? `${req.startDt.split(' ')[0].replace(/\./g, '-')} ${req.startDt.split(' ')[1] || ''}` : ''} ~ {req.endDt ? `${req.endDt.split(' ')[0].replace(/\./g, '-')} ${req.endDt.split(' ')[1] || ''}` : ''}
                                         </p>
                                     </div>
 

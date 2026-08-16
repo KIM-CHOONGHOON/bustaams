@@ -795,11 +795,11 @@ router.get('/pending-requests', authenticateToken, async (req, res) => {
                 START_ADDR as startAddr, 
                 END_ADDR as endAddr, 
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' LIMIT 1) as roundAddr,
-                DATE_FORMAT(START_DT, '%Y-%m-%d') as startDt, 
-                DATE_FORMAT(END_DT, '%Y-%m-%d') as endDt, 
+                DATE_FORMAT(START_DT, '%Y-%m-%d %H:%i') as startDt, 
+                DATE_FORMAT(END_DT, '%Y-%m-%d %H:%i') as endDt, 
                 DATA_STAT as reqStat
             FROM TB_AUCTION_REQ r
-            WHERE (TRIM(r.TRAVELER_ID) = ? OR TRIM(r.TRAVELER_ID) = ?) AND ${statusFilter}
+            WHERE (TRIM(r.TRAVELER_ID) = ? OR TRIM(r.TRAVELER_ID) = ?) AND (${statusFilter})
             ORDER BY REG_DT DESC
         `;
 
