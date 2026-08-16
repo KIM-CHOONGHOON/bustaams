@@ -232,10 +232,10 @@ const UpcomingTripDetailDriver = () => {
                                     운행 일정
                                 </p>
                                 <p className="text-lg font-black text-[#1D3557] leading-snug">
-                                    {trip.startDate ? trip.startDate.split(' ')[0].replace(/[-/]/g, '.') : ''} -
+                                    {trip.startDate ? `${trip.startDate.split(' ')[0].replace(/[-/]/g, '.')} ${trip.startDate.split(' ')[1] || ''} -` : ''}
                                 </p>
                                 <p className="text-lg font-black text-[#1D3557] leading-snug">
-                                    {trip.endDate ? trip.endDate.split(' ')[0].replace(/[-/]/g, '.') : ''}
+                                    {trip.endDate ? `${trip.endDate.split(' ')[0].replace(/[-/]/g, '.')} ${trip.endDate.split(' ')[1] || ''}` : ''}
                                 </p>
                             </div>
                         </div>
