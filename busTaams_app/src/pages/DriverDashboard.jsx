@@ -209,7 +209,7 @@ const DriverDashboard = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {auctionList.length > 0 ? (
                                 auctionList.slice(0, 3).map((auction, idx) => (
-                                    <div key={auction.id} className={`bg-white rounded-2xl p-6 shadow-xl shadow-teal-900/5 border-l-4 ${idx === 0 ? 'border-secondary' : 'border-primary'} flex flex-col justify-between h-48 hover:translate-y-[-4px] transition-all duration-300 cursor-pointer`} onClick={() => navigate(`/estimate-detail-driver/${auction.id}`)}>
+                                    <div key={auction.id} className={`bg-white rounded-2xl p-6 shadow-xl shadow-teal-900/5 border-l-4 ${idx === 0 ? 'border-secondary' : 'border-primary'} flex flex-col justify-between h-auto min-h-[360px] hover:translate-y-[-4px] transition-all duration-300 cursor-pointer`} onClick={() => navigate(`/estimate-detail-driver/${auction.id}`)}>
                                         <div className="text-left">
                                             <div className="flex justify-between items-start">
                                                 <span className={`${idx === 0 ? 'bg-secondary-fixed text-on-secondary-fixed' : 'bg-primary-fixed text-on-primary-fixed'} text-[10px] font-bold px-2 py-1 rounded-xl uppercase tracking-wider`}>
@@ -218,23 +218,42 @@ const DriverDashboard = () => {
                                                 <span className="text-[10px] text-slate-400 font-bold uppercase">{auction.timeAgo}</span>
                                             </div>
                                             <h3 className="mt-3 font-bold text-lg text-on-surface italic truncate">{auction.title || '여행 제목 없음'}</h3>
-                                            <p className="text-[10px] text-slate-400 font-medium mt-1">{auction.startDate} 운행</p>
-                                            <div className="text-[11px] text-on-surface-variant font-bold leading-tight mt-2 space-x-1">
-                                                <span>{auction.startAddr.split(' ')[1] || auction.startAddr.split(' ')[0]}</span>
+                                            
+                                            {/* 운행 일정 (시간 포함 2줄) */}
+                                            <div className="flex items-start gap-2 mt-3">
+                                                <span className="material-symbols-outlined text-teal-600 text-sm mt-0.5">event</span>
+                                                <div className="flex flex-col text-left">
+                                                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">
+                                                        {auction.startDate ? `${auction.startDate.replace(/[-/]/g, '.')} ~` : ''}
+                                                    </p>
+                                                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+                                                        {auction.endDate ? auction.endDate.replace(/[-/]/g, '.') : ''}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* 운행 경로 (세로 1줄 정렬) */}
+                                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100/50 space-y-3 mt-4 text-left text-[11px] font-bold text-slate-700">
+                                                <div className="space-y-0.5">
+                                                    <p className="text-[9px] font-black text-slate-400">출발</p>
+                                                    <p>{auction.startAddr}</p>
+                                                </div>
                                                 {auction.roundTrip && (
-                                                    <>
-                                                        <span className="text-secondary">→</span>
-                                                        <span>{auction.roundTrip.split(' ')[1] || auction.roundTrip.split(' ')[0]}</span>
-                                                    </>
+                                                    <div className="space-y-0.5">
+                                                        <p className="text-[9px] font-black text-teal-600">목적지</p>
+                                                        <p>{auction.roundTrip}</p>
+                                                    </div>
                                                 )}
-                                                <span className="text-secondary">→</span>
-                                                <span>{auction.endAddr.split(' ')[1] || auction.endAddr.split(' ')[0]}</span>
+                                                <div className="space-y-0.5">
+                                                    <p className="text-[9px] font-black text-slate-400">도착</p>
+                                                    <p>{auction.endAddr}</p>
+                                                </div>
                                             </div>
                                         </div>
-                                        <div className="flex justify-between items-center mt-4">
+                                        <div className="flex justify-between items-center mt-4 border-t border-slate-50 pt-4">
                                             <span className="text-primary font-black text-xl tracking-tighter italic">₩{Number(auction.price).toLocaleString()}</span>
                                             <button 
-                                                onClick={() => navigate(`/estimate-detail-driver/${auction.id}`)}
+                                                onClick={(e) => { e.stopPropagation(); navigate(`/estimate-detail-driver/${auction.id}`); }}
                                                 className="bg-primary text-white rounded-xl px-6 py-2.5 text-[12px] font-black shadow-lg shadow-primary/20 uppercase tracking-widest hover:bg-secondary transition-all"
                                             >
                                                 청약선택

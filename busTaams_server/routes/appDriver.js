@@ -181,6 +181,7 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
                 `SELECT 
                     r.REQ_ID as id, r.TRIP_TITLE as title, r.START_ADDR as startAddr, r.END_ADDR as endAddrMaster,
                     DATE_FORMAT(r.START_DT, '%Y-%m-%d %H:%i') as startDate,
+                    DATE_FORMAT(r.END_DT, '%Y-%m-%d %H:%i') as endDate,
                     b.RES_BUS_AMT as price,
                     r.REG_DT as regDt,
                     (SELECT GROUP_CONCAT(VIA_ADDR ORDER BY VIA_SEQ ASC) FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'START_WAY') as startVia,
