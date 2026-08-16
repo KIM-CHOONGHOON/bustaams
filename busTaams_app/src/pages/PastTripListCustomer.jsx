@@ -106,51 +106,32 @@ const PastTripListCustomer = () => {
                                          <div className="flex items-start gap-2 mt-4 mb-4">
                                              <span className="material-symbols-outlined text-teal-600 text-sm mt-0.5">event</span>
                                              <div className="flex flex-col text-left">
-                                                 <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">{trip.startDate} ~</p>
-                                                 <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none">{trip.endDate}</p>
+                                                 <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">
+                                                     {trip.startDate ? `${trip.startDate.replace(/[-/]/g, '.')} ~` : ''}
+                                                 </p>
+                                                 <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+                                                     {trip.endDate ? trip.endDate.replace(/[-/]/g, '.') : ''}
+                                                 </p>
                                              </div>
                                          </div>
 
-                                         {/* 여행 경로 Bento 스타일 */}
-                                         {(() => {
-                                             const formatAddr = (addr) => {
-                                                 if (!addr) return '';
-                                                 const parts = addr.split(' ');
-                                                 if (parts.length >= 3 && (parts[2].endsWith('구') || parts[2].endsWith('군'))) {
-                                                     return parts.slice(0, 3).join(' ');
-                                                 }
-                                                 return parts.slice(0, 2).join(' ');
-                                             };
-
-                                             return (
-                                                 <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100/50 space-y-4 mb-6">
-                                                     <div className="flex items-center justify-between">
-                                                         <div className="flex-1 text-left">
-                                                             <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">출발</p>
-                                                             <p className="font-bold text-xs text-slate-700">{formatAddr(trip.startAddr)}</p>
-                                                         </div>
-                                                         <div className="px-4 text-slate-200">
-                                                             <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                                                         </div>
-                                                         {trip.roundTrip ? (
-                                                             <>
-                                                                 <div className="flex-1 text-center">
-                                                                     <p className="text-[8px] font-black text-teal-500 uppercase tracking-tighter mb-0.5">목적지</p>
-                                                                     <p className="font-bold text-xs text-slate-700">{formatAddr(trip.roundTrip)}</p>
-                                                                 </div>
-                                                                 <div className="px-4 text-slate-200">
-                                                                     <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                                                                 </div>
-                                                             </>
-                                                         ) : null}
-                                                         <div className="flex-1 text-right">
-                                                             <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">도착</p>
-                                                             <p className="font-bold text-xs text-slate-700">{formatAddr(trip.endAddr)}</p>
-                                                         </div>
-                                                     </div>
+                                         {/* 여행 경로 */}
+                                         <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100/50 space-y-4 mb-6 text-left">
+                                             <div className="space-y-1">
+                                                 <p className="text-xs font-black text-slate-400">출발</p>
+                                                 <p className="font-bold text-sm text-slate-700">{trip.startAddr}</p>
+                                             </div>
+                                             {trip.roundTrip && (
+                                                 <div className="space-y-1">
+                                                     <p className="text-xs font-black text-teal-600">목적지</p>
+                                                     <p className="font-bold text-sm text-slate-700">{trip.roundTrip}</p>
                                                  </div>
-                                             );
-                                         })()}
+                                             )}
+                                             <div className="space-y-1">
+                                                 <p className="text-xs font-black text-slate-400">도착</p>
+                                                 <p className="font-bold text-sm text-slate-700">{trip.endAddr}</p>
+                                             </div>
+                                         </div>
                                      </div>
 
                                     <div className="flex flex-wrap items-center gap-10">
