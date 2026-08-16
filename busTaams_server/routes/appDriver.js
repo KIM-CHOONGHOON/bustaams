@@ -1888,8 +1888,8 @@ router.get('/completed-missions', authenticateToken, async (req, res) => {
                 r.END_ADDR as endAddrMaster,
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'END_NODE' LIMIT 1) as endAddrVia,
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' LIMIT 1) as roundTrip,
-                DATE_FORMAT(r.START_DT, '%Y/%m/%d') as startDate,
-                DATE_FORMAT(r.END_DT, '%Y/%m/%d') as endDate,
+                DATE_FORMAT(r.START_DT, '%Y.%m.%d %H:%i') as startDate,
+                DATE_FORMAT(r.END_DT, '%Y.%m.%d %H:%i') as endDate,
                 b.DRIVER_BIDDING_PRICE as price,
                 db.MODEL_NM as model
             FROM TB_BUS_RESERVATION b
