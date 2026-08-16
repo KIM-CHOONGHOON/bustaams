@@ -487,10 +487,10 @@ const ApprovalListCustomer = () => {
                                         운행 일정
                                     </p>
                                     <p className="text-lg font-black text-[#1E293B] leading-snug">
-                                        {tripSummary.startDt ? tripSummary.startDt.split(' ')[0].replace(/[-/]/g, '.') : ''} -
+                                        {tripSummary.startDt ? `${tripSummary.startDt.split(' ')[0].replace(/[-/]/g, '.')} ${tripSummary.startDt.split(' ')[1] || ''} -` : ''}
                                     </p>
                                     <p className="text-lg font-black text-[#1E293B] leading-snug">
-                                        {tripSummary.endDt ? tripSummary.endDt.split(' ')[0].replace(/[-/]/g, '.') : ''}
+                                        {tripSummary.endDt ? `${tripSummary.endDt.split(' ')[0].replace(/[-/]/g, '.')} ${tripSummary.endDt.split(' ')[1] || ''}` : ''}
                                     </p>
                                 </div>
                             </div>

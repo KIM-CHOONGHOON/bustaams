@@ -482,14 +482,18 @@ const EstimateListCustomer = () => {
                                                         {/* 액션 버튼 */}
                                                         <div className="space-y-4 pt-4 border-t border-slate-50">
                                                             <div className="flex flex-col sm:flex-row gap-4">
-                                                                <button 
-                                                                    onClick={() => navigate(`/estimate-detail/${est.id}`)}
-                                                                    className={`flex-grow py-4 rounded-xl font-black text-xs tracking-widest uppercase transition-all active:scale-95 btn-primary ${
-                                                                        est.isSelected ? 'bg-secondary text-white shadow-lg' : 'bg-primary text-white shadow-lg shadow-primary/20'
-                                                                    }`}
-                                                                >
-                                                                    {est.isSelected ? '확정된 청약' : '상세 청약 및 승인하기'}
-                                                                </button>
+                                                                {tripSummary.status !== 'DRIVER_PAY_WAIT' && 
+                                                                 tripSummary.status !== 'FINAL_APPROVAL_WAIT' && 
+                                                                 tripSummary.status !== 'CONFIRM' && (
+                                                                    <button 
+                                                                        onClick={() => navigate(`/estimate-detail/${est.id}`)}
+                                                                        className={`flex-grow py-4 rounded-xl font-black text-xs tracking-widest uppercase transition-all active:scale-95 btn-primary ${
+                                                                            est.isSelected ? 'bg-secondary text-white shadow-lg' : 'bg-primary text-white shadow-lg shadow-primary/20'
+                                                                        }`}
+                                                                    >
+                                                                        {est.isSelected ? '확정된 청약' : '상세 청약 및 승인하기'}
+                                                                    </button>
+                                                                )}
                                                                 <button 
                                                                     onClick={() => navigate(`/chat-detail/${est.id}`)}
                                                                     className="px-8 py-4 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all active:scale-95 flex items-center justify-center gap-2 btn-primary"
