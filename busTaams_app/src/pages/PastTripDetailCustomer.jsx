@@ -186,10 +186,10 @@ const PastTripDetailCustomer = () => {
                                     운행 일정
                                 </p>
                                 <p className="text-lg font-black text-[#1E293B] leading-snug">
-                                    {detail.startDt ? detail.startDt.split(' ')[0].replace(/[-/]/g, '.') : ''} -
+                                    {detail.startDt ? `${detail.startDt.split(' ')[0].replace(/[-/]/g, '.')} ${detail.startDt.split(' ')[1] || ''} -` : ''}
                                 </p>
                                 <p className="text-lg font-black text-[#1E293B] leading-snug">
-                                    {detail.endDt ? detail.endDt.split(' ')[0].replace(/[-/]/g, '.') : ''}
+                                    {detail.endDt ? `${detail.endDt.split(' ')[0].replace(/[-/]/g, '.')} ${detail.endDt.split(' ')[1] || ''}` : ''}
                                 </p>
                             </div>
                         </div>
