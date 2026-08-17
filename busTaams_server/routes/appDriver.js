@@ -217,18 +217,18 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
             });
         }
 
-        // 5. 5개 단계별 세부 통계 계산 (TB_BUS_RESERVATION.DATA_STAT 컬럼 기준 - 기사 개별 차량 승인 상태)
+        // 5. 5개 단계별 세부 통계 계산 (TB_BUS_RESERVATION.DATA_STAT 및 TB_AUCTION_REQ.DATA_STAT 기반)
         const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
         const [statsRows] = await pool.execute(
             `SELECT 
                 (SELECT COUNT(*) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND b.DATA_STAT = 'CUSTOMER_PAY_WAIT') as countCustomerWait,
                 (SELECT COUNT(*) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND b.DATA_STAT = 'DRIVER_PAY_WAIT') as countDriverPayWait,
-                (SELECT COUNT(*) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND b.DATA_STAT = 'FINAL_APPROVAL_WAIT') as countFinalApprovalWait,
-                (SELECT COUNT(*) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND b.DATA_STAT = 'CONFIRM') as countConfirmed,
-                (SELECT COUNT(*) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND b.DATA_STAT = 'DONE') as countDone,
-                (SELECT SUM(b.DRIVER_BIDDING_PRICE) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND b.DATA_STAT = 'DONE' AND DATE_FORMAT(b.MOD_DT, '%Y-%m') = ?) as monthlyProfit,
-                (SELECT SUM(b.DRIVER_BIDDING_PRICE) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND b.DATA_STAT = 'CONFIRM' AND DATE_FORMAT(r.START_DT, '%Y-%m') = ?) as pendingProfit,
-                (SELECT SUM(b.DRIVER_BIDDING_PRICE) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND b.DATA_STAT = 'DONE') as totalProfit`,
+                (SELECT COUNT(*) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND (b.DATA_STAT = 'FINAL_APPROVAL_WAIT' OR r.DATA_STAT = 'FINAL_APPROVAL_WAIT') AND b.DATA_STAT NOT IN ('DRIVER_CANCEL', 'TRAVELER_CANCEL', 'CONFIRM', 'DONE')) as countFinalApprovalWait,
+                (SELECT COUNT(*) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND (b.DATA_STAT = 'CONFIRM' OR r.DATA_STAT = 'CONFIRM')) as countConfirmed,
+                (SELECT COUNT(*) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND (b.DATA_STAT = 'DONE' OR r.DATA_STAT = 'DONE')) as countDone,
+                (SELECT SUM(b.DRIVER_BIDDING_PRICE) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND (b.DATA_STAT = 'DONE' OR r.DATA_STAT = 'DONE') AND DATE_FORMAT(b.MOD_DT, '%Y-%m') = ?) as monthlyProfit,
+                (SELECT SUM(b.DRIVER_BIDDING_PRICE) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND (b.DATA_STAT = 'CONFIRM' OR r.DATA_STAT = 'CONFIRM') AND DATE_FORMAT(r.START_DT, '%Y-%m') = ?) as pendingProfit,
+                (SELECT SUM(b.DRIVER_BIDDING_PRICE) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND (b.DATA_STAT = 'DONE' OR r.DATA_STAT = 'DONE')) as totalProfit`,
             [custId, custId, custId, custId, custId, custId, currentMonth, custId, currentMonth, custId]
         );
 
@@ -1662,7 +1662,7 @@ router.get('/bids/waiting', authenticateToken, async (req, res) => {
         } else if (tab === 'driver_pay') {
             statusFilter = "b.DATA_STAT = 'DRIVER_PAY_WAIT'";
         } else if (tab === 'final_approval_wait') {
-            statusFilter = "b.DATA_STAT = 'FINAL_APPROVAL_WAIT'";
+            statusFilter = "(b.DATA_STAT = 'FINAL_APPROVAL_WAIT' OR r.DATA_STAT = 'FINAL_APPROVAL_WAIT') AND b.DATA_STAT NOT IN ('DRIVER_CANCEL', 'TRAVELER_CANCEL', 'CONFIRM', 'DONE')";
         }
 
         const [rows] = await pool.execute(`
