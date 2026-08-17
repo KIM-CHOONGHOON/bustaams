@@ -133,16 +133,36 @@ const ChatRoom = () => {
         }
     }, [history]);
 
-    // 메시지 전송
+    // 메시지 전송 (한글 주석)
     const handleSendMessage = async () => {
-        if (!message.trim() || !chatRoom) return;
+        if (!message.trim()) return;
+
+        let activeChatSeq = chatRoom?.chatSeq;
+
+        // 채팅방 정보가 아직 준비되지 않은 경우 즉시 다시 로드 시도
+        if (!activeChatSeq) {
+            try {
+                const roomRes = await api.get(`/app/chat/room/${id}`);
+                if (roomRes.success && roomRes.data?.chatSeq) {
+                    setChatRoom(roomRes.data);
+                    activeChatSeq = roomRes.data.chatSeq;
+                }
+            } catch (retryErr) {
+                console.error('Retry fetch chat room error:', retryErr);
+            }
+        }
+
+        if (!activeChatSeq) {
+            notify.error('전송 실패', '채팅방 정보가 아직 완전히 로드되지 않았습니다. 잠시 후 다시 시도해주세요.');
+            return;
+        }
 
         const originalMsg = message;
         setMessage(''); // 즉시 비우기 (UX)
 
         try {
             const res = await api.post('/app/chat/send', {
-                chatSeq: chatRoom.chatSeq,
+                chatSeq: activeChatSeq,
                 msgBody: originalMsg,
                 msgKind: 'TEXT'
             });
@@ -150,14 +170,15 @@ const ChatRoom = () => {
             if (res.success) {
                 // 내역 즉시 갱신
                 const histRes = await api.get(`/app/chat/history/${chatRoom.chatSeq}`);
-                if (histRes.success) {
+                if (histRes.success && Array.isArray(histRes.data)) {
                     setHistory(histRes.data);
                 }
             } else {
-                notify.error('전송 실패', '메시지를 보낼 수 없습니다.');
+                notify.error('전송 실패', res.error || '메시지를 보낼 수 없습니다.');
                 setMessage(originalMsg); // 복구
             }
         } catch (err) {
+            console.error('Send message error:', err);
             notify.error('오류', '메시지 전송 중 오류가 발생했습니다.');
             setMessage(originalMsg);
         }
@@ -250,22 +271,34 @@ const ChatRoom = () => {
                 </div>
 
                 {history.map((msg, idx) => {
-                    // 내가 보낸 메시지인지 확인 (대소문자 및 다양한 키 이름 대응) (한글 주석)
-                    const isMe = String(msg.SENDER_CUST_ID || msg.senderCustId || msg.sender_cust_id || '').trim().toLowerCase() === String(myCustId || '').trim().toLowerCase();
-                    
+                    // 내가 보낸 메시지인지 정밀 판단 (내 CUST_ID와 일치할 때만 오른쪽) (한글 주석)
+                    const senderCustId = String(msg.SENDER_CUST_ID || msg.senderCustId || msg.sender_cust_id || '').trim();
+                    const loggedCustId = String(myCustId || currentUser?.custId || '').trim();
+
+                    let isMe = false;
+                    if (senderCustId && loggedCustId) {
+                        isMe = (senderCustId.toLowerCase() === loggedCustId.toLowerCase()) || 
+                               (parseInt(senderCustId, 10) > 0 && parseInt(senderCustId, 10) === parseInt(loggedCustId, 10));
+                    }
+
                     return (
                         <div key={idx} className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`flex flex-col gap-2 ${isMe ? 'items-end' : 'items-start'} max-w-[85%]`}>
+                            <div className={`flex flex-col gap-1.5 ${isMe ? 'items-end' : 'items-start'} max-w-[80%]`}>
+                                {!isMe && (
+                                    <span className="text-[10px] font-bold text-gray-400 ml-1">
+                                        {chatRoom?.otherUser?.USER_NM || (currentUser?.userType === 'DRIVER' ? '여행 고객님' : '운행 기사님')}
+                                    </span>
+                                )}
                                 <div className={`p-4 rounded-2xl shadow-sm ${
                                     isMe 
                                     ? 'bg-[#004D40] text-white rounded-tr-none' 
-                                    : 'bg-white text-[#1D3557] rounded-tl-none border border-gray-50'
+                                    : 'bg-white text-[#1D3557] rounded-tl-none border border-gray-100'
                                 }`}>
-                                    <p className="text-[14px] leading-relaxed font-medium">{msg.MSG_BODY}</p>
+                                    <p className="text-[14px] leading-relaxed font-medium whitespace-pre-wrap break-all">{msg.MSG_BODY}</p>
                                 </div>
-                                <div className={`flex items-center gap-2 ${isMe ? 'mr-1' : 'ml-1'}`}>
+                                <div className={`flex items-center gap-1.5 ${isMe ? 'mr-1' : 'ml-1'}`}>
                                     <span className="text-[9px] font-bold text-gray-300 uppercase">
-                                        {msg.regDt.split(' ')[1].substring(0, 5)}
+                                        {msg.regDt ? msg.regDt.split(' ')[1]?.substring(0, 5) : ''}
                                     </span>
                                     {isMe && (
                                         <span className="material-symbols-outlined text-[12px] text-[#004D40]" style={{fontVariationSettings: "'FILL' 1"}}>done_all</span>

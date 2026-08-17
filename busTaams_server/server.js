@@ -143,6 +143,7 @@ const SMS_VERIFIED_TTL_MS = 15 * 60 * 1000;
 const appAuthRouter = require('./routes/appAuth');
 const appCustomerRouter = require('./routes/appCustomer');
 const appDriverRouter = require('./routes/appDriver');
+const appChatRouter = require('./routes/appChat');
 
 app.use('/api/app/auth', appAuthRouter);
 app.use('/app/auth', appAuthRouter);
@@ -152,6 +153,10 @@ app.use('/app/customer', appCustomerRouter);
 
 app.use('/api/app/driver', appDriverRouter);
 app.use('/app/driver', appDriverRouter);
+
+app.use('/api/app/chat', appChatRouter);
+app.use('/app/chat', appChatRouter);
+app.use('/api/chat', appChatRouter);
 
 // 🔄 클라이언트 호환성을 위해 /app/... 요청을 내부적으로 /api/... 로 투명하게 Rewrite해 주는 미들웨어 추가!
 app.use((req, res, next) => {

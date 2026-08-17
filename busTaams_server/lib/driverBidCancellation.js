@@ -208,8 +208,8 @@ async function executeDriverBidCancellation(connection, bucket, p) {
             clientIp: '127.0.0.1'
         });
         await connection.execute(
-            `UPDATE TB_BUS_RESERVATION SET DRIVER_PAY_STAT = 'C', DRIVER_REFUND_DT = NOW(), DRIVER_REFUND_AMT = ? WHERE RES_ID = ?`,
-            [targetRes.DRIVER_PAY_AMT || 0, resId]
+            `UPDATE TB_BUS_RESERVATION SET DRIVER_PAY_STAT = 'C' WHERE RES_ID = ?`,
+            [resId]
         );
     }
 

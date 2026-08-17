@@ -287,14 +287,14 @@ const UpcomingTripDetailDriver = () => {
                                             <span className="text-[10px] font-bold">전화하기</span>
                                         </a>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2 mt-2">
+                                    <div className="space-y-3 mt-3 text-left border-t border-slate-200/60 pt-3">
                                         <div>
-                                            <p className="text-[10px] text-gray-400 font-bold">연락처</p>
-                                            <p className="font-bold text-xs text-[#1D3557]">{trip.customerPhone}</p>
+                                            <p className="text-[10px] text-gray-400 font-bold mb-0.5">연락처</p>
+                                            <p className="font-black text-xs text-[#1D3557] tracking-wide">{trip.customerPhone || '정보 없음'}</p>
                                         </div>
                                         <div>
-                                            <p className="text-[10px] text-gray-400 font-bold">이메일</p>
-                                            <p className="font-bold text-xs text-[#1D3557]">{trip.customerEmail || '정보 없음'}</p>
+                                            <p className="text-[10px] text-gray-400 font-bold mb-0.5">이메일</p>
+                                            <p className="font-black text-xs text-[#1D3557] break-all">{trip.customerEmail || '정보 없음'}</p>
                                         </div>
                                     </div>
                                 </div>

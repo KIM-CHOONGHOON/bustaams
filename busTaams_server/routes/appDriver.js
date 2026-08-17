@@ -198,22 +198,23 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
 
             // 시간 경과 표시 및 경로 가공
             auctionList = listRows.map(row => {
-                const diffMin = Math.floor((new Date() - new Date(row.regDt)) / 60000);
+                const diffMin = Math.floor((new Date() - (row.regDt ? new Date(row.regDt) : new Date())) / 60000);
 
-                const endAddr = row.endAddrVia || row.endAddrMaster;
+                const endAddr = row.endAddrVia || row.endAddrMaster || '';
 
                 // 경로 시퀀스 생성: 출발 -> 출발경유 -> 회차 -> 회차경유 -> 도착
-                const pathParts = [row.startAddr];
-                if (row.startVia) pathParts.push(...row.startVia.split(','));
+                const pathParts = [];
+                if (row.startAddr) pathParts.push(row.startAddr);
+                if (row.startVia) pathParts.push(...row.startVia.split(',').filter(Boolean));
                 if (row.roundTrip) pathParts.push(row.roundTrip);
-                if (row.endVia) pathParts.push(...row.endVia.split(','));
-                pathParts.push(endAddr);
+                if (row.endVia) pathParts.push(...row.endVia.split(',').filter(Boolean));
+                if (endAddr) pathParts.push(endAddr);
 
                 return {
                     ...row,
                     endAddr: endAddr, // 프론트엔드 호환용
                     fullPath: pathParts,
-                    timeAgo: diffMin < 60 ? `${diffMin}분 전` : `${Math.floor(diffMin / 60)}시간 전`
+                    timeAgo: isNaN(diffMin) ? '방금 전' : (diffMin < 60 ? `${Math.max(0, diffMin)}분 전` : `${Math.floor(diffMin / 60)}시간 전`)
                 };
             });
         }
@@ -2578,11 +2579,9 @@ router.post('/cancel-bid/:id', authenticateToken, async (req, res) => {
             `UPDATE TB_BUS_RESERVATION 
              SET DATA_STAT = 'DRIVER_CANCEL', 
                  DRIVER_PAY_STAT = ?, 
-                 DRIVER_REFUND_DT = NOW(),
-                 DRIVER_REFUND_AMT = ?,
                  MOD_ID = ?, MOD_DT = NOW() 
              WHERE RES_ID = ?`,
-            [isRefunded ? 'C' : driverPayStat, driverPayAmt || 0, custId, resId]
+            [isRefunded ? 'C' : driverPayStat, custId, resId]
         );
 
         // 4. TB_AUCTION_REQ_BUS 슬롯을 다시 'AUCTION' 상태로 돌려놓음 (다른 기사가 입찰할 수 있도록 오픈)

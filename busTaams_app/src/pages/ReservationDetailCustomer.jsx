@@ -20,6 +20,46 @@ const ReservationDetailCustomer = () => {
     const [cancelFile, setCancelFile] = useState(null);
     const [isCancelling, setIsCancelling] = useState(false);
 
+    const calculateRefundPolicy = (confirmDt, startDt) => {
+        const now = new Date();
+        const startDate = startDt ? new Date(startDt) : null;
+        const confirmDate = confirmDt ? new Date(confirmDt) : null;
+
+        if (confirmDate) {
+            const diffHours = (now - confirmDate) / (1000 * 60 * 60);
+            if (diffHours <= 24) {
+                return {
+                    type: 'A',
+                    label: '가. 확정 후 24시간 이내 취소',
+                    desc: '데이터 이용료 100% 전액 환불'
+                };
+            }
+        }
+
+        if (startDate) {
+            const diffDays = (startDate - now) / (1000 * 60 * 60 * 24);
+            if (diffDays > 30) {
+                return {
+                    type: 'B',
+                    label: '나. 확정 24시간 경과 후 ~ 출발 30일 전 취소',
+                    desc: '데이터 이용료의 50% 공제 후 환불'
+                };
+            } else {
+                return {
+                    type: 'C',
+                    label: '다. 여행 출발 30일 이내 취소',
+                    desc: '데이터 이용료의 80% 공제 후 환불'
+                };
+            }
+        }
+
+        return {
+            type: 'A',
+            label: '가. 확정 후 24시간 이내 취소',
+            desc: '데이터 이용료 100% 전액 환불'
+        };
+    };
+
     useEffect(() => {
         const fetchDetail = async () => {
             setLoading(true);
@@ -495,20 +535,48 @@ const ReservationDetailCustomer = () => {
             </main>
 
             {/* Cancel Modal */}
-            {showCancelModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-300">
-                    <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-10 shadow-2xl space-y-8 animate-in zoom-in-95 duration-300">
-                        <div className="space-y-2 text-center">
-                            <h3 className="text-3xl font-black tracking-tighter text-slate-900 italic">여행 취소 요청</h3>
-                            <div className="bg-rose-50 p-4 rounded-2xl border border-rose-100 space-y-2">
-                                <p className="text-rose-600 text-[10px] font-black uppercase tracking-widest">취소 패널티 안내</p>
-                                <p className="text-slate-600 text-xs font-bold leading-relaxed">
-                                    취소 횟수에 따라 서비스 이용이 제한될 수 있습니다.<br/>
-                                    (1회: 3개월, 2회: 6개월, 3회: 9개월, 4회 이상: 무기한)
-                                </p>
+            {showCancelModal && (() => {
+                const currentPolicy = calculateRefundPolicy(reservation?.confirmDt || reservation?.regDt, reservation?.startDt);
+                return (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-300">
+                        <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-8 md:p-10 shadow-2xl space-y-6 animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
+                            <div className="space-y-4 text-center">
+                                <h3 className="text-3xl font-black tracking-tighter text-slate-900 italic">여행 취소 요청</h3>
+                                
+                                {/* 데이터 이용료 취소/환불 기준 안내 박스 */}
+                                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3 text-left">
+                                    <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+                                        <span className="material-symbols-outlined text-teal-700 text-lg">policy</span>
+                                        <h4 className="text-slate-900 text-xs font-black uppercase tracking-wider">데이터 이용료 취소·환불 기준</h4>
+                                    </div>
+                                    
+                                    <p className="text-slate-600 text-xs font-medium leading-relaxed">
+                                        여행 일정 확정 후 이용자가 일정을 취소하는 경우, 회사는 취소 시점에 따라 선결제된 데이터 이용료를 다음과 같이 공제 후 환불합니다.
+                                    </p>
+
+                                    <div className="space-y-1.5 pt-1 text-xs">
+                                        <div className={`p-2.5 rounded-xl border flex items-center justify-between transition-all ${currentPolicy.type === 'A' ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold shadow-sm' : 'bg-white border-slate-100 text-slate-500'}`}>
+                                            <span>가. 확정 24시간 이내 취소</span>
+                                            <span className="font-black text-emerald-700">100% 전액 환불</span>
+                                        </div>
+                                        <div className={`p-2.5 rounded-xl border flex items-center justify-between transition-all ${currentPolicy.type === 'B' ? 'bg-amber-50 border-amber-300 text-amber-900 font-bold shadow-sm' : 'bg-white border-slate-100 text-slate-500'}`}>
+                                            <span>나. 확정 24시간 경과 ~ 출발 30일 전</span>
+                                            <span className="font-black text-amber-700">50% 공제 후 환불</span>
+                                        </div>
+                                        <div className={`p-2.5 rounded-xl border flex items-center justify-between transition-all ${currentPolicy.type === 'C' ? 'bg-rose-50 border-rose-300 text-rose-900 font-bold shadow-sm' : 'bg-white border-slate-100 text-slate-500'}`}>
+                                            <span>다. 출발 30일 이내 취소</span>
+                                            <span className="font-black text-rose-700">80% 공제 후 환불</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-2 p-3 bg-teal-900 text-white rounded-xl text-center space-y-0.5">
+                                        <p className="text-[10px] text-teal-200 font-bold">현재 적용되는 환불 기준</p>
+                                        <p className="text-xs font-black italic">{currentPolicy.label} → {currentPolicy.desc}</p>
+                                    </div>
+                                </div>
+
+                                <p className="text-slate-400 text-xs font-bold">원활한 서비스 개선을 위해 취소 사유를 입력해주세요.</p>
                             </div>
-                            <p className="text-slate-400 text-sm font-bold">원활한 서비스 개선을 위해 취소 사유를 입력해주세요.</p>
-                        </div>
 
                         <div className="space-y-6">
                             <div className="space-y-2">
@@ -574,7 +642,8 @@ const ReservationDetailCustomer = () => {
                         </div>
                     </div>
                 </div>
-            )}
+                );
+            })()}
 
             <BottomNavCustomer />
         </div>

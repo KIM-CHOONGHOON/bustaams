@@ -227,7 +227,7 @@ const ReservationListCustomer = () => {
                                                         <span className="w-24 text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] shrink-0">차량 정보</span>
                                                         <div className="flex items-center gap-3">
                                                             <span className="material-symbols-outlined text-teal-600 text-xl">minor_crash</span>
-                                                            <p className="text-slate-900 font-black tracking-tight text-base md:text-lg italic">{res.busType || '대형버스 (45인승)'}</p>
+                                                            <p className="text-slate-900 font-black tracking-tight text-base md:text-lg italic">{res.busTypeSummary || res.busType || '대형버스 (45인승)'}</p>
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-6 border-b border-slate-50 pb-3">

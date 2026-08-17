@@ -140,6 +140,7 @@ async function insertPaymentMaster(connection, p) {
             pgMid,
             payAmount,
             pgTid,
+            cardAuthNo = null,
             cardCode = null,
             cardName = null,
             cardMaskNo = null,
@@ -153,22 +154,22 @@ async function insertPaymentMaster(connection, p) {
             `INSERT INTO TB_PAYMENT_MASTER (
                 PAY_ID, ORDER_NO, PAY_TYPE, REQ_ID, CUST_ID, PG_MID, 
                 CARD_CODE, CARD_NAME, CARD_MASK_NO, PAY_YYMM, PLAN_DATE, 
-                PAY_AMOUNT, PAY_STATUS, PG_TID, PG_RESULT_CODE, PG_RESULT_MSG, 
+                PAY_AMOUNT, PAY_STATUS, PG_TID, CARD_AUTH_NO, PG_RESULT_CODE, PG_RESULT_MSG, 
                 COMPLETE_DT, REG_ID, REG_DT, MOD_ID, MOD_DT
             ) VALUES (
                 ?, ?, 'ONETIME', ?, ?, ?, 
                 ?, ?, ?, DATE_FORMAT(NOW(), '%Y%m'), CURDATE(), 
-                ?, 'SUCCESS', ?, ?, ?, 
+                ?, 'SUCCESS', ?, ?, ?, ?, 
                 NOW(), ?, NOW(), ?, NOW()
             )`,
             [
                 payId, orderNo || `ORD-${Date.now()}`, reqId || null, custId || 'UNKNOWN', pgMid || process.env.INICIS_MID || 'INIpayTest',
                 cardCode, cardName, cardMaskNo,
-                payAmount || 0, pgTid || null, pgResultCode, pgResultMsg,
+                payAmount || 0, pgTid || null, cardAuthNo || null, pgResultCode || '0000', pgResultMsg || '정상결제',
                 custId || 'UNKNOWN', custId || 'UNKNOWN'
             ]
         );
-        console.log(`>>> [TB_PAYMENT_MASTER] Inserted PAY_ID: ${payId} for Order: ${orderNo}, Amount: ${payAmount}`);
+        console.log(`>>> [TB_PAYMENT_MASTER] Inserted PAY_ID: ${payId} for Order: ${orderNo}, Amount: ${payAmount}, AuthNo: ${cardAuthNo}, TID: ${pgTid}`);
         return payId;
     } catch (err) {
         console.error('>>> [TB_PAYMENT_MASTER] Insert Error:', err);
@@ -277,8 +278,8 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
     }
 }
 
-    const updateDBAfterPayment = async (oid, connection, tid, amt) => {
-        console.log(`>>> [updateDBAfterPayment] Starting for OID: ${oid}, TID: ${tid}, Amt: ${amt}`);
+    const updateDBAfterPayment = async (oid, connection, tid, amt, payExtraInfo = {}) => {
+        console.log(`>>> [updateDBAfterPayment] Starting for OID: ${oid}, TID: ${tid}, Amt: ${amt}, AuthNo: ${payExtraInfo.cardAuthNo || 'N/A'}`);
         // oid 파싱: BUS_RES_{resId}_{ts} 또는 BUS_REQ_{reqId}_{ts} 또는 BUS_DRV_{resId}_{ts}
         const parts = oid.split('_');
         const type = parts[1]; // RES 또는 REQ 또는 DRV
@@ -321,14 +322,20 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                 );
 
                 // 3. TB_PAYMENT_MASTER 결제 이력 저장 (고객 단건 결제)
-                const [custRows] = await connection.execute('SELECT CUST_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ?', [reqId]);
+                const [custRows] = await connection.execute('SELECT TRAVELER_ID AS CUST_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ?', [reqId]);
                 const custId = custRows.length > 0 ? custRows[0].CUST_ID : 'CUSTOMER';
                 await insertPaymentMaster(connection, {
                     orderNo: oid,
                     reqId: reqId,
                     custId: custId,
                     payAmount: finalAmt,
-                    pgTid: tid
+                    pgTid: tid,
+                    cardAuthNo: payExtraInfo.cardAuthNo || null,
+                    pgResultCode: payExtraInfo.pgResultCode || '0000',
+                    pgResultMsg: payExtraInfo.pgResultMsg || '정상결제',
+                    cardCode: payExtraInfo.cardCode || null,
+                    cardName: payExtraInfo.cardName || null,
+                    cardMaskNo: payExtraInfo.cardMaskNo || null
                 });
 
                 // 4. TB_AUCTION_REQ 마스터 상태 변경
@@ -344,7 +351,7 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
             }
             console.log(`>>> [updateDBAfterPayment REQ] Updating customer payment to DRIVER_PAY_WAIT for REQ_ID: ${targetId}`);
             
-            // 1. TB_BUS_RESERVATION 결제 정보 적재 및 상태 전이
+            // 1. TB_BUS_RESERVATION 결제 정보 적재 및 상태 전이 (TRAVELER_CANCEL 상태도 정상 복원 업데이트) (한글 주석)
             await connection.execute(
                 `UPDATE TB_BUS_RESERVATION 
                  SET DATA_STAT = 'DRIVER_PAY_WAIT',
@@ -353,26 +360,38 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                      CUSTOMER_PAY_DT = NOW(),
                      CUSTOMER_PAY_ID = ?,
                      MOD_DT = NOW() 
-                 WHERE REQ_ID = ? AND DATA_STAT NOT IN ('FINAL_APPROVAL_WAIT', 'CONFIRM', 'DONE')`,
+                 WHERE REQ_ID = ? AND DATA_STAT NOT IN ('CONFIRM', 'DONE')`,
                 [finalAmt, tid || `PAY-CUST-${Date.now()}`, targetId]
             );
 
-            // 2. TB_AUCTION_REQ_BUS 상태를 DRIVER_PAY_WAIT으로 변경
+            // 2. TB_AUCTION_REQ_BUS 및 TB_AUCTION_REQ 상태를 DRIVER_PAY_WAIT으로 변경 (한글 주석)
             await connection.execute(
                 `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'DRIVER_PAY_WAIT', MOD_DT = NOW() 
-                 WHERE REQ_ID = ? AND DATA_STAT NOT IN ('FINAL_APPROVAL_WAIT', 'CONFIRM', 'DONE')`,
+                 WHERE REQ_ID = ? AND DATA_STAT NOT IN ('CONFIRM', 'DONE')`,
+                [targetId]
+            );
+
+            await connection.execute(
+                `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'DRIVER_PAY_WAIT', MOD_DT = NOW() 
+                 WHERE REQ_ID = ? AND DATA_STAT NOT IN ('CONFIRM', 'DONE')`,
                 [targetId]
             );
 
             // 3. TB_PAYMENT_MASTER 결제 이력 저장 (고객 전체 결제)
-            const [custRows] = await connection.execute('SELECT CUST_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ?', [targetId]);
+            const [custRows] = await connection.execute('SELECT TRAVELER_ID AS CUST_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ?', [targetId]);
             const custId = custRows.length > 0 ? custRows[0].CUST_ID : 'CUSTOMER';
             await insertPaymentMaster(connection, {
                 orderNo: oid,
                 reqId: targetId,
                 custId: custId,
                 payAmount: finalAmt,
-                pgTid: tid
+                pgTid: tid,
+                cardAuthNo: payExtraInfo.cardAuthNo || null,
+                pgResultCode: payExtraInfo.pgResultCode || '0000',
+                pgResultMsg: payExtraInfo.pgResultMsg || '정상결제',
+                cardCode: payExtraInfo.cardCode || null,
+                cardName: payExtraInfo.cardName || null,
+                cardMaskNo: payExtraInfo.cardMaskNo || null
             });
 
             // 4. TB_AUCTION_REQ 마스터 상태 변경
@@ -433,7 +452,13 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                     reqId: reqId,
                     custId: driverId,
                     payAmount: dynamic.feeTotalAmt,
-                    pgTid: tid
+                    pgTid: tid,
+                    cardAuthNo: payExtraInfo.cardAuthNo || null,
+                    pgResultCode: payExtraInfo.pgResultCode || '0000',
+                    pgResultMsg: payExtraInfo.pgResultMsg || '정상결제',
+                    cardCode: payExtraInfo.cardCode || null,
+                    cardName: payExtraInfo.cardName || null,
+                    cardMaskNo: payExtraInfo.cardMaskNo || null
                 });
 
                 // 4. TB_AUCTION_REQ 마스터 상태도 모든 버스가 결제 완료되었을 때만 'FINAL_APPROVAL_WAIT'로 변경
@@ -626,7 +651,7 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
             const isDriver = P_OID && P_OID.startsWith('BUS_DRV_');
 
             if (P_STATUS !== '00') {
-                const errorRedirect = isDriver ? `/app/approval-pending-driver?tab=driver_pay&payError=${encodeURIComponent(P_RMESG1)}` : `/app/approval-list?payError=${encodeURIComponent(P_RMESG1)}`;
+                const errorRedirect = isDriver ? `/app/driver-dashboard?payError=${encodeURIComponent(P_RMESG1)}` : `/app/approval-list?payError=${encodeURIComponent(P_RMESG1)}`;
                 return sendHtmlResponse(`결제 인증 실패: ${P_RMESG1}`, errorRedirect);
             }
 
@@ -656,7 +681,15 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                     const connection = await pool.getConnection();
                     try {
                         await connection.beginTransaction();
-                        await updateDBAfterPayment(oid, connection, tid, amt);
+                        const mobileExtraInfo = {
+                            cardAuthNo: resultParams.get('P_AUTH_NO') || resultParams.get('P_APPL_NUM') || null,
+                            pgResultCode: '0000',
+                            pgResultMsg: msg || '정상결제',
+                            cardCode: resultParams.get('P_CARD_ISSUER_CODE') || null,
+                            cardName: resultParams.get('P_FN_NM') || null,
+                            cardMaskNo: resultParams.get('P_CARD_NUM') || null
+                        };
+                        await updateDBAfterPayment(oid, connection, tid, amt, mobileExtraInfo);
                         await connection.commit();
 
                         const redirectPath = isDriver ? '/app/driver-dashboard?payResult=success' : '/app/customer-dashboard?payResult=success';
@@ -682,10 +715,11 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
 
         // 2. PC 웹표준 결제 처리
         const { resultCode, resultMsg, authToken, authUrl, mid } = req.body;
-        const isDriver = (req.body.orderNumber && req.body.orderNumber.startsWith('BUS_DRV_')) || (req.body.MOID && req.body.MOID.startsWith('BUS_DRV_'));
+        const reqOrderNo = req.body.orderNumber || req.body.MOID || req.body.oid || req.body.P_OID || '';
+        let isDriver = reqOrderNo.startsWith('BUS_DRV_');
 
         if (resultCode !== '0000') {
-            const errorRedirect = isDriver ? `/app/approval-pending-driver?tab=driver_pay&payError=${encodeURIComponent(resultMsg)}` : `/app/approval-list?payError=${encodeURIComponent(resultMsg)}`;
+            const errorRedirect = isDriver ? `/app/driver-dashboard?payError=${encodeURIComponent(resultMsg)}` : `/app/approval-list?payError=${encodeURIComponent(resultMsg)}`;
             return sendHtmlResponse(`결제 인증 실패: ${resultMsg}`, errorRedirect);
         }
 
@@ -709,11 +743,24 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
 
             console.log('>>> [Payment PC Approval] Result:', result);
 
+            const resMoid = result.MOID || result.oid || reqOrderNo;
+            if (resMoid.startsWith('BUS_DRV_')) {
+                isDriver = true;
+            }
+
             if (result.resultCode === '0000') {
                 const connection = await pool.getConnection();
                 try {
                     await connection.beginTransaction();
-                    await updateDBAfterPayment(result.MOID, connection, result.TID, result.TotPrice);
+                    const pcExtraInfo = {
+                        cardAuthNo: result.applNum || result.applNo || result.CARD_AUTH_NO || result.cardAuthNo || null,
+                        pgResultCode: result.resultCode || '0000',
+                        pgResultMsg: result.resultMsg || '정상결제',
+                        cardCode: result.CARD_Code || result.cardCode || null,
+                        cardName: result.CARD_Name || result.cardName || null,
+                        cardMaskNo: result.CARD_Num || result.cardNum || null
+                    };
+                    await updateDBAfterPayment(resMoid, connection, result.TID, result.TotPrice, pcExtraInfo);
                     await connection.commit();
 
                     const redirectPath = isDriver ? '/app/driver-dashboard?payResult=success' : '/app/customer-dashboard?payResult=success';
@@ -727,7 +774,7 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                     connection.release();
                 }
             } else {
-                const errorRedirect = isDriver ? `/app/approval-pending-driver?tab=driver_pay&payError=${encodeURIComponent(result.resultMsg || '알 수 없는 오류')}` : `/app/approval-list?payError=${encodeURIComponent(result.resultMsg || '알 수 없는 오류')}`;
+                const errorRedirect = isDriver ? `/app/driver-dashboard?payError=${encodeURIComponent(result.resultMsg || '알 수 없는 오류')}` : `/app/approval-list?payError=${encodeURIComponent(result.resultMsg || '알 수 없는 오류')}`;
                 sendHtmlResponse(`결제 승인 실패: ${result.resultMsg}`, errorRedirect);
             }
         } catch (err) {
@@ -745,15 +792,22 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
      * 카드 결제 완료 후 2중 안전장치 동기화 (DB 업데이트 및 기사 푸시 발송)
      */
     router.post('/force-sync', async (req, res) => {
-        const { reqId, resId, tid, amt } = req.body;
-        console.log(`>>> [Payment Force Sync] ReqID: ${reqId}, ResID: ${resId}, TID: ${tid}, Amt: ${amt}`);
+        const { reqId, resId, tid, amt, cardAuthNo, authNo, resultCode, resultMsg, cardName, cardMaskNo } = req.body;
+        console.log(`>>> [Payment Force Sync] ReqID: ${reqId}, ResID: ${resId}, TID: ${tid}, Amt: ${amt}, AuthNo: ${cardAuthNo || authNo}`);
         const connection = await pool.getConnection();
         try {
             await connection.beginTransaction();
+            const syncExtraInfo = {
+                cardAuthNo: cardAuthNo || authNo || null,
+                pgResultCode: resultCode || '0000',
+                pgResultMsg: resultMsg || '정상결제',
+                cardName: cardName || null,
+                cardMaskNo: cardMaskNo || null
+            };
             if (resId) {
-                await updateDBAfterPayment(`BUS_RES_${resId}_${Date.now()}`, connection, tid || `MANUAL-${Date.now()}`, amt || 33000);
+                await updateDBAfterPayment(`BUS_RES_${resId}_${Date.now()}`, connection, tid || `MANUAL-${Date.now()}`, amt || 33000, syncExtraInfo);
             } else if (reqId) {
-                await updateDBAfterPayment(`BUS_REQ_${reqId}_${Date.now()}`, connection, tid || `MANUAL-${Date.now()}`, amt || 33000);
+                await updateDBAfterPayment(`BUS_REQ_${reqId}_${Date.now()}`, connection, tid || `MANUAL-${Date.now()}`, amt || 33000, syncExtraInfo);
             }
             await connection.commit();
             res.json({ success: true, message: '결제 상태가 성공적으로 동기화되었습니다.' });

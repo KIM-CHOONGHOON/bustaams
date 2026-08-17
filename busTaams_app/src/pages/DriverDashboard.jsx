@@ -28,64 +28,77 @@ const DriverDashboard = () => {
     const [todayTrip, setTodayTrip] = useState(null);
     const [loading, setLoading] = useState(true);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [fetchError, setFetchError] = useState(null);
     const location = useLocation();
+
+    const fetchDashboardData = async () => {
+        setLoading(true);
+        setFetchError(null);
+        try {
+            const res = await api.get('/app/driver/dashboard');
+            if (res.success && res.data) {
+                setStats({
+                    countCustomerWait: res.data.countCustomerWait || 0,
+                    countDriverPayWait: res.data.countDriverPayWait || 0,
+                    countFinalApprovalWait: res.data.countFinalApprovalWait || 0,
+                    countConfirmed: res.data.countConfirmed || 0,
+                    countDone: res.data.countDone || 0,
+                    countAuctions: res.data.countAuctions || 0,
+                    totalProfit: res.data.totalProfit || 0,
+                    monthlyProfit: res.data.monthlyProfit || 0,
+                    pendingProfit: res.data.pendingProfit || 0,
+                    feePolicyNm: res.data.feePolicyNm || '미가입'
+                });
+                setUserName(res.data.userName || '기사님');
+                setUserImage(res.data.userImage);
+                setRegistrationStatus({
+                    isDriverInfoRegistered: !!res.data.isDriverInfoRegistered,
+                    isBusInfoRegistered: !!res.data.isBusInfoRegistered
+                });
+                setAuctionList(res.data.auctionList || []);
+                setTodayTrip(res.data.todayTrip || null);
+            } else {
+                setFetchError(res.error || '대시보드 데이터를 불러오지 못했습니다.');
+            }
+        } catch (err) {
+            console.error('Fetch driver dashboard error:', err);
+            const errMsg = err.message || '인증 세션이 만료되었거나 네트워크 오류가 발생했습니다.';
+            setFetchError(errMsg);
+            if (errMsg.includes('인증') || errMsg.includes('로그인')) {
+                notify.warn('로그인 필요', '기사 서비스 이용을 위해 재로그인이 필요합니다.');
+                navigate('/login', { replace: true });
+            }
+        } finally {
+            setLoading(false);
+        }
+
+        // 읽지 않은 알림 개수 가져오기
+        try {
+            const notifs = await getNotifications();
+            if (Array.isArray(notifs)) {
+                const unread = notifs.filter(n => n.READ_YN === 'N').length;
+                setUnreadCount(unread);
+            }
+        } catch (err) {
+            console.error('Fetch notifications count error:', err);
+        }
+    };
 
     useEffect(() => {
         const queryParams = new URLSearchParams(location.search);
         if (queryParams.get('payResult') === 'success') {
             notify.success('결제 완료', '기사 이용료 결제가 성공적으로 완료되었습니다!');
-            navigate('/app/driver-dashboard', { replace: true });
+            fetchDashboardData();
+            navigate('/driver-dashboard', { replace: true });
         } else if (queryParams.get('payError')) {
             notify.error('결제 오류', decodeURIComponent(queryParams.get('payError')));
-            navigate('/app/driver-dashboard', { replace: true });
+            navigate('/driver-dashboard', { replace: true });
         }
     }, [location.search]);
 
     useEffect(() => {
         // FCM 토큰 수신 및 서버 저장 자동 시도
         requestFirebaseToken();
-
-        const fetchDashboardData = async () => {
-            setLoading(true);
-            try {
-                const res = await api.get('/app/driver/dashboard');
-                if (res.success) {
-                    setStats({
-                        countCustomerWait: res.data.countCustomerWait || 0,
-                        countDriverPayWait: res.data.countDriverPayWait || 0,
-                        countFinalApprovalWait: res.data.countFinalApprovalWait || 0,
-                        countConfirmed: res.data.countConfirmed || 0,
-                        countDone: res.data.countDone || 0,
-                        countAuctions: res.data.countAuctions || 0,
-                        totalProfit: res.data.totalProfit || 0,
-                        monthlyProfit: res.data.monthlyProfit || 0,
-                        pendingProfit: res.data.pendingProfit || 0,
-                        feePolicyNm: res.data.feePolicyNm || '미가입'
-                    });
-                    setUserName(res.data.userName);
-                    setUserImage(res.data.userImage);
-                    setRegistrationStatus({
-                        isDriverInfoRegistered: res.data.isDriverInfoRegistered,
-                        isBusInfoRegistered: res.data.isBusInfoRegistered
-                    });
-                    setAuctionList(res.data.auctionList || []);
-                    setTodayTrip(res.data.todayTrip || null);
-                }
-            } catch (err) {
-                console.error('Fetch driver dashboard error:', err);
-            } finally {
-                setLoading(false);
-            }
-
-            // 읽지 않은 알림 개수 가져오기
-            try {
-                const notifs = await getNotifications();
-                const unread = notifs.filter(n => n.READ_YN === 'N').length;
-                setUnreadCount(unread);
-            } catch (err) {
-                console.error('Fetch notifications count error:', err);
-            }
-        };
         fetchDashboardData();
     }, []);
 
@@ -116,6 +129,39 @@ const DriverDashboard = () => {
         { icon: 'badge', label: '기사 정보 등록', desc: '파트너 인증', path: '/driver-certification', iconBg: 'bg-orange-50', iconColor: 'text-orange-600' },
         { icon: 'directions_bus', label: '버스 정보 등록', desc: '차량 인증', path: '/bus-certification', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-700' },
     ];
+
+    if (loading) {
+        return (
+            <div className="bg-background text-on-background min-h-screen flex flex-col items-center justify-center font-body p-6 text-center">
+                <div className="w-12 h-12 border-4 border-teal-800 border-t-transparent rounded-full animate-spin mb-4"></div>
+                <p className="text-teal-900 font-bold text-base">기사 대시보드를 불러오는 중입니다...</p>
+            </div>
+        );
+    }
+
+    if (fetchError) {
+        return (
+            <div className="bg-background text-on-background min-h-screen flex flex-col items-center justify-center font-body p-6 text-center">
+                <span className="material-symbols-outlined text-amber-500 text-6xl mb-4">warning</span>
+                <h2 className="text-2xl font-bold text-teal-900 mb-2">대시보드를 불러올 수 없습니다</h2>
+                <p className="text-slate-500 text-sm max-w-md mb-6">{fetchError}</p>
+                <div className="flex gap-4">
+                    <button 
+                        onClick={() => fetchDashboardData()}
+                        className="bg-primary text-white font-bold py-3 px-6 rounded-full shadow-md hover:scale-105 active:scale-95 transition-all text-sm"
+                    >
+                        다시 시도
+                    </button>
+                    <button 
+                        onClick={() => navigate('/login')}
+                        className="bg-slate-200 text-slate-700 font-bold py-3 px-6 rounded-full shadow-md hover:scale-105 active:scale-95 transition-all text-sm"
+                    >
+                        로그인 화면으로
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="bg-background text-on-background min-h-screen pb-40 font-body">
@@ -361,9 +407,9 @@ const DriverDashboard = () => {
                                             <p className="text-[11px] font-bold text-secondary mb-1">{todayTrip.title}</p>
                                             <p className="text-[9px] font-black opacity-40 uppercase tracking-widest mb-2">운행 경로</p>
                                             <p className="text-lg font-black font-headline leading-tight italic tracking-tighter">
-                                                {todayTrip.startAddr.split(' ')[1] || todayTrip.startAddr.split(' ')[0]} 
-                                                {todayTrip.roundTrip && ` → ${todayTrip.roundTrip.split(' ')[1] || todayTrip.roundTrip.split(' ')[0]}`}
-                                                → {todayTrip.endAddr.split(' ')[1] || todayTrip.endAddr.split(' ')[0]}
+                                                {todayTrip.startAddr ? (todayTrip.startAddr.split(' ')[1] || todayTrip.startAddr.split(' ')[0]) : ''} 
+                                                {todayTrip.roundTrip ? ` → ${todayTrip.roundTrip.split(' ')[1] || todayTrip.roundTrip.split(' ')[0]}` : ''}
+                                                {todayTrip.endAddr ? ` → ${todayTrip.endAddr.split(' ')[1] || todayTrip.endAddr.split(' ')[0]}` : ''}
                                             </p>
                                             <div className="mt-4 flex items-end justify-between">
                                                 <p className="text-2xl font-black italic tracking-tighter text-secondary">₩{Number(todayTrip.price).toLocaleString()}</p>
