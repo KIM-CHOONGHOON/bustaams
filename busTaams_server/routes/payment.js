@@ -128,53 +128,9 @@ module.exports = function createPaymentRouter(pool, app) {
         }
     };
 
-    const updateDBAfterPayment = async (oid, connection, tid, amt) => {
-        console.log(`>>> [updateDBAfterPayment] Starting for OID: ${oid}, TID: ${tid}, Amt: ${amt}`);
-        // oid 파싱: BUS_RES_{resId}_{ts} 또는 BUS_REQ_{reqId}_{ts} 또는 BUS_DRV_{resId}_{ts}
-        const parts = oid.split('_');
-        const type = parts[1]; // RES 또는 REQ 또는 DRV
-        const targetId = parts[2]; // resId 또는 reqId
-
-        // 8월 17일까지 테스트 기간인 경우 데이터베이스에는 원래 가격으로 기록
-        let finalAmt = Number(amt) || 33000;
-        const now = new Date();
-        const limitDate = new Date('2026-08-17T23:59:59');
-
-        if (type === 'RES') {
-            if (now <= limitDate && finalAmt === 1100) {
-                console.log(`>>> [TEST PAYMENT OVERRIDE] Restoring database recorded amount to 33,000 KRW (paid: 1,100 KRW)`);
-                finalAmt = 33000;
-            }
-            // 고객 단건 승인 및 결제 완료 처리 -> 상태를 'DRIVER_PAY_WAIT'으로 변경하고 고객 결제 정보를 저장합니다.
-            console.log(`>>> [updateDBAfterPayment RES] Updating customer payment to DRIVER_PAY_WAIT for RES_ID: ${targetId}`);
-            
-            const [bidRows] = await connection.execute('SELECT REQ_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [targetId]);
-            if (bidRows.length > 0) {
-                const { REQ_ID: reqId, REQ_BUS_SEQ: unitSeq } = bidRows[0];
-
-                // 1. TB_BUS_RESERVATION 결제 정보 적재 및 상태 전이
-                await connection.execute(
-                    `UPDATE TB_BUS_RESERVATION 
-                     SET DATA_STAT = 'DRIVER_PAY_WAIT',
-                         CUSTOMER_PAY_STAT = 'Y',
-                         CUSTOMER_PAY_AMT = ?,
-                         CUSTOMER_PAY_DT = NOW(),
-                         CUSTOMER_PAY_ID = ?,
-                         MOD_DT = NOW() 
-                     WHERE RES_ID = ? AND DATA_STAT = 'CUSTOMER_PAY_WAIT'`,
-                    [finalAmt, tid || `PAY-CUST-${Date.now()}`, targetId]
-                );
-
-                // 2. TB_AUCTION_REQ_BUS 상태를 DRIVER_PAY_WAIT으로 변경
-                await connection.execute(
-                    `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'DRIVER_PAY_WAIT', MOD_DT = NOW() 
-                     WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT = 'CUSTOMER_PAY_WAIT'`,
-                    [reqId, unitSeq]
-                );
-
 /**
  * TB_AUCTION_REQ_BUS의 개별 차량들의 DATA_STAT를 검사하여 
- * 모든 버스의 상태가 동일하게 완료되었을 경우에만 TB_AUCTION_REQ 마스터 상태를 업데이트합니다.
+ * 모든 버스의 상태가 100% 동일하게 완료되었을 경우에만 TB_AUCTION_REQ 마스터 상태를 업데이트합니다.
  */
 async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
     const [busRows] = await connection.execute(
@@ -222,6 +178,50 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
     }
 }
 
+    const updateDBAfterPayment = async (oid, connection, tid, amt) => {
+        console.log(`>>> [updateDBAfterPayment] Starting for OID: ${oid}, TID: ${tid}, Amt: ${amt}`);
+        // oid 파싱: BUS_RES_{resId}_{ts} 또는 BUS_REQ_{reqId}_{ts} 또는 BUS_DRV_{resId}_{ts}
+        const parts = oid.split('_');
+        const type = parts[1]; // RES 또는 REQ 또는 DRV
+        const targetId = parts[2]; // resId 또는 reqId
+
+        // 8월 17일까지 테스트 기간인 경우 데이터베이스에는 원래 가격으로 기록
+        let finalAmt = Number(amt) || 33000;
+        const now = new Date();
+        const limitDate = new Date('2026-08-17T23:59:59');
+
+        if (type === 'RES') {
+            if (now <= limitDate && finalAmt === 1100) {
+                console.log(`>>> [TEST PAYMENT OVERRIDE] Restoring database recorded amount to 33,000 KRW (paid: 1,100 KRW)`);
+                finalAmt = 33000;
+            }
+            // 고객 단건 승인 및 결제 완료 처리 -> 상태를 'DRIVER_PAY_WAIT'으로 변경하고 고객 결제 정보를 저장합니다.
+            console.log(`>>> [updateDBAfterPayment RES] Updating customer payment to DRIVER_PAY_WAIT for RES_ID: ${targetId}`);
+            
+            const [bidRows] = await connection.execute('SELECT REQ_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [targetId]);
+            if (bidRows.length > 0) {
+                const { REQ_ID: reqId, REQ_BUS_SEQ: unitSeq } = bidRows[0];
+
+                // 1. TB_BUS_RESERVATION 결제 정보 적재 및 상태 전이 (해당 버스 개별)
+                await connection.execute(
+                    `UPDATE TB_BUS_RESERVATION 
+                     SET DATA_STAT = 'DRIVER_PAY_WAIT',
+                         CUSTOMER_PAY_STAT = 'Y',
+                         CUSTOMER_PAY_AMT = ?,
+                         CUSTOMER_PAY_DT = NOW(),
+                         CUSTOMER_PAY_ID = ?,
+                         MOD_DT = NOW() 
+                     WHERE RES_ID = ?`,
+                    [finalAmt, tid || `PAY-CUST-${Date.now()}`, targetId]
+                );
+
+                // 2. TB_AUCTION_REQ_BUS 상태를 DRIVER_PAY_WAIT으로 변경 (해당 버스 슬롯 개별)
+                await connection.execute(
+                    `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'DRIVER_PAY_WAIT', MOD_DT = NOW() 
+                     WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?`,
+                    [reqId, unitSeq]
+                );
+
                 // 3. TB_AUCTION_REQ 마스터 상태도 모든 버스가 완료되었을 때만 DRIVER_PAY_WAIT으로 변경
                 await checkAndUpdateMasterStatus(connection, reqId, 'CUSTOMER');
 
@@ -268,7 +268,7 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                 await sendDriverPaymentPushNotification(connection, targetId, bid.REQ_BUS_SEQ, bid.RES_ID);
             }
         } else if (type === 'DRV') {
-            // 기사 데이터 이용료 결제 완료 처리 -> 상태를 'FINAL_APPROVAL_WAIT'으로 변경하고 기사의 결제 정보를 저장합니다.
+            // 기사 데이터 이용료 결제 완료 처리 -> 기사 개별 레코드 FINAL_APPROVAL_WAIT 변경 및 마스터 상태 체크
             console.log(`>>> [updateDBAfterPayment DRV] Updating driver payment to FINAL_APPROVAL_WAIT for RES_ID: ${targetId}`);
 
             const [priceRows] = await connection.execute(
@@ -282,7 +282,7 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                 // 동적 계산 수수료 산출
                 const dynamic = await calculateDriverDynamicFee(connection, driverId, biddingPrice);
 
-                // 2. TB_BUS_RESERVATION 기사 결제 완료 업데이트 및 상태를 'FINAL_APPROVAL_WAIT' (고객 최종 승인대기)로 변경
+                // 1. TB_BUS_RESERVATION 기사 결제 완료 업데이트 및 개별 상태를 'FINAL_APPROVAL_WAIT' (고객 최종 승인대기)로 변경
                 await connection.execute(
                     `UPDATE TB_BUS_RESERVATION 
                      SET DRIVER_PAY_STAT = 'Y',
@@ -297,7 +297,7 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                     [dynamic.feeTotalAmt, tid || `PAY-DRIVER-${Date.now()}`, dynamic.feeRate, driverId, targetId]
                 );
 
-                // 3. TB_AUCTION_REQ_BUS 상태도 'FINAL_APPROVAL_WAIT'로 변경
+                // 2. TB_AUCTION_REQ_BUS 개별 차량 슬롯 상태도 'FINAL_APPROVAL_WAIT'로 변경
                 const [bRows] = await connection.execute('SELECT REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [targetId]);
                 if (bRows.length > 0) {
                     const { REQ_BUS_SEQ: uSeq } = bRows[0];
@@ -308,7 +308,7 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                     );
                 }
 
-                // 4. TB_AUCTION_REQ 마스터 상태도 모든 버스가 결제 완료되었을 때만 'FINAL_APPROVAL_WAIT'로 변경
+                // 3. TB_AUCTION_REQ 마스터 상태도 모든 버스가 결제 완료되었을 때만 'FINAL_APPROVAL_WAIT'로 변경
                 await checkAndUpdateMasterStatus(connection, reqId, driverId);
 
                 // 5. TB_MOM_MEMBER 사용량(USE_CNT) 증가 처리
