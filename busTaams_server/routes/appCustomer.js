@@ -2900,14 +2900,11 @@ router.post('/cancel-request', authenticateToken, uploadOrPass, async (req, res)
         }
         const currentReqStat = check[0].DATA_STAT;
 
-        // [추가] 견적 리스트(AUCTION) 상태이거나 버스변경(BUS_CHANGE) 상태인 경우 단순 취소 처리 (페널티 없음)
+        // 견적 리스트(AUCTION) 상태이거나 버스변경(BUS_CHANGE) 상태인 경우 단순 취소 처리
         if (currentReqStat === 'AUCTION' || currentReqStat === 'BUS_CHANGE') {
-            // 사용자의 요청대로 TB_AUCTION_REQ, TB_AUCTION_REQ_BUS 테이블의 상태만 변경
             await connection.execute('UPDATE TB_AUCTION_REQ SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?', [custId, reqId]);
             await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?', [custId, reqId]);
-
-            // 기존 코드에서 예약 정보도 함께 취소 처리 (드라이버 혼선 방지 위해 유지 권장하나, 사용자 요청에 따라 최소화)
-            // await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND DATA_STAT NOT IN (\'CONFIRM\', \'DONE\')', [custId, reqId]);
+            await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND DATA_STAT NOT IN (\'CONFIRM\', \'DONE\')', [custId, reqId]);
 
             await connection.commit();
             res.json({ success: true, message: '견적 요청 취소가 완료되었습니다.' });
