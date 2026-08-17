@@ -1288,17 +1288,17 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
         const newStartDt = reqRows[0].START_DT;
         const newEndDt = reqRows[0].END_DT;
 
-        // [추가] 해당 기사의 동일 일정 중복 예약 검증 (CUSTOMER_PAY_WAIT, DRIVER_PAY_WAIT, FINAL_APPROVAL_WAIT, CONFIRM 상태 대상)
+        // 해당 기사의 동일 일정 중복 예약 검증 (최신 DATA_STAT 활성 상태 대상: CUSTOMER_PAY_WAIT, DRIVER_PAY_WAIT, FINAL_APPROVAL_WAIT, CONFIRM, PROPOSED, ACCEPTED)
         const [duplicateRows] = await connection.execute(
             `SELECT 1 
              FROM TB_BUS_RESERVATION b
              JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID
              WHERE b.DRIVER_ID = ? 
-               AND b.DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'CONFIRM')
-               AND r.START_DT < ? 
-               AND r.END_DT > ?
+               AND b.DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'CONFIRM', 'PROPOSED', 'ACCEPTED')
+               AND r.DATA_STAT NOT IN ('TRAVELER_CANCEL', 'DRIVER_CANCEL', 'BUS_CANCEL', 'BUS_CHANGE', 'CANCEL_ADMIN', 'CANCEL_CUSTOMER', 'CANCELED')
+               AND ((r.START_DT < ? AND r.END_DT > ?) OR (DATE(r.START_DT) = DATE(?) OR DATE(r.END_DT) = DATE(?)))
              LIMIT 1`,
-            [custId, newEndDt, newStartDt]
+            [custId, newEndDt, newStartDt, newStartDt, newEndDt]
         );
 
         if (duplicateRows.length > 0) {

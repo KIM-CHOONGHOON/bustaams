@@ -24,7 +24,7 @@ function archBlocks(driverId) {
                   FROM TB_BUS_RESERVATION res
                   INNER JOIN TB_AUCTION_REQ ar ON ar.REQ_ID = res.REQ_ID
                  WHERE res.DRIVER_ID = ?
-                   AND res.DATA_STAT = 'CONFIRM'
+                   AND res.DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'CONFIRM')
                    AND DATE(ar.START_DT) = DATE(r.START_DT)
                    AND ar.REQ_ID <> r.REQ_ID
               )`;
