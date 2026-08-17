@@ -11,6 +11,7 @@ const { registerBusDriverPaymentCard } = require('../lib/busDriverCreditCardRegi
 const { sendNotification } = require('../services/notificationService');
 const { runDriverVerificationsForProfileSetup } = require('../driverVerification');
 const { processBankbookOcr, processBizRegOcr } = require('../services/ocrService');
+const { cancelInicisPayment } = require('../lib/driverBidCancellation');
 
 const JWT_SECRET_KEY = process.env.JWT_SECRET || 'bustaams-dev-secret-key-2026';
 
@@ -2544,24 +2545,47 @@ router.post('/cancel-bid/:id', authenticateToken, async (req, res) => {
         if (uRows.length === 0) throw new Error('사용자를 찾을 수 없습니다.');
         const custId = uRows[0].CUST_ID;
 
-        // 2. 예약(입찰) 정보 확인 (CUSTOMER_PAY_WAIT 또는 DRIVER_PAY_WAIT 상태 대상)
+        // 2. 예약(입찰) 정보 확인 (CUSTOMER_PAY_WAIT, DRIVER_PAY_WAIT, FINAL_APPROVAL_WAIT 대상)
         const [resRows] = await connection.execute(
-            `SELECT REQ_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION 
-             WHERE RES_ID = ? AND DRIVER_ID = ? AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT')`,
+            `SELECT REQ_ID, REQ_BUS_SEQ, DRIVER_PAY_STAT, DRIVER_PAY_ID, DRIVER_PAY_AMT 
+             FROM TB_BUS_RESERVATION 
+             WHERE RES_ID = ? AND DRIVER_ID = ? AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT')`,
             [resId, custId]
         );
         if (resRows.length === 0) {
             throw new Error('취소 가능한 청약 내역이 아니거나 이미 확정되어 권한이 없습니다.');
         }
-        const { REQ_ID: reqId, REQ_BUS_SEQ: reqBusSeq } = resRows[0];
+        const { REQ_ID: reqId, REQ_BUS_SEQ: reqBusSeq, DRIVER_PAY_STAT: driverPayStat, DRIVER_PAY_ID: driverPayId, DRIVER_PAY_AMT: driverPayAmt } = resRows[0];
 
-        // 3. TB_BUS_RESERVATION 상태 변경 (DRIVER_CANCEL)
+        // 2-1. [해당 버스 기사의 카드 결제 핀포인트 취소 (환불)]
+        let isRefunded = false;
+        if (driverPayStat === 'Y' && driverPayId) {
+            try {
+                const refundRes = await cancelInicisPayment({
+                    tid: driverPayId,
+                    msg: '기사 청약 취소 (데이터 이용료 환불)',
+                    clientIp: '127.0.0.1'
+                });
+                console.log(`>>> [Driver Bid Cancel Refund Success] RES_ID: ${resId}, TID: ${driverPayId}`, refundRes);
+                isRefunded = true;
+            } catch (refErr) {
+                console.error(`>>> [Driver Bid Cancel Refund Failed] RES_ID: ${resId}, TID: ${driverPayId}`, refErr);
+            }
+        }
+
+        // 3. TB_BUS_RESERVATION 기사 결제/예약 상태 변경 (DRIVER_CANCEL)
         await connection.execute(
-            "UPDATE TB_BUS_RESERVATION SET DATA_STAT = 'DRIVER_CANCEL', MOD_ID = ?, MOD_DT = NOW() WHERE RES_ID = ?",
-            [custId, resId]
+            `UPDATE TB_BUS_RESERVATION 
+             SET DATA_STAT = 'DRIVER_CANCEL', 
+                 DRIVER_PAY_STAT = ?, 
+                 DRIVER_REFUND_DT = NOW(),
+                 DRIVER_REFUND_AMT = ?,
+                 MOD_ID = ?, MOD_DT = NOW() 
+             WHERE RES_ID = ?`,
+            [isRefunded ? 'C' : driverPayStat, driverPayAmt || 0, custId, resId]
         );
 
-        // 4. TB_AUCTION_REQ_BUS 슬롯을 다시 'AUCTION' 상태로 돌려놓음 (다른 기사가 입찰할 수 있도록)
+        // 4. TB_AUCTION_REQ_BUS 슬롯을 다시 'AUCTION' 상태로 돌려놓음 (다른 기사가 입찰할 수 있도록 오픈)
         await connection.execute(
             "UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'AUCTION', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?",
             [custId, reqId, reqBusSeq]
@@ -2578,39 +2602,118 @@ router.post('/cancel-bid/:id', authenticateToken, async (req, res) => {
         await connection.execute(
             `INSERT INTO TB_PAYMENT_CANCEL_HISTORY (
                 CANCEL_ID, BAT_ID, CANCEL_AMOUNT, CANCEL_REASON, CANCEL_STATUS, 
-                REG_ID, REG_DT, MOD_ID, MOD_DT
+                PG_TID, REG_ID, REG_DT, MOD_ID, MOD_DT
             ) VALUES (
-                ?, ?, 0, ?, 'SUCCESS', ?, NOW(), ?, NOW()
+                ?, ?, ?, ?, 'SUCCESS', ?, ?, NOW(), ?, NOW()
             )`,
-            [cancelId, resId, '기사에 의한 입찰/청약 취소', custId, custId]
+            [cancelId, resId, driverPayAmt || 0, '기사에 의한 청약 취소 (데이터 이용료 환불)', driverPayId || null, custId, custId]
         );
-        await connection.execute(
-            `UPDATE TB_PAYMENT_MASTER SET PAY_STATUS = 'FAIL', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND CUST_ID = ?`,
-            [custId, reqId, custId]
-        );
+        if (driverPayId) {
+            await connection.execute(
+                `UPDATE TB_PAYMENT_MASTER SET PAY_STATUS = 'FAIL', MOD_ID = ?, MOD_DT = NOW() WHERE PG_TID = ?`,
+                [custId, driverPayId]
+            );
+        }
 
-        // 6. 기사 취소 페널티/제한 누적 관리 (TB_USER_CANCEL_MANAGE)
+        // 6. 기사 취소 페널티/청약 규제 실행 (TB_USER_CANCEL_MANAGE)
         const [manageRows] = await connection.execute(
             'SELECT CANCEL_BUS_DRIVER_CNT FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ?',
             [custId]
         );
+        let newCnt = 1;
         if (manageRows.length > 0) {
+            newCnt = Number(manageRows[0].CANCEL_BUS_DRIVER_CNT || 0) + 1;
+        }
+
+        if (newCnt >= 10) {
             await connection.execute(
                 `UPDATE TB_USER_CANCEL_MANAGE 
-                 SET CANCEL_BUS_DRIVER_CNT = CANCEL_BUS_DRIVER_CNT + 1, MOD_ID = ?, MOD_DT = NOW() 
+                 SET CANCEL_BUS_DRIVER_CNT = ?,
+                     TRADE_RESTRICT_YN = 'Y',
+                     RESTRICT_STAT = 'Y',
+                     RESTRICT_START_DT = NOW(),
+                     RESTRICT_END_DT = DATE_ADD(NOW(), INTERVAL 7 DAY),
+                     TRADE_RESTRICT_START_DT = NOW(),
+                     TRADE_RESTRICT_END_DT = DATE_ADD(NOW(), INTERVAL 7 DAY),
+                     MOD_ID = ?, MOD_DT = NOW() 
                  WHERE CUST_ID = ?`,
-                [custId, custId]
+                [newCnt, custId, custId]
             );
         } else {
             await connection.execute(
                 `INSERT INTO TB_USER_CANCEL_MANAGE (CUST_ID, USER_TYPE, CANCEL_BUS_DRIVER_CNT, REG_ID, REG_DT, MOD_ID, MOD_DT)
-                 VALUES (?, 'DRIVER', 1, ?, NOW(), ?, NOW())`,
-                [custId, custId, custId]
+                 VALUES (?, 'DRIVER', ?, ?, NOW(), ?, NOW())
+                 ON DUPLICATE KEY UPDATE 
+                 CANCEL_BUS_DRIVER_CNT = ?, MOD_ID = ?, MOD_DT = NOW()`,
+                [custId, newCnt, custId, custId, newCnt, custId]
             );
         }
 
+        // 7. [데이터 조회] 해당 여정 정보, 버스 유형 및 고객(TRAVELER_ID) 정보 조회
+        const [reqInfoRows] = await connection.execute(
+            `SELECT r.TRAVELER_ID, r.TRIP_TITLE, b.BUS_TYPE 
+             FROM TB_AUCTION_REQ r
+             LEFT JOIN TB_AUCTION_REQ_BUS b ON r.REQ_ID = b.REQ_ID AND b.REQ_BUS_SEQ = ?
+             WHERE r.REQ_ID = ?`,
+            [reqBusSeq, reqId]
+        );
+
+        const travelerId = reqInfoRows.length > 0 ? reqInfoRows[0].TRAVELER_ID : null;
+        const tripTitle = reqInfoRows.length > 0 ? reqInfoRows[0].TRIP_TITLE : '요청하신 여행';
+        const busType = (reqInfoRows.length > 0 && reqInfoRows[0].BUS_TYPE) ? reqInfoRows[0].BUS_TYPE : '버스';
+
         await connection.commit();
-        res.json({ success: true, message: '청약 취소가 완료되었습니다.' });
+        res.json({ success: true, message: '청약 취소 및 환불 처리가 완료되었습니다.' });
+
+        // 8. [비동기 푸시 발송]
+        // A. 동일한 버스 유형을 가진 다른 버스기사들에게 입찰/청약 재오픈 푸시 발송
+        try {
+            const [otherDrivers] = await pool.execute(
+                `SELECT DISTINCT u.CUST_ID 
+                 FROM TB_USER u
+                 JOIN TB_DRIVER_DETAIL d ON u.CUST_ID = d.CUST_ID
+                 WHERE u.USER_TYPE = 'DRIVER' 
+                   AND u.CUST_ID != ? 
+                   AND (d.BUS_TYPE LIKE CONCAT('%', ?, '%') OR ? LIKE CONCAT('%', d.BUS_TYPE, '%'))`,
+                [custId, busType, busType]
+            );
+
+            const pushTitleForDrivers = '[신규 버스 청약 재입찰]';
+            const pushBodyForDrivers = `"${tripTitle}" 여행의 ${busType} 차량 청약 입찰이 새로 열렸습니다. 지금 참여해보세요!`;
+            const pushLinkForDrivers = `/app/driver/bids/opportunities`;
+
+            for (const d of otherDrivers) {
+                sendNotification(pool, {
+                    custId: d.CUST_ID,
+                    title: pushTitleForDrivers,
+                    body: pushBodyForDrivers,
+                    link: pushLinkForDrivers,
+                    type: 'SYSTEM'
+                }).catch(err => console.error(`[Push Error] 동일 버스 기사 알림 실패 (CUST_ID: ${d.CUST_ID}):`, err));
+            }
+        } catch (pushDrvErr) {
+            console.error('>>> [Push Notification Error] Failed to send other drivers push:', pushDrvErr);
+        }
+
+        // B. 고객(여행자)에게 기사 취소 및 새로운 버스 청약 대기 푸시 발송
+        if (travelerId) {
+            try {
+                const pushTitleForCust = '[배차 진행 안내]';
+                const pushBodyForCust = `"${tripTitle}" 여행의 버스 기사님의 청약 취소로 인해 새로운 버스 청약 응찰이 재진행 중입니다. 잠시만 기다려주세요.`;
+                const pushLinkForCust = `/estimate-list?reqId=${reqId}`;
+
+                sendNotification(pool, {
+                    custId: travelerId,
+                    title: pushTitleForCust,
+                    body: pushBodyForCust,
+                    link: pushLinkForCust,
+                    type: 'SYSTEM'
+                }).catch(err => console.error(`[Push Error] 고객 안내 푸시 발송 실패 (CUST_ID: ${travelerId}):`, err));
+            } catch (pushCustErr) {
+                console.error('>>> [Push Notification Error] Failed to send customer push:', pushCustErr);
+            }
+        }
+
     } catch (error) {
         if (connection) await connection.rollback();
         console.error('[Driver Cancel Bid] Error:', error);
