@@ -27,8 +27,19 @@ const DriverDashboard = () => {
     const [auctionList, setAuctionList] = useState([]);
     const [todayTrip, setTodayTrip] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [unreadCount, setUnreadCount] = useState(0);
- 
+    const location = useLocation();
+
+    useEffect(() => {
+        const queryParams = new URLSearchParams(location.search);
+        if (queryParams.get('payResult') === 'success') {
+            notify.success('결제 완료', '기사 이용료 결제가 성공적으로 완료되었습니다!');
+            navigate('/app/driver-dashboard', { replace: true });
+        } else if (queryParams.get('payError')) {
+            notify.error('결제 오류', decodeURIComponent(queryParams.get('payError')));
+            navigate('/app/driver-dashboard', { replace: true });
+        }
+    }, [location.search]);
+
     useEffect(() => {
         // FCM 토큰 수신 및 서버 저장 자동 시도
         requestFirebaseToken();
