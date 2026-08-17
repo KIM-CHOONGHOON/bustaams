@@ -228,7 +228,7 @@ async function insertPaymentCancelHistory(connection, p) {
 
 /**
  * TB_AUCTION_REQ_BUS의 개별 차량들의 DATA_STAT를 검사하여 
- * 모든 버스의 상태가 100% 동일하게 완료되었을 경우에만 TB_AUCTION_REQ 마스터 상태를 업데이트합니다.
+ * 마스터 TB_AUCTION_REQ 상태를 업데이트합니다.
  */
 async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
     const [busRows] = await connection.execute(
@@ -253,17 +253,18 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
             `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'CONFIRM', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
             [modId, reqId]
         );
-    } else if ((statusCounts['FINAL_APPROVAL_WAIT'] || 0) === totalBuses) {
+    } else if ((statusCounts['FINAL_APPROVAL_WAIT'] || 0) > 0 && (statusCounts['FINAL_APPROVAL_WAIT'] || 0) + (statusCounts['CONFIRM'] || 0) === totalBuses) {
         await connection.execute(
             `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'FINAL_APPROVAL_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
             [modId, reqId]
         );
-    } else if ((statusCounts['DRIVER_PAY_WAIT'] || 0) === totalBuses) {
+    } else if ((statusCounts['DRIVER_PAY_WAIT'] || 0) > 0 || (statusCounts['FINAL_APPROVAL_WAIT'] || 0) > 0) {
+        // 기사 결제 대기 또는 최종 승인 대기 단계 버스가 존재할 경우 마스터도 DRIVER_PAY_WAIT 이상으로 유지
         await connection.execute(
             `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'DRIVER_PAY_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
             [modId, reqId]
         );
-    } else if ((statusCounts['CUSTOMER_PAY_WAIT'] || 0) === totalBuses) {
+    } else if ((statusCounts['CUSTOMER_PAY_WAIT'] || 0) > 0) {
         await connection.execute(
             `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'CUSTOMER_PAY_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
             [modId, reqId]
@@ -293,7 +294,6 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                 console.log(`>>> [TEST PAYMENT OVERRIDE] Restoring database recorded amount to 33,000 KRW (paid: 1,100 KRW)`);
                 finalAmt = 33000;
             }
-            // 고객 단건 승인 및 결제 완료 처리 -> 상태를 'DRIVER_PAY_WAIT'으로 변경하고 고객 결제 정보를 저장합니다.
             console.log(`>>> [updateDBAfterPayment RES] Updating customer payment to DRIVER_PAY_WAIT for RES_ID: ${targetId}`);
             
             const [bidRows] = await connection.execute('SELECT REQ_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [targetId]);
@@ -331,7 +331,7 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                     pgTid: tid
                 });
 
-                // 4. TB_AUCTION_REQ 마스터 상태도 모든 버스가 완료되었을 때만 DRIVER_PAY_WAIT으로 변경
+                // 4. TB_AUCTION_REQ 마스터 상태 변경
                 await checkAndUpdateMasterStatus(connection, reqId, 'CUSTOMER');
 
                 // 5. 해당 버스 기사에게 PUSH 알림 전송
@@ -342,7 +342,6 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                 console.log(`>>> [TEST PAYMENT OVERRIDE] Restoring database recorded amount to 33,000 KRW (paid: 1,100 KRW)`);
                 finalAmt = 33000;
             }
-            // 고객 전체 승인 및 결제 완료 처리 -> 상태를 'DRIVER_PAY_WAIT'으로 변경하고 고객 결제 정보를 저장합니다.
             console.log(`>>> [updateDBAfterPayment REQ] Updating customer payment to DRIVER_PAY_WAIT for REQ_ID: ${targetId}`);
             
             // 1. TB_BUS_RESERVATION 결제 정보 적재 및 상태 전이
@@ -354,14 +353,14 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                      CUSTOMER_PAY_DT = NOW(),
                      CUSTOMER_PAY_ID = ?,
                      MOD_DT = NOW() 
-                 WHERE REQ_ID = ? AND DATA_STAT = 'CUSTOMER_PAY_WAIT'`,
+                 WHERE REQ_ID = ? AND DATA_STAT NOT IN ('FINAL_APPROVAL_WAIT', 'CONFIRM', 'DONE')`,
                 [finalAmt, tid || `PAY-CUST-${Date.now()}`, targetId]
             );
 
             // 2. TB_AUCTION_REQ_BUS 상태를 DRIVER_PAY_WAIT으로 변경
             await connection.execute(
                 `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'DRIVER_PAY_WAIT', MOD_DT = NOW() 
-                 WHERE REQ_ID = ? AND DATA_STAT = 'CUSTOMER_PAY_WAIT'`,
+                 WHERE REQ_ID = ? AND DATA_STAT NOT IN ('FINAL_APPROVAL_WAIT', 'CONFIRM', 'DONE')`,
                 [targetId]
             );
 
@@ -376,7 +375,7 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                 pgTid: tid
             });
 
-            // 4. TB_AUCTION_REQ 마스터 상태도 모든 버스가 완료되었을 때만 DRIVER_PAY_WAIT으로 변경
+            // 4. TB_AUCTION_REQ 마스터 상태 변경
             await checkAndUpdateMasterStatus(connection, targetId, 'CUSTOMER');
 
             // 5. 전체 예약 건에 연동된 기사들에게 각각 PUSH 알림 전송
