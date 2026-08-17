@@ -563,24 +563,25 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
      * POST /api/payment/mobile-return
      * 이니시스 인증 완료 후 POST 방식으로 리다이렉트되는 경로 (P_NEXT_URL)
      */
-    router.post('/mobile-return', async (req, res) => {
+    /**
+     * 이니시스 인증 완료 후 POST 방식으로 리다이렉트되는 경로 (/return, /pc-return, /mobile-return)
+     */
+    const handlePaymentReturn = async (req, res) => {
         console.log('>>> [Payment Return] Body:', req.body);
         
         // 헬퍼: HTML 응답 생성 (프론트엔드로 리다이렉트)
         const sendHtmlResponse = (msg, redirectPath) => {
-            // Referer가 있으면 해당 오리진을 사용, 없으면 프로토콜+호스트 사용
             const referer = req.get('referer');
             let frontOrigin = '';
             const hostHeader = req.get('x-forwarded-host') || req.get('host');
             
-            if (hostHeader.includes('cafe24.com')) {
+            if (hostHeader && hostHeader.includes('cafe24.com')) {
                 frontOrigin = 'https://bustaams.cafe24.com';
             } else if (referer) {
                 const url = new URL(referer);
                 frontOrigin = url.origin;
             } else {
-                // 로컬 개발 환경용 (Vite)
-                frontOrigin = `${req.get('x-forwarded-proto') || req.protocol}://${hostHeader.split(':')[0]}:5174`;
+                frontOrigin = `${req.get('x-forwarded-proto') || req.protocol}://${hostHeader ? hostHeader.split(':')[0] : 'bustaams.cafe24.com'}:5174`;
             }
 
             const finalUrl = redirectPath.startsWith('http') ? redirectPath : `${frontOrigin}${redirectPath}`;
@@ -608,7 +609,6 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                         <p class="sub">잠시 후 이동합니다...</p>
                     </div>
                     <script>
-                        // WebView 멈춤 현상 방지를 위해 alert 제거, 직접 리다이렉트
                         window.location.replace("${finalUrl}");
                     </script>
                 </body>
@@ -627,11 +627,9 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
             }
 
             try {
-                // 승인 요청 시 사용할 MID 결정 (전달받은 P_MID가 없으면 설정된 MID 사용)
                 const targetMid = P_MID || MID;
                 console.log(`>>> [Mobile Approval Request] URL: ${P_REQ_URL}, MID: ${targetMid}, TID: ${P_TID}, OID: ${P_OID}`);
 
-                // 모바일 승인 요청 (P_REQ_URL로 P_MID, P_TID 전송)
                 const approvalRes = await axios.post(P_REQ_URL, 
                     `P_MID=${targetMid}&P_TID=${P_TID}`, 
                     { 
@@ -643,14 +641,12 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                 const resultStr = iconv.decode(Buffer.from(approvalRes.data), 'euc-kr');
                 console.log('>>> [Payment Mobile Approval] Result:', resultStr);
 
-                // 결과 파싱 (P_STATUS=00&P_AMT=1000&...)
                 const resultParams = new URLSearchParams(resultStr);
                 const status = resultParams.get('P_STATUS');
                 const amt = resultParams.get('P_AMT');
                 const msg = resultParams.get('P_RMESG1');
                 const tid = resultParams.get('P_TID') || P_TID;
                 const oid = resultParams.get('P_OID') || P_OID;
-                const type = resultParams.get('P_TYPE');
 
                 if (status === '00') {
                     const connection = await pool.getConnection();
@@ -659,7 +655,6 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                         await updateDBAfterPayment(oid, connection, tid, amt);
                         await connection.commit();
 
-                        // 결제 성공 시 메인 대시보드로 화면 전환
                         const redirectPath = isDriver ? '/app/driver-dashboard?payResult=success' : '/app/customer-dashboard?payResult=success';
                         sendHtmlResponse('결제가 성공적으로 완료되었습니다.', redirectPath);
                     } catch (dbErr) {
@@ -717,7 +712,6 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                     await updateDBAfterPayment(result.MOID, connection, result.TID, result.TotPrice);
                     await connection.commit();
 
-                    // 결제 성공 시 메인 대시보드로 화면 전환
                     const redirectPath = isDriver ? '/app/driver-dashboard?payResult=success' : '/app/customer-dashboard?payResult=success';
                     sendHtmlResponse('결제가 성공적으로 완료되었습니다.', redirectPath);
                 } catch (dbErr) {
@@ -736,7 +730,11 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
             console.error('PC Approval Critical Error:', err);
             res.status(500).send('결제 승인 처리 중 오류가 발생했습니다.');
         }
-    });
+    };
+
+    router.post('/return', handlePaymentReturn);
+    router.post('/pc-return', handlePaymentReturn);
+    router.post('/mobile-return', handlePaymentReturn);
 
     return router;
 };
