@@ -172,11 +172,58 @@ module.exports = function createPaymentRouter(pool, app) {
                     [reqId, unitSeq]
                 );
 
-                // 3. TB_AUCTION_REQ 마스터 상태도 DRIVER_PAY_WAIT으로 변경
-                await connection.execute(
-                    `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'DRIVER_PAY_WAIT', MOD_DT = NOW() WHERE REQ_ID = ?`,
-                    [reqId]
-                );
+/**
+ * TB_AUCTION_REQ_BUS의 개별 차량들의 DATA_STAT를 검사하여 
+ * 모든 버스의 상태가 동일하게 완료되었을 경우에만 TB_AUCTION_REQ 마스터 상태를 업데이트합니다.
+ */
+async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
+    const [busRows] = await connection.execute(
+        `SELECT DATA_STAT, COUNT(*) as cnt 
+         FROM TB_AUCTION_REQ_BUS 
+         WHERE REQ_ID = ? 
+         GROUP BY DATA_STAT`,
+        [reqId]
+    );
+
+    const statusCounts = {};
+    let totalBuses = 0;
+    for (const r of busRows) {
+        statusCounts[r.DATA_STAT] = Number(r.cnt);
+        totalBuses += Number(r.cnt);
+    }
+
+    if (totalBuses === 0) return;
+
+    if (statusCounts['CONFIRM'] === totalBuses) {
+        await connection.execute(
+            `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'CONFIRM', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
+            [modId, reqId]
+        );
+    } else if ((statusCounts['FINAL_APPROVAL_WAIT'] || 0) === totalBuses) {
+        await connection.execute(
+            `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'FINAL_APPROVAL_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
+            [modId, reqId]
+        );
+    } else if ((statusCounts['DRIVER_PAY_WAIT'] || 0) === totalBuses) {
+        await connection.execute(
+            `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'DRIVER_PAY_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
+            [modId, reqId]
+        );
+    } else if ((statusCounts['CUSTOMER_PAY_WAIT'] || 0) === totalBuses) {
+        await connection.execute(
+            `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'CUSTOMER_PAY_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
+            [modId, reqId]
+        );
+    } else {
+        await connection.execute(
+            `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'AUCTION', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
+            [modId, reqId]
+        );
+    }
+}
+
+                // 3. TB_AUCTION_REQ 마스터 상태도 모든 버스가 완료되었을 때만 DRIVER_PAY_WAIT으로 변경
+                await checkAndUpdateMasterStatus(connection, reqId, 'CUSTOMER');
 
                 // 4. 해당 버스 기사에게 PUSH 알림 전송
                 await sendDriverPaymentPushNotification(connection, reqId, unitSeq, targetId);
@@ -202,18 +249,15 @@ module.exports = function createPaymentRouter(pool, app) {
                 [finalAmt, tid || `PAY-CUST-${Date.now()}`, targetId]
             );
 
-            // 2. TB_AUCTION_REQ 상태를 DRIVER_PAY_WAIT으로 변경
-            await connection.execute(
-                `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'DRIVER_PAY_WAIT', MOD_DT = NOW() WHERE REQ_ID = ?`,
-                [targetId]
-            );
-
-            // 3. TB_AUCTION_REQ_BUS 상태를 DRIVER_PAY_WAIT으로 변경
+            // 2. TB_AUCTION_REQ_BUS 상태를 DRIVER_PAY_WAIT으로 변경
             await connection.execute(
                 `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'DRIVER_PAY_WAIT', MOD_DT = NOW() 
                  WHERE REQ_ID = ? AND DATA_STAT = 'CUSTOMER_PAY_WAIT'`,
                 [targetId]
             );
+
+            // 3. TB_AUCTION_REQ 마스터 상태도 모든 버스가 완료되었을 때만 DRIVER_PAY_WAIT으로 변경
+            await checkAndUpdateMasterStatus(connection, targetId, 'CUSTOMER');
 
             // 4. 전체 예약 건에 연동된 기사들에게 각각 PUSH 알림 전송
             const [bids] = await connection.execute(
@@ -264,11 +308,8 @@ module.exports = function createPaymentRouter(pool, app) {
                     );
                 }
 
-                // 4. TB_AUCTION_REQ 마스터 상태도 'FINAL_APPROVAL_WAIT'로 변경
-                await connection.execute(
-                    `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'FINAL_APPROVAL_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
-                    [driverId, reqId]
-                );
+                // 4. TB_AUCTION_REQ 마스터 상태도 모든 버스가 결제 완료되었을 때만 'FINAL_APPROVAL_WAIT'로 변경
+                await checkAndUpdateMasterStatus(connection, reqId, driverId);
 
                 // 5. TB_MOM_MEMBER 사용량(USE_CNT) 증가 처리
                 const yyyyMM = now.getFullYear().toString() + String(now.getMonth() + 1).padStart(2, '0');
