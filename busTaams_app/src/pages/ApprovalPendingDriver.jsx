@@ -331,13 +331,22 @@ const ApprovalPendingDriver = () => {
 
                                 <div className="relative z-10 flex flex-col gap-3">
                                     {activeTab === 'driver_pay' ? (
-                                        <button 
-                                            onClick={() => handleDriverPay(bid)}
-                                            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-black text-sm active:scale-95 transition-all shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2"
-                                        >
-                                            <span className="material-symbols-outlined text-lg">payment</span>
-                                            데이터 이용료 결재 및 배차 확정
-                                        </button>
+                                        <div className="flex flex-col gap-3">
+                                            <button 
+                                                onClick={() => handleDriverPay(bid)}
+                                                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-black text-sm active:scale-95 transition-all shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2"
+                                            >
+                                                <span className="material-symbols-outlined text-lg">payment</span>
+                                                데이터 이용료 결재 및 배차 확정
+                                            </button>
+                                            <button 
+                                                onClick={() => handleCancelBid(bid.id)}
+                                                className="w-full bg-red-50 text-red-600 py-3.5 rounded-xl font-black text-xs italic uppercase tracking-[0.1em] hover:bg-red-100 hover:text-red-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2 border border-red-100"
+                                            >
+                                                <span className="material-symbols-outlined text-[16px]">cancel</span>
+                                                청약 취소하기
+                                            </button>
+                                        </div>
                                     ) : activeTab === 'final_approval_wait' ? (
                                         <div className="w-full bg-emerald-50 border border-emerald-200 text-emerald-700 py-4 rounded-xl font-black text-sm flex items-center justify-center gap-2">
                                             <span className="material-symbols-outlined text-lg">verified</span>

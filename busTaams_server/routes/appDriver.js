@@ -2544,9 +2544,10 @@ router.post('/cancel-bid/:id', authenticateToken, async (req, res) => {
         if (uRows.length === 0) throw new Error('사용자를 찾을 수 없습니다.');
         const custId = uRows[0].CUST_ID;
 
-        // 2. 예약(입찰) 정보 확인 (본인의 입찰 대기중인 건인지 확인)
+        // 2. 예약(입찰) 정보 확인 (CUSTOMER_PAY_WAIT 또는 DRIVER_PAY_WAIT 상태 대상)
         const [resRows] = await connection.execute(
-            'SELECT REQ_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ? AND DRIVER_ID = ? AND DATA_STAT = \'CUSTOMER_PAY_WAIT\'',
+            `SELECT REQ_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION 
+             WHERE RES_ID = ? AND DRIVER_ID = ? AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT')`,
             [resId, custId]
         );
         if (resRows.length === 0) {
@@ -2556,21 +2557,41 @@ router.post('/cancel-bid/:id', authenticateToken, async (req, res) => {
 
         // 3. TB_BUS_RESERVATION 상태 변경 (DRIVER_CANCEL)
         await connection.execute(
-            'UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'DRIVER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE RES_ID = ?',
+            "UPDATE TB_BUS_RESERVATION SET DATA_STAT = 'DRIVER_CANCEL', MOD_ID = ?, MOD_DT = NOW() WHERE RES_ID = ?",
             [custId, resId]
         );
 
-        // 4. TB_AUCTION_REQ_BUS 슬롯을 다시 \'AUCTION\' 상태로 돌려놓음 (다른 기사가 입찰할 수 있도록)
+        // 4. TB_AUCTION_REQ_BUS 슬롯을 다시 'AUCTION' 상태로 돌려놓음 (다른 기사가 입찰할 수 있도록)
         await connection.execute(
-            'UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'AUCTION\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?',
+            "UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'AUCTION', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?",
             [custId, reqId, reqBusSeq]
         );
 
-        // 5. 마스터 TB_AUCTION_REQ 상태도 \'AUCTION\'으로 되돌려놓음 (슬롯 하나가 비었으므로)
+        // 5. 마스터 TB_AUCTION_REQ 상태도 'AUCTION'으로 되돌려놓음 (슬롯 하나가 비었으므로)
         await connection.execute(
-            'UPDATE TB_AUCTION_REQ SET DATA_STAT = \'AUCTION\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?',
+            "UPDATE TB_AUCTION_REQ SET DATA_STAT = 'AUCTION', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?",
             [custId, reqId]
         );
+
+        // 6. 기사 취소 페널티/제한 누적 관리 (TB_USER_CANCEL_MANAGE)
+        const [manageRows] = await connection.execute(
+            'SELECT CANCEL_BUS_DRIVER_CNT FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ?',
+            [custId]
+        );
+        if (manageRows.length > 0) {
+            await connection.execute(
+                `UPDATE TB_USER_CANCEL_MANAGE 
+                 SET CANCEL_BUS_DRIVER_CNT = CANCEL_BUS_DRIVER_CNT + 1, MOD_ID = ?, MOD_DT = NOW() 
+                 WHERE CUST_ID = ?`,
+                [custId, custId]
+            );
+        } else {
+            await connection.execute(
+                `INSERT INTO TB_USER_CANCEL_MANAGE (CUST_ID, USER_TYPE, CANCEL_BUS_DRIVER_CNT, REG_ID, REG_DT, MOD_ID, MOD_DT)
+                 VALUES (?, 'DRIVER', 1, ?, NOW(), ?, NOW())`,
+                [custId, custId, custId]
+            );
+        }
 
         await connection.commit();
         res.json({ success: true, message: '청약 취소가 완료되었습니다.' });
