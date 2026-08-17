@@ -38,18 +38,44 @@ export const requestFirebaseToken = async () => {
     return window.appFcmToken;
   }
 
+  // 네이티브 앱 인터페이스 호출 시도 (안드로이드/iOS WebView 전용)
+  if (typeof window !== 'undefined') {
+    if (window.Android && typeof window.Android.getFcmToken === 'function') {
+      try {
+        const appToken = window.Android.getFcmToken();
+        if (appToken) {
+          window.appFcmToken = appToken;
+          await sendTokenToServer(appToken);
+          return appToken;
+        }
+      } catch (e) { console.log('[Native App Call Error]:', e); }
+    }
+  }
+
   // 2. 웹 브라우저/웹뷰 알림 API 방어
   if (typeof window === 'undefined' || !('Notification' in window)) {
-    console.log('이 브라우저/환경에서는 알림 서비스를 지원하지 않습니다.');
+    console.log('이 브라우저/환경에서는 Notification 알림 서비스를 지원하지 않습니다.');
     return null;
   }
 
   try {
     const permission = await Notification.requestPermission();
     if (permission === 'granted') {
+      let swRegistration = null;
+      if ('serviceWorker' in navigator) {
+        try {
+          swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+          console.log('[FCM] ServiceWorker registered successfully:', swRegistration.scope);
+        } catch (swErr) {
+          console.warn('[FCM] ServiceWorker register warning:', swErr.message);
+        }
+      }
+
       const token = await getToken(messaging, {
         vapidKey: VAPID_KEY,
+        ...(swRegistration && { serviceWorkerRegistration: swRegistration })
       });
+
       if (token) {
         console.log('[FCM Token Received]:', token);
         await sendTokenToServer(token);
@@ -58,7 +84,7 @@ export const requestFirebaseToken = async () => {
         console.log('FCM 토큰을 생성할 수 없습니다. 권한 및 Firebase 설정을 확인하세요.');
       }
     } else {
-      console.log('알림 권한이 거부되었습니다.');
+      console.log('알림 권한이 허용되지 않았습니다. 현재 권한 상태:', permission);
     }
   } catch (error) {
     console.error('FCM 토큰 가져오기 오류:', error);
