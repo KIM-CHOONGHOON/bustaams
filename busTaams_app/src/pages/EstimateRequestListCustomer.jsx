@@ -316,7 +316,7 @@ const EstimateRequestListCustomer = () => {
                                         </button>
                                     ) : typeParam === 'driver_pay' ? (
                                         <button 
-                                            onClick={() => navigate(`/estimate-list?reqId=${req.reqUuid}`)}
+                                            onClick={() => navigate(`/estimate-driver-pay-detail?reqId=${req.reqUuid}`)}
                                             className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-black text-sm active:scale-95 transition-all shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2"
                                         >
                                             <span className="material-symbols-outlined text-lg">directions_bus</span>

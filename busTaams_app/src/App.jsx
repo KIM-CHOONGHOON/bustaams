@@ -46,6 +46,7 @@ import CardRegisterDriver from './pages/CardRegisterDriver';
 
 // Customer Screens
 import EstimateListCustomer from './pages/EstimateListCustomer';
+import EstimateDriverPayDetailCustomer from './pages/EstimateDriverPayDetailCustomer';
 import EstimateRequestListCustomer from './pages/EstimateRequestListCustomer';
 import EstimateDetailCustomer from './pages/EstimateDetailCustomer';
 import ApprovalListCustomer from './pages/ApprovalListCustomer';
@@ -158,6 +159,7 @@ function App() {
         <Route path="/cancel-reservation/:id" element={<CancelReservation />} />
         <Route path="/user-profile" element={<ProfileCustomer />} />
         <Route path="/estimate-list" element={<EstimateListCustomer />} />
+        <Route path="/estimate-driver-pay-detail" element={<EstimateDriverPayDetailCustomer />} />
         <Route path="/estimate-request-list" element={<EstimateRequestListCustomer />} />
         <Route path="/estimate-detail/:id" element={<EstimateDetailCustomer />} />
         <Route path="/approval-list" element={<ApprovalListCustomer />} />
