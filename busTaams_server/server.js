@@ -5140,16 +5140,26 @@ app.put('/api/traveler-quote-request-details/bid', async (req, res) => {
                 [resId, reqId, reqBusSeq, travelerId, driverId, busId || null, bidPrice]
             );
 
-            // 3. 상위 상태 변경: TB_AUCTION_REQ_BUS 및 TB_AUCTION_REQ 상태를 'CUSTOMER_PAY_WAIT'으로 변경
+            // 3. 상위 상태 변경: TB_AUCTION_REQ_BUS 업데이트 후 모든 차량 승인 완료 시 TB_AUCTION_REQ 상태를 'CUSTOMER_PAY_WAIT'으로 변경
             await connection.execute(
                 "UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'CUSTOMER_PAY_WAIT' WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT = 'AUCTION'",
                 [reqId, reqBusSeq]
             );
 
-            await connection.execute(
-                "UPDATE TB_AUCTION_REQ SET DATA_STAT = 'CUSTOMER_PAY_WAIT' WHERE REQ_ID = ? AND DATA_STAT = 'AUCTION'",
+            const [cntAggRows] = await connection.execute(
+                `SELECT COUNT(*) AS total,
+                        SUM(CASE WHEN DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'CONFIRM', 'DONE') THEN 1 ELSE 0 END) AS approvedCnt
+                   FROM TB_AUCTION_REQ_BUS
+                  WHERE REQ_ID = ?`,
                 [reqId]
             );
+            const cntAgg = cntAggRows[0];
+            if (Number(cntAgg.total) > 0 && Number(cntAgg.approvedCnt) === Number(cntAgg.total)) {
+                await connection.execute(
+                    "UPDATE TB_AUCTION_REQ SET DATA_STAT = 'CUSTOMER_PAY_WAIT' WHERE REQ_ID = ? AND DATA_STAT = 'AUCTION'",
+                    [reqId]
+                );
+            }
         }
 
         await connection.commit();

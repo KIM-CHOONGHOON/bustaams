@@ -1367,13 +1367,16 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
         );
         console.log(`[BID_PROCESS] Reservation inserted successfully for resId: ${resId}`);
 
-        // 5. 전체 차량 입찰 완료 여부 확인 및 마스터 상태 업데이트
-        const [pendingRows] = await connection.execute(
-            'SELECT COUNT(*) as count FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = ? AND DATA_STAT = "AUCTION"',
+        // 5. 전체 차량 청약 승인 완료 여부 확인 및 마스터 상태 업데이트
+        const [cntAggRows] = await connection.execute(
+            `SELECT COUNT(*) AS total,
+                    SUM(CASE WHEN DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'CONFIRM', 'DONE') THEN 1 ELSE 0 END) AS approvedCnt
+               FROM TB_AUCTION_REQ_BUS
+              WHERE REQ_ID = ?`,
             [reqId]
         );
-
-        if (pendingRows[0].count === 0) {
+        const cntAgg = cntAggRows[0];
+        if (Number(cntAgg.total) > 0 && Number(cntAgg.approvedCnt) === Number(cntAgg.total)) {
             await connection.execute(
                 "UPDATE TB_AUCTION_REQ SET DATA_STAT = 'CUSTOMER_PAY_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?",
                 [custId, reqId]
@@ -1477,19 +1480,17 @@ router.post('/pay', authenticateToken, async (req, res) => {
             return res.status(404).json({ success: false, error: '결제 대상 청약 건을 찾을 수 없습니다.' });
         }
 
-        // 4. TB_AUCTION_REQ_BUS 및 TB_AUCTION_REQ 상태도 'FINAL_APPROVAL_WAIT'로 변경
+        // 4. TB_AUCTION_REQ_BUS 및 TB_AUCTION_REQ 상태 변경 (모든 차량 승인 완료 시 마스터 상태 갱신)
+        let targetReqId = reqId;
         if (resId) {
             const [bRows] = await connection.execute('SELECT REQ_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [resId]);
             if (bRows.length > 0) {
                 const { REQ_ID: rId, REQ_BUS_SEQ: uSeq } = bRows[0];
+                targetReqId = rId;
                 await connection.execute(
                     `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'FINAL_APPROVAL_WAIT', MOD_ID = ?, MOD_DT = NOW() 
                      WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?`,
                     [custId, rId, uSeq]
-                );
-                await connection.execute(
-                    `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'FINAL_APPROVAL_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
-                    [custId, rId]
                 );
             }
         } else if (reqId) {
@@ -1498,10 +1499,23 @@ router.post('/pay', authenticateToken, async (req, res) => {
                  WHERE REQ_ID = ? AND DATA_STAT = 'DRIVER_PAY_WAIT'`,
                 [custId, reqId]
             );
-            await connection.execute(
-                `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'FINAL_APPROVAL_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
-                [custId, reqId]
+        }
+
+        if (targetReqId) {
+            const [cntAggRows] = await connection.execute(
+                `SELECT COUNT(*) AS total,
+                        SUM(CASE WHEN DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'CONFIRM', 'DONE') THEN 1 ELSE 0 END) AS approvedCnt
+                   FROM TB_AUCTION_REQ_BUS
+                  WHERE REQ_ID = ?`,
+                [targetReqId]
             );
+            const cntAgg = cntAggRows[0];
+            if (Number(cntAgg.total) > 0 && Number(cntAgg.approvedCnt) === Number(cntAgg.total)) {
+                await connection.execute(
+                    `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'CUSTOMER_PAY_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
+                    [custId, targetReqId]
+                );
+            }
         }
 
         // 5. TB_MOM_MEMBER 사용량(USE_CNT) 증가 처리
