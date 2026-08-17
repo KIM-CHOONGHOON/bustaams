@@ -134,6 +134,32 @@ const EstimateRequestListCustomer = () => {
             notify.error('오류 발생', '승인 처리 중 오류가 발생했습니다.');
         }
     };
+    const handleCancelRequest = async (reqUuid) => {
+        const confirmed = await notify.confirm(
+            '전체 청약 요청 취소',
+            '청약을 취소하시겠습니까?\n결제된 대금(고객 결제 및 버스기사 데이터이용료)은 카드 결제 취소(환불) 처리되며, 취소 규칙에 따라 일정 기간 신규 청약이 제한될 수 있습니다.'
+        );
+        if (!confirmed) return;
+
+        try {
+            const res = await api.post('/app/customer/cancel-request', {
+                reqId: reqUuid,
+                cancelCode: '06',
+                cancelReasonText: '최종 승인대기 목록에서 사용자에 의한 전체 청약 취소'
+            });
+
+            if (res.success) {
+                notify.success('취소 완료', '전체 청약 취소 및 환불 처리가 완료되었습니다.');
+                window.location.reload();
+            } else {
+                notify.error('취소 실패', res.error || '취소 처리 중 오류가 발생했습니다.');
+            }
+        } catch (err) {
+            console.error('Cancel request error:', err);
+            const errorMsg = err.response?.data?.error || err.message || '서버 통신 오류가 발생했습니다.';
+            notify.error('오류 발생', errorMsg);
+        }
+    };
 
     return (
         <div className="bg-[#F8FAFC] text-slate-800 min-h-screen pb-32 font-body">
@@ -299,13 +325,22 @@ const EstimateRequestListCustomer = () => {
 
                                 <div className="mt-8 flex gap-3">
                                     {typeParam === 'final_approval' ? (
-                                        <button 
-                                            onClick={() => handleFinalApprove(req.reqUuid, req.tripTitle)}
-                                            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-xl font-black text-sm active:scale-95 transition-all shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2"
-                                        >
-                                            <span className="material-symbols-outlined text-lg">verified</span>
-                                            <span>최종 승인하기 (예약 확정)</span>
-                                        </button>
+                                        <div className="flex flex-col sm:flex-row gap-3 w-full">
+                                            <button 
+                                                onClick={() => handleFinalApprove(req.reqUuid, req.tripTitle)}
+                                                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-xl font-black text-sm active:scale-95 transition-all shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2"
+                                            >
+                                                <span className="material-symbols-outlined text-lg">verified</span>
+                                                <span>최종 승인하기 (예약 확정)</span>
+                                            </button>
+                                            <button 
+                                                onClick={() => handleCancelRequest(req.reqUuid)}
+                                                className="bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 px-6 py-4 rounded-xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2"
+                                            >
+                                                <span className="material-symbols-outlined text-lg">cancel</span>
+                                                <span>전체 청약 취소</span>
+                                            </button>
+                                        </div>
                                     ) : typeParam === 'customer_pay' || typeParam === 'waiting' ? (
                                         <button 
                                             onClick={() => navigate(`/approval-list?reqId=${req.reqUuid}`)}

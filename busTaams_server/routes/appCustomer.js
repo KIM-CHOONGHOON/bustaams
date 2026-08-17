@@ -2188,7 +2188,24 @@ router.post('/auction-req', authenticateToken, async (req, res) => {
             await connection.rollback();
             return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
         }
+
         const custId = uRows[0].CUST_ID;
+
+        // 고객 취소 규정에 따른 신규 청약 제한 검사 (TB_USER_CANCEL_MANAGE)
+        const [restrictRows] = await connection.execute(
+            `SELECT TRADE_RESTRICT_YN, TRADE_RESTRICT_END_DT 
+             FROM TB_USER_CANCEL_MANAGE 
+             WHERE CUST_ID = ? AND TRADE_RESTRICT_YN = 'Y' AND TRADE_RESTRICT_END_DT > NOW()`,
+            [custId]
+        );
+        if (restrictRows.length > 0) {
+            await connection.rollback();
+            const endDtStr = restrictRows[0].TRADE_RESTRICT_END_DT ? new Date(restrictRows[0].TRADE_RESTRICT_END_DT).toLocaleString('ko-KR') : '';
+            return res.status(403).json({
+                success: false,
+                error: `청약 취소 규정(페널티)에 의해 신규 청약 신청이 제한된 상태입니다. (제한 해제 일시: ${endDtStr})`
+            });
+        }
 
         // 이용 제한 확인
         const [restrictionRows] = await connection.execute(`
