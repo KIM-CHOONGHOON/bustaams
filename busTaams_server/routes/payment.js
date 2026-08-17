@@ -531,10 +531,12 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                 .update(SIGN_KEY)
                 .digest('hex');
 
-            const host = req.get('x-forwarded-host') || req.get('host');
+            const host = req.get('x-forwarded-host') || req.get('host') || 'bustaams.cafe24.com';
             const protocol = host.includes('cafe24.com') ? 'https' : (req.get('x-forwarded-proto') || req.protocol);
-            // P_NEXT_URL은 반드시 백엔드 API 주소여야 함 (이니시스 POST 수신용)
-            const returnUrl = `${protocol}://${host}/api/payment/mobile-return`;
+            // P_NEXT_URL은 반드시 백엔드 HTTPS API 주소여야 함 (이니시스 POST 수신용)
+            const returnUrl = host.includes('cafe24.com') 
+                ? 'https://bustaams.cafe24.com/api/payment/mobile-return' 
+                : `${protocol}://${host}/api/payment/mobile-return`;
 
             const responseData = {
                 mid: MID,
@@ -550,7 +552,7 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                 returnUrl: returnUrl
             };
 
-            console.log('>>> [Payment Ready] Success response data prepared');
+            console.log('>>> [Payment Ready] Success response data prepared:', responseData);
             res.json(responseData);
         } catch (err) {
             console.error('>>> [Payment Ready] Critical Error:', err);
@@ -572,18 +574,21 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
         const sendHtmlResponse = (msg, redirectPath) => {
             const referer = req.get('referer');
             let frontOrigin = '';
-            const hostHeader = req.get('x-forwarded-host') || req.get('host');
+            const hostHeader = req.get('x-forwarded-host') || req.get('host') || 'bustaams.cafe24.com';
             
-            if (hostHeader && hostHeader.includes('cafe24.com')) {
+            if (hostHeader.includes('cafe24.com')) {
                 frontOrigin = 'https://bustaams.cafe24.com';
             } else if (referer) {
                 const url = new URL(referer);
                 frontOrigin = url.origin;
             } else {
-                frontOrigin = `${req.get('x-forwarded-proto') || req.protocol}://${hostHeader ? hostHeader.split(':')[0] : 'bustaams.cafe24.com'}:5174`;
+                frontOrigin = `${req.get('x-forwarded-proto') || req.protocol}://${hostHeader.split(':')[0]}:5174`;
             }
 
-            const finalUrl = redirectPath.startsWith('http') ? redirectPath : `${frontOrigin}${redirectPath}`;
+            const ts = Date.now();
+            const sep = redirectPath.includes('?') ? '&' : '?';
+            const pathWithTs = `${redirectPath}${sep}t=${ts}`;
+            const finalUrl = pathWithTs.startsWith('http') ? pathWithTs : `${frontOrigin}${pathWithTs}`;
 
             res.send(`
                 <!DOCTYPE html>

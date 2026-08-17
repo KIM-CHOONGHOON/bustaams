@@ -2,17 +2,18 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>busTaams | Mobility Solutions</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>전세 버스 영업 대행 서비스.</title>
+    <meta property="og:title" content="전세 버스 영업 대행 서비스." />
     <!-- PWA Settings -->
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="icon" type="image/png" href="/icon-512.png" />
+    <link rel="manifest" href="/app/manifest.json" />
+    <link rel="icon" type="image/png" href="/app/icon-512.png" />
     <meta name="theme-color" content="#0052cc" />
-    <link rel="apple-touch-icon" href="/icon-512.png" />
+    <link rel="apple-touch-icon" href="/app/icon-512.png" />
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
+          navigator.serviceWorker.register('/app/sw.js')
             .then(registration => {
               console.log('App SW Registered');
               
@@ -44,8 +45,8 @@
     <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
     <!-- KG Inicis Standard Pay SDK -->
     <script src="https://stdpay.inicis.com/stdjs/INIStdPay.js" charset="UTF-8"></script>
-    <script type="module" crossorigin src="/assets/index-BI1xFzKQ.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-riEoVdUS.css">
+    <script type="module" crossorigin src="/app/assets/index-DLUEvEAn.js"></script>
+    <link rel="stylesheet" crossorigin href="/app/assets/index-CwowRDlV.css">
   </head>
   <body class="bg-background font-body text-on-background min-h-screen">
     <div id="root"></div>

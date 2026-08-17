@@ -15,8 +15,8 @@ for (const k in envConfig) {
     process.env[k] = envConfig[k];
 }
 
-const apiKey = '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';
-console.log('Testing with key (-- version):', apiKey.substring(0, 25) + '...');
+const apiKey = process.env.OPENAI_API_KEY || '';
+console.log('Testing with key:', apiKey ? apiKey.substring(0, 10) + '...' : 'NONE');
 
 if (!apiKey) {
     console.error('API Key is empty.');

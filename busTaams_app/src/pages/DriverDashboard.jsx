@@ -27,6 +27,7 @@ const DriverDashboard = () => {
     const [auctionList, setAuctionList] = useState([]);
     const [todayTrip, setTodayTrip] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [unreadCount, setUnreadCount] = useState(0);
     const location = useLocation();
 
     useEffect(() => {
