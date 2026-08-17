@@ -615,14 +615,7 @@ const ApprovalListCustomer = () => {
                                                             <span className="material-symbols-outlined text-sm">published_with_changes</span>
                                                             차량 변경요청
                                                         </button>
-                                                        {unit.unitStat !== 'TRAVELER_CANCEL' && unit.unitStat !== 'CONFIRM' && (
-                                                            <button
-                                                                onClick={() => handleCancelBus(unit.unitSeq)}
-                                                                className="w-full py-2 text-[10px] font-black text-error border border-error/10 rounded-xl hover:bg-error/5 transition-all active:scale-95 uppercase tracking-widest btn-secondary"
-                                                            >
-                                                                이 차량 청약 요청 취소
-                                                            </button>
-                                                        )}
+                                                        {/* 이 차량 청약 요청 취소 버튼 비활성화/제거 */}
                                                     </div>
                                                 </div>
                                             ) : (
@@ -727,14 +720,7 @@ const ApprovalListCustomer = () => {
                                                                         차량 변경요청
                                                                     </button>
 
-                                                                    {unit.unitStat !== 'TRAVELER_CANCEL' && unit.unitStat !== 'CONFIRM' && (
-                                                                        <button
-                                                                            onClick={() => handleCancelBus(unit.unitSeq)}
-                                                                            className="w-full py-2 text-[10px] font-black text-slate-400 hover:text-error transition-all active:scale-95 uppercase tracking-widest"
-                                                                        >
-                                                                            이 차량 청약 요청 취소
-                                                                        </button>
-                                                                    )}
+                                                                    {/* 이 차량 청약 요청 취소 버튼 제거 */}
                                                                 </div>
                                                             </div>
                                                         </div>
