@@ -1,10 +1,44 @@
-/**
- * 버스기사 청약 취소 — TB_BUS_RESERVATION·TB_AUCTION_REQ(_BUS)·취소 관리·이력·파일
- * — TB_AUCTION_REQ_BUS 해당 슬롯 `BUS_CANCEL`, 마스터 TB_AUCTION_REQ `AUCTION` 복구.
- */
-
+const axios = require('axios');
+const crypto = require('crypto');
 const { allocateSequentialFileIds } = require('./allocateFileIds');
 const { orgFileNmAndExt } = require('./bt_common_utils');
+
+// 💰 이니시스 카드 결제 취소 (환불) 요청 헬퍼 함수
+async function cancelInicisPayment({ tid, msg, clientIp }) {
+    try {
+        const mid = process.env.INICIS_MID || 'INIpayTest';
+        const apiKey = process.env.INICIS_BILL_API_KEY || 'rKnPljRn5m6J9Mzz';
+        const timestamp = new Date().toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
+
+        const type = 'Refund';
+        const paymethod = 'Card';
+        const hashDataStr = apiKey + type + paymethod + timestamp + (clientIp || '127.0.0.1') + mid + tid;
+        const hashData = crypto.createHash('sha256').update(hashDataStr).digest('hex');
+
+        const params = {
+            type,
+            paymethod,
+            timestamp,
+            clientIp: clientIp || '127.0.0.1',
+            mid,
+            tid,
+            msg: msg || '기사 청약 취소 (환불)',
+            hashData
+        };
+
+        const response = await axios.post('https://iniapi.inicis.com/api/v1/refund', params, {
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log('>>> [Inicis Driver Cancel Refund Response]:', response.data);
+        return response.data;
+    } catch (err) {
+        console.error('>>> [Inicis Driver Cancel Refund Error]:', err.message);
+        return null;
+    }
+}
 
 /** 누적 허용: 10회까지(11회째부터 거절). 스냅샷·클램프에 동일 적용. */
 /** const MAX_DRIVER_BID_CANCEL_ACCUM = 10;
@@ -138,17 +172,45 @@ async function executeDriverBidCancellation(connection, bucket, p) {
     }
 
     const [resRows] = await connection.execute(
-        `SELECT RES_ID, REQ_ID, REQ_BUS_SEQ, DATA_STAT, TRAVELER_ID, BUS_ID, DRIVER_ID
+        `SELECT RES_ID, REQ_ID, REQ_BUS_SEQ, DATA_STAT, TRAVELER_ID, BUS_ID, DRIVER_ID,
+                CUSTOMER_PAY_STAT, CUSTOMER_PAY_ID, CUSTOMER_PAY_AMT,
+                DRIVER_PAY_STAT, DRIVER_PAY_ID, DRIVER_PAY_AMT
            FROM TB_BUS_RESERVATION
           WHERE RES_ID = ? AND REQ_ID = ? AND REQ_BUS_SEQ = ?
             AND DRIVER_ID = ?
-            AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'CONFIRM')
+            AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'CONFIRM')
           LIMIT 1
           FOR UPDATE`,
         [resId, reqId, reqBusSeq, driverCustId]
     );
     if (!resRows[0]) {
         return {ok: false, status: 409, code: 'NOT_BIDDING_OR_CONFIRM', message: MSGS.NOT_BIDDING_OR_CONFIRM};
+    }
+
+    const targetRes = resRows[0];
+
+    // 💰 결제 완료된 카드 건이 있을 경우 PG 카드 승인 취소 연동
+    if (targetRes.CUSTOMER_PAY_STAT === 'Y' && targetRes.CUSTOMER_PAY_ID) {
+        await cancelInicisPayment({
+            tid: targetRes.CUSTOMER_PAY_ID,
+            msg: '기사 청약 취소로 인한 고객 결제 환불',
+            clientIp: '127.0.0.1'
+        });
+        await connection.execute(
+            `UPDATE TB_BUS_RESERVATION SET CUSTOMER_PAY_STAT = 'C', CUSTOMER_REFUND_DT = NOW(), CUSTOMER_REFUND_AMT = ? WHERE RES_ID = ?`,
+            [targetRes.CUSTOMER_PAY_AMT || 0, resId]
+        );
+    }
+    if (targetRes.DRIVER_PAY_STAT === 'Y' && targetRes.DRIVER_PAY_ID) {
+        await cancelInicisPayment({
+            tid: targetRes.DRIVER_PAY_ID,
+            msg: '기사 청약 취소로 인한 이용료 환불',
+            clientIp: '127.0.0.1'
+        });
+        await connection.execute(
+            `UPDATE TB_BUS_RESERVATION SET DRIVER_PAY_STAT = 'C', DRIVER_REFUND_DT = NOW(), DRIVER_REFUND_AMT = ? WHERE RES_ID = ?`,
+            [targetRes.DRIVER_PAY_AMT || 0, resId]
+        );
     }
 
     const [uRes] = await connection.execute(
@@ -158,7 +220,7 @@ async function executeDriverBidCancellation(connection, bucket, p) {
                 MOD_ID = ?
           WHERE RES_ID = ? AND REQ_ID = ? AND REQ_BUS_SEQ = ?
             AND DRIVER_ID = ?
-            AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'CONFIRM')`,
+            AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'CONFIRM')`,
         [modId, resId, reqId, reqBusSeq, driverCustId]
     );
     if (uRes.affectedRows !== 1) {
