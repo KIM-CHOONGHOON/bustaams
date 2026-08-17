@@ -1656,13 +1656,13 @@ router.get('/bids/waiting', authenticateToken, async (req, res) => {
         if (uRows.length === 0) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
         const custId = uRows[0].CUST_ID;
 
-        let statusFilter = "r.DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT')";
+        let statusFilter = "b.DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT')";
         if (tab === 'customer_wait') {
-            statusFilter = "r.DATA_STAT = 'CUSTOMER_PAY_WAIT'";
+            statusFilter = "b.DATA_STAT = 'CUSTOMER_PAY_WAIT'";
         } else if (tab === 'driver_pay') {
-            statusFilter = "r.DATA_STAT = 'DRIVER_PAY_WAIT'";
+            statusFilter = "b.DATA_STAT = 'DRIVER_PAY_WAIT'";
         } else if (tab === 'final_approval_wait') {
-            statusFilter = "r.DATA_STAT = 'FINAL_APPROVAL_WAIT'";
+            statusFilter = "b.DATA_STAT = 'FINAL_APPROVAL_WAIT'";
         }
 
         const [rows] = await pool.execute(`
