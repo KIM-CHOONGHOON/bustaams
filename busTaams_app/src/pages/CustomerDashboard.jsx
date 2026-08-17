@@ -6,6 +6,7 @@ import { notify } from '../utils/toast';
 import BottomNavCustomer from '../components/BottomNavCustomer';
 import Avatar from '../components/Avatar';
 import CompanyInfoFooter from '../components/CompanyInfoFooter';
+import { requestFirebaseToken } from '../utils/fcm';
 
 const CustomerDashboard = () => {
     const navigate = useNavigate();
@@ -31,6 +32,9 @@ const CustomerDashboard = () => {
     ];
 
     useEffect(() => {
+        // FCM 토큰 수신 및 서버 저장 자동 시도
+        requestFirebaseToken();
+
         // 대시보드 통계 및 프로필 정보 로드
         const fetchDashboardData = async () => {
             // 1. 대시보드 통계 가져오기

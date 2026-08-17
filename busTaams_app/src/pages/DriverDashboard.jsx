@@ -5,6 +5,7 @@ import Swal from 'sweetalert2';
 import { notify } from '../utils/toast';
 import BottomNavDriver from '../components/BottomNavDriver';
 import CompanyInfoFooter from '../components/CompanyInfoFooter';
+import { requestFirebaseToken } from '../utils/fcm';
 
 const DriverDashboard = () => {
     const navigate = useNavigate();
@@ -29,6 +30,9 @@ const DriverDashboard = () => {
     const [unreadCount, setUnreadCount] = useState(0);
  
     useEffect(() => {
+        // FCM 토큰 수신 및 서버 저장 자동 시도
+        requestFirebaseToken();
+
         const fetchDashboardData = async () => {
             setLoading(true);
             try {
