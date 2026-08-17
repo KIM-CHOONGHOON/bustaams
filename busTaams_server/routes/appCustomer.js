@@ -149,27 +149,10 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
         console.log(`[Dashboard Debug] UserID: ${userId}, CustID: ${custId}`);
         const [statsRows] = await pool.execute(`
             SELECT 
-                COUNT(DISTINCT CASE 
-                    WHEN r.DATA_STAT IN ('AUCTION', 'BUS_CHANGE') 
-                    AND NOT EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'CONFIRM'))
-                    AND NOT EXISTS (SELECT 1 FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT'))
-                    THEN r.REQ_ID END) as countProgressing,
-                
-                COUNT(DISTINCT CASE 
-                    WHEN r.DATA_STAT = 'CUSTOMER_PAY_WAIT' 
-                    OR EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'CUSTOMER_PAY_WAIT')
-                    OR EXISTS (SELECT 1 FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'CUSTOMER_PAY_WAIT')
-                    THEN r.REQ_ID END) as countCustomerPayWait,
-
-                COUNT(DISTINCT CASE 
-                    WHEN r.DATA_STAT = 'DRIVER_PAY_WAIT' 
-                    OR EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'DRIVER_PAY_WAIT')
-                    THEN r.REQ_ID END) as countDriverPayWait,
-
-                COUNT(DISTINCT CASE 
-                    WHEN r.DATA_STAT = 'FINAL_APPROVAL_WAIT' 
-                    OR EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'FINAL_APPROVAL_WAIT')
-                    THEN r.REQ_ID END) as countFinalApprovalWait
+                COUNT(CASE WHEN r.DATA_STAT IN ('AUCTION', 'MATCHING', 'WAIT_DECISION', 'BUS_CHANGE') THEN 1 END) as countProgressing,
+                COUNT(CASE WHEN r.DATA_STAT = 'CUSTOMER_PAY_WAIT' THEN 1 END) as countCustomerPayWait,
+                COUNT(CASE WHEN r.DATA_STAT = 'DRIVER_PAY_WAIT' THEN 1 END) as countDriverPayWait,
+                COUNT(CASE WHEN r.DATA_STAT = 'FINAL_APPROVAL_WAIT' THEN 1 END) as countFinalApprovalWait
             FROM TB_AUCTION_REQ r
             WHERE TRIM(r.TRAVELER_ID) = ? OR TRIM(r.TRAVELER_ID) = ?
         `, [custId, userId]);

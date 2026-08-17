@@ -217,18 +217,18 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
             });
         }
 
-        // 5. 5개 단계별 세부 통계 계산 (한글 주석)
+        // 5. 5개 단계별 세부 통계 계산 (TB_AUCTION_REQ.DATA_STAT 컬럼 기준 집계)
         const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
         const [statsRows] = await pool.execute(
             `SELECT 
-                (SELECT COUNT(*) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'CUSTOMER_PAY_WAIT') as countCustomerWait,
-                (SELECT COUNT(*) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'DRIVER_PAY_WAIT') as countDriverPayWait,
-                (SELECT COUNT(*) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'FINAL_APPROVAL_WAIT') as countFinalApprovalWait,
-                (SELECT COUNT(*) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'CONFIRM') as countConfirmed,
-                (SELECT COUNT(*) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'DONE') as countDone,
-                (SELECT SUM(DRIVER_BIDDING_PRICE) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'DONE' AND DATE_FORMAT(MOD_DT, '%Y-%m') = ?) as monthlyProfit,
-                (SELECT SUM(b.DRIVER_BIDDING_PRICE) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND b.DATA_STAT = 'CONFIRM' AND DATE_FORMAT(r.START_DT, '%Y-%m') = ?) as pendingProfit,
-                (SELECT SUM(DRIVER_BIDDING_PRICE) FROM TB_BUS_RESERVATION WHERE DRIVER_ID = ? AND DATA_STAT = 'DONE') as totalProfit`,
+                (SELECT COUNT(*) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND r.DATA_STAT = 'CUSTOMER_PAY_WAIT') as countCustomerWait,
+                (SELECT COUNT(*) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND r.DATA_STAT = 'DRIVER_PAY_WAIT') as countDriverPayWait,
+                (SELECT COUNT(*) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND r.DATA_STAT = 'FINAL_APPROVAL_WAIT') as countFinalApprovalWait,
+                (SELECT COUNT(*) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND r.DATA_STAT = 'CONFIRM') as countConfirmed,
+                (SELECT COUNT(*) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND r.DATA_STAT = 'DONE') as countDone,
+                (SELECT SUM(b.DRIVER_BIDDING_PRICE) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND r.DATA_STAT = 'DONE' AND DATE_FORMAT(r.MOD_DT, '%Y-%m') = ?) as monthlyProfit,
+                (SELECT SUM(b.DRIVER_BIDDING_PRICE) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND r.DATA_STAT = 'CONFIRM' AND DATE_FORMAT(r.START_DT, '%Y-%m') = ?) as pendingProfit,
+                (SELECT SUM(b.DRIVER_BIDDING_PRICE) FROM TB_BUS_RESERVATION b JOIN TB_AUCTION_REQ r ON b.REQ_ID = r.REQ_ID WHERE b.DRIVER_ID = ? AND r.DATA_STAT = 'DONE') as totalProfit`,
             [custId, custId, custId, custId, custId, custId, currentMonth, custId, currentMonth, custId]
         );
 
