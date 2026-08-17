@@ -7,7 +7,8 @@ import Avatar from '../components/Avatar';
 
 /**
  * 고객용 기사결제 대기 상세 화면
- * 기사 결제 대기 상태의 진행 상황을 확인합니다. (버스 취소 버튼 제외)
+ * 기사 결제 대기 상태의 진행 상황을 확인합니다.
+ * ("이 차량 버스 취소하기" 버튼만 삭제하고, "전체 청약 취소" 버튼은 유지합니다.)
  */
 const EstimateDriverPayDetailCustomer = () => {
     const navigate = useNavigate();
@@ -52,6 +53,32 @@ const EstimateDriverPayDetailCustomer = () => {
         };
         fetchProfile();
     }, [reqId]);
+
+    // 전체 청약 요청 취소
+    const handleCancelRequest = async () => {
+        const confirmed = await notify.confirm('전체 청약 요청 취소', '전체 청약 요청을 취소하시겠습니까?');
+        if (!confirmed) return;
+        try {
+            const res = await api.post('/app/customer/cancel-request', { 
+                reqId,
+                cancelCode: '06', // 기타 사유
+                cancelReasonText: '사용자에 의한 전체 취소'
+            });
+            
+            if (res.success) {
+                notify.success('취소 완료', '전체 청약 요청이 성공적으로 취소되었습니다.');
+                navigate('/customer-dashboard');
+            } else {
+                notify.error('취소 실패', res.error || '취소 처리 중 응답 오류가 발생했습니다.');
+            }
+        } catch (error) {
+            console.error('Cancel error:', error);
+            const errorMsg = error.response?.data?.error || error.message || '서버와의 통신 중 오류가 발생했습니다.';
+            notify.error('오류 발생', errorMsg);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const getBusStatusDisplay = (status) => {
         const config = {
@@ -351,7 +378,7 @@ const EstimateDriverPayDetailCustomer = () => {
                         </div>
                     </div>
 
-                    {/* 오른쪽 사이드바 (요약 및 전체 액션) */}
+                    {/* 오른쪽 사이드바 (요약 및 전체 청약 취소 버튼) */}
                     <div className="lg:col-span-5 space-y-8">
                         <div className="bg-slate-900 rounded-2xl p-8 text-white sticky top-28 shadow-2xl shadow-slate-900/20 border border-slate-800">
                             <h2 className="text-2xl font-black mb-8 italic tracking-tighter">청약 상세 요약</h2>
@@ -375,6 +402,19 @@ const EstimateDriverPayDetailCustomer = () => {
                                  <div className="flex justify-between items-center flex-wrap gap-2">
                                      <span className="text-3xl font-black tracking-tighter text-secondary italic break-all">₩{totalReqAmt.toLocaleString()}</span>
                                  </div>
+                            </div>
+
+                            {/* 전체 청약 취소 버튼 유지 */}
+                            <div className="space-y-4 pt-10">
+                                {tripSummary.status !== 'TRAVELER_CANCEL' && tripSummary.status !== 'CONFIRM' && (
+                                    <button 
+                                        onClick={handleCancelRequest}
+                                        className="w-full bg-white/5 text-error border border-error/20 py-5 rounded-[2rem] font-black text-lg hover:bg-error/10 active:scale-95 transition-all flex items-center justify-center gap-3 italic"
+                                    >
+                                        <span className="material-symbols-outlined">cancel</span>
+                                        전체 청약 취소
+                                    </button>
+                                )}
                             </div>
 
                             <div className="mt-10 p-5 bg-white/5 rounded-2xl border border-white/5">
