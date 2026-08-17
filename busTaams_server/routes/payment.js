@@ -735,5 +735,31 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
     router.post('/pc-return', handlePaymentReturn);
     router.post('/mobile-return', handlePaymentReturn);
 
+    /**
+     * POST /api/payment/force-sync
+     * 카드 결제 완료 후 2중 안전장치 동기화 (DB 업데이트 및 기사 푸시 발송)
+     */
+    router.post('/force-sync', async (req, res) => {
+        const { reqId, resId, tid, amt } = req.body;
+        console.log(`>>> [Payment Force Sync] ReqID: ${reqId}, ResID: ${resId}, TID: ${tid}, Amt: ${amt}`);
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+            if (resId) {
+                await updateDBAfterPayment(`BUS_RES_${resId}_${Date.now()}`, connection, tid || `MANUAL-${Date.now()}`, amt || 33000);
+            } else if (reqId) {
+                await updateDBAfterPayment(`BUS_REQ_${reqId}_${Date.now()}`, connection, tid || `MANUAL-${Date.now()}`, amt || 33000);
+            }
+            await connection.commit();
+            res.json({ success: true, message: '결제 상태가 성공적으로 동기화되었습니다.' });
+        } catch (err) {
+            await connection.rollback();
+            console.error('>>> [Payment Force Sync Error]:', err);
+            res.status(500).json({ success: false, error: err.message });
+        } finally {
+            connection.release();
+        }
+    });
+
     return router;
 };
