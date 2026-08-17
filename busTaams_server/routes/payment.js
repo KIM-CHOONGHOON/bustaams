@@ -129,6 +129,104 @@ module.exports = function createPaymentRouter(pool, app) {
     };
 
 /**
+ * TB_PAYMENT_MASTER 결제 성공 이력 적재 헬퍼 함수
+ */
+async function insertPaymentMaster(connection, p) {
+    try {
+        const {
+            orderNo,
+            reqId,
+            custId,
+            pgMid,
+            payAmount,
+            pgTid,
+            cardCode = null,
+            cardName = null,
+            cardMaskNo = null,
+            pgResultCode = '0000',
+            pgResultMsg = '정상결제'
+        } = p;
+
+        const payId = 'PAY' + Date.now() + Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+
+        await connection.execute(
+            `INSERT INTO TB_PAYMENT_MASTER (
+                PAY_ID, ORDER_NO, PAY_TYPE, REQ_ID, CUST_ID, PG_MID, 
+                CARD_CODE, CARD_NAME, CARD_MASK_NO, PAY_YYMM, PLAN_DATE, 
+                PAY_AMOUNT, PAY_STATUS, PG_TID, PG_RESULT_CODE, PG_RESULT_MSG, 
+                COMPLETE_DT, REG_ID, REG_DT, MOD_ID, MOD_DT
+            ) VALUES (
+                ?, ?, 'ONETIME', ?, ?, ?, 
+                ?, ?, ?, DATE_FORMAT(NOW(), '%Y%m'), CURDATE(), 
+                ?, 'SUCCESS', ?, ?, ?, 
+                NOW(), ?, NOW(), ?, NOW()
+            )`,
+            [
+                payId, orderNo || `ORD-${Date.now()}`, reqId || null, custId || 'UNKNOWN', pgMid || process.env.INICIS_MID || 'INIpayTest',
+                cardCode, cardName, cardMaskNo,
+                payAmount || 0, pgTid || null, pgResultCode, pgResultMsg,
+                custId || 'UNKNOWN', custId || 'UNKNOWN'
+            ]
+        );
+        console.log(`>>> [TB_PAYMENT_MASTER] Inserted PAY_ID: ${payId} for Order: ${orderNo}, Amount: ${payAmount}`);
+        return payId;
+    } catch (err) {
+        console.error('>>> [TB_PAYMENT_MASTER] Insert Error:', err);
+        return null;
+    }
+}
+
+/**
+ * TB_PAYMENT_CANCEL_HISTORY 카드 결제 취소 이력 적재 및 TB_PAYMENT_MASTER 상태 변경 헬퍼 함수
+ */
+async function insertPaymentCancelHistory(connection, p) {
+    try {
+        const {
+            payId,
+            reqId,
+            cancelAmount,
+            cancelReason,
+            pgTid,
+            regId
+        } = p;
+
+        const cancelId = 'CN' + Date.now() + Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+
+        await connection.execute(
+            `INSERT INTO TB_PAYMENT_CANCEL_HISTORY (
+                CANCEL_ID, BAT_ID, CANCEL_AMOUNT, CANCEL_REASON, CANCEL_STATUS, 
+                PG_TID, REG_ID, REG_DT, MOD_ID, MOD_DT
+            ) VALUES (
+                ?, ?, ?, ?, 'SUCCESS', 
+                ?, ?, NOW(), ?, NOW()
+            )`,
+            [
+                cancelId, payId || reqId || 'CANCEL_NONE', cancelAmount || 0, cancelReason || '여행 취소',
+                pgTid || null, regId || 'SYSTEM', regId || 'SYSTEM'
+            ]
+        );
+
+        if (pgTid) {
+            await connection.execute(
+                `UPDATE TB_PAYMENT_MASTER SET PAY_STATUS = 'FAIL', MOD_ID = ?, MOD_DT = NOW() WHERE PG_TID = ?`,
+                [regId || 'SYSTEM', pgTid]
+            );
+        } else if (reqId) {
+            await connection.execute(
+                `UPDATE TB_PAYMENT_MASTER SET PAY_STATUS = 'FAIL', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
+                [regId || 'SYSTEM', reqId]
+            );
+        }
+
+        console.log(`>>> [TB_PAYMENT_CANCEL_HISTORY] Inserted CANCEL_ID: ${cancelId} for Amount: ${cancelAmount}`);
+        return cancelId;
+    } catch (err) {
+        console.error('>>> [TB_PAYMENT_CANCEL_HISTORY] Insert Error:', err);
+        return null;
+    }
+}
+
+/**
  * TB_AUCTION_REQ_BUS의 개별 차량들의 DATA_STAT를 검사하여 
  * 모든 버스의 상태가 100% 동일하게 완료되었을 경우에만 TB_AUCTION_REQ 마스터 상태를 업데이트합니다.
  */
@@ -222,10 +320,21 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                     [reqId, unitSeq]
                 );
 
-                // 3. TB_AUCTION_REQ 마스터 상태도 모든 버스가 완료되었을 때만 DRIVER_PAY_WAIT으로 변경
+                // 3. TB_PAYMENT_MASTER 결제 이력 저장 (고객 단건 결제)
+                const [custRows] = await connection.execute('SELECT CUST_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ?', [reqId]);
+                const custId = custRows.length > 0 ? custRows[0].CUST_ID : 'CUSTOMER';
+                await insertPaymentMaster(connection, {
+                    orderNo: oid,
+                    reqId: reqId,
+                    custId: custId,
+                    payAmount: finalAmt,
+                    pgTid: tid
+                });
+
+                // 4. TB_AUCTION_REQ 마스터 상태도 모든 버스가 완료되었을 때만 DRIVER_PAY_WAIT으로 변경
                 await checkAndUpdateMasterStatus(connection, reqId, 'CUSTOMER');
 
-                // 4. 해당 버스 기사에게 PUSH 알림 전송
+                // 5. 해당 버스 기사에게 PUSH 알림 전송
                 await sendDriverPaymentPushNotification(connection, reqId, unitSeq, targetId);
             }
         } else if (type === 'REQ') {
@@ -256,10 +365,21 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                 [targetId]
             );
 
-            // 3. TB_AUCTION_REQ 마스터 상태도 모든 버스가 완료되었을 때만 DRIVER_PAY_WAIT으로 변경
+            // 3. TB_PAYMENT_MASTER 결제 이력 저장 (고객 전체 결제)
+            const [custRows] = await connection.execute('SELECT CUST_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ?', [targetId]);
+            const custId = custRows.length > 0 ? custRows[0].CUST_ID : 'CUSTOMER';
+            await insertPaymentMaster(connection, {
+                orderNo: oid,
+                reqId: targetId,
+                custId: custId,
+                payAmount: finalAmt,
+                pgTid: tid
+            });
+
+            // 4. TB_AUCTION_REQ 마스터 상태도 모든 버스가 완료되었을 때만 DRIVER_PAY_WAIT으로 변경
             await checkAndUpdateMasterStatus(connection, targetId, 'CUSTOMER');
 
-            // 4. 전체 예약 건에 연동된 기사들에게 각각 PUSH 알림 전송
+            // 5. 전체 예약 건에 연동된 기사들에게 각각 PUSH 알림 전송
             const [bids] = await connection.execute(
                 `SELECT RES_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE REQ_ID = ?`,
                 [targetId]
@@ -308,7 +428,16 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                     );
                 }
 
-                // 3. TB_AUCTION_REQ 마스터 상태도 모든 버스가 결제 완료되었을 때만 'FINAL_APPROVAL_WAIT'로 변경
+                // 3. TB_PAYMENT_MASTER 결제 이력 저장 (기사 결제)
+                await insertPaymentMaster(connection, {
+                    orderNo: oid,
+                    reqId: reqId,
+                    custId: driverId,
+                    payAmount: dynamic.feeTotalAmt,
+                    pgTid: tid
+                });
+
+                // 4. TB_AUCTION_REQ 마스터 상태도 모든 버스가 결제 완료되었을 때만 'FINAL_APPROVAL_WAIT'로 변경
                 await checkAndUpdateMasterStatus(connection, reqId, driverId);
 
                 // 5. TB_MOM_MEMBER 사용량(USE_CNT) 증가 처리

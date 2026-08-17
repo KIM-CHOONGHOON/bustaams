@@ -2875,6 +2875,22 @@ router.post('/cancel-request', authenticateToken, uploadOrPass, async (req, res)
             await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?', [custId, reqId]);
             await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND DATA_STAT NOT IN (\'CONFIRM\', \'DONE\')', [custId, reqId]);
 
+            // 결제 취소 이력 적재 및 결제 마스터 실패(FAIL) 처리
+            const cancelId = 'CN' + Date.now() + Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+            await connection.execute(
+                `INSERT INTO TB_PAYMENT_CANCEL_HISTORY (
+                    CANCEL_ID, BAT_ID, CANCEL_AMOUNT, CANCEL_REASON, CANCEL_STATUS, 
+                    REG_ID, REG_DT, MOD_ID, MOD_DT
+                ) VALUES (
+                    ?, ?, 0, ?, 'SUCCESS', ?, NOW(), ?, NOW()
+                )`,
+                [cancelId, reqId, cancelReasonText || '고객에 의한 여행 청약 취소', custId, custId]
+            );
+            await connection.execute(
+                `UPDATE TB_PAYMENT_MASTER SET PAY_STATUS = 'FAIL', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
+                [custId, reqId]
+            );
+
             await connection.commit();
             res.json({ success: true, message: '견적 요청 취소가 완료되었습니다.' });
 

@@ -2573,6 +2573,22 @@ router.post('/cancel-bid/:id', authenticateToken, async (req, res) => {
             [custId, reqId]
         );
 
+        // 5-1. 결제 취소 이력 적재 (TB_PAYMENT_CANCEL_HISTORY 및 TB_PAYMENT_MASTER 상태 변경)
+        const cancelId = 'CN' + Date.now() + Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+        await connection.execute(
+            `INSERT INTO TB_PAYMENT_CANCEL_HISTORY (
+                CANCEL_ID, BAT_ID, CANCEL_AMOUNT, CANCEL_REASON, CANCEL_STATUS, 
+                REG_ID, REG_DT, MOD_ID, MOD_DT
+            ) VALUES (
+                ?, ?, 0, ?, 'SUCCESS', ?, NOW(), ?, NOW()
+            )`,
+            [cancelId, resId, '기사에 의한 입찰/청약 취소', custId, custId]
+        );
+        await connection.execute(
+            `UPDATE TB_PAYMENT_MASTER SET PAY_STATUS = 'FAIL', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND CUST_ID = ?`,
+            [custId, reqId, custId]
+        );
+
         // 6. 기사 취소 페널티/제한 누적 관리 (TB_USER_CANCEL_MANAGE)
         const [manageRows] = await connection.execute(
             'SELECT CANCEL_BUS_DRIVER_CNT FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ?',
