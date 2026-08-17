@@ -746,29 +746,15 @@ router.get('/pending-requests', authenticateToken, async (req, res) => {
 
         let statusFilter = "";
         if (type === 'progress') {
-            statusFilter = `
-                r.DATA_STAT IN ('AUCTION', 'BUS_CHANGE') 
-                AND NOT EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'CONFIRM'))
-                AND NOT EXISTS (SELECT 1 FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT'))
-            `;
+            statusFilter = "r.DATA_STAT IN ('AUCTION', 'MATCHING', 'WAIT_DECISION', 'BUS_CHANGE')";
         } else if (type === 'customer_pay' || type === 'waiting') {
-            statusFilter = `
-                r.DATA_STAT = 'CUSTOMER_PAY_WAIT' 
-                OR EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'CUSTOMER_PAY_WAIT')
-                OR EXISTS (SELECT 1 FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'CUSTOMER_PAY_WAIT')
-            `;
+            statusFilter = "r.DATA_STAT = 'CUSTOMER_PAY_WAIT'";
         } else if (type === 'driver_pay') {
-            statusFilter = `
-                r.DATA_STAT = 'DRIVER_PAY_WAIT' 
-                OR EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'DRIVER_PAY_WAIT')
-            `;
+            statusFilter = "r.DATA_STAT = 'DRIVER_PAY_WAIT'";
         } else if (type === 'final_approval') {
-            statusFilter = `
-                r.DATA_STAT = 'FINAL_APPROVAL_WAIT' 
-                OR EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'FINAL_APPROVAL_WAIT')
-            `;
+            statusFilter = "r.DATA_STAT = 'FINAL_APPROVAL_WAIT'";
         } else {
-            statusFilter = "r.DATA_STAT IN ('AUCTION', 'CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'BUS_CHANGE')";
+            statusFilter = "r.DATA_STAT IN ('AUCTION', 'MATCHING', 'WAIT_DECISION', 'BUS_CHANGE', 'CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT')";
         }
 
         const sql = `
