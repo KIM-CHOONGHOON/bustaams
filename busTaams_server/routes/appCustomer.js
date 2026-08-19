@@ -3176,7 +3176,8 @@ router.post('/cancel-request', authenticateToken, uploadOrPass, async (req, res)
                             console.log(`>>> [Traveler Card Refund Result] ResId: ${p.RES_ID}, TID: ${p.CUSTOMER_PAY_ID}, Amt: ${custRefundAmt}, Policy: ${policy.label}`, refundResult);
                             
                             if (refundResult && refundResult.resultCode !== '00') {
-                                if (refundResult.resultCode !== 'ERR3001') {
+                                // ERR3001 또는 01은 이미 취소된 거래에 대한 에러이므로 통과시킵니다.
+                                if (refundResult.resultCode !== 'ERR3001' && refundResult.resultCode !== '01') {
                                     throw new Error(`이니시스 환불 거절: ${refundResult.resultMsg} (${refundResult.resultCode})`);
                                 }
                             }
@@ -3244,7 +3245,8 @@ router.post('/cancel-request', authenticateToken, uploadOrPass, async (req, res)
                             console.log(`>>> [Driver Card Refund Result] ResId: ${p.RES_ID}, TID: ${p.DRIVER_PAY_ID}, Amt: ${drvRefundAmt}, Policy: ${policy.label}`, refundResult);
                             
                             if (refundResult && refundResult.resultCode !== '00') {
-                                if (refundResult.resultCode !== 'ERR3001') {
+                                // ERR3001 또는 01은 이미 취소된 거래에 대한 에러이므로 통과시킵니다.
+                                if (refundResult.resultCode !== 'ERR3001' && refundResult.resultCode !== '01') {
                                     throw new Error(`이니시스 환불 거절: ${refundResult.resultMsg} (${refundResult.resultCode})`);
                                 }
                             }
