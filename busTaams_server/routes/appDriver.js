@@ -1506,7 +1506,7 @@ router.post('/pay', authenticateToken, async (req, res) => {
         if (targetReqId) {
             const [cntAggRows] = await connection.execute(
                 `SELECT COUNT(*) AS total,
-                        SUM(CASE WHEN DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'CONFIRM', 'DONE') THEN 1 ELSE 0 END) AS approvedCnt
+                        SUM(CASE WHEN DATA_STAT IN ('FINAL_APPROVAL_WAIT', 'CONFIRM', 'DONE') THEN 1 ELSE 0 END) AS approvedCnt
                    FROM TB_AUCTION_REQ_BUS
                   WHERE REQ_ID = ?`,
                 [targetReqId]
@@ -1514,9 +1514,29 @@ router.post('/pay', authenticateToken, async (req, res) => {
             const cntAgg = cntAggRows[0];
             if (Number(cntAgg.total) > 0 && Number(cntAgg.approvedCnt) === Number(cntAgg.total)) {
                 await connection.execute(
-                    `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'CUSTOMER_PAY_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
+                    `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'FINAL_APPROVAL_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
                     [custId, targetReqId]
                 );
+
+                // 🔔 모든 차량 기사 결제 완료 시 고객에게 최종 승인 요청 푸시 및 알림 전송
+                try {
+                    const [reqRows] = await connection.execute(
+                        `SELECT TRIP_TITLE, TRAVELER_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ?`,
+                        [targetReqId]
+                    );
+                    if (reqRows.length > 0 && reqRows[0].TRAVELER_ID) {
+                        const { TRIP_TITLE: tripTitle, TRAVELER_ID: travelerId } = reqRows[0];
+                        await sendNotification(pool, {
+                            custId: travelerId,
+                            title: `[최종 승인 요청]`,
+                            body: `"${tripTitle || '요청하신 여행'}"의 기사 결제가 완료되었습니다. 최종 승인을 진행해 주세요.`,
+                            link: `/estimate-request-list?type=final_approval`,
+                            type: 'SYSTEM'
+                        });
+                    }
+                } catch (pushErr) {
+                    console.error('>>> [Push Error in appDriver.js]:', pushErr);
+                }
             }
         }
 
@@ -2609,7 +2629,7 @@ router.post('/cancel-bid/:id', authenticateToken, async (req, res) => {
         );
         if (driverPayId) {
             await connection.execute(
-                `UPDATE TB_PAYMENT_MASTER SET PAY_STATUS = 'FAIL', MOD_ID = ?, MOD_DT = NOW() WHERE PG_TID = ?`,
+                `UPDATE TB_PAYMENT_MASTER SET PAY_STATUS = 'CANCEL', MOD_ID = ?, MOD_DT = NOW() WHERE PG_TID = ?`,
                 [custId, driverPayId]
             );
         }

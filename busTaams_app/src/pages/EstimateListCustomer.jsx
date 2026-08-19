@@ -159,6 +159,24 @@ const EstimateListCustomer = () => {
         }
     };
 
+    // 차량 변경 요청 처리 (11인승 등)
+    const handleRequestBusChange = async (unitSeq) => {
+        const confirmed = await notify.confirm('차량 변경 요청', '고객 차량변경 요청 상태로 변경하시겠습니까?');
+        if (!confirmed) return;
+        try {
+            const res = await api.post('/app/customer/request-bus-change', { reqId, busSeq: unitSeq });
+            if (res.success) {
+                notify.success('변경 요청 완료', '고객 차량변경 요청 상태로 변경되었습니다.');
+                navigate('/customer-dashboard');
+            } else {
+                notify.error('오류 발생', res.error || '차량 변경 요청 중 오류가 발생했습니다.');
+            }
+        } catch (error) {
+            console.error('Bus change request error:', error);
+            notify.error('오류 발생', '차량 변경 요청 중 오류가 발생했습니다.');
+        }
+    };
+
     const getBusStatusDisplay = (status) => {
         const config = {
             'AUCTION': { label: '입찰 대기중', color: 'bg-slate-100 text-slate-400' },
@@ -479,38 +497,53 @@ const EstimateListCustomer = () => {
                                                             </div>
                                                         </div>
 
-                                                        {/* 액션 버튼 */}
-                                                        <div className="space-y-4 pt-4 border-t border-slate-50">
-                                                            <div className="flex flex-col sm:flex-row gap-4">
-                                                                {tripSummary.status !== 'DRIVER_PAY_WAIT' && 
-                                                                 tripSummary.status !== 'FINAL_APPROVAL_WAIT' && 
-                                                                 tripSummary.status !== 'CONFIRM' && (
+                                                        {/* 액션 버튼 (11인승이 아닐 경우만 노출) */}
+                                                        {!unit.busType?.includes('11') && (
+                                                            <div className="space-y-4 pt-4 border-t border-slate-50">
+                                                                <div className="flex flex-col sm:flex-row gap-4">
+                                                                    {tripSummary.status !== 'DRIVER_PAY_WAIT' && 
+                                                                     tripSummary.status !== 'FINAL_APPROVAL_WAIT' && 
+                                                                     tripSummary.status !== 'CONFIRM' && (
+                                                                        <button 
+                                                                            onClick={() => navigate(`/estimate-detail/${est.id}`)}
+                                                                            className={`flex-grow py-4 rounded-xl font-black text-xs tracking-widest uppercase transition-all active:scale-95 btn-primary ${
+                                                                                est.isSelected ? 'bg-secondary text-white shadow-lg' : 'bg-primary text-white shadow-lg shadow-primary/20'
+                                                                            }`}
+                                                                        >
+                                                                            {est.isSelected ? '확정된 청약' : '상세 청약 및 승인하기'}
+                                                                        </button>
+                                                                    )}
                                                                     <button 
-                                                                        onClick={() => navigate(`/estimate-detail/${est.id}`)}
-                                                                        className={`flex-grow py-4 rounded-xl font-black text-xs tracking-widest uppercase transition-all active:scale-95 btn-primary ${
-                                                                            est.isSelected ? 'bg-secondary text-white shadow-lg' : 'bg-primary text-white shadow-lg shadow-primary/20'
-                                                                        }`}
+                                                                        onClick={() => navigate(`/chat-detail/${est.id}`)}
+                                                                        className="px-8 py-4 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all active:scale-95 flex items-center justify-center gap-2 btn-primary"
                                                                     >
-                                                                        {est.isSelected ? '확정된 청약' : '상세 청약 및 승인하기'}
+                                                                        <span className="material-symbols-outlined text-lg">chat_bubble</span>
+                                                                        채팅문의
                                                                     </button>
-                                                                )}
-                                                                <button 
-                                                                    onClick={() => navigate(`/chat-detail/${est.id}`)}
-                                                                    className="px-8 py-4 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all active:scale-95 flex items-center justify-center gap-2 btn-primary"
-                                                                >
-                                                                    <span className="material-symbols-outlined text-lg">chat_bubble</span>
-                                                                    채팅문의
-                                                                </button>
+                                                                </div>
                                                             </div>
-                                                        </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             ))
                                         )}
                                     </div>
 
-                                    {/* 버스 취소 버튼 (차량 레벨로 이동) */}
-                                    {units.length > 1 && unit.unitStat !== 'TRAVELER_CANCEL' && unit.unitStat !== 'CONFIRM' && unit.unitStat !== 'BUS_CANCEL' && (
+                                    {/* 11인승 전용 차량 변경하기 버튼 */}
+                                    {unit.busType?.includes('11') && unit.unitStat !== 'BUS_CHANGE' && unit.unitStat !== 'BUS_CANCEL' && unit.unitStat !== 'TRAVELER_CANCEL' && (
+                                        <div className="mt-6 pt-6 border-t border-slate-100">
+                                            <button 
+                                                onClick={() => handleRequestBusChange(unit.unitSeq)}
+                                                className="w-full py-4 rounded-xl font-black text-xs tracking-widest uppercase transition-all active:scale-95 bg-primary text-white shadow-lg shadow-primary/20 hover:bg-slate-900 flex items-center justify-center gap-2 btn-primary"
+                                            >
+                                                <span className="material-symbols-outlined text-lg">sync_alt</span>
+                                                차량 변경하기
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* 버스 취소 버튼 (차량 레벨로 이동, 11인승 및 청약 미완료 45인승 제외) */}
+                                    {units.length > 1 && unit.unitStat !== 'TRAVELER_CANCEL' && unit.unitStat !== 'CONFIRM' && unit.unitStat !== 'BUS_CANCEL' && !unit.busType?.includes('11') && !(unit.busType?.includes('45') && (!unit.estimates || unit.estimates.length === 0)) && (
                                         <div className="mt-6 pt-6 border-t border-slate-100">
                                             <button 
                                                 onClick={() => handleCancelBus(unit.unitSeq)}

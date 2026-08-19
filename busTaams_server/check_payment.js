@@ -10,7 +10,7 @@ async function check() {
     });
 
     try {
-        const [rows] = await pool.execute(`SELECT * FROM TB_PAYMENT ORDER BY REG_DT DESC LIMIT 3`);
+        const [rows] = await pool.execute(`SELECT * FROM TB_PAYMENT_MASTER ORDER BY REG_DT DESC LIMIT 3`);
         console.log("Recent payments:");
         console.table(rows);
     } catch(e) {

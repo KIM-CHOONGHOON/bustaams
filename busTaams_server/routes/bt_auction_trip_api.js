@@ -132,7 +132,7 @@ function createAuctionTripRouter(pool, admin, bucket, bucketName) {
                     const fuel = Number(bus.fuelCost) || 0;
 
                     for (let i = 0; i < qty; i++) {
-                        const totalFee = Math.floor(price * 0.066);
+                        const totalFee = 33000;
                         const refundFee = Math.floor(price * 0.055);
                         const attrFee = totalFee - refundFee;
 

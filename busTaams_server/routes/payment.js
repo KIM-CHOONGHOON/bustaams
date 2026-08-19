@@ -128,6 +128,32 @@ module.exports = function createPaymentRouter(pool, app) {
         }
     };
 
+    const sendCustomerFinalApprovalPushNotification = async (connection, reqId) => {
+        try {
+            // 1. 여행 정보 및 고객 ID 조회
+            const [reqRows] = await connection.execute(
+                `SELECT TRIP_TITLE, TRAVELER_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ?`,
+                [reqId]
+            );
+            if (reqRows.length === 0) return;
+
+            const { TRIP_TITLE: tripTitle, TRAVELER_ID: custId } = reqRows[0];
+            if (!custId) return;
+
+            // 2. 고객 PUSH 알림 및 DB 알림 저장
+            console.log(`>>> [Push Notification] Sending final approval push to customer ${custId} for reqId: ${reqId}`);
+            await sendNotification(pool, {
+                custId: custId,
+                title: `[최종 승인 요청]`,
+                body: `"${tripTitle || '요청하신 여행'}"의 기사 결제가 완료되었습니다. 최종 승인을 진행해 주세요.`,
+                link: `/estimate-request-list?type=final_approval`,
+                type: 'SYSTEM'
+            });
+        } catch (pushErr) {
+            console.error('>>> [Push Notification Error] Failed to send customer final approval push notification:', pushErr);
+        }
+    };
+
 /**
  * TB_PAYMENT_MASTER 결제 성공 이력 적재 헬퍼 함수
  */
@@ -209,12 +235,12 @@ async function insertPaymentCancelHistory(connection, p) {
 
         if (pgTid) {
             await connection.execute(
-                `UPDATE TB_PAYMENT_MASTER SET PAY_STATUS = 'FAIL', MOD_ID = ?, MOD_DT = NOW() WHERE PG_TID = ?`,
+                `UPDATE TB_PAYMENT_MASTER SET PAY_STATUS = 'CANCEL', MOD_ID = ?, MOD_DT = NOW() WHERE PG_TID = ?`,
                 [regId || 'SYSTEM', pgTid]
             );
         } else if (reqId) {
             await connection.execute(
-                `UPDATE TB_PAYMENT_MASTER SET PAY_STATUS = 'FAIL', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
+                `UPDATE TB_PAYMENT_MASTER SET PAY_STATUS = 'CANCEL', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
                 [regId || 'SYSTEM', reqId]
             );
         }
@@ -247,34 +273,39 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
         totalBuses += Number(r.cnt);
     }
 
-    if (totalBuses === 0) return;
+    if (totalBuses === 0) return null;
 
     if (statusCounts['CONFIRM'] === totalBuses) {
         await connection.execute(
             `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'CONFIRM', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
             [modId, reqId]
         );
+        return 'CONFIRM';
     } else if ((statusCounts['FINAL_APPROVAL_WAIT'] || 0) > 0 && (statusCounts['FINAL_APPROVAL_WAIT'] || 0) + (statusCounts['CONFIRM'] || 0) === totalBuses) {
         await connection.execute(
             `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'FINAL_APPROVAL_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
             [modId, reqId]
         );
+        return 'FINAL_APPROVAL_WAIT';
     } else if ((statusCounts['DRIVER_PAY_WAIT'] || 0) > 0 || (statusCounts['FINAL_APPROVAL_WAIT'] || 0) > 0) {
         // 기사 결제 대기 또는 최종 승인 대기 단계 버스가 존재할 경우 마스터도 DRIVER_PAY_WAIT 이상으로 유지
         await connection.execute(
             `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'DRIVER_PAY_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
             [modId, reqId]
         );
+        return 'DRIVER_PAY_WAIT';
     } else if ((statusCounts['CUSTOMER_PAY_WAIT'] || 0) > 0) {
         await connection.execute(
             `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'CUSTOMER_PAY_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
             [modId, reqId]
         );
+        return 'CUSTOMER_PAY_WAIT';
     } else {
         await connection.execute(
             `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'AUCTION', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
             [modId, reqId]
         );
+        return 'AUCTION';
     }
 }
 
@@ -309,6 +340,7 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                          CUSTOMER_PAY_AMT = ?,
                          CUSTOMER_PAY_DT = NOW(),
                          CUSTOMER_PAY_ID = ?,
+                         DONE_DT = IFNULL(DONE_DT, NOW()),
                          MOD_DT = NOW() 
                      WHERE RES_ID = ?`,
                     [finalAmt, tid || `PAY-CUST-${Date.now()}`, targetId]
@@ -359,6 +391,7 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                      CUSTOMER_PAY_AMT = ?,
                      CUSTOMER_PAY_DT = NOW(),
                      CUSTOMER_PAY_ID = ?,
+                     DONE_DT = IFNULL(DONE_DT, NOW()),
                      MOD_DT = NOW() 
                  WHERE REQ_ID = ? AND DATA_STAT NOT IN ('CONFIRM', 'DONE')`,
                 [finalAmt, tid || `PAY-CUST-${Date.now()}`, targetId]
@@ -462,7 +495,10 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                 });
 
                 // 4. TB_AUCTION_REQ 마스터 상태도 모든 버스가 결제 완료되었을 때만 'FINAL_APPROVAL_WAIT'로 변경
-                await checkAndUpdateMasterStatus(connection, reqId, driverId);
+                const newMasterStatus = await checkAndUpdateMasterStatus(connection, reqId, driverId);
+                if (newMasterStatus === 'FINAL_APPROVAL_WAIT') {
+                    await sendCustomerFinalApprovalPushNotification(connection, reqId);
+                }
 
                 // 5. TB_MOM_MEMBER 사용량(USE_CNT) 증가 처리
                 const yyyyMM = now.getFullYear().toString() + String(now.getMonth() + 1).padStart(2, '0');
@@ -532,11 +568,16 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                 oid = `BUS_DRV_${resId}_${timestamp}`;
             } else if (resId) {
                 oid = `BUS_RES_${resId}_${timestamp}`;
+                // 카드 결제 이동 전 동의 일자 및 DONE_DT 일시 저장 (한글 주석)
+                await pool.execute(
+                    'UPDATE TB_BUS_RESERVATION SET CUSTOMER_REFUND_AGREE_DT = NOW(), DONE_DT = NOW(), MOD_DT = NOW() WHERE RES_ID = ?',
+                    [resId]
+                );
             } else if (reqId) {
                 oid = `BUS_REQ_${reqId}_${timestamp}`;
-                // 고객의 환불정책 동의 일자 업데이트 (한글 주석)
+                // 고객의 환불정책 동의 일자 및 카드 결제 이동 전 DONE_DT 일시 저장 (한글 주석)
                 await pool.execute(
-                    'UPDATE TB_BUS_RESERVATION SET CUSTOMER_REFUND_AGREE_DT = NOW() WHERE REQ_ID = ?',
+                    'UPDATE TB_BUS_RESERVATION SET CUSTOMER_REFUND_AGREE_DT = NOW(), DONE_DT = NOW(), MOD_DT = NOW() WHERE REQ_ID = ?',
                     [reqId]
                 );
             } else {
@@ -648,10 +689,10 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
         // 1. 모바일 결제 처리 (P_STATUS가 있는 경우)
         if (req.body.P_STATUS !== undefined) {
             const { P_STATUS, P_RMESG1, P_TID, P_REQ_URL, P_MID, P_OID } = req.body;
-            const isDriver = P_OID && P_OID.startsWith('BUS_DRV_');
+            const isDriver = (P_OID && P_OID.startsWith('BUS_DRV_'));
 
             if (P_STATUS !== '00') {
-                const errorRedirect = isDriver ? `/app/driver-dashboard?payError=${encodeURIComponent(P_RMESG1)}` : `/app/approval-list?payError=${encodeURIComponent(P_RMESG1)}`;
+                const errorRedirect = isDriver ? `/app/driver-dashboard?payError=${encodeURIComponent(P_RMESG1)}` : `/app/customer-dashboard?payError=${encodeURIComponent(P_RMESG1)}`;
                 return sendHtmlResponse(`결제 인증 실패: ${P_RMESG1}`, errorRedirect);
             }
 
@@ -676,6 +717,7 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                 const msg = resultParams.get('P_RMESG1');
                 const tid = resultParams.get('P_TID') || P_TID;
                 const oid = resultParams.get('P_OID') || P_OID;
+                const finalIsDriver = isDriver || (oid && oid.startsWith('BUS_DRV_'));
 
                 if (status === '00') {
                     const connection = await pool.getConnection();
@@ -692,18 +734,18 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                         await updateDBAfterPayment(oid, connection, tid, amt, mobileExtraInfo);
                         await connection.commit();
 
-                        const redirectPath = isDriver ? '/app/driver-dashboard?payResult=success' : '/app/customer-dashboard?payResult=success';
+                        const redirectPath = finalIsDriver ? '/app/driver-dashboard?payResult=success' : '/app/customer-dashboard?payResult=success';
                         sendHtmlResponse('결제가 성공적으로 완료되었습니다.', redirectPath);
                     } catch (dbErr) {
                         await connection.rollback();
                         console.error('>>> [Payment DB Update Error (Mobile)]:', dbErr);
-                        const redirectPath = isDriver ? '/app/driver-dashboard' : '/app/customer-dashboard';
+                        const redirectPath = finalIsDriver ? '/app/driver-dashboard' : '/app/customer-dashboard';
                         sendHtmlResponse(`결제 성공했으나 데이터 업데이트 중 오류가 발생했습니다. (오류: ${dbErr.message})`, redirectPath);
                     } finally {
                         connection.release();
                     }
                 } else {
-                    const errorRedirect = isDriver ? `/app/approval-pending-driver?tab=driver_pay&payError=${encodeURIComponent(msg || '알 수 없는 오류')}` : `/app/approval-list?payError=${encodeURIComponent(msg || '알 수 없는 오류')}`;
+                    const errorRedirect = finalIsDriver ? `/app/driver-dashboard?payError=${encodeURIComponent(msg || '알 수 없는 오류')}` : `/app/customer-dashboard?payError=${encodeURIComponent(msg || '알 수 없는 오류')}`;
                     sendHtmlResponse(`모바일 결제 승인 실패: ${msg || '알 수 없는 오류'}`, errorRedirect);
                 }
             } catch (err) {
@@ -719,7 +761,7 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
         let isDriver = reqOrderNo.startsWith('BUS_DRV_');
 
         if (resultCode !== '0000') {
-            const errorRedirect = isDriver ? `/app/driver-dashboard?payError=${encodeURIComponent(resultMsg)}` : `/app/approval-list?payError=${encodeURIComponent(resultMsg)}`;
+            const errorRedirect = isDriver ? `/app/driver-dashboard?payError=${encodeURIComponent(resultMsg)}` : `/app/customer-dashboard?payError=${encodeURIComponent(resultMsg)}`;
             return sendHtmlResponse(`결제 인증 실패: ${resultMsg}`, errorRedirect);
         }
 

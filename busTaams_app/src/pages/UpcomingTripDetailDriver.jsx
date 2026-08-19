@@ -186,13 +186,12 @@ const UpcomingTripDetailDriver = () => {
     }
 
     if (error || !trip) {
-        return (
-            <div className="bg-[#F8F9FA] min-h-screen flex flex-col items-center justify-center p-10 text-center">
-                <span className="material-symbols-outlined text-6xl text-gray-200 mb-6">error</span>
-                <h2 className="text-2xl font-black text-[#004D40] mb-4">{error || '정보를 찾을 수 없습니다.'}</h2>
-                <button onClick={() => navigate(-1)} className="bg-[#004D40] text-white px-8 py-4 rounded-xl font-bold">돌아가기</button>
-            </div>
-        );
+        alert(error || '유효하지 않은 예약 내역이거나 운행 정보를 불러올 수 없습니다.');
+        // 기사 대시보드로 이동
+        setTimeout(() => {
+            navigate('/driver-dashboard');
+        }, 100);
+        return null;
     }
 
     return (

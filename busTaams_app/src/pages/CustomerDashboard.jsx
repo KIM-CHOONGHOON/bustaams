@@ -37,10 +37,10 @@ const CustomerDashboard = () => {
         const queryParams = new URLSearchParams(location.search);
         if (queryParams.get('payResult') === 'success') {
             notify.success('결제 완료', '이용대금 결제가 성공적으로 완료되었습니다!');
-            navigate('/app/customer-dashboard', { replace: true });
+            navigate('/customer-dashboard', { replace: true });
         } else if (queryParams.get('payError')) {
             notify.error('결제 오류', decodeURIComponent(queryParams.get('payError')));
-            navigate('/app/customer-dashboard', { replace: true });
+            navigate('/customer-dashboard', { replace: true });
         }
     }, [location.search]);
 

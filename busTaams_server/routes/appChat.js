@@ -48,14 +48,51 @@ router.get('/room/:resId', authenticateToken, async (req, res) => {
             }
         }
 
-        // 1-2. RES_ID / REQ_ID 기준 기존 방 검색 (참가자 여부 불문하고 방 존재 시 매핑)
-        if (!chatRoom) {
+        // 1-2. 고유한 RES_ID 혹은 REQ_ID 분석
+        let actualResId = null;
+        let reqId = null;
+
+        if (resId.startsWith('RES_')) {
+            actualResId = resId;
+            const [resRows] = await pool.execute(
+                `SELECT REQ_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?`,
+                [resId]
+            );
+            if (resRows.length > 0) {
+                reqId = resRows[0].REQ_ID;
+            }
+        } else if (resId.startsWith('REQ_')) {
+            reqId = resId;
+            if (userType === 'DRIVER') {
+                const [drvResRows] = await pool.execute(
+                    `SELECT RES_ID FROM TB_BUS_RESERVATION WHERE REQ_ID = ? AND DRIVER_ID = ? LIMIT 1`,
+                    [reqId, custId]
+                );
+                if (drvResRows.length > 0) {
+                    actualResId = drvResRows[0].RES_ID;
+                }
+            } else {
+                const [custResRows] = await pool.execute(
+                    `SELECT RES_ID FROM TB_BUS_RESERVATION WHERE REQ_ID = ? LIMIT 1`,
+                    [reqId]
+                );
+                if (custResRows.length > 0) {
+                    actualResId = custResRows[0].RES_ID;
+                }
+            }
+        } else {
+            actualResId = resId;
+            reqId = resId;
+        }
+
+        // 1-3. RES_ID 기준 기존 방 검색 (1:1 채널 고유성 보장)
+        if (!chatRoom && actualResId) {
             const [rooms] = await pool.execute(
                 `SELECT CHAT_LOG_SEQ as CHAT_SEQ, REQ_ID, RES_ID, CHAT_TITLE 
                  FROM TB_CHAT_LOG 
-                 WHERE RES_ID = ? OR REQ_ID = ?
+                 WHERE RES_ID = ?
                  ORDER BY CHAT_LOG_SEQ DESC LIMIT 1`,
-                [resId, resId]
+                [actualResId]
             );
 
             if (rooms.length > 0) {
@@ -64,19 +101,17 @@ router.get('/room/:resId', authenticateToken, async (req, res) => {
             }
         }
 
-        // 1-3. 방이 없는 경우 신규 1:1 대화방 생성
+        // 1-4. 방이 없는 경우 신규 1:1 대화방 생성
         if (!chatRoom) {
-            let reqId = resId;
-            let actualResId = resId;
             let travelerId = userType === 'TRAVELER' ? custId : null;
             let driverId = userType === 'DRIVER' ? custId : null;
 
             const [resRows] = await pool.execute(
                 `SELECT REQ_ID, RES_ID, TRAVELER_ID, DRIVER_ID 
                  FROM TB_BUS_RESERVATION 
-                 WHERE RES_ID = ? OR REQ_ID = ?
+                 WHERE RES_ID = ?
                  ORDER BY REG_DT DESC LIMIT 1`,
-                [resId, resId]
+                [actualResId]
             );
 
             if (resRows.length > 0) {
@@ -84,10 +119,10 @@ router.get('/room/:resId', authenticateToken, async (req, res) => {
                 actualResId = resRows[0].RES_ID;
                 if (!travelerId) travelerId = resRows[0].TRAVELER_ID;
                 if (!driverId && resRows[0].DRIVER_ID) driverId = resRows[0].DRIVER_ID;
-            } else {
+            } else if (reqId) {
                 const [reqRows] = await pool.execute(
                     `SELECT REQ_ID, TRAVELER_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ?`,
-                    [resId]
+                    [reqId]
                 );
                 if (reqRows.length > 0) {
                     reqId = reqRows[0].REQ_ID;

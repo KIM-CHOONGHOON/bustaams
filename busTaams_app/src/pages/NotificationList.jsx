@@ -44,14 +44,27 @@ const NotificationList = () => {
             const statusRes = await request(`/app/driver/bids/status?reqId=${reqId}&resId=${resId}`);
             if (statusRes.success && statusRes.status) {
               const status = statusRes.status;
-              if (status === 'DRIVER_PAY_WAIT') {
-                navigate(`/approval-pending-driver?tab=driver_pay`);
-              } else if (status === 'FINAL_APPROVAL_WAIT') {
-                navigate(`/approval-pending-driver?tab=final_approval_wait`);
-              } else if (status === 'CONFIRM') {
-                navigate(`/upcoming-trip-detail-driver/${resId}`);
+              // 기사 데이터 결제와 관련된 건(링크에 tab=driver_pay 포함)인 경우
+              const isDriverPayNotif = notif.LINK && notif.LINK.includes('tab=driver_pay');
+              if (isDriverPayNotif) {
+                if (status === 'DRIVER_PAY_WAIT') {
+                  navigate(`/approval-pending-driver?tab=driver_pay`);
+                } else {
+                  // 이미 결제 완료(FINAL_APPROVAL_WAIT, CONFIRM 등) 또는 다른 상태 -> 안내 팝업 및 기사 메인대시보드로 리다이렉트
+                  alert('이미 결제가 완료되었거나 진행할 수 없는 상태입니다.');
+                  navigate('/driver-dashboard');
+                }
               } else {
-                navigate(notif.LINK);
+                if (status === 'DRIVER_PAY_WAIT') {
+                  navigate(`/approval-pending-driver?tab=driver_pay`);
+                } else if (status === 'FINAL_APPROVAL_WAIT') {
+                  navigate(`/approval-pending-driver?tab=final_approval_wait`);
+                } else if (status === 'CONFIRM') {
+                  navigate(`/upcoming-trip-detail-driver/${resId}`);
+                } else {
+                  alert('유효하지 않은 여정이거나 현재 진행 중인 단계가 아닙니다.');
+                  navigate('/driver-dashboard');
+                }
               }
               return;
             }
@@ -175,7 +188,7 @@ const NotificationList = () => {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-[11px] font-bold tracking-wider text-slate-400 uppercase">
-                          {style.label} • {new Date(notif.CREATED_AT).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}
+                          {style.label} • {new Date(notif.REG_DT || notif.CREATED_AT).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}
                         </span>
                       </div>
                       <h4 className={`font-bold truncate ${notif.READ_YN === 'N' ? 'text-slate-900' : 'text-slate-500'}`}>

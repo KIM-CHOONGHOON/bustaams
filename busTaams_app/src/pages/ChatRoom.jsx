@@ -112,10 +112,58 @@ const ChatRoom = () => {
         const interval = setInterval(async () => {
             try {
                 const histRes = await api.get(`/app/chat/history/${chatRoom.chatSeq}`);
-                if (histRes.success) {
+                if (histRes.success && Array.isArray(histRes.data)) {
                     // 메시지 개수가 다를 때만 업데이트 (간단한 동기화)
                     if (histRes.data.length !== history.length) {
+                        const prevLength = history.length;
                         setHistory(histRes.data);
+
+                        // 최초 진입 시 알림음 재생 차단 (기존 대역폭 유지)
+                        if (prevLength > 0 && histRes.data.length > prevLength) {
+                            const latestMsg = histRes.data[histRes.data.length - 1];
+                            const loggedId = myCustId || currentUser?.custId;
+
+                            // 내가 보낸 메시지가 아닌 상대방이 보낸 신규 메시지일 때만 알림 발생
+                            if (latestMsg && String(latestMsg.REG_ID) !== String(loggedId)) {
+                                // 1. 진동 알림 (Vibrate)
+                                if (navigator.vibrate) {
+                                    navigator.vibrate([150, 100, 150]);
+                                }
+
+                                // 2. 알림음 재생 (Web Audio API)
+                                try {
+                                    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                                    
+                                    // 첫 번째 부드러운 음 (D5)
+                                    const osc1 = audioCtx.createOscillator();
+                                    const gain1 = audioCtx.createGain();
+                                    osc1.connect(gain1);
+                                    gain1.connect(audioCtx.destination);
+                                    osc1.type = 'sine';
+                                    osc1.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+                                    gain1.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                                    gain1.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+                                    osc1.start(audioCtx.currentTime);
+                                    osc1.stop(audioCtx.currentTime + 0.12);
+
+                                    // 두 번째 맑은 음 (A5, 90ms 시차)
+                                    setTimeout(() => {
+                                        const osc2 = audioCtx.createOscillator();
+                                        const gain2 = audioCtx.createGain();
+                                        osc2.connect(gain2);
+                                        gain2.connect(audioCtx.destination);
+                                        osc2.type = 'sine';
+                                        osc2.frequency.setValueAtTime(880.00, audioCtx.currentTime);
+                                        gain2.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                                        gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.22);
+                                        osc2.start(audioCtx.currentTime);
+                                        osc2.stop(audioCtx.currentTime + 0.22);
+                                    }, 90);
+                                } catch (soundErr) {
+                                    console.warn('Play notification sound failed:', soundErr);
+                                }
+                            }
+                        }
                     }
                 }
             } catch (err) {
@@ -124,7 +172,7 @@ const ChatRoom = () => {
         }, 3000);
 
         return () => clearInterval(interval);
-    }, [chatRoom, history.length]);
+    }, [chatRoom, history.length, myCustId, currentUser]);
 
     // 스크롤 하단 이동
     useEffect(() => {

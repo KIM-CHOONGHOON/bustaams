@@ -7,28 +7,37 @@ const { orgFileNmAndExt } = require('./bt_common_utils');
 async function cancelInicisPayment({ tid, msg, clientIp }) {
     try {
         const mid = process.env.INICIS_MID || 'INIpayTest';
-        const apiKey = process.env.INICIS_BILL_API_KEY || 'rKnPljRn5m6J9Mzz';
+        let apiKey = process.env.INICIS_BILL_API_KEY || 'rKnPljRn5m6J9Mzz';
+        let refundUrl = 'https://iniapi.inicis.com/api/v1/refund';
+        if (mid === 'INIpayTest') {
+            apiKey = 'ItEQKi3rY7uvDS8l';
+            refundUrl = 'https://stginiapi.inicis.com/api/v1/refund';
+        }
         const timestamp = new Date().toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
+
+        let targetIp = clientIp || '1.234.65.153';
+        if (targetIp === '127.0.0.1' || targetIp === 'localhost') {
+            targetIp = '1.234.65.153';
+        }
 
         const type = 'Refund';
         const paymethod = 'Card';
-        const hashDataStr = apiKey + type + paymethod + timestamp + (clientIp || '127.0.0.1') + mid + tid;
-        const hashData = crypto.createHash('sha256').update(hashDataStr).digest('hex');
+        const hashDataStr = apiKey + type + paymethod + timestamp + targetIp + mid + tid;
+        const hashData = crypto.createHash('sha512').update(hashDataStr).digest('hex');
 
-        const params = {
-            type,
-            paymethod,
-            timestamp,
-            clientIp: clientIp || '127.0.0.1',
-            mid,
-            tid,
-            msg: msg || '기사 청약 취소 (환불)',
-            hashData
-        };
+        const params = new URLSearchParams();
+        params.append('type', type);
+        params.append('paymethod', paymethod);
+        params.append('timestamp', timestamp);
+        params.append('clientIp', targetIp);
+        params.append('mid', mid);
+        params.append('tid', tid);
+        params.append('msg', msg || '기사 청약 취소 (환불)');
+        params.append('hashData', hashData);
 
-        const response = await axios.post('https://iniapi.inicis.com/api/v1/refund', params, {
+        const response = await axios.post(refundUrl, params, {
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
             }
         });
 
@@ -191,22 +200,32 @@ async function executeDriverBidCancellation(connection, bucket, p) {
 
     // 💰 결제 완료된 카드 건이 있을 경우 PG 카드 승인 취소 연동
     if (targetRes.CUSTOMER_PAY_STAT === 'Y' && targetRes.CUSTOMER_PAY_ID) {
-        await cancelInicisPayment({
+        const refundResult = await cancelInicisPayment({
             tid: targetRes.CUSTOMER_PAY_ID,
             msg: '기사 청약 취소로 인한 고객 결제 환불',
             clientIp: '127.0.0.1'
         });
+        if (refundResult && refundResult.resultCode !== '00') {
+            if (refundResult.resultCode !== 'ERR3001') {
+                throw new Error(`고객 결제 이니시스 환불 거절: ${refundResult.resultMsg} (${refundResult.resultCode})`);
+            }
+        }
         await connection.execute(
             `UPDATE TB_BUS_RESERVATION SET CUSTOMER_PAY_STAT = 'C', CUSTOMER_REFUND_DT = NOW(), CUSTOMER_REFUND_AMT = ? WHERE RES_ID = ?`,
             [targetRes.CUSTOMER_PAY_AMT || 0, resId]
         );
     }
     if (targetRes.DRIVER_PAY_STAT === 'Y' && targetRes.DRIVER_PAY_ID) {
-        await cancelInicisPayment({
+        const refundResult = await cancelInicisPayment({
             tid: targetRes.DRIVER_PAY_ID,
             msg: '기사 청약 취소로 인한 이용료 환불',
             clientIp: '127.0.0.1'
         });
+        if (refundResult && refundResult.resultCode !== '00') {
+            if (refundResult.resultCode !== 'ERR3001') {
+                throw new Error(`기사 이용료 이니시스 환불 거절: ${refundResult.resultMsg} (${refundResult.resultCode})`);
+            }
+        }
         await connection.execute(
             `UPDATE TB_BUS_RESERVATION SET DRIVER_PAY_STAT = 'C' WHERE RES_ID = ?`,
             [resId]

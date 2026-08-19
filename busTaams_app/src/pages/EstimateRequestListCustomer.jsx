@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../api';
 import { notify } from '../utils/toast';
 import BottomNavCustomer from '../components/BottomNavCustomer';
+import Swal from 'sweetalert2';
 
 
 const EstimateRequestListCustomer = () => {
@@ -135,17 +136,57 @@ const EstimateRequestListCustomer = () => {
         }
     };
     const handleCancelRequest = async (reqUuid) => {
-        const confirmed = await notify.confirm(
-            '전체 청약 요청 취소',
-            '청약을 취소하시겠습니까?\n결제된 대금(고객 결제 및 버스기사 데이터이용료)은 카드 결제 취소(환불) 처리되며, 취소 규칙에 따라 일정 기간 신규 청약이 제한될 수 있습니다.'
-        );
-        if (!confirmed) return;
+        const { value: formValues } = await Swal.fire({
+            title: '전체 청약 취소 요청',
+            html: `
+                <div class="text-left py-2 font-body">
+                    <p class="text-xs text-rose-600 mb-4 font-bold bg-rose-50 p-3.5 rounded-xl leading-relaxed">
+                        ※ 주의: 청약을 취소하시면 결제된 전체 대금(고객 결제 및 버스기사 데이터이용료)은 카드 결제 취소(환불) 처리되며, 취소 규정에 따라 일정 기간 신규 청약이 제한될 수 있습니다.
+                    </p>
+                    <div class="mb-4">
+                        <label class="block text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-wider">취소 사유 선택</label>
+                        <select id="cancelCode" class="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold focus:ring-2 focus:ring-rose-500 outline-none appearance-none shadow-sm">
+                            <option value="01">여행 계획 변경 / 취소</option>
+                            <option value="02">다른 대중교통 이용</option>
+                            <option value="03">기사 불친절 또는 차량 정보 불만족</option>
+                            <option value="04">요금 불만족</option>
+                            <option value="05">기타 사유</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-wider">상세 취소 사유 입력</label>
+                        <textarea id="cancelReasonText" class="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium h-24 focus:ring-2 focus:ring-rose-500 outline-none shadow-sm" placeholder="상세한 취소 사유를 입력해주세요."></textarea>
+                    </div>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: '청약 취소하기',
+            cancelButtonText: '돌아가기',
+            customClass: {
+                popup: 'rounded-2xl border-none shadow-2xl p-8 max-w-md w-full',
+                title: 'font-black text-xl text-slate-800 mb-2',
+                confirmButton: 'bg-rose-600 text-white px-6 py-3.5 rounded-xl font-bold shadow-lg shadow-rose-100 mx-2 active:scale-95 transition-all text-sm',
+                cancelButton: 'bg-slate-100 text-slate-500 px-6 py-3.5 rounded-xl font-bold mx-2 active:scale-95 transition-all text-sm'
+            },
+            buttonsStyling: false,
+            preConfirm: () => {
+                const code = document.getElementById('cancelCode').value;
+                const reason = document.getElementById('cancelReasonText').value;
+                if (!reason.trim()) {
+                    Swal.showValidationMessage('상세 취소 사유를 입력해주세요.');
+                    return false;
+                }
+                return { cancelCode: code, cancelReasonText: reason };
+            }
+        });
+
+        if (!formValues) return;
 
         try {
             const res = await api.post('/app/customer/cancel-request', {
                 reqId: reqUuid,
-                cancelCode: '06',
-                cancelReasonText: '최종 승인대기 목록에서 사용자에 의한 전체 청약 취소'
+                cancelCode: formValues.cancelCode,
+                cancelReasonText: formValues.cancelReasonText
             });
 
             if (res.success) {
