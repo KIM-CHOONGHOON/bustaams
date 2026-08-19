@@ -8,6 +8,7 @@ const admin = require('firebase-admin');
 const { Storage } = require('@google-cloud/storage');
 const bcrypt = require('bcrypt');
 const { encrypt, decrypt } = require('./crypto');
+const { sendNotification } = require('./services/notificationService');
 
 /**
  * 가변 길이 0-패딩 숫자 ID 생성기
@@ -3152,9 +3153,9 @@ app.post('/api/payment/return', async (req, res) => {
                 [payAmt, authData.tid, reqId, driverId]
             );
 
-            // 전체 요청 상태 및 차량 유닛 상태도 'DRIVER_PAY_WAIT'으로 변경
+            // 전체 요청 상태 및 차량 유닛 상태도 'DRIVER_PAY_WAIT'으로 변경하고 결제 상태 COMPLETED 변경
             await connection.execute(
-                `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'DRIVER_PAY_WAIT', MOD_DT = NOW() WHERE REQ_ID = ?`,
+                `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'DRIVER_PAY_WAIT', PAYMENT_STS = 'COMPLETED', MOD_DT = NOW() WHERE REQ_ID = ?`,
                 [reqId]
             );
 
@@ -3163,6 +3164,32 @@ app.post('/api/payment/return', async (req, res) => {
                  WHERE REQ_ID = ? AND DATA_STAT = 'CUSTOMER_PAY_WAIT'`,
                 [reqId]
             );
+
+            // 해당 예약 건에 연동된 기사들에게 각각 PUSH 알림 전송
+            const [bids] = await connection.execute(
+                `SELECT RES_ID, REQ_BUS_SEQ, DRIVER_ID FROM TB_BUS_RESERVATION WHERE REQ_ID = ? AND DRIVER_ID = ?`,
+                [reqId, driverId]
+            );
+            for (const bid of bids) {
+                try {
+                    const [reqRows] = await connection.execute(
+                        `SELECT TRIP_TITLE FROM TB_AUCTION_REQ WHERE REQ_ID = ?`,
+                        [reqId]
+                    );
+                    const tripTitle = reqRows.length > 0 ? reqRows[0].TRIP_TITLE : '요청하신 여행';
+
+                    await sendNotification(pool, {
+                        custId: bid.DRIVER_ID,
+                        title: `[데이터 이용료 결제 요청]`,
+                        body: `"${tripTitle}"의 여행자님의 데이터 이용료가 결제되었습니다. 기사님께서도 데이터 이용료 결제 해주세요.`,
+                        link: `/app/driver/bids/waiting?tab=driver_pay&reqId=${reqId}&resId=${bid.RES_ID}`,
+                        type: 'SYSTEM'
+                    });
+                    console.log(`[PAY_SUCCESS] Sent push to driver: ${bid.DRIVER_ID}`);
+                } catch (pushErr) {
+                    console.error('Failed to send driver push in server.js:', pushErr);
+                }
+            }
             
             console.log(`[PAY_SUCCESS] Updated status for REQ_ID: ${reqId}, DRIVER_ID: ${driverId}`);
         }

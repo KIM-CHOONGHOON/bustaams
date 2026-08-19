@@ -49,11 +49,7 @@ async function cancelInicisPayment({ tid, msg, clientIp }) {
     }
 }
 
-/** 누적 허용: 10회까지(11회째부터 거절). 스냅샷·클램프에 동일 적용. */
-/** const MAX_DRIVER_BID_CANCEL_ACCUM = 10;
-
-/** 누적 허용: 10회까지(11회째부터 거절). 스냅샷·클램프에 동일 적용. */
-const MAX_DRIVER_BID_CANCEL_ACCUM = 10;
+const MAX_DRIVER_BID_CANCEL_ACCUM = 9999;
 
 const DRIVER_CANCEL_FILE_CATEGORY = 'DRIVER_CANCEL_REPORT';
 const GCS_BUCKET_FIXED = 'bustaams-secure-data';
@@ -61,6 +57,11 @@ const GCS_BUCKET_FIXED = 'bustaams-secure-data';
 /** 거래 제한 시작: 취소 등록일 당일 00:01:01 */
 function cancelRegistrationDay000101(d = new Date()) {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 1, 1, 0);
+}
+
+/** 거래 제한 시작: 취소 등록일 다음날(당일 제외) 00:01:01 */
+function cancelRegistrationNextDay000101(d = new Date()) {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 1, 1, 0);
 }
 
 function addDays(dt, days) {
@@ -135,6 +136,15 @@ async function executeDriverBidCancellation(connection, bucket, p) {
     const gcsBucketNm = bucket.name || GCS_BUCKET_FIXED;
     const modId = driverCustId;
 
+    // 0. 취소할 예약의 현재 상태를 먼저 조회하여 CUSTOMER_PAY_WAIT 인지 판별합니다.
+    const [statRows] = await connection.execute(
+        `SELECT DATA_STAT FROM TB_BUS_RESERVATION 
+          WHERE RES_ID = ? AND REQ_ID = ? AND REQ_BUS_SEQ = ? AND DRIVER_ID = ?
+          LIMIT 1`,
+        [resId, reqId, reqBusSeq, driverCustId]
+    );
+    const isCustomerPayWait = statRows.length > 0 && statRows[0].DATA_STAT === 'CUSTOMER_PAY_WAIT';
+
     const [userTypeRows] = await connection.execute(
         `SELECT USER_TYPE FROM TB_USER WHERE TRIM(CUST_ID) = TRIM(?) LIMIT 1`,
         [driverCustId]
@@ -145,39 +155,45 @@ async function executeDriverBidCancellation(connection, bucket, p) {
     const userTypeRaw = userTypeRows[0]?.USER_TYPE ?? userTypeRows[0]?.user_type;
     const manageUserType = normalizeManageUserType(userTypeRaw);
 
-    /* 모달 스냅샷과 TB_USER_CANCEL_MANAGE 현재값 일치 (FOR UPDATE) — 증가분은 prevDb 기준 +1 */
-    const [manageRows] = await connection.execute(
-        `SELECT COALESCE(CANCEL_BUS_DRIVER_CNT, 0) AS cancelBusDriverCnt
-           FROM TB_USER_CANCEL_MANAGE
-          WHERE CUST_ID = ?
-          LIMIT 1
-          FOR UPDATE`,
-        [driverCustId]
-    );
-    const manageRow = manageRows[0];
-    const prevDbRaw = manageRow != null ? manageRow.cancelBusDriverCnt : 0;
-    const prevDb =
-        manageRow != null
-            ? Math.max(
-                  0,
-                  Math.min(
-                      MAX_DRIVER_BID_CANCEL_ACCUM,
-                      Number.isFinite(Number(prevDbRaw)) ? Math.trunc(Number(prevDbRaw)) : 0
+    let prevDb = 0;
+    let nextCnt = 0;
+    let manageRow = null;
+
+    if (!isCustomerPayWait) {
+        /* 모달 스냅샷과 TB_USER_CANCEL_MANAGE 현재값 일치 (FOR UPDATE) — 증가분은 prevDb 기준 +1 */
+        const [manageRows] = await connection.execute(
+            `SELECT COALESCE(CANCEL_BUS_DRIVER_CNT, 0) AS cancelBusDriverCnt
+               FROM TB_USER_CANCEL_MANAGE
+              WHERE CUST_ID = ?
+              LIMIT 1
+              FOR UPDATE`,
+            [driverCustId]
+        );
+        manageRow = manageRows[0];
+        const prevDbRaw = manageRow != null ? manageRow.cancelBusDriverCnt : 0;
+        prevDb =
+            manageRow != null
+                ? Math.max(
+                      0,
+                      Math.min(
+                          MAX_DRIVER_BID_CANCEL_ACCUM,
+                          Number.isFinite(Number(prevDbRaw)) ? Math.trunc(Number(prevDbRaw)) : 0
+                      )
                   )
-              )
-            : 0;
+                : 0;
 
-    if (snap !== prevDb) {
-        return {ok: false, status: 409, code: 'CANCEL_SNAPSHOT_STALE', message: MSGS.SNAPSHOT_STALE};
-    }
-    if (snap >= MAX_DRIVER_BID_CANCEL_ACCUM) {
-        return {ok: false, status: 409, code: 'MAX_DRIVER_BID_CANCELS', message: MSGS.MAX_CANCELS};
-    }
+        if (snap !== prevDb) {
+            return {ok: false, status: 409, code: 'CANCEL_SNAPSHOT_STALE', message: MSGS.SNAPSHOT_STALE};
+        }
+        if (snap >= MAX_DRIVER_BID_CANCEL_ACCUM) {
+            return {ok: false, status: 409, code: 'MAX_DRIVER_BID_CANCELS', message: MSGS.MAX_CANCELS};
+        }
 
-    /** 실제 반영 값은 DB(prevDb) 기준 +1만 허용 — 스냅샷은 검증용이라 snap≠prevDb 이면 위에서 차단됨 */
-    const nextCnt = prevDb + 1;
-    if (nextCnt > MAX_DRIVER_BID_CANCEL_ACCUM) {
-        return {ok: false, status: 409, code: 'MAX_DRIVER_BID_CANCELS', message: MSGS.MAX_CANCELS};
+        /** 실제 반영 값은 DB(prevDb) 기준 +1만 허용 — 스냅샷은 검증용이라 snap≠prevDb 이면 위에서 차단됨 */
+        nextCnt = prevDb + 1;
+        if (nextCnt > MAX_DRIVER_BID_CANCEL_ACCUM) {
+            return {ok: false, status: 409, code: 'MAX_DRIVER_BID_CANCELS', message: MSGS.MAX_CANCELS};
+        }
     }
 
     const [resRows] = await connection.execute(
@@ -198,7 +214,8 @@ async function executeDriverBidCancellation(connection, bucket, p) {
 
     const targetRes = resRows[0];
 
-    // 💰 결제 완료된 카드 건이 있을 경우 PG 카드 승인 취소 연동
+    // 💰 결제 완료된 카드 건이 있을 경우 PG 카드 승인 취소 연동 (고객 카드 승인은 기사 취소 시 취소되지 않아야 하므로 생략)
+    /*
     if (targetRes.CUSTOMER_PAY_STAT === 'Y' && targetRes.CUSTOMER_PAY_ID) {
         const refundResult = await cancelInicisPayment({
             tid: targetRes.CUSTOMER_PAY_ID,
@@ -215,6 +232,7 @@ async function executeDriverBidCancellation(connection, bucket, p) {
             [targetRes.CUSTOMER_PAY_AMT || 0, resId]
         );
     }
+    */
     if (targetRes.DRIVER_PAY_STAT === 'Y' && targetRes.DRIVER_PAY_ID) {
         const refundResult = await cancelInicisPayment({
             tid: targetRes.DRIVER_PAY_ID,
@@ -230,6 +248,30 @@ async function executeDriverBidCancellation(connection, bucket, p) {
             `UPDATE TB_BUS_RESERVATION SET DRIVER_PAY_STAT = 'C' WHERE RES_ID = ?`,
             [resId]
         );
+
+        // 결제 취소 이력 테이블 (TB_PAYMENT_CANCEL_HISTORY) 적재 (기사 청약 취소)
+        const cancelHistIdDrv = ('CN' + Date.now() + Math.floor(Math.random() * 1000).toString().padStart(3, '0')).slice(0, 20);
+        const batIdDrv = String(targetRes.DRIVER_PAY_ID || reqId || 'BAT_DRV_CANCEL').slice(0, 20);
+        await connection.execute(`
+            INSERT INTO TB_PAYMENT_CANCEL_HISTORY (
+                CANCEL_ID, BAT_ID, CANCEL_AMOUNT, CANCEL_REASON, CANCEL_STATUS, 
+                PG_TID, REG_ID, REG_DT, MOD_ID, MOD_DT
+            ) VALUES (
+                ?, ?, ?, ?, 'SUCCESS', 
+                ?, ?, NOW(), ?, NOW()
+            )
+        `, [
+            cancelHistIdDrv, batIdDrv, targetRes.DRIVER_PAY_AMT || 0, 
+            '기사 청약 취소로 인한 이용료 환불', targetRes.DRIVER_PAY_ID, 
+            driverCustId, driverCustId
+        ]);
+
+        // 결제 마스터 테이블 (TB_PAYMENT_MASTER) 상태 변경 ('CANCEL')
+        await connection.execute(`
+            UPDATE TB_PAYMENT_MASTER 
+            SET PAY_STATUS = 'CANCEL', MOD_ID = ?, MOD_DT = NOW() 
+            WHERE PG_TID = ?
+        `, [driverCustId, targetRes.DRIVER_PAY_ID]);
     }
 
     const [uRes] = await connection.execute(
@@ -270,38 +312,51 @@ async function executeDriverBidCancellation(connection, bucket, p) {
         return {ok: false, status: 409, code: 'AUCTION_REQ_MISMATCH', message: MSGS.AUCTION_REQ_MISMATCH};
     }
 
-    /* TB_USER_CANCEL_MANAGE — 누적 + 거래제한 (취소 등록일 당일 0:01:01 시작, 종료는 항상 +7일) */
-    const startRestrict = cancelRegistrationDay000101();
-    const restrictEnd = addDays(startRestrict, 7);
+    if (!isCustomerPayWait) {
+        /* TB_USER_CANCEL_MANAGE — 누적 + 거래제한 (1~10회는 당일 제외 7일간, 10회 초과는 영구 제재) */
+        let startRestrict;
+        let restrictEnd;
 
-    if (!manageRow) {
-        const [ins] = await connection.execute(
-            `INSERT INTO TB_USER_CANCEL_MANAGE (
-                CUST_ID, USER_TYPE, CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, CANCEL_TRAVELER_ALL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT,
-                TRADE_RESTRICT_YN, TRADE_RESTRICT_START_DT, TRADE_RESTRICT_END_DT,
-                REG_DT, REG_ID, MOD_DT, MOD_ID
-            ) VALUES (?, ?, 0, ?, 0, 0, 'Y', ?, ?, NOW(), ?, NOW(), ?)`,
-            [driverCustId, manageUserType, nextCnt, startRestrict, restrictEnd, modId, modId]
-        );
-        if (ins.affectedRows !== 1) {
-            return {ok: false, status: 409, code: 'CANCEL_SNAPSHOT_STALE', message: MSGS.SNAPSHOT_STALE};
+        if (nextCnt > 10) {
+            startRestrict = cancelRegistrationDay000101();
+            restrictEnd = new Date(9999, 11, 31, 23, 59, 59);
+        } else {
+            startRestrict = cancelRegistrationNextDay000101();
+            restrictEnd = addDays(startRestrict, 7);
         }
-    } else {
-        const [upd] = await connection.execute(
-            `UPDATE TB_USER_CANCEL_MANAGE
-                SET USER_TYPE = ?,
-                    CANCEL_BUS_DRIVER_CNT = COALESCE(CANCEL_BUS_DRIVER_CNT, 0) + 1,
-                    TRADE_RESTRICT_YN = 'Y',
-                    TRADE_RESTRICT_START_DT = ?,
-                    TRADE_RESTRICT_END_DT = ?,
-                    MOD_DT = NOW(),
-                    MOD_ID = ?
-              WHERE CUST_ID = ?
-                AND COALESCE(CANCEL_BUS_DRIVER_CNT, 0) = ?`,
-            [manageUserType, startRestrict, restrictEnd, modId, driverCustId, prevDb]
-        );
-        if (upd.affectedRows !== 1) {
-            return {ok: false, status: 409, code: 'CANCEL_SNAPSHOT_STALE', message: MSGS.SNAPSHOT_STALE};
+
+        if (!manageRow) {
+            const [ins] = await connection.execute(
+                `INSERT INTO TB_USER_CANCEL_MANAGE (
+                    CUST_ID, USER_TYPE, CANCEL_CNT, CANCEL_BUS_DRIVER_CNT, CANCEL_TRAVELER_ALL_CNT, CANCEL_TRAVELER_PARTIAL_BUS_CNT,
+                    TRADE_RESTRICT_YN, RESTRICT_STAT, TRADE_RESTRICT_START_DT, TRADE_RESTRICT_END_DT, RESTRICT_START_DT, RESTRICT_END_DT,
+                    REG_DT, REG_ID, MOD_DT, MOD_ID
+                ) VALUES (?, ?, 0, ?, 0, 0, 'Y', 'Y', ?, ?, ?, ?, NOW(), ?, NOW(), ?)`,
+                [driverCustId, manageUserType, nextCnt, startRestrict, restrictEnd, startRestrict, restrictEnd, modId, modId]
+            );
+            if (ins.affectedRows !== 1) {
+                return {ok: false, status: 409, code: 'CANCEL_SNAPSHOT_STALE', message: MSGS.SNAPSHOT_STALE};
+            }
+        } else {
+            const [upd] = await connection.execute(
+                `UPDATE TB_USER_CANCEL_MANAGE
+                    SET USER_TYPE = ?,
+                        CANCEL_BUS_DRIVER_CNT = COALESCE(CANCEL_BUS_DRIVER_CNT, 0) + 1,
+                        TRADE_RESTRICT_YN = 'Y',
+                        RESTRICT_STAT = 'Y',
+                        TRADE_RESTRICT_START_DT = ?,
+                        TRADE_RESTRICT_END_DT = ?,
+                        RESTRICT_START_DT = ?,
+                        RESTRICT_END_DT = ?,
+                        MOD_DT = NOW(),
+                        MOD_ID = ?
+                  WHERE CUST_ID = ?
+                    AND COALESCE(CANCEL_BUS_DRIVER_CNT, 0) = ?`,
+                [manageUserType, startRestrict, restrictEnd, startRestrict, restrictEnd, modId, driverCustId, prevDb]
+            );
+            if (upd.affectedRows !== 1) {
+                return {ok: false, status: 409, code: 'CANCEL_SNAPSHOT_STALE', message: MSGS.SNAPSHOT_STALE};
+            }
         }
     }
 
@@ -353,46 +408,48 @@ async function executeDriverBidCancellation(connection, bucket, p) {
         );
     }
 
-    /* 4. TB_USER_CANCEL_HIST — 첫 행이면 HIST_SEQ=1·REG_* 명시, 이후는 MAX+1·REG_* 생략(DB 기본) */
-    const [mxRows] = await connection.execute(
-        `SELECT COALESCE(MAX(HIST_SEQ), 0) AS m FROM TB_USER_CANCEL_HIST WHERE CUST_ID = ?`,
-        [driverCustId]
-    );
-    const maxHist = Number(mxRows[0]?.m) || 0;
-    const nextHist = maxHist + 1;
-    const isFirstHist = maxHist === 0;
+    if (!isCustomerPayWait) {
+        /* 4. TB_USER_CANCEL_HIST — 첫 행이면 HIST_SEQ=1·REG_* 명시, 이후는 MAX+1·REG_* 생략(DB 기본) */
+        const [mxRows] = await connection.execute(
+            `SELECT COALESCE(MAX(HIST_SEQ), 0) AS m FROM TB_USER_CANCEL_HIST WHERE CUST_ID = ?`,
+            [driverCustId]
+        );
+        const maxHist = Number(mxRows[0]?.m) || 0;
+        const nextHist = maxHist + 1;
+        const isFirstHist = maxHist === 0;
 
-    if (isFirstHist) {
-        await connection.execute(
-            `INSERT INTO TB_USER_CANCEL_HIST (
-                CUST_ID, HIST_SEQ, CANCEL_REASON_GRP_CD, CANCEL_REASON_DTL_CD, CANCEL_REASON_TEXT,
-                REASON_DOC_FILE_NM, REG_DT, REG_ID, MOD_DT, MOD_ID
-            ) VALUES (?, ?, 'CANCEL_REASON', ?, ?, ?, NOW(), ?, NOW(), ?)`,
-            [
-                driverCustId,
-                nextHist,
-                cancellationReasonCode,
-                cancelReasonText.slice(0, 2000),
-                reasonDoc,
-                modId,
-                modId,
-            ]
-        );
-    } else {
-        await connection.execute(
-            `INSERT INTO TB_USER_CANCEL_HIST (
-                CUST_ID, HIST_SEQ, CANCEL_REASON_GRP_CD, CANCEL_REASON_DTL_CD, CANCEL_REASON_TEXT,
-                REASON_DOC_FILE_NM, MOD_DT, MOD_ID
-            ) VALUES (?, ?, 'CANCEL_REASON', ?, ?, ?, NOW(), ?)`,
-            [
-                driverCustId,
-                nextHist,
-                cancellationReasonCode,
-                cancelReasonText.slice(0, 2000),
-                reasonDoc,
-                modId,
-            ]
-        );
+        if (isFirstHist) {
+            await connection.execute(
+                `INSERT INTO TB_USER_CANCEL_HIST (
+                    CUST_ID, HIST_SEQ, CANCEL_REASON_GRP_CD, CANCEL_REASON_DTL_CD, CANCEL_REASON_TEXT,
+                    REASON_DOC_FILE_NM, REG_DT, REG_ID, MOD_DT, MOD_ID
+                ) VALUES (?, ?, 'CANCEL_REASON', ?, ?, ?, NOW(), ?, NOW(), ?)`,
+                [
+                    driverCustId,
+                    nextHist,
+                    cancellationReasonCode,
+                    cancelReasonText.slice(0, 2000),
+                    reasonDoc,
+                    modId,
+                    modId,
+                ]
+            );
+        } else {
+            await connection.execute(
+                `INSERT INTO TB_USER_CANCEL_HIST (
+                    CUST_ID, HIST_SEQ, CANCEL_REASON_GRP_CD, CANCEL_REASON_DTL_CD, CANCEL_REASON_TEXT,
+                    REASON_DOC_FILE_NM, MOD_DT, MOD_ID
+                ) VALUES (?, ?, 'CANCEL_REASON', ?, ?, ?, NOW(), ?)`,
+                [
+                    driverCustId,
+                    nextHist,
+                    cancellationReasonCode,
+                    cancelReasonText.slice(0, 2000),
+                    reasonDoc,
+                    modId,
+                ]
+            );
+        }
     }
 
     return {ok: true, fileIds};
@@ -400,6 +457,7 @@ async function executeDriverBidCancellation(connection, bucket, p) {
 
 module.exports = {
     executeDriverBidCancellation,
+    cancelInicisPayment,
     DRIVER_CANCEL_FILE_CATEGORY,
     GCS_BUCKET_FIXED,
     MSGS,

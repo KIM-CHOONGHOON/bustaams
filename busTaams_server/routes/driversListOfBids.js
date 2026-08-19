@@ -74,12 +74,23 @@ function createDriversListOfBidsHandler(pool) {
         try {
             connection = await pool.getConnection();
 
+            let driverCustId = driverId;
+            if (!driverId.startsWith('DRV')) {
+                const [uRows] = await connection.execute(
+                    `SELECT CUST_ID FROM TB_USER WHERE USER_ID = ? OR CUST_ID = ? LIMIT 1`,
+                    [driverId, driverId]
+                );
+                if (uRows.length > 0) {
+                    driverCustId = uRows[0].CUST_ID;
+                }
+            }
+
             const [countRows] = await connection.execute(
                 `SELECT COUNT(*) AS c
                    FROM TB_BUS_RESERVATION r
                    LEFT JOIN TB_AUCTION_REQ ar ON ar.REQ_ID = r.REQ_ID
                   WHERE ${baseWhere}`,
-                [driverId]
+                [driverCustId]
             );
             const listTotal = Number(countRows[0]?.c) || 0;
 
@@ -102,7 +113,7 @@ function createDriversListOfBidsHandler(pool) {
                   WHERE ${baseWhere}
                   ORDER BY r.RES_ID DESC
                   LIMIT ${limitSql} OFFSET ${offsetSql}`,
-                [driverId]
+                [driverCustId]
             );
             const items = queryRows || [];
 

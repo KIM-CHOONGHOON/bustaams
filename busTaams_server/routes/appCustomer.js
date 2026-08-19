@@ -2993,27 +2993,22 @@ router.post('/cancel-request', authenticateToken, uploadOrPass, async (req, res)
         }
         const currentReqStat = check[0].DATA_STAT;
 
-        // 견적 리스트(AUCTION) 상태이거나 버스변경(BUS_CHANGE) 상태인 경우 단순 취소 처리
-        if (currentReqStat === 'AUCTION' || currentReqStat === 'BUS_CHANGE') {
+        // 💰 혹시 이미 결제된 내역이 존재하는지 확인 (단순 취소 여부 판별)
+        const [hasPaymentRows] = await connection.execute(
+            `SELECT 1 FROM TB_BUS_RESERVATION 
+              WHERE REQ_ID = ? AND (CUSTOMER_PAY_STAT = 'Y' OR DRIVER_PAY_STAT = 'Y')
+              LIMIT 1`,
+            [reqId]
+        );
+        const hasPayment = hasPaymentRows.length > 0;
+
+        // 견적 리스트(AUCTION) 상태이거나 버스변경(BUS_CHANGE) 상태이며 결제 내역이 전혀 없는 경우 단순 취소 처리
+        if ((currentReqStat === 'AUCTION' || currentReqStat === 'BUS_CHANGE') && !hasPayment) {
             await connection.execute('UPDATE TB_AUCTION_REQ SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?', [custId, reqId]);
             await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?', [custId, reqId]);
             await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND DATA_STAT NOT IN (\'CONFIRM\', \'DONE\')', [custId, reqId]);
 
-            // 결제 취소 이력 적재 및 결제 마스터 실패(FAIL) 처리
-            const cancelId = ('CN' + Date.now() + Math.floor(Math.random() * 1000).toString().padStart(3, '0')).slice(0, 20);
-            await connection.execute(
-                `INSERT INTO TB_PAYMENT_CANCEL_HISTORY (
-                    CANCEL_ID, BAT_ID, CANCEL_AMOUNT, CANCEL_REASON, CANCEL_STATUS, 
-                    REG_ID, REG_DT, MOD_ID, MOD_DT
-                ) VALUES (
-                    ?, ?, 0, ?, 'SUCCESS', ?, NOW(), ?, NOW()
-                )`,
-                [cancelId, String(reqId).slice(0, 20), cancelReasonText || '고객에 의한 여행 청약 취소', custId, custId]
-            );
-            await connection.execute(
-                `UPDATE TB_PAYMENT_MASTER SET PAY_STATUS = 'CANCEL', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?`,
-                [custId, reqId]
-            );
+            // 결제 취소 이력 적재 및 결제 마스터 처리 생략 (단순 견적 취소이므로 결제 이력 없음)
 
             await connection.commit();
             res.json({ success: true, message: '견적 요청 취소가 완료되었습니다.' });
@@ -3071,71 +3066,73 @@ router.post('/cancel-request', authenticateToken, uploadOrPass, async (req, res)
             ]);
         }
 
-        // 3. 현재 취소 횟수 조회 (페널티 적용 대상)
-        const [manageRows] = await connection.execute(
-            'SELECT CANCEL_CNT FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ?',
-            [custId]
-        );
-
-        let currentCnt = 0;
-        if (manageRows.length > 0) {
-            currentCnt = manageRows[0].CANCEL_CNT;
-        } else {
-            // 정보가 없으면 초기 행 생성
-            await connection.execute(
-                'INSERT INTO TB_USER_CANCEL_MANAGE (CUST_ID, CANCEL_CNT, REG_ID, MOD_ID) VALUES (?, 0, ?, ?)',
-                [custId, custId, custId]
+        if (currentReqStat !== 'CUSTOMER_PAY_WAIT' && currentReqStat !== 'DRIVER_PAY_WAIT') {
+            // 3. 현재 취소 횟수 조회 (페널티 적용 대상)
+            const [manageRows] = await connection.execute(
+                'SELECT CANCEL_CNT FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ?',
+                [custId]
             );
-        }
 
-        const newCnt = currentCnt + 1;
+            let currentCnt = 0;
+            if (manageRows.length > 0) {
+                currentCnt = manageRows[0].CANCEL_CNT;
+            } else {
+                // 정보가 없으면 초기 행 생성
+                await connection.execute(
+                    'INSERT INTO TB_USER_CANCEL_MANAGE (CUST_ID, CANCEL_CNT, REG_ID, MOD_ID) VALUES (?, 0, ?, ?)',
+                    [custId, custId, custId]
+                );
+            }
 
-        // 취소 관리 테이블 업데이트 (9회까지 당일부터 1주일, 10회부터 당일부터 9999-12-31 무기한 제한 설정) (한글 주석)
-        if (newCnt >= 10) {
-            await connection.execute(`
-                UPDATE TB_USER_CANCEL_MANAGE 
-                SET CANCEL_CNT = ?, 
-                    CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
-                    RESTRICT_STAT = 'P',
-                    RESTRICT_START_DT = NOW(),
-                    RESTRICT_END_DT = '9999-12-31 23:59:59',
-                    TRADE_RESTRICT_YN = 'Y',
-                    TRADE_RESTRICT_START_DT = NOW(),
-                    TRADE_RESTRICT_END_DT = '9999-12-31 23:59:59',
-                    MOD_ID = ?, MOD_DT = NOW()
+            const newCnt = currentCnt + 1;
+
+            // 취소 관리 테이블 업데이트 (9회까지 당일부터 1주일, 10회부터 당일부터 9999-12-31 무기한 제한 설정) (한글 주석)
+            if (newCnt >= 10) {
+                await connection.execute(`
+                    UPDATE TB_USER_CANCEL_MANAGE 
+                    SET CANCEL_CNT = ?, 
+                        CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
+                        RESTRICT_STAT = 'P',
+                        RESTRICT_START_DT = NOW(),
+                        RESTRICT_END_DT = '9999-12-31 23:59:59',
+                        TRADE_RESTRICT_YN = 'Y',
+                        TRADE_RESTRICT_START_DT = NOW(),
+                        TRADE_RESTRICT_END_DT = '9999-12-31 23:59:59',
+                        MOD_ID = ?, MOD_DT = NOW()
+                    WHERE CUST_ID = ?
+                `, [newCnt, custId, custId]);
+            } else {
+                await connection.execute(`
+                    UPDATE TB_USER_CANCEL_MANAGE 
+                    SET CANCEL_CNT = ?, 
+                        CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
+                        RESTRICT_STAT = 'Y',
+                        RESTRICT_START_DT = NOW(),
+                        RESTRICT_END_DT = DATE_ADD(NOW(), INTERVAL 7 DAY),
+                        TRADE_RESTRICT_YN = 'Y',
+                        TRADE_RESTRICT_START_DT = NOW(),
+                        TRADE_RESTRICT_END_DT = DATE_ADD(NOW(), INTERVAL 7 DAY),
+                        MOD_ID = ?, MOD_DT = NOW()
+                    WHERE CUST_ID = ?
+                `, [newCnt, custId, custId]);
+            }
+
+            // 4. 취소 이력 테이블 등록
+            const [[seqRow]] = await connection.execute(`
+                SELECT IFNULL(MAX(HIST_SEQ), 0) + 1 AS HIST_SEQ
+                FROM TB_USER_CANCEL_HIST
                 WHERE CUST_ID = ?
-            `, [newCnt, custId, custId]);
-        } else {
+            `, [custId]);
+
+            const histSeq = seqRow.HIST_SEQ;
+
             await connection.execute(`
-                UPDATE TB_USER_CANCEL_MANAGE 
-                SET CANCEL_CNT = ?, 
-                    CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
-                    RESTRICT_STAT = 'Y',
-                    RESTRICT_START_DT = NOW(),
-                    RESTRICT_END_DT = DATE_ADD(NOW(), INTERVAL 7 DAY),
-                    TRADE_RESTRICT_YN = 'Y',
-                    TRADE_RESTRICT_START_DT = NOW(),
-                    TRADE_RESTRICT_END_DT = DATE_ADD(NOW(), INTERVAL 7 DAY),
-                    MOD_ID = ?, MOD_DT = NOW()
-                WHERE CUST_ID = ?
-            `, [newCnt, custId, custId]);
+                INSERT INTO TB_USER_CANCEL_HIST (
+                    CUST_ID, HIST_SEQ, CANCEL_REASON_GRP_CD, CANCEL_REASON_DTL_CD, 
+                    CANCEL_REASON_TEXT, REASON_DOC_FILE_NM, REG_ID, MOD_ID
+                ) VALUES (?, ?, 'CANCEL_REASON', ?, ?, ?, ?, ?)
+            `, [custId, histSeq, cancelCode || '06', cancelReasonText || '', gcsPath, custId, custId]);
         }
-
-        // 4. 취소 이력 테이블 등록
-        const [[seqRow]] = await connection.execute(`
-            SELECT IFNULL(MAX(HIST_SEQ), 0) + 1 AS HIST_SEQ
-            FROM TB_USER_CANCEL_HIST
-            WHERE CUST_ID = ?
-        `, [custId]);
-
-        const histSeq = seqRow.HIST_SEQ;
-
-        await connection.execute(`
-            INSERT INTO TB_USER_CANCEL_HIST (
-                CUST_ID, HIST_SEQ, CANCEL_REASON_GRP_CD, CANCEL_REASON_DTL_CD, 
-                CANCEL_REASON_TEXT, REASON_DOC_FILE_NM, REG_ID, MOD_ID
-            ) VALUES (?, ?, 'CANCEL_REASON', ?, ?, ?, ?, ?)
-        `, [custId, histSeq, cancelCode || '06', cancelReasonText || '', gcsPath, custId, custId]);
 
         // 💰 카드 결제 완료된 건이 있는지 조회하여 카드 취소(환불) 및 이력 적재 진행 (여행자 & 기사 결제 건 모두 포함)
         const [paymentInfo] = await connection.execute(`

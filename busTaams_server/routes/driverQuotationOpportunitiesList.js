@@ -121,7 +121,18 @@ module.exports = function registerDriverQuotationOpportunitiesList(pool, app) {
                 return res.status(400).json({ error: 'driverUuid 또는 driverId가 필요합니다.' });
             }
 
-            let rows = await fetchRowsByDriverId(connection, duRaw);
+            let driverCustId = duRaw;
+            if (!duRaw.startsWith('DRV')) {
+                const [uRows] = await connection.execute(
+                    `SELECT CUST_ID FROM TB_USER WHERE USER_ID = ? OR CUST_ID = ? LIMIT 1`,
+                    [duRaw, duRaw]
+                );
+                if (uRows.length > 0) {
+                    driverCustId = uRows[0].CUST_ID;
+                }
+            }
+
+            let rows = await fetchRowsByDriverId(connection, driverCustId);
             rows = rows.map((row) => ({
                 ...row,
                 roundTripYn: String(row.roundTripYn || 'N').trim().toUpperCase() === 'Y' ? 'Y' : 'N',

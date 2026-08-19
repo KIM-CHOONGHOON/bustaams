@@ -348,9 +348,18 @@ const ApprovalPendingDriver = () => {
                                             </button>
                                         </div>
                                     ) : activeTab === 'final_approval_wait' ? (
-                                        <div className="w-full bg-emerald-50 border border-emerald-200 text-emerald-700 py-4 rounded-xl font-black text-sm flex items-center justify-center gap-2">
-                                            <span className="material-symbols-outlined text-lg">verified</span>
-                                            고객 최종 승인 대기 중
+                                        <div className="flex flex-col gap-3 w-full">
+                                            <div className="w-full bg-emerald-50 border border-emerald-200 text-emerald-700 py-4 rounded-xl font-black text-sm flex items-center justify-center gap-2">
+                                                <span className="material-symbols-outlined text-lg">verified</span>
+                                                고객 최종 승인 대기 중
+                                            </div>
+                                            <button 
+                                                onClick={() => navigate(`/contract-cancel-driver/${bid.id}`)}
+                                                className="w-full bg-red-50 text-red-600 py-3.5 rounded-xl font-black text-xs italic uppercase tracking-[0.1em] hover:bg-red-100 hover:text-red-700 transition-all active:scale-[0.98] flex items-center justify-center gap-2 border border-red-100"
+                                            >
+                                                <span className="material-symbols-outlined text-[16px]">cancel</span>
+                                                운행 취소하기
+                                            </button>
                                         </div>
                                     ) : (
                                         <button 

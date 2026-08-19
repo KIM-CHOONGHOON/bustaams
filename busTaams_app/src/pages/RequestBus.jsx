@@ -390,8 +390,24 @@ const RequestBus = () => {
         const limitDate = new Date();
         limitDate.setMonth(limitDate.getMonth() + 6);
 
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
         if (depDateTime) {
             const depDate = new Date(depDateTime.replace(' ', 'T'));
+            const depDateOnly = new Date(depDate.getFullYear(), depDate.getMonth(), depDate.getDate());
+            
+            if (depDateOnly <= today) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '날짜 선택 오류',
+                    text: '출발일은 내일 이후 날짜만 선택할 수 있습니다.',
+                    confirmButtonText: '확인',
+                    confirmButtonColor: '#0f766e',
+                });
+                return;
+            }
+
             if (depDate > limitDate) {
                 Swal.fire({
                     icon: 'warning',
@@ -405,6 +421,19 @@ const RequestBus = () => {
         }
         if (arrDateTime) {
             const arrDate = new Date(arrDateTime.replace(' ', 'T'));
+            const arrDateOnly = new Date(arrDate.getFullYear(), arrDate.getMonth(), arrDate.getDate());
+
+            if (arrDateOnly <= today) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: '날짜 선택 오류',
+                    text: '도착일은 내일 이후 날짜만 선택할 수 있습니다.',
+                    confirmButtonText: '확인',
+                    confirmButtonColor: '#0f766e',
+                });
+                return;
+            }
+
             if (arrDate > limitDate) {
                 Swal.fire({
                     icon: 'warning',
@@ -490,6 +519,15 @@ const RequestBus = () => {
             currentDate = depDateTime.split(' ')[0];
         }
 
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+        // 만약 기존 날짜가 없거나 오늘/이전이면 내일 날짜로 디폴트 세팅
+        if (!currentDate || new Date(currentDate) <= new Date(new Date().setHours(0,0,0,0))) {
+            currentDate = tomorrowStr;
+        }
+
         import('sweetalert2').then(({ default: Swal }) => {
             Swal.fire({
                 title: `<h3 class="font-headline font-black text-2xl text-teal-950">${type === 'dep' ? '출발 일시 설정' : '도착 일시 설정'}</h3>`,
@@ -497,7 +535,7 @@ const RequestBus = () => {
                     <div class="flex flex-col gap-4 mt-6 text-left font-body">
                         <div class="space-y-2">
                             <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">날짜 선택</label>
-                            <input type="date" id="swal-date" class="w-full p-5 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:bg-white focus:border-teal-600/20 font-bold text-teal-900 transition-all shadow-inner" value="${currentDate}">
+                            <input type="date" id="swal-date" min="${tomorrowStr}" class="w-full p-5 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:bg-white focus:border-teal-600/20 font-bold text-teal-900 transition-all shadow-inner" value="${currentDate}">
                         </div>
                         <div class="space-y-2">
                             <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">시간 선택</label>
@@ -510,12 +548,9 @@ const RequestBus = () => {
                 cancelButtonText: '취소',
                 buttonsStyling: false,
                 customClass: {
-                    // 모바일 화면을 위해 팝업 크기와 패딩 조절
                     popup: 'rounded-[2rem] p-6 md:p-8 border-none shadow-2xl max-w-[90%] md:max-w-md',
-                    // 버튼의 패딩과 글씨 크기를 조절하고 둥근 모서리로 레이아웃 밸런스 개선
                     confirmButton: 'bg-teal-700 text-white font-headline font-bold text-sm py-3 px-4 rounded-xl shadow-md hover:bg-teal-800 transition-all mx-1 flex-1 text-center justify-center items-center',
                     cancelButton: 'bg-slate-100 text-slate-500 font-headline font-bold text-sm py-3 px-4 rounded-xl hover:bg-slate-200 transition-all mx-1 flex-1 text-center justify-center items-center',
-                    // 버튼 사이 간격 및 여백 조절
                     actions: 'flex gap-2 w-full mt-6 justify-between',
                 },
                 preConfirm: () => {
@@ -526,8 +561,20 @@ const RequestBus = () => {
                         return false;
                     }
 
-                    // 오늘로부터 6개월 제한 체크
                     const selectedDateTime = new Date(`${d}T${t}`);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+
+                    // 당일 및 이전일 제한 체크
+                    const selectedDate = new Date(d);
+                    selectedDate.setHours(0, 0, 0, 0);
+
+                    if (selectedDate <= today) {
+                        Swal.showValidationMessage('출발/도착일은 내일 이후 날짜만 선택할 수 있습니다.');
+                        return false;
+                    }
+
+                    // 오늘로부터 6개월 제한 체크
                     const limitDate = new Date();
                     limitDate.setMonth(limitDate.getMonth() + 6);
 
@@ -542,7 +589,6 @@ const RequestBus = () => {
                 if (res.isConfirmed) {
                     if (type === 'dep') {
                         setDepDateTime(res.value);
-                        // 출발일시가 변경되면 도착일시는 출발일자의 18:00으로 기본 세팅 (한글 주석)
                         const selectedDate = res.value.split(' ')[0];
                         setArrDateTime(`${selectedDate} 18:00`);
                     } else {

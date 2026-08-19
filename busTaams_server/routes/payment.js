@@ -99,18 +99,21 @@ module.exports = function createPaymentRouter(pool, app) {
             );
             const tripTitle = reqRows.length > 0 ? reqRows[0].TRIP_TITLE : '요청하신 여행';
 
-            // 2. 해당 버스기사의 USER_ID 및 CUST_ID 조회
+            // 2. 해당 버스기사의 DRIVER_ID 조회
             const [resRows] = await connection.execute(
-                `SELECT r.DRIVER_ID, u.USER_ID 
-                 FROM TB_BUS_RESERVATION r
-                 JOIN TB_USER u ON r.DRIVER_ID = u.CUST_ID
-                 WHERE r.RES_ID = ?`,
+                `SELECT DRIVER_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?`,
                 [resId]
             );
 
             if (resRows.length > 0) {
                 const driverCustId = resRows[0].DRIVER_ID;
-                const driverUserId = resRows[0].USER_ID;
+                
+                // 2-1. 해당 기사의 USER_ID를 별도로 안전하게 조회 (TRIM 적용)
+                const [uRows] = await connection.execute(
+                    `SELECT USER_ID FROM TB_USER WHERE TRIM(CUST_ID) = TRIM(?) LIMIT 1`,
+                    [driverCustId]
+                );
+                const driverUserId = uRows.length > 0 ? uRows[0].USER_ID : driverCustId;
 
                 // push message 발송
                 console.log(`>>> [Push Notification] Sending payment completed push to driver ${driverUserId} (${driverCustId}) for reqId: ${reqId}, unitSeq: ${unitSeq}`);
@@ -370,8 +373,12 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                     cardMaskNo: payExtraInfo.cardMaskNo || null
                 });
 
-                // 4. TB_AUCTION_REQ 마스터 상태 변경
+                // 4. TB_AUCTION_REQ 마스터 상태 변경 및 결제 상태 COMPLETED 변경
                 await checkAndUpdateMasterStatus(connection, reqId, 'CUSTOMER');
+                await connection.execute(
+                    'UPDATE TB_AUCTION_REQ SET PAYMENT_STS = "COMPLETED", MOD_DT = NOW() WHERE REQ_ID = ?',
+                    [reqId]
+                );
 
                 // 5. 해당 버스 기사에게 PUSH 알림 전송
                 await sendDriverPaymentPushNotification(connection, reqId, unitSeq, targetId);
@@ -405,7 +412,7 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
             );
 
             await connection.execute(
-                `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'DRIVER_PAY_WAIT', MOD_DT = NOW() 
+                `UPDATE TB_AUCTION_REQ SET DATA_STAT = 'DRIVER_PAY_WAIT', PAYMENT_STS = 'COMPLETED', MOD_DT = NOW() 
                  WHERE REQ_ID = ? AND DATA_STAT NOT IN ('CONFIRM', 'DONE')`,
                 [targetId]
             );
