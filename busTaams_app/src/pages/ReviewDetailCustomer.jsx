@@ -104,7 +104,7 @@ const ReviewDetailCustomer = () => {
                 </div>
                 <div 
                     className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center overflow-hidden border border-slate-100 cursor-pointer transition-transform active:scale-95 shadow-sm"
-                    onClick={() => navigate('/profile-customer')}
+                    
                 >
                     {profileImage ? (
                         <img 

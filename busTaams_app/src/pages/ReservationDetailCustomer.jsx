@@ -216,7 +216,7 @@ const ReservationDetailCustomer = () => {
                         <h1 className="font-headline text-lg font-black tracking-tighter text-teal-800 italic">여행 상세 정보</h1>
                     </div>
                     <div className="flex items-center gap-4">
-                        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 overflow-hidden border-2 border-white shadow-sm transition-transform hover:scale-110 active:scale-95 cursor-pointer" onClick={() => navigate('/profile-customer')}>
+                        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 overflow-hidden border-2 border-white shadow-sm" >
                             {customerProfile?.profileImage ? (
                                 <img 
                                     src={getImageUrl(customerProfile.profileImage, imageVersion)} 

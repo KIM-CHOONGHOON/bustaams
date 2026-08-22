@@ -50,7 +50,7 @@ const PastTripListCustomer = () => {
                         <h1 className="font-headline font-black tracking-tighter text-3xl text-teal-900 leading-none italic">여행 이력</h1>
                     </div>
                     <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => navigate('/profile-customer')}>
+                        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 transition-colors" >
                             {profileImage ? (
                                 <img 
                                     alt="Profile" 

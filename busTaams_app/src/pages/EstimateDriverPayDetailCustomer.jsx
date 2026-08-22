@@ -134,8 +134,8 @@ const EstimateDriverPayDetailCustomer = () => {
                         <Avatar
                             profileImage={profileImage}
                             imageVersion={imageVersion}
-                            className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors"
-                            onClick={() => navigate('/profile-customer')}
+                            className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 transition-colors"
+                            
                         />
                     </div>
                 </div>

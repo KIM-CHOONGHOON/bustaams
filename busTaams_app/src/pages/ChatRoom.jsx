@@ -282,7 +282,7 @@ const ChatRoom = () => {
                             if (currentUser?.userType === 'DRIVER') {
                                 navigate('/driver-dashboard');
                             } else {
-                                navigate('/profile-customer');
+                                
                             }
                         }}
                     >

@@ -155,8 +155,8 @@ const InquiryListCustomer = () => {
                     
                     <div className="flex items-center gap-3">
                         <div 
-                            className="w-11 h-11 rounded-xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden"
-                            onClick={() => navigate('/profile-customer')}
+                            className="w-11 h-11 rounded-xl bg-white p-0.5 shadow-sm border border-slate-100 transition-all duration-300 overflow-hidden"
+                            
                         >
                             <div className="w-full h-full rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center relative group">
                                 {profileImage ? (

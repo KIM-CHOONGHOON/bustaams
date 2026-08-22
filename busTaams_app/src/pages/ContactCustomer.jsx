@@ -127,7 +127,7 @@ const ContactCustomer = () => {
                     <span className="material-symbols-outlined">chat_bubble</span>
                     <span className="font-black text-[9px] uppercase tracking-widest mt-1">Talk</span>
                 </button>
-                <button onClick={() => navigate('/profile-customer')} className="flex flex-col items-center justify-center bg-white/20 text-white rounded-xl w-12 h-12 shadow-lg active:scale-90 transition-all">
+                <button  className="flex flex-col items-center justify-center bg-white/20 text-white rounded-xl w-12 h-12 shadow-md transition-all cursor-default">
                     <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1"}}>person</span>
                 </button>
             </nav>

@@ -79,8 +79,8 @@ const ReviewPendingListCustomer = () => {
                         <Avatar 
                             profileImage={profileImage}
                             imageVersion={imageVersion}
-                            className="w-11 h-11 rounded-xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden flex items-center justify-center"
-                            onClick={() => navigate('/profile-customer')}
+                            className="w-11 h-11 rounded-xl bg-white p-0.5 shadow-sm border border-slate-100 transition-all duration-300 overflow-hidden flex items-center justify-center"
+                            
                         />
                     </div>
                 </div>

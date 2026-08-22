@@ -703,8 +703,7 @@ const RequestBus = () => {
 
                     <div className="flex items-center gap-3">
                         <div
-                            className="w-11 h-11 rounded-xl bg-white p-0.5 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md hover:border-teal-600/20 transition-all duration-300 overflow-hidden"
-                            onClick={() => navigate('/profile-customer')}
+                            className="w-11 h-11 rounded-xl bg-white p-0.5 shadow-sm border border-slate-100 transition-all duration-300 overflow-hidden"
                         >
                             <div className="w-full h-full rounded-lg overflow-hidden bg-slate-50 flex items-center justify-center relative group">
                                 {profileImage ? (
@@ -857,10 +856,10 @@ const RequestBus = () => {
                                                 const count = busCounts[bus.code] || 0;
                                                 return (
                                                     <div key={bus.code} className="space-y-3">
-                                                        <div className="flex items-center justify-between p-5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-teal-600/30 hover:shadow-md transition-all duration-300">
+                                                        <div className="flex flex-col items-start p-5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-teal-600/30 hover:shadow-md transition-all duration-300 gap-4">
                                                             <div>
                                                                 <p className="font-headline font-bold text-teal-900">{bus.name}</p>
-                                                                <p className="text-[11px] text-slate-500 font-medium">{bus.description}</p>
+
                                                             </div>
                                                             <div className="flex items-center gap-3 bg-white border border-slate-100 rounded-xl p-1 shadow-sm">
                                                                 <button onClick={(e) => { e.preventDefault(); updateBusCount(bus.code, -1); }} className="w-8 h-8 flex items-center justify-center text-teal-700 hover:bg-slate-50 rounded-lg transition-colors" type="button"><span className="material-symbols-outlined text-lg">remove</span></button>

@@ -417,7 +417,7 @@ const ApprovalListCustomer = () => {
                                 profileImage={customerProfile?.profileImage}
                                 imageVersion={imageVersion}
                                 className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center overflow-hidden border-2 border-white shadow-sm transition-transform hover:scale-110 active:scale-95 cursor-pointer"
-                                onClick={() => navigate('/profile-customer')}
+                                
                             />
                         </div>
                     </div>
@@ -448,8 +448,8 @@ const ApprovalListCustomer = () => {
                         <Avatar
                             profileImage={customerProfile?.profileImage}
                             imageVersion={imageVersion}
-                            className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 overflow-hidden border-2 border-white shadow-sm transition-transform hover:scale-110 active:scale-95 cursor-pointer"
-                            onClick={() => navigate('/profile-customer')}
+                            className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 overflow-hidden border-2 border-white shadow-sm"
+                            
                         />
                     </div>
                 </div>

@@ -151,7 +151,7 @@ const ChatRoomCustomer = () => {
                         <span className="material-symbols-outlined relative z-10" style={{fontVariationSettings: "'FILL' 1"}}>chat_bubble</span>
                         <span className="font-black text-[9px] uppercase tracking-widest mt-1 relative z-10 underline decoration-2 underline-offset-4">Talk</span>
                     </button>
-                    <button onClick={() => navigate('/profile-customer')} className="flex flex-col items-center justify-center bg-slate-900 text-white rounded-full w-12 h-12 shadow-lg active:scale-90 transition-all">
+                    <button  className="flex flex-col items-center justify-center bg-slate-900 text-white rounded-full w-12 h-12 shadow-md transition-all cursor-default">
                         <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1"}}>person</span>
                     </button>
                 </nav>

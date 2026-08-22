@@ -148,7 +148,7 @@ const ApprovalDetailCustomer = () => {
                         <h1 className="font-headline text-lg font-black tracking-tighter text-orange-600 italic">승인 상세 화면</h1>
                     </div>
                     <div className="flex items-center gap-4">
-                        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 overflow-hidden border-2 border-white shadow-sm transition-transform hover:scale-110 active:scale-95 cursor-pointer" onClick={() => navigate('/profile-customer')}>
+                        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 overflow-hidden border-2 border-white shadow-sm" >
                             {customerProfile?.profileImage ? (
                                 <img 
                                     src={customerProfile.profileImage.startsWith('http') ? 

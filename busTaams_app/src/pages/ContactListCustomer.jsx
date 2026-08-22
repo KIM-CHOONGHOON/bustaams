@@ -129,7 +129,7 @@ const ContactListCustomer = () => {
                     <span className="material-symbols-outlined">confirmation_number</span>
                     <span className="font-black text-[9px] uppercase tracking-widest mt-1">Trips</span>
                 </button>
-                <button onClick={() => navigate('/profile-customer')} className="flex flex-col items-center justify-center bg-slate-900 text-white rounded-xl w-12 h-12 shadow-lg active:scale-90 transition-all">
+                <button  className="flex flex-col items-center justify-center bg-slate-900 text-white rounded-xl w-12 h-12 shadow-md transition-all cursor-default">
                     <span className="material-symbols-outlined" style={{fontVariationSettings: "'FILL' 1"}}>person</span>
                 </button>
             </nav>

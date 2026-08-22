@@ -163,8 +163,8 @@ const CustomerDashboard = () => {
                     <Avatar 
                         profileImage={profileImage} 
                         imageVersion={imageVersion} 
-                        onClick={() => navigate('/profile-customer')} 
-                        className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors"
+                         
+                        className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 transition-colors"
                     />
                     <button 
                         onClick={handleLogout}
