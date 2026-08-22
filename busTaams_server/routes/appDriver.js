@@ -13,6 +13,8 @@ const { sendNotification } = require('../services/notificationService');
 const { runDriverVerificationsForProfileSetup } = require('../driverVerification');
 const { processBankbookOcr, processBizRegOcr } = require('../services/ocrService');
 const { cancelInicisPayment } = require('../lib/driverBidCancellation');
+const { applyMomMemberAfterBid } = require('../lib/driverBidMomMember');
+const { calculateDriverFee } = require('../lib/feeCalculator');
 
 const JWT_SECRET_KEY = process.env.JWT_SECRET || 'bustaams-dev-secret-key-2026';
 
@@ -1394,11 +1396,9 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
         const resId = await getNextId('TB_BUS_RESERVATION', 'RES_ID', 10, connection);
         console.log(`[BID_PROCESS] Generated RES_ID: ${resId} for reqBusSeq: ${reqBusSeq}`);
 
-        // 수수료 계산 (FEE_POLICY에 따라 DRIVER = 6.6%, 그 외 = 2.2%)
-        const feeRate = feePolicy === 'DRIVER' ? 0.066 : 0.022;
-        const feeTotal = Math.floor(busAmt * feeRate);
-        const feeRefund = Math.floor(feeTotal * (5.5 / 6.6));
-        const feeAttribution = feeTotal - feeRefund;
+        // 동적 수수료 계산 (FEE_POLICY 및 당월 확정 건수 기반)
+        const feeCalculation = await calculateDriverFee(connection, custId, busAmt);
+        const { feeTotal, feeRefund, feeAttribution } = feeCalculation;
 
         await connection.execute(
             `INSERT INTO TB_BUS_RESERVATION (
@@ -1409,6 +1409,12 @@ router.post('/auctions/:id/bid', authenticateToken, async (req, res) => {
             [resId, reqId, reqBusSeq, travelerId, custId, busId, busAmt, feeTotal, feeRefund, feeAttribution, dataStatToSet, custId, custId, feePolicy]
         );
         console.log(`[BID_PROCESS] Reservation inserted successfully for resId: ${resId}`);
+
+        // 4-1. TB_MOM_MEMBER 청약 실적 카운트 등록 및 갱신
+        const momResult = await applyMomMemberAfterBid(connection, custId);
+        if (!momResult.ok) {
+            throw new Error(momResult.lines ? momResult.lines.join('\n') : '청약 실적(횟수) 등록 중 오류가 발생했습니다.');
+        }
 
         // 5. 전체 차량 청약 승인 완료 여부 확인 및 마스터 상태 업데이트 (DRIVER_PAY_WAIT 상태도 승인 범위에 포함)
         const [cntAggRows] = await connection.execute(

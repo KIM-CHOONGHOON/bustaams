@@ -4,6 +4,7 @@ const axios = require('axios');
 const iconv = require('iconv-lite');
 const router = express.Router();
 const { sendNotification } = require('../services/notificationService');
+const { calculateDriverFee } = require('../lib/feeCalculator');
 
 // 이니시스 설정 (.env에서 가져옴)
 const MID = process.env.INICIS_MID || 'INIpayTest';
@@ -12,55 +13,11 @@ const SIGN_KEY = process.env.INICIS_SIGN_KEY || 'SU5JTElURV9UUklQTEVERVNfS0VZU1R
 // 💰 기사 데이터 이용료 동적 계산 헬퍼 함수 (한글 주석)
 async function calculateDriverDynamicFee(connection, custId, biddingPrice) {
     try {
-        const [momRows] = await connection.execute(
-            `SELECT FEE_POLICY, BASIC_CNT, USE_CNT 
-             FROM TB_MOM_MEMBER 
-             WHERE CUST_ID = ? AND YYYYMM = DATE_FORMAT(NOW(), '%Y%m')`,
-            [custId]
-        );
-
-        let feePolicy = 'DRIVER';
-        let basicCnt = 0;
-        let useCnt = 0;
-
-        if (momRows.length > 0) {
-            feePolicy = momRows[0].FEE_POLICY;
-            basicCnt = momRows[0].BASIC_CNT;
-            useCnt = momRows[0].USE_CNT;
-        } else {
-            const [driverRows] = await connection.execute(
-                "SELECT FEE_POLICY FROM TB_DRIVER_DETAIL WHERE CUST_ID = ?",
-                [custId]
-            );
-            if (driverRows.length > 0) {
-                feePolicy = driverRows[0].FEE_POLICY;
-            }
-        }
-
-        if (feePolicy === 'DRIVER_GENERAL') {
-            basicCnt = 10;
-        } else if (feePolicy === 'DRIVER_MIDDLE') {
-            basicCnt = 20;
-        } else if (feePolicy === 'DRIVER_HIGH') {
-            basicCnt = 30;
-        }
-
-        let feeRate = 0.033; // 일반 기사는 3.3%
-
-        if (['DRIVER_GENERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH'].includes(feePolicy)) {
-            if (useCnt < basicCnt) {
-                feeRate = 0.022;
-            } else {
-                feeRate = 0.033;
-            }
-        }
-
-        const feeTotalAmt = Math.floor(biddingPrice * feeRate);
-
+        const result = await calculateDriverFee(connection, custId, biddingPrice);
         return {
-            feePolicy,
-            feeRate,
-            feeTotalAmt
+            feePolicy: result.feePolicy,
+            feeRate: result.feeRate,
+            feeTotalAmt: result.feeTotal
         };
     } catch (err) {
         console.error('[calculateDriverDynamicFee] Error:', err);

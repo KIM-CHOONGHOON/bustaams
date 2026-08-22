@@ -288,6 +288,10 @@ async function executeDriverBidCancellation(connection, bucket, p) {
         return {ok: false, status: 409, code: 'NOT_BIDDING_OR_CONFIRM', message: MSGS.NOT_BIDDING_OR_CONFIRM};
     }
 
+    // 기사 청약(입찰) 취소 시 청약 횟수 롤백(차감)
+    const { rollbackMomMember } = require('./driverBidMomMember');
+    await rollbackMomMember(connection, driverCustId);
+
     const [busUp] = await connection.execute(
         `UPDATE TB_AUCTION_REQ_BUS
             SET DATA_STAT = 'BUS_CANCEL',
