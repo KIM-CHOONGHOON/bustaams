@@ -734,32 +734,9 @@ const RequestBus = () => {
                 </div>
             </header>
 
-            <main className="max-w-7xl mx-auto px-6 pt-24 pb-32">
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    {/* Left Side */}
-                    <div className="col-span-12 lg:col-span-5 flex flex-col justify-center mb-8 lg:mb-0">
-                        <span className="text-teal-600 font-headline font-bold uppercase tracking-[0.3em] mb-4 block text-[12px]">전세 서비스</span>
-                        <h2 className="font-headline font-extrabold text-5xl lg:text-7xl leading-[1.1] text-teal-900 mb-8 tracking-tight text-[48px]">
-                            당신만을 위한<br />전용 버스.
-                        </h2>
-                        <p className="text-slate-600 text-lg lg:text-xl leading-relaxed max-w-md text-[18px]">
-                            일생에 단 한 번뿐인 특별한 여행을 정의하세요. 럭셔리 비즈니스 코치부터 지속 가능한 운송 솔루션까지, 귀하의 단체에 꼭 필요한 사양을 요청하실 수 있습니다.
-                        </p>
-
-                        <div className="mt-12 relative rounded-2xl overflow-hidden h-64 w-full shadow-xl">
-                            <img alt="Bus" className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCz878BnQd8uirQZS16lTczMSsapv5qs4qZPfOQxFRYi3OW0p-2zDSuiwWyAD_HIV9ilP6hEIC5JSbP3laJx9zkoMeQLMfC7G1UQxZD58i_ZpXCTUCTvamqt_-ap-545hcLovNaBPkNJGYRpfTyzltMPomzBwTuKptb_I1wquU_GdmO0CMeWjdgsmvlzyZisBNylO15Gztlwd1yoZWLIeWpv54WA3SO5V--fxRyp6Dt8dlmB3tE01oDz_XWHFW2onY5E9x8_ZpPr3o" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-teal-900/60 to-transparent"></div>
-                            <div className="absolute bottom-6 left-6 text-white text-left">
-                                <p className="font-headline font-bold text-lg">VIP 경험</p>
-                                <p className="text-sm opacity-90">맞춤형 노선 계획 포함</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Right Side: The Form Canvas */}
-                    <div className="col-span-12 lg:col-span-7">
-                        <div className="bg-white rounded-2xl p-8 lg:p-12 shadow-2xl relative border border-slate-100">
-                            <form onSubmit={(e) => e.preventDefault()} className="space-y-10 text-left">
+            <main className="max-w-3xl mx-auto px-6 pt-24 pb-32">
+                <div className="bg-white rounded-2xl p-8 lg:p-12 shadow-2xl relative border border-slate-100">
+                    <form onSubmit={(e) => e.preventDefault()} className="space-y-10 text-left">
                                 <section>
                                     <div className="flex items-center gap-4 mb-8">
                                         <div className="w-1.5 h-8 bg-red-600 rounded-full"></div>
@@ -967,8 +944,6 @@ const RequestBus = () => {
                                     </button>
                                 </div>
                             </form>
-                        </div>
-                    </div>
                 </div>
             </main>
 
