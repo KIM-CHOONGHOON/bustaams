@@ -72,7 +72,14 @@ const NotificationList = () => {
         } catch (routeErr) {
           console.error('동적 라우팅 파싱 에러:', routeErr);
         }
-        navigate(notif.LINK);
+
+        let targetLink = notif.LINK;
+        if (targetLink.startsWith('/app/')) {
+          targetLink = targetLink.replace(/^\/app/, '');
+        } else if (targetLink === '/app') {
+          targetLink = '/';
+        }
+        navigate(targetLink);
       }
     } catch (error) {
       console.error('알림 읽음 처리 실패:', error);

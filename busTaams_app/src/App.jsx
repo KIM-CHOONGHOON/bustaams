@@ -146,6 +146,7 @@ function App() {
         
         {/* 고객용 라우트 */}
         <Route path="/customer-dashboard" element={<CustomerDashboard />} />
+        <Route path="/customer/dashboard" element={<CustomerDashboard />} />
         <Route path="/request-bus" element={<RequestBus />} />
         <Route path="/edit-request/:id" element={<RequestBus />} />
         <Route path="/reservation-detail/:id" element={<ErrorBoundary><ReservationDetail /></ErrorBoundary>} />
@@ -171,6 +172,7 @@ function App() {
         
         {/* 기사님용 라우트 */}
         <Route path="/driver-dashboard" element={<DriverDashboard />} />
+        <Route path="/driver/dashboard" element={<DriverDashboard />} />
         <Route path="/driver-certification" element={<DriverInfoRegistration />} />
         <Route path="/bus-certification" element={<BusInfoRegistration />} />
         <Route path="/estimate-list-driver" element={<EstimateListDriver />} />

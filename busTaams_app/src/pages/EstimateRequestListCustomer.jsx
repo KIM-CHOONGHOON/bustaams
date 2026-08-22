@@ -88,6 +88,11 @@ const EstimateRequestListCustomer = () => {
     };
 
     useEffect(() => {
+        if (typeParam === 'cancel') {
+            navigate('/customer-dashboard', { replace: true });
+            return;
+        }
+
         const fetchRequests = async () => {
             setLoading(true);
             try {
@@ -116,7 +121,7 @@ const EstimateRequestListCustomer = () => {
 
         fetchRequests();
         fetchProfile();
-    }, [typeParam]);
+    }, [typeParam, navigate]);
 
     const handleFinalApprove = async (reqUuid, title) => {
         const confirmed = await notify.confirm('최종 승인 확정', `'${title}' 청약 건의 기사 결제가 완료되었습니다. 최종 승인하고 예약을 확정하시겠습니까?`);
