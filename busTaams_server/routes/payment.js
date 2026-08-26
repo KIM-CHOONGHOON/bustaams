@@ -23,8 +23,8 @@ async function calculateDriverDynamicFee(connection, custId, biddingPrice) {
         console.error('[calculateDriverDynamicFee] Error:', err);
         return {
             feePolicy: 'DRIVER',
-            feeRate: 0.033,
-            feeTotalAmt: Math.floor(biddingPrice * 0.033)
+            feeRate: 0.066,
+            feeTotalAmt: Math.floor(biddingPrice * 0.066)
         };
     }
 }

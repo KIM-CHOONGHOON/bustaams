@@ -50,16 +50,16 @@ async function calculateDriverFee(connection, custId, busAmt) {
     const confirmCount = confirmRows[0]?.confirmCount || 0;
     
     // 3. 요금제 정책 및 확정 건수에 따른 수수료율 결정
-    let feeRate = 0.033; // 기본 3.3%
+    let feeRate = 0.066; // 기본 6.6%
     
     if (feePolicy === 'DRIVER') {
-        feeRate = 0.033;
+        feeRate = 0.066;
     } else if (feePolicy === 'DRIVER_GENERAL') {
-        feeRate = confirmCount >= 10 ? 0.033 : 0.022;
+        feeRate = confirmCount >= 10 ? 0.066 : 0.022;
     } else if (feePolicy === 'DRIVER_HIGH') {
-        feeRate = confirmCount >= 20 ? 0.033 : 0.022;
+        feeRate = confirmCount >= 20 ? 0.066 : 0.022;
     } else if (feePolicy === 'DRIVER_MIDDLE') {
-        feeRate = confirmCount >= 30 ? 0.033 : 0.022;
+        feeRate = confirmCount >= 30 ? 0.066 : 0.022;
     }
     
     const feeTotal = Math.floor(busAmt * feeRate);
