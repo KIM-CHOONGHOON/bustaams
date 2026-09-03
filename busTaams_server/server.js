@@ -3040,6 +3040,7 @@ app.get('/api/payment/ready', async (req, res) => {
             amount: cleanAmount,
             signature,
             mKey,
+            quotabase: "2:3",
             buyertel: '01012345678',
             buyername: '홍길동'
         });

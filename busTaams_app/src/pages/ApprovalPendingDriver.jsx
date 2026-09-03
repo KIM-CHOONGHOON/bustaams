@@ -71,9 +71,10 @@ const ApprovalPendingDriver = () => {
                 form.P_MOBILE.value = cleanMobile;
                 form.P_EMAIL.value = data.buyeremail;
                 form.P_NEXT_URL.value = data.returnUrl;
-                form.P_RESERVED.value = "vbank_receipt=Y";
+                form.P_RESERVED.value = "vbank_receipt=Y&quota=2:3&quotabase=2:3";
                 form.P_INI_PAYMENT.value = "CARD";
                 form.P_CHARSET.value = "euc-kr";
+                if (form.P_QUOTABASE) form.P_QUOTABASE.value = "2:3";
 
                 form.submit();
             } else {
@@ -97,6 +98,8 @@ const ApprovalPendingDriver = () => {
                 form.returnUrl.value = `${window.location.origin}/api/payment/return`;
                 form.closeUrl.value = `${window.location.origin}/close-payment`;
                 form.gopaymethod.value = "Card";
+                if (form.quotabase) form.quotabase.value = "2:3";
+                if (form.acceptmethod) form.acceptmethod.value = "quota(2:3)";
 
                 window.INIStdPay.pay(form);
             }
@@ -413,6 +416,9 @@ const ApprovalPendingDriver = () => {
                 <input type="hidden" name="returnUrl" value="" />
                 <input type="hidden" name="closeUrl" value={`${window.location.origin}/close-payment`} />
                 <input type="hidden" name="gopaymethod" value="Card" />
+                <input type="hidden" name="quotabase" value="2:3" />
+                <input type="hidden" name="acceptmethod" value="quota(2:3)" />
+                <input type="hidden" name="ini_onlycardcode" value="" />
 
                 {/* 모바일 필드 (P_ 접두사) */}
                 <input type="hidden" name="P_MID" value="" />
@@ -426,6 +432,7 @@ const ApprovalPendingDriver = () => {
                 <input type="hidden" name="P_RESERVED" value="" />
                 <input type="hidden" name="P_INI_PAYMENT" value="" />
                 <input type="hidden" name="P_CHARSET" value="euc-kr" />
+                <input type="hidden" name="P_QUOTABASE" value="2:3" />
             </form>
         </div>
     );
