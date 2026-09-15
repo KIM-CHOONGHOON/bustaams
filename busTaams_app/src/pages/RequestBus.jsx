@@ -374,9 +374,39 @@ const RequestBus = () => {
     const handleRequestSubmit = async (e) => {
         e.preventDefault();
         if (selectedBuses.length === 0) {
-            notify.warn('알림', '배차할 버스를 선택해주세요.');
+            Swal.fire({
+                icon: 'warning',
+                title: '차량 선택 필요',
+                text: '배차할 차량을 최소 1대 이상 선택해주세요.',
+                confirmButtonText: '확인',
+                confirmButtonColor: '#0f766e',
+            });
             return;
         }
+
+        // 차량 1대당 최소 금액 (300,000원) 유효성 검사 (한글 주석)
+        let hasUnderMinPrice = false;
+        busTypes.forEach(bus => {
+            const count = busCounts[bus.code] || 0;
+            for (let i = 0; i < count; i++) {
+                const amt = quoteAmounts[`${bus.code}_${i}`] || 0;
+                if (amt < 300000) {
+                    hasUnderMinPrice = true;
+                }
+            }
+        });
+
+        if (hasUnderMinPrice) {
+            Swal.fire({
+                icon: 'warning',
+                title: '최소 금액 미달',
+                text: '차량 1대당 최소 요청 금액은 300,000원 이상이어야 합니다.\n300,000원 미만으로는 등록할 수 없습니다.',
+                confirmButtonText: '확인',
+                confirmButtonColor: '#0f766e',
+            });
+            return;
+        }
+
         if (!depAddress || !arrAddress || !endAddress) {
             notify.warn('알림', '출발지, 목적지, 최종도착지를 모두 입력해주세요.');
             return;
@@ -856,10 +886,9 @@ const RequestBus = () => {
                                                 const count = busCounts[bus.code] || 0;
                                                 return (
                                                     <div key={bus.code} className="space-y-3">
-                                                        <div className="flex flex-col items-start p-5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-teal-600/30 hover:shadow-md transition-all duration-300 gap-4">
+                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-teal-600/30 hover:shadow-md transition-all duration-300 gap-4">
                                                             <div>
                                                                 <p className="font-headline font-bold text-teal-900">{bus.name}</p>
-
                                                             </div>
                                                             <div className="flex items-center gap-3 bg-white border border-slate-100 rounded-xl p-1 shadow-sm">
                                                                 <button onClick={(e) => { e.preventDefault(); updateBusCount(bus.code, -1); }} className="w-8 h-8 flex items-center justify-center text-teal-700 hover:bg-slate-50 rounded-lg transition-colors" type="button"><span className="material-symbols-outlined text-lg">remove</span></button>
@@ -867,7 +896,7 @@ const RequestBus = () => {
                                                                 <button onClick={(e) => { e.preventDefault(); updateBusCount(bus.code, 1); }} className="w-8 h-8 flex items-center justify-center text-teal-700 hover:bg-slate-50 rounded-lg transition-colors" type="button"><span className="material-symbols-outlined text-lg">add</span></button>
                                                             </div>
                                                         </div>
-                                                        
+
                                                         {/* +,- 선택시 하단에 생성되는 기수별 고객 요청 금액 입력부 */}
                                                         {count > 0 && (
                                                             <div className="pl-6 border-l-2 border-teal-600/30 space-y-3 ml-4 animate-fade-in text-left">
@@ -880,7 +909,7 @@ const RequestBus = () => {
                                                                                 <span className="text-xs font-black text-slate-700">{bus.name} - {i + 1}호차</span>
                                                                             </div>
                                                                             <div className="flex-1 max-w-xs space-y-1">
-                                                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">고객 요청 금액</span>
+                                                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">고객 요청 금액 <span className="text-teal-600 font-bold ml-1">(최소 ₩300,000)</span></span>
                                                                                 <div className="flex items-center bg-white rounded-xl px-3 py-2 border border-slate-200 shadow-inner overflow-hidden">
                                                                                     <span className="shrink-0 font-black text-sm text-teal-800 mr-1.5">₩</span>
                                                                                     <input
@@ -904,7 +933,7 @@ const RequestBus = () => {
                                                                                             }
                                                                                         }}
                                                                                         className="quote-amount-input flex-1 min-w-0 w-full bg-transparent border-none focus:ring-0 text-teal-950 font-black text-right outline-none p-0 text-sm"
-                                                                                        placeholder="0"
+                                                                                        placeholder="300,000"
                                                                                     />
                                                                                 </div>
                                                                             </div>

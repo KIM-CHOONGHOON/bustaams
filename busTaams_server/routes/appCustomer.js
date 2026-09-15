@@ -2260,7 +2260,24 @@ router.post('/auction-req', authenticateToken, async (req, res) => {
 
         if (!startAddr || !endAddr || !startDt || !endDt) {
             console.warn('[Auction Request] Validation Failed: Missing required fields');
+            await connection.rollback();
             return res.status(400).json({ success: false, error: '필수 정보(출발지, 도착지, 날짜)가 누락되었습니다.' });
+        }
+
+        // 차량 미선택 검증 (한글 주석)
+        const safeBusesCheck = Array.isArray(buses) ? buses : [];
+        if (safeBusesCheck.length === 0) {
+            console.warn('[Auction Request] Validation Failed: No buses selected');
+            await connection.rollback();
+            return res.status(400).json({ success: false, error: '차량을 최소 1대 이상 선택해야 합니다.' });
+        }
+
+        // 차량 1대당 최소 금액 (300,000원) 검증 (한글 주석)
+        const hasUnderMinAmt = safeBusesCheck.some(b => (parseInt(b.reqAmt, 10) || 0) < 300000);
+        if (hasUnderMinAmt) {
+            console.warn('[Auction Request] Validation Failed: Bus amount under 300,000 KRW');
+            await connection.rollback();
+            return res.status(400).json({ success: false, error: '차량 1대당 최소 요청 금액은 300,000원 이상이어야 합니다.' });
         }
 
         // 0. CUST_ID 및 이용 제한 조회
@@ -2519,8 +2536,19 @@ router.put('/auction-req/:id', authenticateToken, async (req, res) => {
             return res.status(403).json({ success: false, error: '수정 권한이 없습니다.' });
         }
 
-        // 2. 마스터 업데이트
+        // 2. 마스터 업데이트 및 차량 유효성 검증
         const safeBuses = Array.isArray(buses) ? buses : [];
+        if (safeBuses.length === 0) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, error: '차량을 최소 1대 이상 선택해야 합니다.' });
+        }
+
+        const hasUnderMinAmt = safeBuses.some(b => (parseInt(b.reqAmt, 10) || 0) < 300000);
+        if (hasUnderMinAmt) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, error: '차량 1대당 최소 요청 금액은 300,000원 이상이어야 합니다.' });
+        }
+
         const totalReqAmt = safeBuses.reduce((acc, b) => acc + (parseInt(b.reqAmt, 10) || 0), 0);
         const tripTitle = clientTripTitle || `${startAddr.split(' ')[0]} -> ${endAddr.split(' ')[0]} 여정`;
         const formatDt = (dtStr) => dtStr.replace('T', ' ').replace('Z', '').substring(0, 19);
