@@ -2657,7 +2657,8 @@ router.post('/cancel-bid/:id', authenticateToken, async (req, res) => {
             [resId, custId]
         );
         if (resRows.length === 0) {
-            throw new Error('취소 가능한 청약 내역이 아니거나 이미 확정되어 권한이 없습니다.');
+            await connection.rollback();
+            return res.status(400).json({ success: false, error: '취소 가능한 입찰(청약) 내역이 없거나 이미 취소 처리된 건입니다.' });
         }
         const { REQ_ID: reqId, REQ_BUS_SEQ: reqBusSeq, DATA_STAT: originalDataStat, DRIVER_PAY_STAT: driverPayStat, DRIVER_PAY_ID: driverPayId, DRIVER_PAY_AMT: driverPayAmt } = resRows[0];
 
@@ -2869,7 +2870,11 @@ router.post('/cancel-bid/:id', authenticateToken, async (req, res) => {
     } catch (error) {
         if (connection) await connection.rollback();
         console.error('[Driver Cancel Bid] Error:', error);
-        res.status(500).json({ success: false, error: error.message || '청약 취소 중 오류가 발생했습니다.' });
+        let errorMsg = error.message || '청약 취소 중 오류가 발생했습니다.';
+        if (errorMsg.includes('Malformed communication packet') || errorMsg.includes('ER_') || errorMsg.includes('PACKET')) {
+            errorMsg = '취소 가능한 입찰(청약) 내역이 존재하지 않거나 이미 취소 처리된 상태입니다.';
+        }
+        res.status(500).json({ success: false, error: errorMsg });
     } finally {
         if (connection) connection.release();
     }

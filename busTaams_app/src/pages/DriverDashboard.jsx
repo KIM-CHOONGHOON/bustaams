@@ -51,12 +51,43 @@ const DriverDashboard = () => {
                 });
                 setUserName(res.data.userName || '기사님');
                 setUserImage(res.data.userImage);
+                const isDriverReg = !!res.data.isDriverInfoRegistered;
+                const isBusReg = !!res.data.isBusInfoRegistered;
                 setRegistrationStatus({
-                    isDriverInfoRegistered: !!res.data.isDriverInfoRegistered,
-                    isBusInfoRegistered: !!res.data.isBusInfoRegistered
+                    isDriverInfoRegistered: isDriverReg,
+                    isBusInfoRegistered: isBusReg
                 });
                 setAuctionList(res.data.auctionList || []);
                 setTodayTrip(res.data.todayTrip || null);
+
+                // 미등록 상태 알림 팝업 및 자동 이동
+                if (!isDriverReg) {
+                    Swal.fire({
+                        title: '기사 정보 등록 필요',
+                        text: '기사 정보가 등록되어 있지 않습니다. 기사 정보를 먼저 등록해 주세요.',
+                        icon: 'warning',
+                        confirmButtonColor: '#00685f',
+                        confirmButtonText: '확인',
+                        allowOutsideClick: false
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            navigate('/driver-certification');
+                        }
+                    });
+                } else if (!isBusReg) {
+                    Swal.fire({
+                        title: '버스 정보 등록 필요',
+                        text: '버스 정보가 등록되어 있지 않습니다. 버스 정보를 등록해 주세요.',
+                        icon: 'warning',
+                        confirmButtonColor: '#00685f',
+                        confirmButtonText: '확인',
+                        allowOutsideClick: false
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            navigate('/bus-certification');
+                        }
+                    });
+                }
             } else {
                 setFetchError(res.error || '대시보드 데이터를 불러오지 못했습니다.');
             }
@@ -185,11 +216,12 @@ const DriverDashboard = () => {
                 <div className="flex items-center gap-1.5 md:gap-4 shrink-0">
                     <button 
                         onClick={() => navigate('/notifications')}
-                        className="relative text-teal-800 hover:opacity-80 transition-opacity p-1 md:p-2"
+                        className="relative p-1.5 md:p-2 rounded-full hover:bg-slate-100/60 transition-colors flex items-center justify-center text-teal-800"
+                        title="알림 목록"
                     >
-                        <span className="material-symbols-outlined text-[20px] md:text-[24px]">notifications</span>
+                        <span className="material-symbols-outlined text-[22px] md:text-[26px]">notifications</span>
                         {unreadCount > 0 && (
-                            <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-secondary rounded-full border-2 border-white text-[9px] text-white font-bold flex items-center justify-center">
+                            <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 rounded-full border-2 border-white text-[10px] text-white font-extrabold flex items-center justify-center shadow-sm pointer-events-none">
                                 {unreadCount > 99 ? '99+' : unreadCount}
                             </span>
                         )}
@@ -358,7 +390,35 @@ const DriverDashboard = () => {
                                 return (
                                     <div 
                                         key={idx}
-                                        onClick={() => !isDisabled && navigate(menu.path)}
+                                        onClick={() => {
+                                            if (!isDisabled) {
+                                                navigate(menu.path);
+                                            } else if (!isDriverInfoReg) {
+                                                Swal.fire({
+                                                    title: '기사 정보 등록 필요',
+                                                    text: '기사 정보를 먼저 등록해 주세요.',
+                                                    icon: 'warning',
+                                                    confirmButtonColor: '#00685f',
+                                                    confirmButtonText: '확인'
+                                                }).then((result) => {
+                                                    if (result.isConfirmed) {
+                                                        navigate('/driver-certification');
+                                                    }
+                                                });
+                                            } else if (!isBusInfoReg) {
+                                                Swal.fire({
+                                                    title: '버스 정보 등록 필요',
+                                                    text: '버스 정보를 등록해 주세요.',
+                                                    icon: 'warning',
+                                                    confirmButtonColor: '#00685f',
+                                                    confirmButtonText: '확인'
+                                                }).then((result) => {
+                                                    if (result.isConfirmed) {
+                                                        navigate('/bus-certification');
+                                                    }
+                                                });
+                                            }
+                                        }}
                                         className={`cursor-pointer bg-white px-5 py-4 rounded-[20px] shadow-sm border border-slate-100/70 flex items-center justify-between transition-all duration-300 ${
                                             isDisabled 
                                             ? 'opacity-45 cursor-not-allowed grayscale' 

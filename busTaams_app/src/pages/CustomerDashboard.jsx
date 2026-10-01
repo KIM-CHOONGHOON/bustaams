@@ -151,11 +151,12 @@ const CustomerDashboard = () => {
                 <div className="flex items-center gap-1.5 md:gap-4 shrink-0">
                     <button 
                         onClick={() => navigate('/notifications')}
-                        className="p-1 md:p-2 rounded-full hover:bg-slate-100/50 transition-colors relative"
+                        className="relative p-1.5 md:p-2 rounded-full hover:bg-slate-100/60 transition-colors flex items-center justify-center"
+                        title="알림 목록"
                     >
-                        <span className="material-symbols-outlined text-slate-500 text-[20px] md:text-[24px]">notifications</span>
+                        <span className="material-symbols-outlined text-slate-700 text-[22px] md:text-[26px]">notifications</span>
                         {unreadCount > 0 && (
-                            <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 rounded-full border-2 border-white text-[9px] text-white font-bold flex items-center justify-center">
+                            <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 rounded-full border-2 border-white text-[10px] text-white font-extrabold flex items-center justify-center shadow-sm pointer-events-none">
                                 {unreadCount > 99 ? '99+' : unreadCount}
                             </span>
                         )}

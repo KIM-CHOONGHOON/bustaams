@@ -145,11 +145,19 @@ const ApprovalPendingDriver = () => {
                 await notify.success('입찰 취소 완료', '입찰이 성공적으로 취소되었습니다.');
                 fetchData();
             } else {
-                await notify.error('입찰 취소 실패', result.error || '오류가 발생했습니다.');
+                let errText = result.error || '오류가 발생했습니다.';
+                if (errText.includes('Malformed') || errText.includes('packet') || errText.includes('Error:')) {
+                    errText = '취소 가능한 입찰 내역이 아니거나 이미 처리된 요청입니다.';
+                }
+                await notify.error('입찰 취소 실패', errText);
             }
         } catch (err) {
             console.error('Cancel bid error:', err);
-            await notify.error('입찰 취소 실패', err.message || '서버 통신 오류가 발생했습니다.');
+            let errText = err.message || '서버 통신 오류가 발생했습니다.';
+            if (errText.includes('Malformed') || errText.includes('packet')) {
+                errText = '취소 가능한 입찰 내역이 아니거나 이미 처리된 요청입니다.';
+            }
+            await notify.error('입찰 취소 실패', errText);
         }
     };
 

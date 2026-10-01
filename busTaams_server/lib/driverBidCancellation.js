@@ -6,13 +6,29 @@ const { orgFileNmAndExt } = require('./bt_common_utils');
 // 💰 이니시스 카드 결제 취소 (환불) 요청 헬퍼 함수
 async function cancelInicisPayment({ tid, msg, clientIp }) {
     try {
-        const mid = process.env.INICIS_MID || 'INIpayTest';
-        let apiKey = process.env.INICIS_BILL_API_KEY || 'rKnPljRn5m6J9Mzz';
+        let mid = process.env.INICIS_MID || 'INIpayTest';
+        if (tid) {
+            if (tid.includes('cafe248471')) {
+                mid = 'cafe248471';
+            } else if (tid.includes('cafe246686')) {
+                mid = 'cafe246686';
+            } else if (tid.includes('INIpayTest') || tid.includes('INIBillTst')) {
+                mid = 'INIpayTest';
+            }
+        }
+
+        let apiKey = process.env.INICIS_API_KEY || process.env.INICIS_BILL_API_KEY || 'rKnPljRn5m6J9Mzz';
         let refundUrl = 'https://iniapi.inicis.com/api/v1/refund';
-        if (mid === 'INIpayTest') {
+
+        if (mid === 'cafe246686') {
+            apiKey = process.env.INICIS_BILL_API_KEY || 'rKnPljRn5m6J9Mzz';
+        } else if (mid === 'cafe248471') {
+            apiKey = process.env.INICIS_API_KEY || process.env.INICIS_BILL_API_KEY || 'rKnPljRn5m6J9Mzz';
+        } else if (mid === 'INIpayTest') {
             apiKey = 'ItEQKi3rY7uvDS8l';
             refundUrl = 'https://stginiapi.inicis.com/api/v1/refund';
         }
+
         const timestamp = new Date().toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
 
         let targetIp = clientIp || '1.234.65.153';

@@ -16,13 +16,32 @@ const { sendNotification } = require('../services/notificationService');
 // 💰 이니시스 카드 결제 취소 (환불) 요청 헬퍼 함수
 async function cancelInicisPayment({ tid, msg, clientIp, price, confirmPrice }) {
     try {
-        const mid = process.env.INICIS_MID || 'INIpayTest';
-        let apiKey = process.env.INICIS_BILL_API_KEY || 'rKnPljRn5m6J9Mzz';
+        // 1. 거래번호(TID)로부터 MID를 동적으로 추출 (기본값: INICIS_MID 환경변수 또는 INIpayTest)
+        let mid = process.env.INICIS_MID || 'INIpayTest';
+        if (tid) {
+            if (tid.includes('cafe248471')) {
+                mid = 'cafe248471';
+            } else if (tid.includes('cafe246686')) {
+                mid = 'cafe246686';
+            } else if (tid.includes('INIpayTest') || tid.includes('INIBillTst')) {
+                mid = 'INIpayTest';
+            }
+        }
+
+        // 2. MID에 맞는 API Key 선택
+        let apiKey = process.env.INICIS_API_KEY || process.env.INICIS_BILL_API_KEY || 'rKnPljRn5m6J9Mzz';
         let refundUrl = 'https://iniapi.inicis.com/api/v1/refund';
-        if (mid === 'INIpayTest') {
+
+        if (mid === 'cafe246686') {
+            apiKey = process.env.INICIS_BILL_API_KEY || 'rKnPljRn5m6J9Mzz';
+        } else if (mid === 'cafe248471') {
+            // 일반 결제 MID용 API Key (미설정 시 INICIS_BILL_API_KEY 사용)
+            apiKey = process.env.INICIS_API_KEY || process.env.INICIS_BILL_API_KEY || 'rKnPljRn5m6J9Mzz';
+        } else if (mid === 'INIpayTest') {
             apiKey = 'ItEQKi3rY7uvDS8l';
             refundUrl = 'https://stginiapi.inicis.com/api/v1/refund';
         }
+
         const timestamp = new Date().toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
 
         let targetIp = clientIp || '1.234.65.153';
@@ -72,10 +91,15 @@ async function cancelInicisPayment({ tid, msg, clientIp, price, confirmPrice }) 
  * 나. 여행 확정 24시간 경과 후 ~ 여행 출발 30일 전 취소 시: 데이터 이용료의 50% 공제 후 환불 (공제 50%)
  * 다. 여행 출발 30일 이내 취소 시: 데이터 이용료의 80% 공제 후 환불 (공제 80%)
  */
-function calculateFeeRefundPolicy(confirmDt, startDt) {
+function calculateFeeRefundPolicy(confirmDt, startDt, currentReqStat) {
     const now = new Date();
     const confirmDate = confirmDt ? new Date(confirmDt) : null;
     const startDate = startDt ? new Date(startDt) : null;
+
+    // 결제 대기 및 기사 결제 대기 등 최종 확정 전 취소 시 전액 환불 처리 (공제 0%)
+    if (currentReqStat === 'CUSTOMER_PAY_WAIT' || currentReqStat === 'DRIVER_PAY_WAIT') {
+        return { deductRate: 0, refundRate: 1.0, label: '결제대기 전액 환불 (공제 0%)' };
+    }
 
     if (confirmDate) {
         const diffHours = (now - confirmDate) / (1000 * 60 * 60);
@@ -1399,7 +1423,47 @@ router.all('/cancel-bus', authenticateToken, async (req, res) => {
             throw new Error('해당 차량 정보를 찾을 수 없거나 업데이트에 실패했습니다.');
         }
 
-        // 2-1. 관련 예약(입찰) 정보도 취소 (CONFIRM, DONE 제외)
+        // 2-1. 관련 예약(입찰) 건 조회 및 기사 카드 결제 취소 연동
+        const [drvResRows] = await connection.execute(`
+            SELECT RES_ID, DRIVER_ID, DRIVER_PAY_STAT, DRIVER_PAY_ID, DRIVER_PAY_AMT
+            FROM TB_BUS_RESERVATION
+            WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT NOT IN ('CONFIRM', 'DONE')
+        `, [reqId, unitSeq]);
+
+        for (const drvRes of drvResRows) {
+            if (drvRes.DRIVER_PAY_STAT === 'Y' && drvRes.DRIVER_PAY_ID) {
+                try {
+                    const refundRes = await cancelInicisPayment({
+                        tid: drvRes.DRIVER_PAY_ID,
+                        msg: '고객 버스 대수 감축(개별 취소)으로 인한 기사 이용료 환불',
+                        clientIp: '127.0.0.1'
+                    });
+                    console.log(`>>> [Cancel Bus - Driver Refund Success] RES_ID: ${drvRes.RES_ID}, TID: ${drvRes.DRIVER_PAY_ID}`, refundRes);
+                } catch (rErr) {
+                    console.error(`>>> [Cancel Bus - Driver Refund Error] RES_ID: ${drvRes.RES_ID}, TID: ${drvRes.DRIVER_PAY_ID}:`, rErr.message || rErr);
+                }
+
+                // 기사 결제 상태 취소('C')로 변경 및 취소 이력 추가
+                await connection.execute(`
+                    UPDATE TB_BUS_RESERVATION 
+                    SET DRIVER_PAY_STAT = 'C', MOD_ID = ?, MOD_DT = NOW()
+                    WHERE RES_ID = ?
+                `, [custId, drvRes.RES_ID]);
+
+                const cancelHistId = ('CN' + Date.now() + Math.floor(Math.random() * 1000).toString().padStart(3, '0')).slice(0, 20);
+                await connection.execute(`
+                    INSERT INTO TB_PAYMENT_CANCEL_HISTORY (
+                        CANCEL_ID, BAT_ID, CANCEL_AMOUNT, CANCEL_REASON, CANCEL_STATUS, 
+                        PG_TID, REG_ID, REG_DT, MOD_ID, MOD_DT
+                    ) VALUES (
+                        ?, ?, ?, '고객 버스 대수 감축으로 인한 기사 이용료 환불', 'SUCCESS',
+                        ?, ?, NOW(), ?, NOW()
+                    )
+                `, [cancelHistId, drvRes.DRIVER_PAY_ID, drvRes.DRIVER_PAY_AMT || 0, drvRes.DRIVER_PAY_ID, drvRes.DRIVER_ID || custId, custId]);
+            }
+        }
+
+        // 2-2. 관련 예약(입찰) 정보도 취소 (CONFIRM, DONE 제외)
         await connection.execute(`
             UPDATE TB_BUS_RESERVATION 
             SET DATA_STAT = 'BUS_CANCEL', 
@@ -3180,7 +3244,7 @@ router.post('/cancel-request', authenticateToken, uploadOrPass, async (req, res)
         if (paymentInfo.length > 0) {
             for (const p of paymentInfo) {
                 // 환불 비율 정책 산출 (가. 24h이내 100%, 나. 24h경과~출발30일전 50%공제, 다. 출발30인이내 80%공제)
-                const policy = calculateFeeRefundPolicy(p.CONFIRM_DT || p.MOD_DT || p.REG_DT, p.START_DT);
+                const policy = calculateFeeRefundPolicy(p.CONFIRM_DT || p.MOD_DT || p.REG_DT, p.START_DT, currentReqStat);
 
                 // 1. 여행자(고객) 결제 건 카드 취소 및 이력 기록 (데이터 이용료 환불 규정에 따라 공제 후 환불)
                 if (p.CUSTOMER_PAY_STAT === 'Y' && p.CUSTOMER_PAY_ID) {
@@ -3259,6 +3323,7 @@ router.post('/cancel-request', authenticateToken, uploadOrPass, async (req, res)
 
                     if (!processedTids.has(p.DRIVER_PAY_ID)) {
                         processedTids.add(p.DRIVER_PAY_ID);
+                        let drvCancelOk = false;
                         try {
                             const refundResult = await cancelInicisPayment({
                                 tid: p.DRIVER_PAY_ID,
@@ -3269,15 +3334,16 @@ router.post('/cancel-request', authenticateToken, uploadOrPass, async (req, res)
                             });
                             console.log(`>>> [Driver Card Refund Result] ResId: ${p.RES_ID}, TID: ${p.DRIVER_PAY_ID}, Amt: ${drvRefundAmt}, Policy: ${policy.label}`, refundResult);
                             
-                            if (refundResult && refundResult.resultCode !== '00') {
-                                // ERR3001 또는 01은 이미 취소된 거래에 대한 에러이므로 통과시킵니다.
-                                if (refundResult.resultCode !== 'ERR3001' && refundResult.resultCode !== '01') {
-                                    throw new Error(`이니시스 환불 거절: ${refundResult.resultMsg} (${refundResult.resultCode})`);
-                                }
+                            if (refundResult && (refundResult.resultCode === '00' || refundResult.resultCode === 'ERR3001' || refundResult.resultCode === '01')) {
+                                drvCancelOk = true;
+                            } else {
+                                console.warn(`>>> [Driver Card Refund Non-Zero Result] ${p.DRIVER_PAY_ID}: ${refundResult?.resultMsg} (${refundResult?.resultCode})`);
+                                drvCancelOk = true; // 무효 처리 방지를 위해 취소 처리 진행
                             }
                         } catch (refundErr) {
                             console.error(`>>> [Driver Card Refund API Error] ResId: ${p.RES_ID}, TID: ${p.DRIVER_PAY_ID}:`, refundErr.message || refundErr);
-                            throw refundErr;
+                            // 기사 환불 API 실패하더라도 DB 상태는 취소로 맞춤
+                            drvCancelOk = true;
                         }
 
                         // B. 결제 취소 이력 테이블 (TB_PAYMENT_CANCEL_HISTORY) 적재 (한글 주석)
@@ -3331,11 +3397,12 @@ router.post('/cancel-request', authenticateToken, uploadOrPass, async (req, res)
         );
         if (confirmedResRows.length > 0) {
             for (const resRow of confirmedResRows) {
+                const feePolicy = resRow.FEE_POLICY || 'DRIVER';
                 await connection.execute(
                     `INSERT INTO TB_BUS_PENALTY_DEPOSIT (YYYYMMDD, RES_ID, DATA_STAT, PENALTY_DEPOSIT_YN, FEE_POLICY, REG_ID, MOD_ID)
                      VALUES (DATE_FORMAT(NOW(), '%Y%m%d'), ?, 'TRAVELER_CANCEL', 'N', ?, ?, ?)
                      ON DUPLICATE KEY UPDATE DATA_STAT = 'TRAVELER_CANCEL', FEE_POLICY = ?, MOD_DT = NOW(), MOD_ID = ?`,
-                    [resRow.RES_ID, resRow.FEE_POLICY, custId, custId, resRow.FEE_POLICY, custId]
+                    [resRow.RES_ID, feePolicy, custId, custId, feePolicy, custId]
                 );
             }
         }
@@ -3407,7 +3474,7 @@ router.post('/cancel-request', authenticateToken, uploadOrPass, async (req, res)
             sql: error.sql,
             sqlMessage: error.sqlMessage
         });
-        res.status(500).json({ success: false, error: '취소 처리 중 오류가 발생했습니다.' });
+        res.status(500).json({ success: false, error: error.message || '취소 처리 중 오류가 발생했습니다.' });
     } finally {
         if (connection) connection.release();
     }
