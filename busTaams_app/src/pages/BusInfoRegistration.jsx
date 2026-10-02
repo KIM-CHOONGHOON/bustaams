@@ -2,8 +2,62 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getBusProfile, getDriverProfile, updateBusProfile, request } from '../api';
 import { notify } from '../utils/toast';
-import BottomNavDriver from '../components/BottomNavDriver';
 import Swal from 'sweetalert2'; // 한글 주석: OCR 로딩 및 팝업용 SweetAlert2 추가
+
+// 한글 주석: 달력 선택과 년월일 텍스트 직접 입력이 모두 가능한 날짜 입력 컴포넌트
+const CustomDatePickerInput = ({ name, value, onChange, placeholder = "YYYY-MM-DD", className = "" }) => {
+    const dateInputRef = useRef(null);
+
+    const handleTextChange = (e) => {
+        let val = e.target.value;
+        const cleanNums = val.replace(/[^0-9]/g, '');
+        if (cleanNums.length === 8 && !val.includes('-')) {
+            val = `${cleanNums.slice(0, 4)}-${cleanNums.slice(4, 6)}-${cleanNums.slice(6, 8)}`;
+        }
+        onChange({ target: { name, value: val } });
+    };
+
+    const handleCalendarClick = () => {
+        if (dateInputRef.current) {
+            if (typeof dateInputRef.current.showPicker === 'function') {
+                dateInputRef.current.showPicker();
+            } else {
+                dateInputRef.current.focus();
+                dateInputRef.current.click();
+            }
+        }
+    };
+
+    return (
+        <div className="relative flex items-center w-full">
+            <input
+                type="text"
+                name={name}
+                value={value || ''}
+                onChange={handleTextChange}
+                placeholder={placeholder}
+                maxLength="10"
+                className={`${className} pr-12`}
+            />
+            <button
+                type="button"
+                onClick={handleCalendarClick}
+                className="absolute right-3 p-1.5 text-slate-500 hover:text-[#004e47] transition-colors rounded-lg flex items-center justify-center cursor-pointer"
+                title="달력에서 선택"
+            >
+                <span className="material-symbols-outlined text-[22px]">calendar_month</span>
+            </button>
+            <input
+                ref={dateInputRef}
+                type="date"
+                value={value && value.length === 10 ? value : ''}
+                onChange={(e) => onChange({ target: { name, value: e.target.value } })}
+                className="sr-only absolute pointer-events-none opacity-0 w-0 h-0"
+                tabIndex="-1"
+            />
+        </div>
+    );
+};
 
 const BusInfoRegistration = () => {
     const navigate = useNavigate();
@@ -471,11 +525,21 @@ const BusInfoRegistration = () => {
                                 </div>
                                 <div className="space-y-2">
                                     <label className="block text-xs font-extrabold text-[#004e47] uppercase tracking-wider ml-1">보험 만료일</label>
-                                    <input name="insuranceExpDt" value={formData.insuranceExpDt} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-[#00685f] text-[#191c1e] font-medium" type="date" />
+                                    <CustomDatePickerInput 
+                                        name="insuranceExpDt" 
+                                        value={formData.insuranceExpDt} 
+                                        onChange={handleInputChange} 
+                                        className="w-full bg-[#e6e8ea] border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-[#00685f] text-[#191c1e] font-medium" 
+                                    />
                                 </div>
                                 <div className="space-y-2">
                                     <label className="block text-xs font-extrabold text-[#004e47] uppercase tracking-wider ml-1">차량 정기검사 유효기간</label>
-                                    <input name="lastInspectDt" value={formData.lastInspectDt} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-[#00685f] text-[#191c1e] font-medium" type="date" />
+                                    <CustomDatePickerInput 
+                                        name="lastInspectDt" 
+                                        value={formData.lastInspectDt} 
+                                        onChange={handleInputChange} 
+                                        className="w-full bg-[#e6e8ea] border-none rounded-xl px-4 py-4 focus:ring-2 focus:ring-[#00685f] text-[#191c1e] font-medium" 
+                                    />
                                 </div>
                             </div>
                         </section>

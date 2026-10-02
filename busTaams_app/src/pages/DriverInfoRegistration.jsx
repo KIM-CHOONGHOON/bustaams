@@ -224,6 +224,61 @@ const TERMS_CONTENTS = {
 부칙 본 방침은 2026 년 6 월 25 일부터 시행됩니다.`
 };
 
+// 한글 주석: 달력 선택과 년월일 텍스트 직접 입력이 모두 가능한 날짜 입력 컴포넌트
+const CustomDatePickerInput = ({ name, value, onChange, placeholder = "YYYY-MM-DD", className = "" }) => {
+    const dateInputRef = useRef(null);
+
+    const handleTextChange = (e) => {
+        let val = e.target.value;
+        const cleanNums = val.replace(/[^0-9]/g, '');
+        if (cleanNums.length === 8 && !val.includes('-')) {
+            val = `${cleanNums.slice(0, 4)}-${cleanNums.slice(4, 6)}-${cleanNums.slice(6, 8)}`;
+        }
+        onChange({ target: { name, value: val } });
+    };
+
+    const handleCalendarClick = () => {
+        if (dateInputRef.current) {
+            if (typeof dateInputRef.current.showPicker === 'function') {
+                dateInputRef.current.showPicker();
+            } else {
+                dateInputRef.current.focus();
+                dateInputRef.current.click();
+            }
+        }
+    };
+
+    return (
+        <div className="relative flex items-center w-full">
+            <input
+                type="text"
+                name={name}
+                value={value || ''}
+                onChange={handleTextChange}
+                placeholder={placeholder}
+                maxLength="10"
+                className={`${className} pr-12`}
+            />
+            <button
+                type="button"
+                onClick={handleCalendarClick}
+                className="absolute right-3 p-1.5 text-slate-500 hover:text-[#004e47] transition-colors rounded-lg flex items-center justify-center cursor-pointer"
+                title="달력에서 선택"
+            >
+                <span className="material-symbols-outlined text-[22px]">calendar_month</span>
+            </button>
+            <input
+                ref={dateInputRef}
+                type="date"
+                value={value && value.length === 10 ? value : ''}
+                onChange={(e) => onChange({ target: { name, value: e.target.value } })}
+                className="sr-only absolute pointer-events-none opacity-0 w-0 h-0"
+                tabIndex="-1"
+            />
+        </div>
+    );
+};
+
 // 한글 주석: 운전면허증 번호 자동 포맷팅 헬퍼 함수 (00-00-000000-00)
 const formatLicenseNo = (value) => {
     if (!value) return '';
@@ -969,7 +1024,12 @@ const DriverInfoRegistration = () => {
                                 </div>
                                 <div className="space-y-2">
                                     <label className="font-headline font-bold text-sm text-[#191c1e] ml-1">면허 발급일</label>
-                                    <input type="date" name="licenseIssueDt" value={formData.licenseIssueDt} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-6 py-4 text-[#191c1e]" />
+                                    <CustomDatePickerInput 
+                                        name="licenseIssueDt" 
+                                        value={formData.licenseIssueDt} 
+                                        onChange={handleInputChange} 
+                                        className="w-full bg-[#e6e8ea] border-none rounded-xl px-6 py-4 text-[#191c1e]" 
+                                    />
                                 </div>
                                 <div className="space-y-2">
                                     <label className="font-headline font-bold text-sm text-[#191c1e] ml-1">면허 유효 여부</label>
@@ -1000,7 +1060,12 @@ const DriverInfoRegistration = () => {
                                 </div>
                                 <div className="space-y-2">
                                     <label className="font-headline font-bold text-sm text-[#191c1e] ml-1">자격 취득일</label>
-                                    <input type="date" name="qualAcquisitionDt" value={formData.qualAcquisitionDt} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-6 py-4 text-[#191c1e]" />
+                                    <CustomDatePickerInput 
+                                        name="qualAcquisitionDt" 
+                                        value={formData.qualAcquisitionDt} 
+                                        onChange={handleInputChange} 
+                                        className="w-full bg-[#e6e8ea] border-none rounded-xl px-6 py-4 text-[#191c1e]" 
+                                    />
                                 </div>
                                 <div className="col-span-1 md:col-span-2 space-y-2">
                                     <label className="font-headline font-bold text-sm text-[#191c1e] ml-1">자격 유지 상태</label>
