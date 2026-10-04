@@ -299,6 +299,30 @@ const formatLicenseNo = (value) => {
     return formatted;
 };
 
+// 한글 주석: 운전기사 자기소개 추천 문구 템플릿 4종
+const SELF_INTRO_TEMPLATES = [
+    {
+        id: 'safe',
+        label: '💡 1. [안전운전 전문] 10년 이상 무사고 & 편안하고 안전한 운행',
+        text: '안녕하세요! 10년 이상의 무사고 경력을 바탕으로 승객 여러분의 안전하고 편안한 이동을 최우선으로 생각합니다. 항상 쾌적한 차량 상태와 친절한 서비스로 모시겠습니다.'
+    },
+    {
+        id: 'kind',
+        label: '💡 2. [친절 서비스] 밝은 미소와 친절함으로 모시는 베테랑 기사',
+        text: '반갑습니다! 항상 밝은 미소와 친절함으로 승객 한 분 한 분을 소중히 모시는 베테랑 기사입니다. 목적지까지 즐겁고 쾌적한 여행이 되시도록 최선을 다하겠습니다.'
+    },
+    {
+        id: 'vip',
+        label: '💡 3. [VIP 프리미엄] 최상의 승차감과 편안한 휴식 제공',
+        text: '안녕하세요! 풍부한 운전 노하우로 승객 여러분께 최상의 승차감과 편안한 휴식을 제공해 드립니다. 안전 운행은 기본, 최고의 만족을 드릴 것을 약속드립니다.'
+    },
+    {
+        id: 'tour',
+        label: '💡 4. [관광/단체 전문] 풍부한 단체 운행 경험 & 철저한 시간 준수',
+        text: '안녕하십니까! 각종 단체 관광 및 행사 운행 경험이 풍부한 전문 운전기원입니다. 깔끔한 차량 유지관리와 시간 준수로 기분 좋은 여행길을 만들어 드리겠습니다.'
+    }
+];
+
 const DriverInfoRegistration = () => {
     const navigate = useNavigate();
     // 공용 업로드용 Ref 및 상태 선언
@@ -345,6 +369,7 @@ const DriverInfoRegistration = () => {
     const [isVerified, setIsVerified] = useState(false);
     const [idToken, setIdToken] = useState(null);
     const [originalPhone, setOriginalPhone] = useState('');
+    const [isEditingPhone, setIsEditingPhone] = useState(false);
 
     // 마케팅 알림 동의 상태
     const [marketing, setMarketing] = useState({
@@ -453,7 +478,12 @@ const DriverInfoRegistration = () => {
                         acctHold: driver?.acctHold || ''
                     }));
                     setOriginalPhone(user?.phone || '');
-                    if (user?.phone) setIsVerified(true); // 이미 번호가 있으면 인증된 것으로 간주 (변경 시 재인증 필요)
+                    if (user?.phone) {
+                        setIsVerified(true);
+                        setIsEditingPhone(false);
+                    } else {
+                        setIsEditingPhone(true);
+                    }
                     setPreviews({
                         profileImg: driver?.profileImg || '',
                         licenseImg: driver?.licenseImg || '',
@@ -535,6 +565,14 @@ const DriverInfoRegistration = () => {
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    // 한글 주석: 추천 자기소개 선택 시 자기소개 입력란(selfIntro)에 자동 설정
+    const handleSelectSelfIntro = (e) => {
+        const val = e.target.value;
+        if (val) {
+            setFormData(prev => ({ ...prev, selfIntro: val }));
+        }
     };
 
     // 마케팅 전체 동의 토글
@@ -690,10 +728,7 @@ const DriverInfoRegistration = () => {
             notify.error('입력 오류', '버스운전자격증 사본을 업로드해주세요.');
             return;
         }
-        if (!files.careerCertImg && !previews.careerCertImg) {
-            notify.error('입력 오류', '운전경력증명서(경찰청 발급)를 업로드해주세요.');
-            return;
-        }
+
 
         try {
             setSubmitting(true);
@@ -899,17 +934,38 @@ const DriverInfoRegistration = () => {
                                     <label className="font-headline font-bold text-sm text-[#191c1e] ml-1">휴대전화 번호</label>
                                     <div className="space-y-3">
                                         <div className="flex gap-3">
-                                            <input name="hpNo" value={formData.hpNo} onChange={handleInputChange} className="flex-1 min-w-0 bg-[#e6e8ea] border-none rounded-xl px-4 py-4 text-[#191c1e]" placeholder="010-0000-0000" />
-                                            <button
-                                                type="button"
-                                                onClick={handleSendSMS}
-                                                className="w-[110px] shrink-0 whitespace-nowrap bg-[#004e47] text-white font-bold rounded-xl px-3 py-4 hover:bg-[#00685f] transition-all text-sm active:scale-95"
-                                            >
-                                                {verificationSent ? '재발송' : '인증요청'}
-                                            </button>
+                                            <input 
+                                                name="hpNo" 
+                                                value={formData.hpNo} 
+                                                onChange={handleInputChange} 
+                                                readOnly={!isEditingPhone && !!originalPhone}
+                                                className={`flex-1 min-w-0 border-none rounded-xl px-4 py-4 text-[#191c1e] ${!isEditingPhone && !!originalPhone ? 'bg-[#dce3e1] font-bold cursor-not-allowed' : 'bg-[#e6e8ea]'}`} 
+                                                placeholder="010-0000-0000" 
+                                            />
+                                            {!isEditingPhone && !!originalPhone ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setIsEditingPhone(true);
+                                                        setIsVerified(false);
+                                                        setVerificationSent(false);
+                                                    }}
+                                                    className="w-[110px] shrink-0 whitespace-nowrap bg-[#004e47] text-white font-bold rounded-xl px-3 py-4 hover:bg-[#00685f] transition-all text-sm active:scale-95"
+                                                >
+                                                    수정하기
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleSendSMS}
+                                                    className="w-[110px] shrink-0 whitespace-nowrap bg-[#004e47] text-white font-bold rounded-xl px-3 py-4 hover:bg-[#00685f] transition-all text-sm active:scale-95"
+                                                >
+                                                    {verificationSent ? '재발송' : '인증요청'}
+                                                </button>
+                                            )}
                                         </div>
 
-                                        {verificationSent && (
+                                        {isEditingPhone && verificationSent && (
                                             <div className="flex gap-3">
                                                 <input
                                                     value={verificationCode}
@@ -927,7 +983,7 @@ const DriverInfoRegistration = () => {
                                                 </button>
                                             </div>
                                         )}
-                                        {isVerified && formData.hpNo !== originalPhone && (
+                                        {isVerified && (
                                             <p className="text-xs text-teal-600 font-bold px-1">✓ 인증되었습니다.</p>
                                         )}
                                     </div>
@@ -956,7 +1012,123 @@ const DriverInfoRegistration = () => {
                                 <div className="space-y-2 md:col-span-2">
                                     <label className="font-headline font-bold text-sm text-[#191c1e] ml-1">운전기사 자기소개</label>
                                     <textarea name="selfIntro" value={formData.selfIntro} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-6 py-4 text-[#191c1e] min-h-[120px] resize-none" placeholder="경력, 운행 스타일 등 여행자에게 신뢰를 줄 수 있는 소개를 작성해 주세요." />
+                                    {/* 한글 주석: 추천 자기소개 선택박스 (선택 시 텍스트 박스 자동 입력) */}
+                                    <div className="pt-1">
+                                        <select
+                                            onChange={handleSelectSelfIntro}
+                                            value=""
+                                            className="w-full bg-teal-50/80 border border-teal-200/80 rounded-xl px-4 py-3.5 text-[#004e47] text-xs font-bold cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#004e47]/20 shadow-sm transition-all"
+                                        >
+                                            <option value="">✨ [추천] 자기소개 예시 문구 선택 (클릭 시 자동 입력)</option>
+                                            {SELF_INTRO_TEMPLATES.map(t => (
+                                                <option key={t.id} value={t.text}>{t.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* 인증 서류 보관함 */}
+                        <div className="bg-white p-8 md:p-12 rounded-2xl shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)] text-left">
+                            <h3 className="font-headline font-extrabold text-2xl text-[#004e47] mb-8 flex items-center gap-3">
+                                <span className="w-8 h-8 rounded-lg bg-[#004e47]/10 text-[#004e47] flex items-center justify-center text-base">
+                                    <span className="material-symbols-outlined text-lg">inventory_2</span>
+                                </span>
+                                인증 서류 보관함
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* License Card */}
+                                <div onClick={() => {
+                                    setActiveUploadType('licenseImg');
+                                    setShowPhotoBottomSheet(true);
+                                }} className="p-6 rounded-xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6e7977]">운전면허증 <span className="text-red-500">*필수</span></span>
+                                        <span className={`flex items-center gap-1 text-[10px] font-bold ${formData.licenseApproveStat === 'APPROVE' ? 'text-[#00685f]' : formData.licenseApproveStat === 'WAIT' ? 'text-[#9d4300]' : 'text-[#ba1a1a]'}`}>
+                                            <span className={`w-1.5 h-1.5 rounded-full ${formData.licenseApproveStat === 'APPROVE' ? 'bg-[#00685f]' : formData.licenseApproveStat === 'WAIT' ? 'bg-[#9d4300]' : 'bg-[#ba1a1a]'}`}></span>
+                                            {!formData.licenseApproveStat ? '미등록' : formData.licenseApproveStat === 'WAIT' ? '확인 중' : formData.licenseApproveStat === 'APPROVE' ? '승인됨' : '반려됨'}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-lg bg-[#eceef0] flex items-center justify-center text-[#6e7977] group-hover:text-[#004e47] transition-colors overflow-hidden">
+                                            {previews.licenseImg ? (
+                                                isPdf('licenseImg') ? (
+                                                    <span className="material-symbols-outlined text-3xl text-red-500">picture_as_pdf</span>
+                                                ) : (
+                                                    <img src={previews.licenseImg} className="w-full h-full object-cover" />
+                                                )
+                                            ) : (
+                                                <span className="material-symbols-outlined text-3xl">badge</span>
+                                            )}
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-sm font-bold text-[#191c1e]">면허증 앞면</p>
+                                            <p className="text-xs text-[#3e4947]">이미지를 업로드하세요</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                {/* Certificate Card */}
+                                <div onClick={() => {
+                                    setActiveUploadType('busLicenseImg');
+                                    setShowPhotoBottomSheet(true);
+                                }} className="p-6 rounded-xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6e7977]">버스운전자격증 <span className="text-red-500">*필수</span></span>
+                                        <span className={`flex items-center gap-1 text-[10px] font-bold ${formData.qualApproveStat === 'APPROVE' ? 'text-[#00685f]' : formData.qualApproveStat === 'WAIT' ? 'text-[#9d4300]' : 'text-[#ba1a1a]'}`}>
+                                            <span className={`w-1.5 h-1.5 rounded-full ${formData.qualApproveStat === 'APPROVE' ? 'bg-[#00685f]' : formData.qualApproveStat === 'WAIT' ? 'bg-[#9d4300]' : 'bg-[#ba1a1a]'}`}></span>
+                                            {!formData.qualApproveStat ? '미등록' : formData.qualApproveStat === 'WAIT' ? '확인 중' : formData.qualApproveStat === 'APPROVE' ? '승인됨' : '반려됨'}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-lg bg-[#eceef0] flex items-center justify-center text-[#6e7977] group-hover:text-[#004e47] transition-colors overflow-hidden">
+                                            {previews.busLicenseImg ? (
+                                                isPdf('busLicenseImg') ? (
+                                                    <span className="material-symbols-outlined text-3xl text-red-500">picture_as_pdf</span>
+                                                ) : (
+                                                    <img src={previews.busLicenseImg} className="w-full h-full object-cover" />
+                                                )
+                                            ) : (
+                                                <span className="material-symbols-outlined text-3xl">description</span>
+                                            )}
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-sm font-bold text-[#191c1e]">자격증 사본</p>
+                                            <p className="text-xs text-[#3e4947]">{formData.qualApproveStat === 'WAIT' ? '파일 검토 중 (24h)' : '이미지를 업로드하세요'}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                {/* Career Certificate Card - New Added */}
+                                <div onClick={() => {
+                                    setActiveUploadType('careerCertImg');
+                                    setShowPhotoBottomSheet(true);
+                                }} className="p-6 rounded-xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6e7977]">운전경력증명서 <span className="text-slate-400 font-normal">(선택)</span></span>
+                                        <span className={`flex items-center gap-1 text-[10px] font-bold ${formData.careerCertApproveStat === 'APPROVE' ? 'text-[#00685f]' : formData.careerCertApproveStat === 'WAIT' ? 'text-[#9d4300]' : 'text-[#ba1a1a]'}`}>
+                                            <span className={`w-1.5 h-1.5 rounded-full ${formData.careerCertApproveStat === 'APPROVE' ? 'bg-[#00685f]' : formData.careerCertApproveStat === 'WAIT' ? 'bg-[#9d4300]' : 'bg-[#ba1a1a]'}`}></span>
+                                            {!formData.careerCertApproveStat ? '미등록' : formData.careerCertApproveStat === 'WAIT' ? '확인 중' : formData.careerCertApproveStat === 'APPROVE' ? '승인됨' : '반려됨'}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-lg bg-[#eceef0] flex items-center justify-center text-[#6e7977] group-hover:text-[#004e47] transition-colors overflow-hidden">
+                                            {previews.careerCertImg ? (
+                                                isPdf('careerCertImg') ? (
+                                                    <span className="material-symbols-outlined text-3xl text-red-500">picture_as_pdf</span>
+                                                ) : (
+                                                    <img src={previews.careerCertImg} className="w-full h-full object-cover" />
+                                                )
+                                            ) : (
+                                                <span className="material-symbols-outlined text-3xl">history_edu</span>
+                                            )}
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-sm font-bold text-[#191c1e]">경력증명서</p>
+                                            <p className="text-xs text-[#3e4947]">이미지를 업로드하세요</p>
+                                        </div>
+                                    </div>
+                                </div>
+
                             </div>
                         </div>
 
@@ -1087,222 +1259,12 @@ const DriverInfoRegistration = () => {
                             </div>
                         </div>
 
-                        {/* 인증 서류 보관함 */}
-                        <div className="bg-white p-8 md:p-12 rounded-2xl shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)] text-left">
-                            <h3 className="font-headline font-extrabold text-2xl text-[#004e47] mb-8 flex items-center gap-3">
-                                <span className="w-8 h-8 rounded-lg bg-[#004e47]/10 text-[#004e47] flex items-center justify-center text-base">
-                                    <span className="material-symbols-outlined text-lg">inventory_2</span>
-                                </span>
-                                인증 서류 보관함
-                            </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* License Card */}
-                                <div onClick={() => {
-                                    setActiveUploadType('licenseImg');
-                                    setShowPhotoBottomSheet(true);
-                                }} className="p-6 rounded-xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6e7977]">운전면허증 <span className="text-red-500">*필수</span></span>
-                                        <span className={`flex items-center gap-1 text-[10px] font-bold ${formData.licenseApproveStat === 'APPROVE' ? 'text-[#00685f]' : formData.licenseApproveStat === 'WAIT' ? 'text-[#9d4300]' : 'text-[#ba1a1a]'}`}>
-                                            <span className={`w-1.5 h-1.5 rounded-full ${formData.licenseApproveStat === 'APPROVE' ? 'bg-[#00685f]' : formData.licenseApproveStat === 'WAIT' ? 'bg-[#9d4300]' : 'bg-[#ba1a1a]'}`}></span>
-                                            {!formData.licenseApproveStat ? '미등록' : formData.licenseApproveStat === 'WAIT' ? '확인 중' : formData.licenseApproveStat === 'APPROVE' ? '승인됨' : '반려됨'}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 rounded-lg bg-[#eceef0] flex items-center justify-center text-[#6e7977] group-hover:text-[#004e47] transition-colors overflow-hidden">
-                                            {previews.licenseImg ? (
-                                                isPdf('licenseImg') ? (
-                                                    <span className="material-symbols-outlined text-3xl text-red-500">picture_as_pdf</span>
-                                                ) : (
-                                                    <img src={previews.licenseImg} className="w-full h-full object-cover" />
-                                                )
-                                            ) : (
-                                                <span className="material-symbols-outlined text-3xl">badge</span>
-                                            )}
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="text-sm font-bold text-[#191c1e]">면허증 앞면</p>
-                                            <p className="text-xs text-[#3e4947]">이미지를 업로드하세요</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                {/* Certificate Card */}
-                                <div onClick={() => {
-                                    setActiveUploadType('busLicenseImg');
-                                    setShowPhotoBottomSheet(true);
-                                }} className="p-6 rounded-xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6e7977]">버스운전자격증 <span className="text-red-500">*필수</span></span>
-                                        <span className={`flex items-center gap-1 text-[10px] font-bold ${formData.qualApproveStat === 'APPROVE' ? 'text-[#00685f]' : formData.qualApproveStat === 'WAIT' ? 'text-[#9d4300]' : 'text-[#ba1a1a]'}`}>
-                                            <span className={`w-1.5 h-1.5 rounded-full ${formData.qualApproveStat === 'APPROVE' ? 'bg-[#00685f]' : formData.qualApproveStat === 'WAIT' ? 'bg-[#9d4300]' : 'bg-[#ba1a1a]'}`}></span>
-                                            {!formData.qualApproveStat ? '미등록' : formData.qualApproveStat === 'WAIT' ? '확인 중' : formData.qualApproveStat === 'APPROVE' ? '승인됨' : '반려됨'}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 rounded-lg bg-[#eceef0] flex items-center justify-center text-[#6e7977] group-hover:text-[#004e47] transition-colors overflow-hidden">
-                                            {previews.busLicenseImg ? (
-                                                isPdf('busLicenseImg') ? (
-                                                    <span className="material-symbols-outlined text-3xl text-red-500">picture_as_pdf</span>
-                                                ) : (
-                                                    <img src={previews.busLicenseImg} className="w-full h-full object-cover" />
-                                                )
-                                            ) : (
-                                                <span className="material-symbols-outlined text-3xl">description</span>
-                                            )}
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="text-sm font-bold text-[#191c1e]">자격증 사본</p>
-                                            <p className="text-xs text-[#3e4947]">{formData.qualApproveStat === 'WAIT' ? '파일 검토 중 (24h)' : '이미지를 업로드하세요'}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                {/* Career Certificate Card - New Added */}
-                                <div onClick={() => {
-                                    setActiveUploadType('careerCertImg');
-                                    setShowPhotoBottomSheet(true);
-                                }} className="p-6 rounded-xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6e7977]">운전경력증명서 <span className="text-red-500">*필수</span></span>
-                                        <span className={`flex items-center gap-1 text-[10px] font-bold ${formData.careerCertApproveStat === 'APPROVE' ? 'text-[#00685f]' : formData.careerCertApproveStat === 'WAIT' ? 'text-[#9d4300]' : 'text-[#ba1a1a]'}`}>
-                                            <span className={`w-1.5 h-1.5 rounded-full ${formData.careerCertApproveStat === 'APPROVE' ? 'bg-[#00685f]' : formData.careerCertApproveStat === 'WAIT' ? 'bg-[#9d4300]' : 'bg-[#ba1a1a]'}`}></span>
-                                            {!formData.careerCertApproveStat ? '미등록' : formData.careerCertApproveStat === 'WAIT' ? '확인 중' : formData.careerCertApproveStat === 'APPROVE' ? '승인됨' : '반려됨'}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 rounded-lg bg-[#eceef0] flex items-center justify-center text-[#6e7977] group-hover:text-[#004e47] transition-colors overflow-hidden">
-                                            {previews.careerCertImg ? (
-                                                isPdf('careerCertImg') ? (
-                                                    <span className="material-symbols-outlined text-3xl text-red-500">picture_as_pdf</span>
-                                                ) : (
-                                                    <img src={previews.careerCertImg} className="w-full h-full object-cover" />
-                                                )
-                                            ) : (
-                                                <span className="material-symbols-outlined text-3xl">history_edu</span>
-                                            )}
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="text-sm font-bold text-[#191c1e]">경력증명서</p>
-                                            <p className="text-xs text-[#3e4947]">이미지를 업로드하세요</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                {/* Bankbook Copy Card - Added (Optional) */}
-                                <div onClick={() => {
-                                    setActiveUploadType('bankBookImg');
-                                    setShowPhotoBottomSheet(true);
-                                }} className="p-6 rounded-xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6e7977]">통장 사본 <span className="text-slate-400 font-normal">(선택)</span></span>
-                                        <span className={`flex items-center gap-1 text-[10px] font-bold ${formData.bankBookApproveStat === 'APPROVE' ? 'text-[#00685f]' : formData.bankBookApproveStat === 'WAIT' ? 'text-[#9d4300]' : 'text-[#ba1a1a]'}`}>
-                                            <span className={`w-1.5 h-1.5 rounded-full ${formData.bankBookApproveStat === 'APPROVE' ? 'bg-[#00685f]' : formData.bankBookApproveStat === 'WAIT' ? 'bg-[#9d4300]' : 'bg-[#ba1a1a]'}`}></span>
-                                            {!formData.bankBookApproveStat ? '미등록' : formData.bankBookApproveStat === 'WAIT' ? '확인 중' : formData.bankBookApproveStat === 'APPROVE' ? '승인됨' : '반려됨'}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 rounded-lg bg-[#eceef0] flex items-center justify-center text-[#6e7977] group-hover:text-[#004e47] transition-colors overflow-hidden">
-                                            {previews.bankBookImg ? (
-                                                isPdf('bankBookImg') ? (
-                                                    <span className="material-symbols-outlined text-3xl text-red-500">picture_as_pdf</span>
-                                                ) : (
-                                                    <img src={previews.bankBookImg} className="w-full h-full object-cover" />
-                                                )
-                                            ) : (
-                                                <span className="material-symbols-outlined text-3xl">account_balance_wallet</span>
-                                            )}
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="text-sm font-bold text-[#191c1e]">통장 사본</p>
-                                            <p className="text-xs text-[#3e4947]">입금받으실 통장 입니다.</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* 한글 주석: 계좌 정보 확인 및 수동 입력 영역 추가 */}
-                                <div className="col-span-1 md:col-span-2 p-6 rounded-xl bg-teal-50/40 border border-teal-100/50 space-y-4">
-                                    <h5 className="font-headline font-bold text-[#004e47] text-sm flex items-center gap-2">
-                                        <span className="material-symbols-outlined text-teal-800 text-lg">payments</span>
-                                        정산 계좌 정보 확인
-                                    </h5>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        <div className="space-y-1.5">
-                                            <label className="text-xs font-bold text-[#3e4947] ml-1">은행명</label>
-                                            <input 
-                                                name="bankNm" 
-                                                value={formData.bankNm} 
-                                                onChange={handleInputChange} 
-                                                className="w-full bg-white border border-[#bec9c6]/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#004e47]/20 text-[#191c1e] placeholder:text-slate-400 font-bold" 
-                                                placeholder="예: 신한은행" 
-                                            />
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <label className="text-xs font-bold text-[#3e4947] ml-1">계좌번호</label>
-                                            <input 
-                                                name="acctNo" 
-                                                value={formData.acctNo} 
-                                                onChange={handleInputChange} 
-                                                className="w-full bg-white border border-[#bec9c6]/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#004e47]/20 text-[#191c1e] placeholder:text-slate-400 font-bold" 
-                                                placeholder="하이픈(-) 포함 입력 가능" 
-                                            />
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <label className="text-xs font-bold text-[#3e4947] ml-1">예금주</label>
-                                            <input 
-                                                name="acctHold" 
-                                                value={formData.acctHold} 
-                                                onChange={handleInputChange} 
-                                                className="w-full bg-white border border-[#bec9c6]/30 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#004e47]/20 text-[#191c1e] placeholder:text-slate-400 font-bold" 
-                                                placeholder="실명 입력" 
-                                            />
-                                        </div>
-                                    </div>
-                                    <p className="text-[10px] text-teal-700/80 font-medium">
-                                        * 통장 사본 이미지를 등록하면 위의 정보가 자동으로 입력됩니다. 정보가 올바른지 반드시 확인 후 수정해 주세요.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Preferences Section (환경 설정) */}
-                        <div className="bg-white p-8 md:p-12 rounded-2xl shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)] text-left space-y-6">
-                            <h3 className="font-headline font-extrabold text-2xl text-[#004e47] flex items-center gap-3">
-                                <span className="w-8 h-8 rounded-lg bg-[#004e47]/10 text-[#004e47] flex items-center justify-center text-base">
-                                    <span className="material-symbols-outlined text-lg">settings</span>
-                                </span>
-                                환경 설정
-                            </h3>
-                            <div className="bg-[#f7f9fb] rounded-2xl overflow-hidden border border-[#bec9c6]/30">
-                                <div 
-                                    onClick={() => setShowAlarmBottomSheet(true)}
-                                    className="flex items-center justify-between p-5 hover:bg-slate-100 transition-colors cursor-pointer group border-b border-[#bec9c6]/20"
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <span className="material-symbols-outlined text-teal-800">notifications</span>
-                                        <span className="font-bold text-sm text-[#191c1e]">알림 설정</span>
-                                    </div>
-                                    <span className="material-symbols-outlined text-[#6e7977] group-hover:translate-x-1 transition-transform">chevron_right</span>
-                                </div>
-                                <div 
-                                    onClick={() => setShowTermsBottomSheet(true)}
-                                    className="flex items-center justify-between p-5 hover:bg-slate-100 transition-colors cursor-pointer group"
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <span className="material-symbols-outlined text-teal-800">policy</span>
-                                        <span className="font-bold text-sm text-[#191c1e]">약관 및 정책</span>
-                                    </div>
-                                    <span className="material-symbols-outlined text-[#6e7977] group-hover:translate-x-1 transition-transform">chevron_right</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Footer Action */}
-                        <div className="flex flex-col md:flex-row items-center justify-between gap-6 pt-4 text-left">
-                            <div className="flex items-start gap-3 text-[#3e4947]">
-                                <span className="material-symbols-outlined text-[#00685f] mt-1">info</span>
-                                <div className="text-xs font-bold max-w-md leading-relaxed">
-                                    <p className="text-red-600">면허증.자격증.경력증명서 사진은 필수 등록해야 합니다.</p>
-                                    <p className="text-[#3e4947] mt-1">등록한 사진은 운영팀에서 48시간내에 검토 완료 합니다.</p>
-                                    <p className="text-[#3e4947]">검토 완료 안내를 PUSH MESSAGE로 보내 드립니다.</p>
-                                </div>
+                        {/* Submit Section */}
+                        <div className="flex flex-col md:flex-row items-center justify-between gap-6 pt-4">
+                            <div className="text-left text-xs font-semibold space-y-1">
+                                <p className="text-red-600">면허증 및 자격증 사진은 필수 등록해야 합니다. (경력증명서는 선택)</p>
+                                <p className="text-[#3e4947] mt-1">등록한 사진은 운영팀에서 48시간내에 검토 완료 합니다.</p>
+                                <p className="text-[#3e4947]">검토 완료 안내를 PUSH MESSAGE로 보내 드립니다.</p>
                             </div>
                             <button onClick={handleSubmit} disabled={submitting} className="w-full md:w-auto px-12 py-4 rounded-xl bg-gradient-to-br from-[#004e47] to-[#00685f] text-white font-headline font-extrabold text-lg shadow-[0_20px_40px_-10px_rgba(0,104,95,0.3)] hover:shadow-[0_25px_50px_-12px_rgba(0,104,95,0.4)] active:scale-95 transition-all duration-300">
                                 {submitting ? '처리 중...' : '검토 요청하기'}
