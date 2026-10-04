@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getBusProfile, getDriverProfile, updateBusProfile, request } from '../api';
 import { notify } from '../utils/toast';
 import Swal from 'sweetalert2'; // 한글 주석: OCR 로딩 및 팝업용 SweetAlert2 추가
+import BottomNavDriver from '../components/BottomNavDriver';
 
 // 한글 주석: 달력 선택과 년월일 텍스트 직접 입력이 모두 가능한 날짜 입력 컴포넌트
 const CustomDatePickerInput = ({ name, value, onChange, placeholder = "YYYY-MM-DD", className = "" }) => {
@@ -316,17 +317,9 @@ const BusInfoRegistration = () => {
             return;
         }
 
-        // 필수 서류 체크 (기존 previews에 이미지가 있거나 새로 선택한 파일이 있어야 함)
+        // 필수 서류 체크 (사업자 등록증만 필수)
         if (!files.bizRegFile && !previews.bizRegImg) {
             notify.error('입력 오류', '사업자 등록증은 필수 입력 사항입니다.');
-            return;
-        }
-        if (!files.transLicFile && !previews.transLicImg) {
-            notify.error('입력 오류', '운송 허가증은 필수 입력 사항입니다.');
-            return;
-        }
-        if (!files.insCertFile && !previews.insCertImg) {
-            notify.error('입력 오류', '보험 증명서는 필수 입력 사항입니다.');
             return;
         }
 
@@ -553,9 +546,9 @@ const BusInfoRegistration = () => {
                             <div className="space-y-4">
                                 {
                                     [
-                                        { key: 'bizReg', title: '사업자 등록증', desc: '유효한 사업자 등록증의 PDF 또는 고화질 사진을 업로드해 주세요.', color: 'bg-[#ffdbcf]', icon: 'badge' },
-                                        { key: 'transLic', title: '운송 허가증', desc: '유효한 운송 허가증의 PDF 또는 고화질 사진을 업로드해 주세요.', color: 'bg-[#ffdbca]', icon: 'local_shipping' },
-                                        { key: 'insCert', title: '보험 증명서 (책임/종합보험)', desc: '유효한 보험 가입 증명서의 PDF 또는 고화질 사진을 업로드해 주세요.', color: 'bg-[#a1f1e5]', icon: 'verified_user' }
+                                        { key: 'bizReg', title: '사업자 등록증', required: true, desc: '유효한 사업자 등록증의 PDF 또는 고화질 사진을 업로드해 주세요.', color: 'bg-[#ffdbcf]', icon: 'badge' },
+                                        { key: 'transLic', title: '운송 허가증', required: false, desc: '유효한 운송 허가증의 PDF 또는 고화질 사진을 업로드해 주세요.', color: 'bg-[#ffdbca]', icon: 'local_shipping' },
+                                        { key: 'insCert', title: '보험 증명서 (책임/종합보험)', required: false, desc: '유효한 보험 가입 증명서의 PDF 또는 고화질 사진을 업로드해 주세요.', color: 'bg-[#a1f1e5]', icon: 'verified_user' }
                                     ].map((doc) => {
                                         // 한글 주석: PDF 형식인지 확인하는 플래그 (파일명 혹은 파일 객체의 type, base64 스키마로 탐지)
                                         const isPdf = files[doc.key + 'File']?.type === 'application/pdf' || 
@@ -576,7 +569,9 @@ const BusInfoRegistration = () => {
                                                         )}
                                                     </div>
                                                     <div className="flex-1 text-center md:text-left">
-                                                        <h4 className="font-bold text-[#191c1e]">{doc.title} <span className="text-red-500">*</span></h4>
+                                                        <h4 className="font-bold text-[#191c1e]">
+                                                            {doc.title} {doc.required ? <span className="text-red-500">*</span> : <span className="text-xs text-slate-400 font-normal ml-1">(선택)</span>}
+                                                        </h4>
                                                         <p className="text-sm text-[#6e7977] mt-1">{doc.desc}</p>
                                                     </div>
                                                     <button onClick={() => {

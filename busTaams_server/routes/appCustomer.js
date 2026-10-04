@@ -3450,21 +3450,20 @@ router.post('/cancel-request', authenticateToken, uploadOrPass, async (req, res)
                 });
             }
 
-            // 2. 고객 본인에게 발송하는 푸시 (결제 취소 안내)
-            const customerTitle = '[결제 취소 완료] 여행 예약이 취소되었습니다.';
-            let customerBody = `"${tripTitle}" 여행 일정이 성공적으로 취소되었습니다.`;
+            // 2. 고객 본인에게 발송하는 푸시 (실제 카드 결제 환불 대금이 발생한 경우에만 환불 완료 푸시 발송)
             if (refundTotalAmt > 0) {
-                customerBody = `"${tripTitle}" 여행 예약이 취소되었으며, 결제하신 카드 대금 ₩${refundTotalAmt.toLocaleString()}원이 자동 결제 취소(환불)되었습니다.`;
-            }
-            const customerLink = `/app/estimate-request-list?type=cancel`;
+                const customerTitle = '[결제 환불 완료] 결제가 취소되었습니다.';
+                const customerBody = `"${tripTitle}" 여행 예약이 취소되었으며, 결제하신 카드 대금 ₩${refundTotalAmt.toLocaleString()}원이 자동 결제 취소(환불)되었습니다.`;
+                const customerLink = `/app/estimate-request-list?type=cancel`;
 
-            sendNotification(pool, {
-                custId: custId,
-                title: customerTitle,
-                body: customerBody,
-                link: customerLink,
-                type: 'CANCEL'
-            }).catch(err => console.error(`[Notification] 고객 본인 취소 알림 발송 실패 (고객 ID: ${custId}):`, err));
+                sendNotification(pool, {
+                    custId: custId,
+                    title: customerTitle,
+                    body: customerBody,
+                    link: customerLink,
+                    type: 'CANCEL'
+                }).catch(err => console.error(`[Notification] 고객 본인 환불 알림 발송 실패 (고객 ID: ${custId}):`, err));
+            }
         }
     } catch (error) {
         if (connection) await connection.rollback();

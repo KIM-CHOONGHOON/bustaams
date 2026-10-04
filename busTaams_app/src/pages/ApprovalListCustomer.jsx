@@ -589,12 +589,9 @@ const ApprovalListCustomer = () => {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    {/* 차량의 연식과 모델명을 1줄씩 표시 */}
+                                                    {/* 차량 모델명 표시 */}
                                                     {selectedEst && (
                                                         <div className="mt-1.5 space-y-0.5">
-                                                            {selectedEst.busYear && (
-                                                                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{selectedEst.busYear}년형</p>
-                                                            )}
                                                             {selectedEst.busModel && (
                                                                 <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{selectedEst.busModel}</p>
                                                             )}

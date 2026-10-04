@@ -26,15 +26,32 @@ export const sendTokenToServer = async (token, clientKind = 'mobile') => {
   if (accessToken && userData) {
     try {
       const user = JSON.parse(userData);
-      const isDriver = (user.userType === 'DRIVER' || user.user_type === 'DRIVER');
+      const isDriver = (user.userType === 'DRIVER' || user.user_type === 'DRIVER' || user.USER_TYPE === 'DRIVER' || user.role === 'DRIVER');
 
-      if (isDriver) {
-        await upsertDriverDeviceToken(token, clientKind);
-        console.log('✅ [FCM] 기사용 기기 토큰이 TB_USER_DEVICE_TOKEN 테이블에 저장되었습니다:', token);
-      } else {
-        await upsertDeviceToken(token, clientKind);
-        console.log('✅ [FCM] 고객용 기기 토큰이 TB_USER_DEVICE_TOKEN 테이블에 저장되었습니다:', token);
+      let success = false;
+      try {
+        if (isDriver) {
+          await upsertDriverDeviceToken(token, clientKind);
+        } else {
+          await upsertDeviceToken(token, clientKind);
+        }
+        success = true;
+      } catch (e) {
+        console.warn('Primary upsert token endpoint warning, trying fallback:', e);
       }
+
+      if (!success) {
+        const custId = user.custId || user.CUST_ID || user.userId || user.USER_ID;
+        await fetch('/api/user/device-token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`
+          },
+          body: JSON.stringify({ custId, token, clientKind })
+        });
+      }
+      console.log('✅ [FCM] 기기 토큰이 TB_USER_DEVICE_TOKEN 테이블에 저장되었습니다:', token);
     } catch (err) {
       console.error('❌ [FCM] 기기 토큰 DB 저장 중 오류:', err);
     }

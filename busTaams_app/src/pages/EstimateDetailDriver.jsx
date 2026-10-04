@@ -27,13 +27,26 @@ const EstimateDetailDriver = () => {
 
                 const res = await request(`/app/driver/auctions/${id}`);
                 if (res.success) {
-                    // [추가] 해당 청약이 'AUCTION' 또는 'BUS_CHANGE' 상태가 아닌 경우(예: CUSTOMER_PAY_WAIT, CONFIRM, DONE 등) 진입을 원천 차단합니다.
+                    // [추가] 해당 여정이 여행자에 의해 취소된 상태인 경우 구체적인 취소 안내를 표시합니다.
+                    if (res.data.reqStatus === 'TRAVELER_CANCEL' || res.data.reqStatus === 'CANCELLED') {
+                        Swal.fire({
+                            icon: 'info',
+                            title: '여행 취소 안내',
+                            text: '해당 여행은 여행자가 취소한 요청입니다.',
+                            confirmButtonColor: '#004e47'
+                        }).then(() => {
+                            navigate('/driver-dashboard');
+                        });
+                        return;
+                    }
+
+                    // [추가] 해당 청약이 'AUCTION' 또는 'BUS_CHANGE' 상태가 아닌 경우(예: CUSTOMER_PAY_WAIT, CONFIRM, DONE 등) 진입을 차단합니다.
                     const allowedStatuses = ['AUCTION', 'BUS_CHANGE'];
                     if (!allowedStatuses.includes(res.data.reqStatus)) {
                         Swal.fire({
                             icon: 'warning',
-                            title: '청약 완료',
-                            text: '이미 완료된 청약 입니다.',
+                            title: '청약 안내',
+                            text: '이미 진행이 완료되었거나 마감된 청약입니다.',
                             confirmButtonColor: '#004e47'
                         }).then(() => {
                             navigate('/driver-dashboard');

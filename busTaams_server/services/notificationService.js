@@ -98,13 +98,38 @@ async function sendNotification(pool, { custId, title, body, link, type, data })
             body: shortBody 
         },
         data: dataPayload,
-        android: { priority: 'high' },
-        apns: { payload: { aps: { sound: 'default' } } },
+        android: { 
+            priority: 'high',
+            notification: {
+                title: String(title || 'BusTaams').slice(0, 100),
+                body: shortBody,
+                sound: 'default',
+                channelId: 'bustaams_channel',
+                defaultSound: true,
+                defaultVibrateTimings: true,
+                visibility: 'PUBLIC',
+                priority: 'high'
+            }
+        },
+        apns: { 
+            payload: { 
+                aps: { 
+                    alert: {
+                        title: String(title || 'BusTaams').slice(0, 100),
+                        body: shortBody
+                    },
+                    sound: 'default',
+                    badge: 1
+                } 
+            } 
+        },
         webpush: {
             notification: {
                 title: String(title || 'BusTaams').slice(0, 100),
                 body: shortBody.slice(0, 120),
-                icon: '/logo192.png' // 앱 아이콘 경로 (웹 기준)
+                icon: '/logo192.png',
+                vibrate: [200, 100, 200],
+                requireInteraction: true
             },
         },
     }));

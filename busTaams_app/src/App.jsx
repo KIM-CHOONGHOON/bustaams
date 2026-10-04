@@ -173,8 +173,8 @@ function App() {
         {/* 기사님용 라우트 */}
         <Route path="/driver-dashboard" element={<DriverDashboard />} />
         <Route path="/driver/dashboard" element={<DriverDashboard />} />
-        <Route path="/driver-certification" element={<DriverInfoRegistration />} />
-        <Route path="/bus-certification" element={<BusInfoRegistration />} />
+        <Route path="/driver-certification" element={<ErrorBoundary><DriverInfoRegistration /></ErrorBoundary>} />
+        <Route path="/bus-certification" element={<ErrorBoundary><BusInfoRegistration /></ErrorBoundary>} />
         <Route path="/estimate-list-driver" element={<EstimateListDriver />} />
         <Route path="/estimate-detail-driver/:id" element={<EstimateDetailDriver />} />
         <Route path="/upcoming-trips-driver" element={<UpcomingTripsDriver />} />

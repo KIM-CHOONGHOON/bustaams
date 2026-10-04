@@ -18,10 +18,14 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] 백그라운드 메시지 수신:', payload);
 
-  const notificationTitle = payload.notification.title;
+  const notificationTitle = payload.notification?.title || payload.data?.title || 'BusTaams 알림';
   const notificationOptions = {
-    body: payload.notification.body,
-    icon: '/icon-512.png'
+    body: payload.notification?.body || payload.data?.body || '새로운 알림이 도착했습니다.',
+    icon: '/logo192.png',
+    badge: '/logo192.png',
+    vibrate: [200, 100, 200],
+    requireInteraction: true,
+    data: payload.data || {}
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);

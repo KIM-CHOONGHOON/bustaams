@@ -9,8 +9,33 @@ import Swal from 'sweetalert2';
 const Login = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({ userId: '', password: '' });
+  const [keepLoggedIn, setKeepLoggedIn] = useState(
+    localStorage.getItem('keepLoggedIn') === 'true'
+  );
 
   const [showPassword, setShowPassword] = useState(false);
+
+  // 로그인 상태 유지(keepLoggedIn)가 활성화되어 있고 토큰이 유효하면 자동 로그인 처리
+  React.useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+    const userStr = localStorage.getItem('user');
+    const isKeep = localStorage.getItem('keepLoggedIn') === 'true';
+
+    if (token && userStr && isKeep) {
+      try {
+        const user = JSON.parse(userStr);
+        if (user && user.userType) {
+          if (user.userType === 'DRIVER') {
+            navigate('/driver-dashboard', { replace: true });
+          } else {
+            navigate('/customer-dashboard', { replace: true });
+          }
+        }
+      } catch (e) {
+        console.error('Auto login parse error:', e);
+      }
+    }
+  }, [navigate]);
 
   const handleCheckVehicle = async () => {
     // [추가] 차량 번호 입력창 팝업 띄우기
@@ -122,6 +147,11 @@ const Login = () => {
       if (response.success) {
         localStorage.setItem('accessToken', response.token);
         localStorage.setItem('user', JSON.stringify(response.user));
+        if (keepLoggedIn) {
+          localStorage.setItem('keepLoggedIn', 'true');
+        } else {
+          localStorage.removeItem('keepLoggedIn');
+        }
 
         // FCM 토큰 등록 시도 (실패하더라도 로그인 흐름에 영향이 없도록 안전하게 감싸줍니다)
         try {
@@ -229,7 +259,12 @@ const Login = () => {
                 </div>
                 <div className="flex items-center justify-between py-2">
                   <label className="relative flex items-center cursor-pointer group">
-                    <input className="peer sr-only" type="checkbox" />
+                    <input 
+                      className="peer sr-only" 
+                      type="checkbox" 
+                      checked={keepLoggedIn}
+                      onChange={(e) => setKeepLoggedIn(e.target.checked)}
+                    />
                     <div className="w-6 h-6 bg-surface-container-high rounded-lg peer-checked:bg-primary transition-all flex items-center justify-center">
                       <span className="material-symbols-outlined text-white text-sm scale-0 peer-checked:scale-100 transition-transform">check</span>
                     </div>

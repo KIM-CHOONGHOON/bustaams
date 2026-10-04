@@ -54,12 +54,38 @@ async function notifyUserDevicesByCustId(pool, { custId, title, body, data }) {
         token,
         notification: { title: String(title || 'Bustaams').slice(0, 100), body: shortBody },
         data: dataPayload,
-        android: { priority: 'high' },
-        apns: { payload: { aps: { sound: 'default' } } },
+        android: { 
+            priority: 'high',
+            notification: {
+                title: String(title || 'Bustaams').slice(0, 100),
+                body: shortBody,
+                sound: 'default',
+                channelId: 'bustaams_channel',
+                defaultSound: true,
+                defaultVibrateTimings: true,
+                visibility: 'PUBLIC',
+                priority: 'high'
+            }
+        },
+        apns: { 
+            payload: { 
+                aps: { 
+                    alert: {
+                        title: String(title || 'Bustaams').slice(0, 100),
+                        body: shortBody
+                    },
+                    sound: 'default',
+                    badge: 1
+                } 
+            } 
+        },
         webpush: {
             notification: {
                 title: String(title || 'Bustaams').slice(0, 100),
                 body: shortBody.slice(0, 120),
+                icon: '/logo192.png',
+                vibrate: [200, 100, 200],
+                requireInteraction: true
             },
         },
     }));

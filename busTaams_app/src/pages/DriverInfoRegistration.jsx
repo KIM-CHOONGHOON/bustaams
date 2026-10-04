@@ -882,40 +882,6 @@ const DriverInfoRegistration = () => {
                                     <label className="font-headline font-bold text-sm text-[#191c1e] ml-1">성명 (실명)</label>
                                     <input name="userNm" value={formData.userNm} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-6 py-4 focus:ring-2 focus:ring-[#004e47]/20 transition-all text-[#191c1e] placeholder:text-[#6e7977]" placeholder="홍길동" />
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="font-headline font-bold text-sm text-[#191c1e] ml-1">주민등록번호</label>
-                                    <div className="flex items-center gap-3">
-                                        <input 
-                                            name="residentNoFront" 
-                                            value={formData.residentNoFront} 
-                                            onChange={(e) => {
-                                                const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
-                                                setFormData(prev => ({ ...prev, residentNoFront: val }));
-                                                if (val.length === 6 && residentNoBackRef.current) {
-                                                    residentNoBackRef.current.focus();
-                                                }
-                                            }} 
-                                            maxLength="6"
-                                            pattern="[0-9]*"
-                                            inputMode="numeric"
-                                            className="w-1/2 bg-[#e6e8ea] border-none rounded-xl px-6 py-4 focus:ring-2 focus:ring-[#004e47]/20 transition-all text-[#191c1e] placeholder:text-[#6e7977] text-center" 
-                                            placeholder="YYMMDD" 
-                                        />
-                                        <span className="text-[#3e4947] font-bold">-</span>
-                                        <input 
-                                            ref={residentNoBackRef}
-                                            name="residentNoBack" 
-                                            value={formData.residentNoBack} 
-                                            onChange={(e) => {
-                                                const val = e.target.value.replace(/[^0-9*]/g, '').slice(0, 7);
-                                                setFormData(prev => ({ ...prev, residentNoBack: val }));
-                                            }} 
-                                            maxLength="7"
-                                            className="w-1/2 bg-[#e6e8ea] border-none rounded-xl px-6 py-4 focus:ring-2 focus:ring-[#004e47]/20 transition-all text-[#191c1e] placeholder:text-[#6e7977] text-center" 
-                                            placeholder="C******" 
-                                        />
-                                    </div>
-                                </div>
                                 <div className="space-y-4 md:col-span-2">
                                     <label className="font-headline font-bold text-sm text-[#191c1e] ml-1">성별 구분</label>
                                     <div className="flex gap-8 px-1">
@@ -1001,6 +967,40 @@ const DriverInfoRegistration = () => {
                                 운전면허 정보
                             </h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="space-y-2">
+                                    <label className="font-headline font-bold text-sm text-[#191c1e] ml-1">주민등록번호</label>
+                                    <div className="flex items-center gap-3">
+                                        <input 
+                                            name="residentNoFront" 
+                                            value={formData.residentNoFront} 
+                                            onChange={(e) => {
+                                                const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
+                                                setFormData(prev => ({ ...prev, residentNoFront: val }));
+                                                if (val.length === 6 && residentNoBackRef.current) {
+                                                    residentNoBackRef.current.focus();
+                                                }
+                                            }} 
+                                            maxLength="6"
+                                            pattern="[0-9]*"
+                                            inputMode="numeric"
+                                            className="w-1/2 bg-[#e6e8ea] border-none rounded-xl px-6 py-4 focus:ring-2 focus:ring-[#004e47]/20 transition-all text-[#191c1e] placeholder:text-[#6e7977] text-center" 
+                                            placeholder="YYMMDD" 
+                                        />
+                                        <span className="text-[#3e4947] font-bold">-</span>
+                                        <input 
+                                            ref={residentNoBackRef}
+                                            name="residentNoBack" 
+                                            value={formData.residentNoBack} 
+                                            onChange={(e) => {
+                                                const val = e.target.value.replace(/[^0-9*]/g, '').slice(0, 7);
+                                                setFormData(prev => ({ ...prev, residentNoBack: val }));
+                                            }} 
+                                            maxLength="7"
+                                            className="w-1/2 bg-[#e6e8ea] border-none rounded-xl px-6 py-4 focus:ring-2 focus:ring-[#004e47]/20 transition-all text-[#191c1e] placeholder:text-[#6e7977] text-center" 
+                                            placeholder="C******" 
+                                        />
+                                    </div>
+                                </div>
                                 <div className="space-y-2">
                                     <label className="font-headline font-bold text-sm text-[#191c1e] ml-1">면허 종류 <span className="text-[#ba1a1a] text-xs font-normal ml-2">*1종 대형 필수</span></label>
                                     <select name="licenseType" value={formData.licenseType} onChange={handleInputChange} className="w-full bg-[#e6e8ea] border-none rounded-xl px-6 py-4 focus:ring-2 focus:ring-[#004e47]/20 transition-all text-[#191c1e] appearance-none">

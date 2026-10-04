@@ -210,7 +210,7 @@ const ApprovalDetailCustomer = () => {
                                 <div className="space-y-1 text-left">
                                     <h3 className="text-[32px] font-black tracking-tighter text-orange-600 leading-tight italic">{bid.busModel || '차량 모델 정보 없음'}</h3>
                                     <p className="text-on-surface-variant font-bold opacity-50 uppercase tracking-widest text-xs">
-                                        {bid.busYear || '-'}년형 | {bid.busType || '-'} CLASS | {bid.vehicleNo || '-'}
+                                        {bid.busType || '-'} CLASS | {bid.vehicleNo || '-'}
                                     </p>
                                 </div>
                             </div>
