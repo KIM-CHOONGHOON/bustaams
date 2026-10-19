@@ -67,11 +67,18 @@ const BusInfoRegistration = () => {
     const [userProfileImg, setUserProfileImg] = useState('');
     const [busTypes, setBusTypes] = useState([]);
 
-    // 공용 업로드용 Ref 및 상태 선언
-    const commonAlbumInputRef = useRef(null); // 공용 앨범 선택 Ref
-    const commonCameraInputRef = useRef(null); // 공용 카메라 촬영 Ref
-    const [showPhotoBottomSheet, setShowPhotoBottomSheet] = useState(false); // 바텀 시트 노출 상태
+    // 공용 파일 업로드용 Ref 및 상태 선언
+    const commonFileInputRef = useRef(null); // 공용 파일 선택 Ref
     const [activeUploadType, setActiveUploadType] = useState(null); // 현재 업로드 중인 항목 ('bizReg' | 'transLic' | 'insCert' | 'vehiclePhotos')
+
+    // 스마트폰 기본 작업 선택(카메라/파일) 즉시 열기
+    const openFilePicker = (type) => {
+        setActiveUploadType(type);
+        if (commonFileInputRef.current) {
+            commonFileInputRef.current.value = '';
+            commonFileInputRef.current.click();
+        }
+    };
 
     const [formData, setFormData] = useState({
         vehicleNo: '',
@@ -243,11 +250,11 @@ const BusInfoRegistration = () => {
                     setFormData(prev => ({
                         ...prev,
                         bizNo: info.bizNo || prev.bizNo || '',
-                        bizNm: info.bizNm || prev.bizNm || '',
-                        ceoNm: info.ceoNm || prev.ceoNm || '',
-                        bizAddr: info.bizAddr || prev.bizAddr || '',
-                        bizType: info.bizType || prev.bizType || '',
-                        bizItem: info.bizItem || prev.bizItem || ''
+                        bizNm: info.bizNm || info.companyName || info.tradeName || info.corpName || prev.bizNm || '',
+                        ceoNm: info.ceoNm || info.ceoName || prev.ceoNm || '',
+                        bizAddr: info.bizAddr || info.address || prev.bizAddr || '',
+                        bizType: info.bizType || info.businessType || prev.bizType || '',
+                        bizItem: info.bizItem || info.businessItem || prev.bizItem || ''
                     }));
 
                     Swal.fire({
@@ -453,10 +460,7 @@ const BusInfoRegistration = () => {
                                     <span className="text-[10px] text-[#6e7977] font-bold">{previews.vehiclePhotos.length} / 9</span>
                                 </div>
                                 <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
-                                    <div onClick={() => {
-                                        setActiveUploadType('vehiclePhotos');
-                                        setShowPhotoBottomSheet(true);
-                                    }} className="aspect-square bg-[#e6e8ea] rounded-xl border-2 border-dashed border-[#bec9c6] flex flex-col items-center justify-center cursor-pointer hover:border-[#004e47] transition-colors">
+                                    <div onClick={() => openFilePicker('vehiclePhotos')} className="aspect-square bg-[#e6e8ea] rounded-xl border-2 border-dashed border-[#bec9c6] flex flex-col items-center justify-center cursor-pointer hover:border-[#004e47] transition-colors">
                                         <span className="material-symbols-outlined text-2xl text-[#6e7977]">add_a_photo</span>
                                     </div>
                                     {previews.vehiclePhotos.map((url, i) => (
@@ -540,15 +544,15 @@ const BusInfoRegistration = () => {
                         {/* Section 5 */}
                         <section className="space-y-6 text-left">
                             <div className="flex items-baseline justify-between border-b border-[#bec9c6] pb-4">
-                                <h3 className="font-headline text-2xl font-bold text-[#191c1e]">05. 법적 증빙 서류 업로드 <span className="text-red-500">*</span></h3>
-                                <span className="text-[#6e7977] text-xs font-bold uppercase tracking-widest">필수 증빙 서류</span>
+                                <h3 className="font-headline text-2xl font-bold text-[#191c1e]">05. 증빙 서류 업로드</h3>
+                                <span className="text-[#6e7977] text-xs font-bold uppercase tracking-widest">증빙 서류</span>
                             </div>
                             <div className="space-y-4">
                                 {
                                     [
-                                        { key: 'bizReg', title: '사업자 등록증', required: true, desc: '유효한 사업자 등록증의 PDF 또는 고화질 사진을 업로드해 주세요.', color: 'bg-[#ffdbcf]', icon: 'badge' },
-                                        { key: 'transLic', title: '운송 허가증', required: false, desc: '유효한 운송 허가증의 PDF 또는 고화질 사진을 업로드해 주세요.', color: 'bg-[#ffdbca]', icon: 'local_shipping' },
-                                        { key: 'insCert', title: '보험 증명서 (책임/종합보험)', required: false, desc: '유효한 보험 가입 증명서의 PDF 또는 고화질 사진을 업로드해 주세요.', color: 'bg-[#a1f1e5]', icon: 'verified_user' }
+                                        { key: 'bizReg', title: '사업자 등록증', required: true, desc: '유효한 사업자 등록증의 PDF 또는 고화질 사진을 업로드해 주세요. (*필수)', color: 'bg-[#ffdbcf]', icon: 'badge' },
+                                        { key: 'transLic', title: '운송 허가증', required: false, desc: '유효한 운송 허가증의 PDF 또는 고화질 사진을 업로드해 주세요. (선택)', color: 'bg-[#ffdbca]', icon: 'local_shipping' },
+                                        { key: 'insCert', title: '보험 증명서 (책임/종합보험)', required: false, desc: '유효한 보험 가입 증명서의 PDF 또는 고화질 사진을 업로드해 주세요. (선택)', color: 'bg-[#a1f1e5]', icon: 'verified_user' }
                                     ].map((doc) => {
                                         // 한글 주석: PDF 형식인지 확인하는 플래그 (파일명 혹은 파일 객체의 type, base64 스키마로 탐지)
                                         const isPdf = files[doc.key + 'File']?.type === 'application/pdf' || 
@@ -574,10 +578,7 @@ const BusInfoRegistration = () => {
                                                         </h4>
                                                         <p className="text-sm text-[#6e7977] mt-1">{doc.desc}</p>
                                                     </div>
-                                                    <button onClick={() => {
-                                                        setActiveUploadType(doc.key);
-                                                        setShowPhotoBottomSheet(true);
-                                                    }} className="w-full md:w-auto px-6 py-3 rounded-xl bg-[#eceef0] text-[#004e47] font-bold text-sm hover:bg-[#004e47] hover:text-white transition-colors">
+                                                    <button onClick={() => openFilePicker(doc.key)} className="w-full md:w-auto px-6 py-3 rounded-xl bg-[#eceef0] text-[#004e47] font-bold text-sm hover:bg-[#004e47] hover:text-white transition-colors">
                                                         파일 추가
                                                     </button>
                                                 </div>
@@ -639,71 +640,15 @@ const BusInfoRegistration = () => {
                 </div>
             </main>
 
-            {/* 공용 앨범 선택용 hidden input (한글 주석:차량 사진이 아닐 땐 PDF도 선택 가능하게 설정) */}
+            {/* 파일/서류 직접 선택용 hidden input (스마트폰 기본 작업선택: 카메라/파일 팝업 호출) */}
             <input 
                 type="file" 
-                ref={commonAlbumInputRef} 
+                ref={commonFileInputRef} 
                 className="hidden" 
                 onChange={handleCommonFileChange} 
                 accept={activeUploadType === 'vehiclePhotos' ? 'image/*' : 'image/*,application/pdf'} 
                 multiple={activeUploadType === 'vehiclePhotos'}
             />
-            {/* 공용 카메라 촬영용 hidden input */}
-            <input 
-                type="file" 
-                ref={commonCameraInputRef} 
-                className="hidden" 
-                onChange={handleCommonFileChange} 
-                accept="image/*" 
-                capture="environment" 
-                multiple={activeUploadType === 'vehiclePhotos'}
-            />
-
-            {/* 공용 사진/서류 업로드 바텀 시트 */}
-            {showPhotoBottomSheet && (
-                <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-                    <div className="absolute inset-0" onClick={() => setShowPhotoBottomSheet(false)}></div>
-                    <div className="relative w-full max-w-md bg-white rounded-t-2xl p-8 space-y-6 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] animate-in slide-in-from-bottom duration-300 z-10 border-t border-slate-100 text-center text-[#191c1e]">
-                        <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-2"></div>
-                        <div className="space-y-2 text-left">
-                            <h3 className="font-extrabold text-xl text-teal-900">
-                                {activeUploadType === 'vehiclePhotos' ? '차량 사진 등록' : '서류 등록'}
-                            </h3>
-                            <p className="text-sm text-slate-500 font-semibold">
-                                {activeUploadType === 'vehiclePhotos' ? '차량의 내/외부 사진을 업로드해 주세요.' : '증빙 서류 사진을 업로드해 주세요.'}
-                            </p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <button 
-                                onClick={() => {
-                                    setShowPhotoBottomSheet(false);
-                                    commonCameraInputRef.current.click();
-                                }}
-                                className="flex flex-col items-center justify-center p-5 bg-teal-50 hover:bg-teal-100/70 text-[#004e47] rounded-xl border border-teal-100/50 active:scale-95 transition-all space-y-2 font-bold"
-                            >
-                                <span className="material-symbols-outlined text-4xl text-teal-800">photo_camera</span>
-                                <span className="text-sm">카메라로 촬영</span>
-                            </button>
-                            <button 
-                                onClick={() => {
-                                    setShowPhotoBottomSheet(false);
-                                    commonAlbumInputRef.current.click();
-                                }}
-                                className="flex flex-col items-center justify-center p-5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl border border-slate-100/50 active:scale-95 transition-all space-y-2 font-bold"
-                            >
-                                <span className="material-symbols-outlined text-4xl text-slate-500">image</span>
-                                <span className="text-sm">앨범에서 선택</span>
-                            </button>
-                        </div>
-                        <button 
-                            onClick={() => setShowPhotoBottomSheet(false)}
-                            className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 py-4 rounded-xl font-bold active:scale-[0.98] transition-all text-center text-sm"
-                        >
-                            취소
-                        </button>
-                    </div>
-                </div>
-            )}
 
             <BottomNavDriver />
         </div>

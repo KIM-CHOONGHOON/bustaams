@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { notify } from '../utils/toast';
-import { login, checkVehicle } from '../api';
+import { login, checkVehicle, isTokenValid, logout } from '../api';
 import { requestFirebaseToken } from '../utils/fcm';
 import Swal from 'sweetalert2';
 
@@ -21,7 +21,14 @@ const Login = () => {
     const userStr = localStorage.getItem('user');
     const isKeep = localStorage.getItem('keepLoggedIn') === 'true';
 
-    if (token && userStr && isKeep) {
+    // 💡 핵심 안전장치: 토큰이 만료되었거나 비정상일 경우 즉시 로컬 데이터 청소 후 로그인 화면 표시
+    if (token && !isTokenValid(token)) {
+      console.warn('[Login] 만료된 세션 토큰 감지 - 자동 로그아웃 및 저장소 청소');
+      logout();
+      return;
+    }
+
+    if (token && userStr && isKeep && isTokenValid(token)) {
       try {
         const user = JSON.parse(userStr);
         if (user && user.userType) {
@@ -33,6 +40,7 @@ const Login = () => {
         }
       } catch (e) {
         console.error('Auto login parse error:', e);
+        logout();
       }
     }
   }, [navigate]);

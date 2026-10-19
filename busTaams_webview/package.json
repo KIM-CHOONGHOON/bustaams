@@ -6,6 +6,7 @@
     "@expo/config-plugins": "^57.0.5",
     "expo": "~54.0.3",
     "expo-build-properties": "^57.0.3",
+    "expo-notifications": "~0.32.17",
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
     "react-native": "0.81.5",

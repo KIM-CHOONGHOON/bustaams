@@ -224,11 +224,7 @@ const TERMS_CONTENTS = {
 
 const ProfileCustomer = () => {
     const navigate = useNavigate();
-    const fileInputRef = useRef(null); // 앨범 선택용 Ref
-    const cameraInputRef = useRef(null); // 카메라 직접 촬영용 Ref
-
-    // 사진 선택 바텀 시트 상태
-    const [showPhotoBottomSheet, setShowPhotoBottomSheet] = useState(false);
+    const fileInputRef = useRef(null); // 사진 선택용 Ref
 
     // 사용자 정보 상태
     const [userData, setUserData] = useState({
@@ -511,30 +507,21 @@ const ProfileCustomer = () => {
                             profileImage={userData.profileImage}
                             imageVersion={imageVersion}
                             className="w-24 h-24 rounded-xl overflow-hidden shadow-xl ring-4 ring-surface-container-low bg-slate-100 flex items-center justify-center cursor-pointer"
-                            onClick={() => setShowPhotoBottomSheet(true)}
+                            onClick={() => fileInputRef.current.click()}
                         />
                         <button 
-                            onClick={() => setShowPhotoBottomSheet(true)}
+                            onClick={() => fileInputRef.current.click()}
                             className="absolute bottom-0 right-0 bg-primary p-2 rounded-xl text-white shadow-lg active:scale-90 transition-transform"
                         >
                             <span className="material-symbols-outlined text-sm">edit</span>
                         </button>
-                        {/* 앨범에서 선택용 hidden input */}
+                        {/* 스마트폰 OS 작업 선택(카메라/파일) 직접 호출용 input */}
                         <input 
                             type="file" 
                             ref={fileInputRef} 
                             style={{ display: 'none' }} 
                             onChange={handleImageChange}
                             accept="image/*"
-                        />
-                        {/* 카메라 직접 촬영용 hidden input */}
-                        <input 
-                            type="file" 
-                            ref={cameraInputRef} 
-                            style={{ display: 'none' }} 
-                            onChange={handleImageChange}
-                            accept="image/*"
-                            capture="environment"
                         />
                     </div>
                     <div className="space-y-1">
@@ -745,54 +732,7 @@ const ProfileCustomer = () => {
             {/* Bottom Nav Bar (Main Dashboard Style) */}
             <BottomNavCustomer />
 
-            {/* 사진 업로드 바텀 시트 (Premium UX) */}
-            {showPhotoBottomSheet && (
-                <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-                    {/* 어두운 배경 클릭 시 닫기 */}
-                    <div className="absolute inset-0" onClick={() => setShowPhotoBottomSheet(false)}></div>
-                    
-                    {/* 바텀 시트 본체 */}
-                    <div className="relative w-full max-w-md bg-white rounded-t-2xl p-8 space-y-6 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] animate-in slide-in-from-bottom duration-300 z-10 border-t border-slate-100 text-center">
-                        {/* 상단 드래그 핸들 이미지 표현 */}
-                        <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-2"></div>
-                        
-                        <div className="space-y-2">
-                            <h3 className="font-extrabold text-xl text-teal-800">프로필 사진 업로드</h3>
-                            <p className="text-sm text-slate-500 font-semibold">사진을 등록할 방식을 선택해 주세요.</p>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                            <button 
-                                onClick={() => {
-                                    setShowPhotoBottomSheet(false);
-                                    cameraInputRef.current.click();
-                                }}
-                                className="flex flex-col items-center justify-center p-5 bg-teal-50 hover:bg-teal-100/70 text-teal-800 rounded-xl border border-teal-100/50 active:scale-95 transition-all space-y-2 font-bold"
-                            >
-                                <span className="material-symbols-outlined text-4xl text-teal-700">photo_camera</span>
-                                <span className="text-sm">카메라로 촬영</span>
-                            </button>
-                            <button 
-                                onClick={() => {
-                                    setShowPhotoBottomSheet(false);
-                                    fileInputRef.current.click();
-                                }}
-                                className="flex flex-col items-center justify-center p-5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl border border-slate-100/50 active:scale-95 transition-all space-y-2 font-bold"
-                            >
-                                <span className="material-symbols-outlined text-4xl text-slate-500">image</span>
-                                <span className="text-sm">앨범에서 선택</span>
-                            </button>
-                        </div>
-                        
-                        <button 
-                            onClick={() => setShowPhotoBottomSheet(false)}
-                            className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 py-4 rounded-xl font-bold active:scale-[0.98] transition-all text-center text-sm"
-                        >
-                            취소
-                        </button>
-                    </div>
-                </div>
-            )}
+
 
             {/* 알림 설정 바텀 시트 (Premium UX) */}
             {showAlarmBottomSheet && (

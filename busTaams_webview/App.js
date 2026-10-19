@@ -1,9 +1,40 @@
-import React from 'react';
-import { StyleSheet, View, SafeAreaView, Linking, Alert } from 'react-native';
+import React, { useEffect } from 'react';
+import { StyleSheet, View, SafeAreaView, Linking, Alert, Platform } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { StatusBar } from 'expo-status-bar';
+import * as Notifications from 'expo-notifications';
+
+// 알림 수신 시 팝업 및 알림음 재생 설정
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
 export default function App() {
+  useEffect(() => {
+    async function setupNotificationChannel() {
+      if (Platform.OS === 'android') {
+        try {
+          await Notifications.setNotificationChannelAsync('bustaams_channel', {
+            name: '버스탐스 알림',
+            description: '배차, 청약, 기사/여행자 주요 소식 및 메시지 알림',
+            importance: Notifications.AndroidImportance.HIGH,
+            sound: 'default',
+            vibrationPattern: [0, 250, 250, 250],
+            enableVibrate: true,
+            showBadge: true,
+          });
+          console.log('✅ Android Notification Channel [bustaams_channel] created');
+        } catch (e) {
+          console.warn('NotificationChannel error:', e);
+        }
+      }
+    }
+    setupNotificationChannel();
+  }, []);
   const onShouldStartLoadWithRequest = (request) => {
     const { url } = request;
 

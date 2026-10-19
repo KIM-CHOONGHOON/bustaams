@@ -2,17 +2,21 @@
   "expo": {
     "name": "busTaams",
     "slug": "bustaams",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "notification": {
+      "icon": "./assets/icon.png",
+      "color": "#0052cc"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.bustaams.app"
     },
     "android": {
       "package": "com.bustaams.app",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -29,6 +33,13 @@
       }
     },
     "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#0052cc"
+        }
+      ],
       [
         "expo-build-properties",
         {

@@ -11,7 +11,7 @@ const fs = require('fs');
 const { registerBusDriverPaymentCard } = require('../lib/busDriverCreditCardRegistration');
 const { sendNotification } = require('../services/notificationService');
 const { runDriverVerificationsForProfileSetup } = require('../driverVerification');
-const { processBankbookOcr, processBizRegOcr } = require('../services/ocrService');
+const { processBankbookOcr, processBizRegOcr, processLicenseOcr, processBusLicenseOcr } = require('../services/ocrService');
 const { cancelInicisPayment } = require('../lib/driverBidCancellation');
 const { applyMomMemberAfterBid } = require('../lib/driverBidMomMember');
 const { calculateDriverFee } = require('../lib/feeCalculator');
@@ -883,9 +883,9 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
                 params.push(custId, type, seq);
                 await connection.execute(updateSql, params);
             } else {
-                // 신규 등록 시 파일 필수 체크 (통장 사본은 예외)
+                // 신규 등록 시 파일 필수 체크 (통장 사본 및 운전경력증명서는 선택)
                 if (!file) {
-                    if (type === 'BANKBOOK') return; // 통장 사본은 신규 등록 시 파일 없으면 진행 안 함 (선택)
+                    if (type === 'BANKBOOK' || type === 'CAREER_CERT') return; // 통장 사본, 운전경력증명서는 선택 사항
                     const typeNm = type === 'LICENSE' ? '운전면허증' : type === 'QUALIFICATION' ? '버스운전자격증' : '운전경력증명서';
                     throw new Error(`${typeNm} 파일을 업로드해주세요.`);
                 }
@@ -1130,8 +1130,7 @@ router.post('/bus/register', authenticateToken, memoryUpload.fields([
         const insCertId = await uploadFile('insCertFile', 'BUS_INS', existing.length > 0 ? existing[0].INS_CERT_FILE_ID : null);
 
         if (!bizRegId) throw new Error('사업자 등록증 파일을 업로드해주세요.');
-        if (!transLicId) throw new Error('운송 허가증 파일을 업로드해주세요.');
-        if (!insCertId) throw new Error('보험 증명서 파일을 업로드해주세요.');
+        // 한글 주석: 운송 허가증 및 보험 증명서는 선택 사항입니다.
 
         // 차량 사진 처리 (최대 8장)
         let finalPhotoIds = existing.length > 0 ? (existing[0].VEHICLE_PHOTOS_JSON || []) : [];
@@ -3416,6 +3415,40 @@ router.post('/ocr/bizreg', authenticateToken, memoryUpload.single('bizRegImg'), 
     } catch (err) {
         console.error('[OCR BizReg API] Error:', err);
         res.status(500).json({ error: '사업자 등록증 분석 중 오류 발생: ' + err.message });
+    }
+});
+
+/**
+ * [App] 운전면허증 OCR 분석 API (오류 발생 시 공백 반환)
+ */
+router.post('/ocr/license', authenticateToken, memoryUpload.single('licenseImg'), async (req, res) => {
+    try {
+        const file = req.file;
+        if (!file) {
+            return res.json({ success: true, data: { licenseNo: '', licenseIssueDt: '', licenseType: '', residentNo: '', name: '' } });
+        }
+        const ocrData = await processLicenseOcr(file.buffer);
+        res.json({ success: true, data: ocrData });
+    } catch (err) {
+        console.error('[OCR License API] Silent Error:', err);
+        res.json({ success: true, data: { licenseNo: '', licenseIssueDt: '', licenseType: '', residentNo: '', name: '' } });
+    }
+});
+
+/**
+ * [App] 버스운전자격증 OCR 분석 API (오류 발생 시 공백 반환)
+ */
+router.post('/ocr/buslicense', authenticateToken, memoryUpload.single('busLicenseImg'), async (req, res) => {
+    try {
+        const file = req.file;
+        if (!file) {
+            return res.json({ success: true, data: { busLicenseNo: '', qualAcquisitionDt: '', name: '' } });
+        }
+        const ocrData = await processBusLicenseOcr(file.buffer);
+        res.json({ success: true, data: ocrData });
+    } catch (err) {
+        console.error('[OCR BusLicense API] Silent Error:', err);
+        res.json({ success: true, data: { busLicenseNo: '', qualAcquisitionDt: '', name: '' } });
     }
 });
 

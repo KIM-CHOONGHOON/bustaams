@@ -23,7 +23,9 @@ messaging.onBackgroundMessage((payload) => {
     body: payload.notification?.body || payload.data?.body || '새로운 알림이 도착했습니다.',
     icon: '/logo192.png',
     badge: '/logo192.png',
-    vibrate: [200, 100, 200],
+    vibrate: [300, 100, 300, 100, 300],
+    sound: 'default',
+    tag: payload.data?.type || 'bustaams_notification',
     requireInteraction: true,
     data: payload.data || {}
   };

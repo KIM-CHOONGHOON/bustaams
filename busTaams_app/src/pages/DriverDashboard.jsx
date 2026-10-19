@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import api, { getNotifications, logout } from '../api';
+import api, { getNotifications, logout, isTokenValid } from '../api';
 import Swal from 'sweetalert2';
 import { notify } from '../utils/toast';
 import BottomNavDriver from '../components/BottomNavDriver';
@@ -95,7 +95,9 @@ const DriverDashboard = () => {
             console.error('Fetch driver dashboard error:', err);
             const errMsg = err.message || '인증 세션이 만료되었거나 네트워크 오류가 발생했습니다.';
             setFetchError(errMsg);
-            if (errMsg.includes('인증') || errMsg.includes('로그인')) {
+            // 한글 주석: 토큰 만료 또는 인증 실패 감지 시 즉시 로그아웃 및 저장소 정리 후 로그인 화면으로 안전 이동
+            if (errMsg.includes('인증') || errMsg.includes('로그인') || errMsg.includes('토큰') || errMsg.includes('세션')) {
+                logout();
                 notify.warn('로그인 필요', '기사 서비스 이용을 위해 재로그인이 필요합니다.');
                 navigate('/login', { replace: true });
             }
@@ -178,13 +180,25 @@ const DriverDashboard = () => {
                 <p className="text-slate-500 text-sm max-w-md mb-6">{fetchError}</p>
                 <div className="flex gap-4">
                     <button 
-                        onClick={() => fetchDashboardData()}
+                        onClick={() => {
+                            const token = localStorage.getItem('accessToken');
+                            if (!isTokenValid(token)) {
+                                logout();
+                                notify.warn('로그인 만료', '로그인 정보가 만료되었습니다. 다시 로그인해 주세요.');
+                                navigate('/login', { replace: true });
+                                return;
+                            }
+                            fetchDashboardData();
+                        }}
                         className="bg-primary text-white font-bold py-3 px-6 rounded-full shadow-md hover:scale-105 active:scale-95 transition-all text-sm"
                     >
                         다시 시도
                     </button>
                     <button 
-                        onClick={() => navigate('/login')}
+                        onClick={() => {
+                            logout();
+                            navigate('/login', { replace: true });
+                        }}
                         className="bg-slate-200 text-slate-700 font-bold py-3 px-6 rounded-full shadow-md hover:scale-105 active:scale-95 transition-all text-sm"
                     >
                         로그인 화면으로

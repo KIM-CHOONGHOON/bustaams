@@ -125,14 +125,15 @@ const Signup = () => {
     const [terms, setTerms] = useState({
         service: false,
         privacy: false,
-        traveler: true,
+        traveler: false,
         location: false
     });
 
     const [viewedTerms, setViewedTerms] = useState({
         service: false,
         privacy: false,
-        traveler: true,
+        traveler: false,
+        location: false,
         marketing: false
     });
 
@@ -152,6 +153,35 @@ const Signup = () => {
             push: checked,
             email: checked,
             tel: checked
+        });
+    };
+
+    // 가입 유형(고객/기사) 변경 시 전체 약관 동의 및 열람 상태 초기화
+    const handleUserTypeChange = (type) => {
+        if (userType === type) return;
+        setUserType(type);
+        setStep(1);
+        setIsEmailChecked(false);
+        setIsIdChecked(false);
+        setTerms({
+            service: false,
+            privacy: false,
+            traveler: false,
+            location: false
+        });
+        setViewedTerms({
+            service: false,
+            privacy: false,
+            traveler: false,
+            location: false,
+            marketing: false
+        });
+        setMarketing({
+            sms: false,
+            push: false,
+            email: false,
+            tel: false,
+            agree: false
         });
     };
 
@@ -219,6 +249,7 @@ const Signup = () => {
                 service: true,
                 privacy: true,
                 traveler: true,
+                location: true,
                 marketing: true
             });
         });
@@ -273,11 +304,12 @@ const Signup = () => {
             return;
         }
         try {
-            await sendAuthCode(phoneNo);
+            const reqUserType = isDriver ? 'DRIVER' : 'TRAVELER';
+            await sendAuthCode(phoneNo, 'signup', reqUserType);
             setIsCodeSent(true);
             notify.success('인증번호 발송', '입력하신 휴대폰 번호로 인증번호가 발송되었습니다.');
         } catch (err) {
-            notify.error('발송 실패', '인증번호 발송에 실패했습니다.');
+            notify.error('발송 실패', err.message || '인증번호 발송에 실패했습니다.');
         }
     };
 
@@ -287,7 +319,7 @@ const Signup = () => {
             return;
         }
         try {
-            const res = await verifyAuthCode(phoneNo, authCode);
+            const res = await verifyAuthCode(phoneNo, authCode, 'signup');
             if (res.success || res.verified) {
                 setIsPhoneVerified(true);
                 if (res.idToken || res.verifyToken) {
@@ -295,16 +327,16 @@ const Signup = () => {
                 }
                 notify.success('인증 완료', '본인 인증이 완료되었습니다.');
             } else {
-                notify.error('인증 실패', '인증번호가 일치하지 않습니다.');
+                notify.error('인증 실패', res.error || '인증번호가 일치하지 않습니다.');
             }
         } catch (err) {
-            notify.error('인증 오류', '인증번호 확인 중 오류가 발생했습니다.');
+            notify.error('인증 오류', err.message || '인증번호 확인 중 오류가 발생했습니다.');
         }
     };
 
     const handleAllTerms = (e) => {
         const checked = e.target.checked;
-        if (checked && (!viewedTerms.service || !viewedTerms.privacy || !viewedTerms.traveler)) {
+        if (checked && (!viewedTerms.service || !viewedTerms.privacy || !viewedTerms.traveler || !viewedTerms.location)) {
             notify.warn('약관 상세보기 필요', '약관 상세보기를 먼저 확인해 주세요.');
             return;
         }
@@ -443,7 +475,7 @@ const Signup = () => {
             userType: isDriver ? 'DRIVER' : 'CUSTOMER',
             email,
             signatureBase64: signature,
-            firebaseToken: null,
+            firebaseToken: idToken,
             residentNo: null, // 주민등록번호 수집 안 함
             recomCode: recomCode.trim() || null,
             termsData: {
@@ -471,10 +503,10 @@ const Signup = () => {
                     navigate('/login');
                 });
             } else {
-                notify.error('회원가입 실패', res.message || '회원가입 중 오류가 발생했습니다.');
+                notify.error('회원가입 실패', res.message || res.error || '회원가입 중 오류가 발생했습니다.');
             }
         } catch (err) {
-            notify.error('회원가입 오류', err.response?.data?.message || '서버와의 통신에 실패했습니다.');
+            notify.error('회원가입 오류', err.message || '서버와의 통신에 실패했습니다.');
         } finally {
             setIsSubmitting(false);
         }
@@ -500,14 +532,7 @@ const Signup = () => {
                                 name="userType"
                                 value="customer"
                                 checked={userType === 'customer'}
-                                onChange={() => {
-                                    setUserType('customer');
-                                    setStep(1);
-                                    setIsEmailChecked(false);
-                                    setIsIdChecked(false);
-                                    setTerms(prev => ({ ...prev, traveler: true }));
-                                    setViewedTerms(prev => ({ ...prev, traveler: true }));
-                                }}
+                                onChange={() => handleUserTypeChange('customer')}
                                 className="w-5 h-5 text-primary border-outline/30 focus:ring-primary cursor-pointer"
                             />
                             <span className={`font-bold text-sm transition-colors ${userType === 'customer' ? 'text-primary' : 'text-slate-600 group-hover:text-on-surface'}`}>고객으로 가입</span>
@@ -518,14 +543,7 @@ const Signup = () => {
                                 name="userType"
                                 value="driver"
                                 checked={userType === 'driver'}
-                                onChange={() => {
-                                    setUserType('driver');
-                                    setStep(1);
-                                    setIsEmailChecked(false);
-                                    setIsIdChecked(false);
-                                    setTerms(prev => ({ ...prev, traveler: false }));
-                                    setViewedTerms(prev => ({ ...prev, traveler: false }));
-                                }}
+                                onChange={() => handleUserTypeChange('driver')}
                                 className="w-5 h-5 text-primary border-outline/30 focus:ring-primary cursor-pointer"
                             />
                             <span className={`font-bold text-sm transition-colors ${userType === 'driver' ? 'text-primary' : 'text-slate-600 group-hover:text-on-surface'}`}>기사로 가입</span>

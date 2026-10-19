@@ -163,13 +163,8 @@ router.post('/register', async (req, res) => {
         // userType 대문자 정규화 (DRIVER, TRAVELER 등)
         const finalUserType = (userType || 'TRAVELER').toUpperCase();
 
-        // [추가] 기사 주민번호 유효성 및 중복 체크 (DRIVER 타입인 경우)
-        if (finalUserType === 'DRIVER') {
-            if (!residentNo) {
-                await connection.rollback();
-                return res.status(400).json({ error: '기사 회원은 주민등록번호 입력이 필수입니다.' });
-            }
-            
+        // [추가] 기사 주민번호 유효성 및 중복 체크 (DRIVER 타입인 경우, 주민번호 입력된 경우에만 검증)
+        if (finalUserType === 'DRIVER' && residentNo) {
             // 공백 및 대시를 제거하여 숫자 13자리로 가공 (한글 주석)
             residentNo = String(residentNo).replace(/[^0-9]/g, '');
             
@@ -305,7 +300,7 @@ router.post('/register', async (req, res) => {
             smsAuthYn || 'Y', 
             finalUserType,
             signFileId, // SIGNATURE_FILE_ID
-            finalUserType === 'DRIVER' ? encrypt(residentNo) : null,
+            finalUserType === 'DRIVER' && residentNo ? encrypt(residentNo) : null,
             recomCode || null,
             (finalUserType === 'DRIVER' && recomCode) ? new Date() : null, // 기사 가입 시 추천인 지정일자 기록
             custId  // MOD_ID
@@ -627,12 +622,14 @@ router.post('/send-code', async (req, res) => {
 
         phoneNo = phoneNo.replace(/[^0-9]/g, '');
         const verificationType = type || 'signup';
+        let targetUserType = userType ? userType.toUpperCase() : 'TRAVELER';
+        if (targetUserType === 'CUSTOMER') targetUserType = 'TRAVELER';
 
         // 기가입 여부 확인 로직 분기 (유형별 중복 체크)
         if (verificationType === 'signup') {
             const [existing] = await pool.execute(
                 'SELECT 1 FROM TB_USER WHERE HP_NO = ? AND USER_TYPE = ?', 
-                [phoneNo, userType || 'TRAVELER']
+                [phoneNo, targetUserType]
             );
             if (existing.length > 0) {
                 return res.status(400).json({ success: false, error: '해당 유형으로 이미 가입된 휴대폰 번호입니다.' });
@@ -707,9 +704,10 @@ router.post('/send-code', async (req, res) => {
  */
 router.post('/verify-code', async (req, res) => {
     try {
-        const { phoneNo, code, type } = req.body;
+        let { phoneNo, code, type } = req.body;
         if (!phoneNo || !code) return res.status(400).json({ error: '번호와 인증코드를 모두 입력해주세요.' });
 
+        phoneNo = phoneNo.replace(/[^0-9]/g, '');
         const verificationType = type || 'signup';
         const categoryMap = {
             'signup': 'SIGN_UP',

@@ -22,12 +22,50 @@ export const getImageUrl = (path, imageVersion = Date.now()) => {
     return `${baseUrl}${API_BASE_URL}${cleanPath}${path.includes('?') ? '&' : '?'}t=${imageVersion}`;
 };
 
+/**
+ * 저장된 JWT 토큰의 유효성 및 만료 여부를 판별하는 유틸리티
+ * @param {string} token 
+ * @returns {boolean} 유효 여부 (만료되었거나 손상된 경우 false)
+ */
+export const isTokenValid = (token) => {
+    if (!token || typeof token !== 'string') return false;
+    try {
+        const parts = token.split('.');
+        if (parts.length !== 3) return false;
+        const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+            atob(base64)
+                .split('')
+                .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                .join('')
+        );
+        const payload = JSON.parse(jsonPayload);
+        if (!payload || !payload.exp) return false;
+        // 만료 시간 (초 단위) * 1000과 현재 시간 비교 (60초 여유시간 버퍼)
+        if (payload.exp * 1000 <= Date.now() + 60000) {
+            return false;
+        }
+        return true;
+    } catch (e) {
+        return false;
+    }
+};
+
 // 공통 fetch 래퍼
 export const request = async (url, options = {}, isFormData = false) => {
     const token = localStorage.getItem('accessToken');
+    
+    // 만약 토큰이 저장되어 있으나 이미 만료된 경우 사전 정리
+    if (token && !isTokenValid(token)) {
+        console.warn(`[API] 만료된 토큰 감지 (${url}) - 자동 초기화`);
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('user');
+    }
+
+    const currentToken = localStorage.getItem('accessToken');
     const headers = {
         ...(!isFormData && { 'Content-Type': 'application/json' }),
-        ...(token && { 'Authorization': `Bearer ${token}` }),
+        ...(currentToken && { 'Authorization': `Bearer ${currentToken}` }),
         ...options.headers
     };
 
@@ -47,7 +85,14 @@ export const request = async (url, options = {}, isFormData = false) => {
     }
 
     if (!response.ok) {
-        throw new Error(data.error || data.message || '요청 처리에 실패했습니다.');
+        const errorMsg = data.error || data.message || '요청 처리에 실패했습니다.';
+        // 401(인증 누락), 403(토큰 만료/유효하지 않음) 발생 시 인증 정보 즉시 제거
+        if (response.status === 401 || response.status === 403 || errorMsg.includes('토큰') || errorMsg.includes('인증')) {
+            console.warn(`[API] 인증 실패 또는 토큰 만료 감지 (Status: ${response.status}): ${errorMsg}`);
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('user');
+        }
+        throw new Error(errorMsg);
     }
     return data;
 };

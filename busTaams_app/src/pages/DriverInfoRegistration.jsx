@@ -325,12 +325,19 @@ const SELF_INTRO_TEMPLATES = [
 
 const DriverInfoRegistration = () => {
     const navigate = useNavigate();
-    // 공용 업로드용 Ref 및 상태 선언
-    const commonAlbumInputRef = useRef(null); // 공용 앨범 선택 Ref
-    const commonCameraInputRef = useRef(null); // 공용 카메라 촬영 Ref
+    // 공용 파일 업로드용 Ref 및 상태 선언
+    const commonFileInputRef = useRef(null); // 공용 파일 선택 Ref
     const residentNoBackRef = useRef(null); // 주민등록번호 뒷자리 Ref
-    const [showPhotoBottomSheet, setShowPhotoBottomSheet] = useState(false); // 바텀 시트 노출 상태
     const [activeUploadType, setActiveUploadType] = useState(null); // 현재 업로드 중인 항목 ('profileImg' | 'licenseImg' | 'busLicenseImg' | 'careerCertImg')
+
+    // 스마트폰 기본 작업 선택(카메라/파일) 즉시 열기
+    const openFilePicker = (type) => {
+        setActiveUploadType(type);
+        if (commonFileInputRef.current) {
+            commonFileInputRef.current.value = '';
+            commonFileInputRef.current.click();
+        }
+    };
 
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -653,6 +660,7 @@ const DriverInfoRegistration = () => {
                         body: ocrFormData
                     });
 
+                    Swal.close();
                     if (!response.ok) throw new Error('OCR API 호출 실패');
                     const resJson = await response.json();
 
@@ -664,23 +672,127 @@ const DriverInfoRegistration = () => {
                             acctNo: accountNumber || '',
                             acctHold: accountHolder || ''
                         }));
-                        Swal.fire({
-                            icon: 'success',
-                            title: '인식 완료',
-                            text: '통장 사본 정보가 자동으로 추출되었습니다. 정보를 확인해 주세요!',
-                            confirmButtonColor: '#004e47'
-                        });
-                    } else {
-                        throw new Error(resJson.error || '분석 실패');
+                        notify.success('인식 완료', '통장 사본 정보가 자동으로 입력되었습니다.');
                     }
                 } catch (ocrErr) {
-                    console.error('[OCR Bankbook Front] Error:', ocrErr);
-                    Swal.fire({
-                        icon: 'warning',
-                        title: '인식 실패',
-                        text: '계좌 정보를 자동으로 추출하지 못했습니다. 수동으로 입력해 주세요.',
-                        confirmButtonColor: '#004e47'
+                    console.error('[OCR Bankbook Front] Silent Error:', ocrErr);
+                    Swal.close();
+                }
+            }
+
+            // 한글 주석: 운전면허증 업로드 시 OpenAI Vision OCR API 자동 호출
+            if (type === 'licenseImg') {
+                Swal.fire({
+                    title: '운전면허증 인식 중...',
+                    text: '이미지에서 면허증 정보를 추출하고 있습니다. 잠시만 기다려 주세요.',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
+                try {
+                    const token = localStorage.getItem('accessToken');
+                    const ocrFormData = new FormData();
+                    ocrFormData.append('licenseImg', compressedFile);
+
+                    const response = await fetch('/api/app/driver/ocr/license', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: ocrFormData
                     });
+
+                    Swal.close();
+                    if (!response.ok) throw new Error('OCR API 호출 실패');
+                    const resJson = await response.json();
+
+                    if (resJson?.success && resJson?.data) {
+                        const { licenseNo, licenseIssueDt, licenseType, residentNo } = resJson.data;
+
+                        let rFront = '';
+                        let rBack = '';
+                        if (residentNo) {
+                            const cleaned = residentNo.replace(/[^0-9*]/g, '');
+                            if (cleaned.length >= 13) {
+                                rFront = cleaned.substring(0, 6);
+                                rBack = cleaned.substring(6, 13);
+                            } else if (residentNo.includes('-')) {
+                                const parts = residentNo.split('-');
+                                rFront = parts[0] || '';
+                                rBack = parts[1] || '';
+                            } else if (cleaned.length >= 6) {
+                                rFront = cleaned.substring(0, 6);
+                                rBack = cleaned.substring(6);
+                            }
+                        }
+
+                        let matchedTypeCode = '';
+                        if (licenseType && Array.isArray(licenseTypes)) {
+                            const cleanType = licenseType.replace(/\s+/g, '');
+                            const found = licenseTypes.find(c => c.name.replace(/\s+/g, '').includes(cleanType) || cleanType.includes(c.name.replace(/\s+/g, '')));
+                            if (found) matchedTypeCode = found.code;
+                        }
+
+                        setFormData(prev => ({
+                            ...prev,
+                            ...(licenseNo ? { licenseNo: formatLicenseNo(licenseNo) } : {}),
+                            ...(licenseIssueDt ? { licenseIssueDt } : {}),
+                            ...(matchedTypeCode ? { licenseType: matchedTypeCode } : {}),
+                            ...(rFront ? { residentNoFront: rFront } : {}),
+                            ...(rBack ? { residentNoBack: rBack } : {})
+                        }));
+                        notify.success('인식 완료', '운전면허증 정보가 자동으로 입력되었습니다.');
+                    }
+                } catch (ocrErr) {
+                    console.error('[OCR License Front] Silent Error:', ocrErr);
+                    Swal.close();
+                }
+            }
+
+            // 한글 주석: 버스운전자격증 업로드 시 OpenAI Vision OCR API 자동 호출
+            if (type === 'busLicenseImg') {
+                Swal.fire({
+                    title: '버스운전자격증 인식 중...',
+                    text: '이미지에서 자격증 정보를 추출하고 있습니다. 잠시만 기다려 주세요.',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
+                try {
+                    const token = localStorage.getItem('accessToken');
+                    const ocrFormData = new FormData();
+                    ocrFormData.append('busLicenseImg', compressedFile);
+
+                    const response = await fetch('/api/app/driver/ocr/buslicense', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: ocrFormData
+                    });
+
+                    Swal.close();
+                    if (!response.ok) throw new Error('OCR API 호출 실패');
+                    const resJson = await response.json();
+
+                    if (resJson?.success && resJson?.data) {
+                        const { busLicenseNo, qualAcquisitionDt, name } = resJson.data;
+
+                        setFormData(prev => ({
+                            ...prev,
+                            ...(busLicenseNo ? { busLicenseNo } : {}),
+                            ...(qualAcquisitionDt ? { qualAcquisitionDt } : {}),
+                            ...(name && !prev.userNm ? { userNm: name } : {})
+                        }));
+                        notify.success('인식 완료', '버스운전자격증 정보가 자동으로 입력되었습니다.');
+                    }
+                } catch (ocrErr) {
+                    console.error('[OCR BusLicense Front] Silent Error:', ocrErr);
+                    Swal.close();
                 }
             }
         }
@@ -877,10 +989,7 @@ const DriverInfoRegistration = () => {
                     <aside className="col-span-12 md:col-span-4 lg:col-span-3 space-y-8">
                         <div className="bg-white p-8 rounded-2xl shadow-[0_40px_60px_-15px_rgba(0,104,95,0.06)]">
                             <div className="flex flex-col items-center text-center">
-                                <div className="relative group cursor-pointer" onClick={() => {
-                                    setActiveUploadType('profileImg');
-                                    setShowPhotoBottomSheet(true);
-                                }}>
+                                <div className="relative group cursor-pointer" onClick={() => openFilePicker('profileImg')}>
                                     <div className="w-40 h-40 rounded-xl bg-[#f2f4f6] flex items-center justify-center overflow-hidden border-4 border-white shadow-inner mb-6 transition-transform group-hover:scale-105 duration-500">
                                         {previews.profileImg ? (
                                             <img src={previews.profileImg} className="w-full h-full object-cover" />
@@ -894,10 +1003,7 @@ const DriverInfoRegistration = () => {
                                 </div>
                                 <h3 className="font-headline font-bold text-xl text-[#191c1e] mb-2">프로필 사진</h3>
                                 <p className="text-sm text-[#3e4947] mb-6 px-4 leading-relaxed">기사 ID 카드를 위한 선명하고 전문적인 정면 사진을 제공해 주세요.</p>
-                                <button onClick={() => {
-                                    setActiveUploadType('profileImg');
-                                    setShowPhotoBottomSheet(true);
-                                }} className="w-full py-3 rounded-xl border-2 border-[#bec9c6] text-[#191c1e] font-bold text-sm hover:bg-[#f2f4f6] transition-colors active:scale-95 duration-200">
+                                <button onClick={() => openFilePicker('profileImg')} className="w-full py-3 rounded-xl border-2 border-[#bec9c6] text-[#191c1e] font-bold text-sm hover:bg-[#f2f4f6] transition-colors active:scale-95 duration-200">
                                     이미지 업로드
                                 </button>
                             </div>
@@ -1039,10 +1145,7 @@ const DriverInfoRegistration = () => {
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 {/* License Card */}
-                                <div onClick={() => {
-                                    setActiveUploadType('licenseImg');
-                                    setShowPhotoBottomSheet(true);
-                                }} className="p-6 rounded-xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
+                                <div onClick={() => openFilePicker('licenseImg')} className="p-6 rounded-xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
                                     <div className="flex items-center justify-between mb-4">
                                         <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6e7977]">운전면허증 <span className="text-red-500">*필수</span></span>
                                         <span className={`flex items-center gap-1 text-[10px] font-bold ${formData.licenseApproveStat === 'APPROVE' ? 'text-[#00685f]' : formData.licenseApproveStat === 'WAIT' ? 'text-[#9d4300]' : 'text-[#ba1a1a]'}`}>
@@ -1069,10 +1172,7 @@ const DriverInfoRegistration = () => {
                                     </div>
                                 </div>
                                 {/* Certificate Card */}
-                                <div onClick={() => {
-                                    setActiveUploadType('busLicenseImg');
-                                    setShowPhotoBottomSheet(true);
-                                }} className="p-6 rounded-xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
+                                <div onClick={() => openFilePicker('busLicenseImg')} className="p-6 rounded-xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
                                     <div className="flex items-center justify-between mb-4">
                                         <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6e7977]">버스운전자격증 <span className="text-red-500">*필수</span></span>
                                         <span className={`flex items-center gap-1 text-[10px] font-bold ${formData.qualApproveStat === 'APPROVE' ? 'text-[#00685f]' : formData.qualApproveStat === 'WAIT' ? 'text-[#9d4300]' : 'text-[#ba1a1a]'}`}>
@@ -1099,10 +1199,7 @@ const DriverInfoRegistration = () => {
                                     </div>
                                 </div>
                                 {/* Career Certificate Card - New Added */}
-                                <div onClick={() => {
-                                    setActiveUploadType('careerCertImg');
-                                    setShowPhotoBottomSheet(true);
-                                }} className="p-6 rounded-xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
+                                <div onClick={() => openFilePicker('careerCertImg')} className="p-6 rounded-xl bg-[#f7f9fb] border border-[#bec9c6]/30 hover:border-[#004e47]/30 transition-all cursor-pointer group">
                                     <div className="flex items-center justify-between mb-4">
                                         <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6e7977]">운전경력증명서 <span className="text-slate-400 font-normal">(선택)</span></span>
                                         <span className={`flex items-center gap-1 text-[10px] font-bold ${formData.careerCertApproveStat === 'APPROVE' ? 'text-[#00685f]' : formData.careerCertApproveStat === 'WAIT' ? 'text-[#9d4300]' : 'text-[#ba1a1a]'}`}>
@@ -1259,6 +1356,36 @@ const DriverInfoRegistration = () => {
                             </div>
                         </div>
 
+                        {/* Preferences Section (환경 설정) */}
+                        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-[0_40px_60px_-15px_rgba(0,104,95,0.04)] text-left space-y-4">
+                            <h4 className="font-headline font-extrabold text-xl text-[#191c1e] flex items-center gap-2">
+                                <span className="material-symbols-outlined text-xl text-[#004e47]">tune</span>
+                                환경 설정
+                            </h4>
+                            <div className="bg-[#f7f9fb] rounded-2xl overflow-hidden border border-[#bec9c6]/30">
+                                <div 
+                                    onClick={() => setShowAlarmBottomSheet(true)}
+                                    className="flex items-center justify-between p-5 hover:bg-[#eceef0] transition-colors cursor-pointer group border-b border-[#bec9c6]/20"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <span className="material-symbols-outlined text-[#6e7977]">notifications</span>
+                                        <span className="font-bold text-sm text-[#191c1e]">알림 설정</span>
+                                    </div>
+                                    <span className="material-symbols-outlined text-[#6e7977] group-hover:translate-x-1 transition-transform text-sm">chevron_right</span>
+                                </div>
+                                <div 
+                                    onClick={() => setShowTermsBottomSheet(true)}
+                                    className="flex items-center justify-between p-5 hover:bg-[#eceef0] transition-colors cursor-pointer group"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <span className="material-symbols-outlined text-[#6e7977]">policy</span>
+                                        <span className="font-bold text-sm text-[#191c1e]">약관 및 정책</span>
+                                    </div>
+                                    <span className="material-symbols-outlined text-[#6e7977] group-hover:translate-x-1 transition-transform text-sm">chevron_right</span>
+                                </div>
+                            </div>
+                        </div>
+
                         {/* Submit Section */}
                         <div className="flex flex-col md:flex-row items-center justify-between gap-6 pt-4">
                             <div className="text-left text-xs font-semibold space-y-1">
@@ -1274,65 +1401,14 @@ const DriverInfoRegistration = () => {
                 </div>
             </main>
 
-            {/* 공용 앨범 선택용 hidden input (한글 주석: 프로필 사진이 아닐 땐 PDF도 선택 가능하게 설정) */}
+            {/* 파일/서류 직접 선택용 hidden input (스마트폰 기본 작업선택: 카메라/파일 팝업 호출) */}
             <input 
                 type="file" 
-                ref={commonAlbumInputRef} 
+                ref={commonFileInputRef} 
                 className="hidden" 
                 onChange={(e) => handleFileChange(e, activeUploadType)} 
                 accept={activeUploadType === 'profileImg' ? 'image/*' : 'image/*,application/pdf'} 
             />
-            {/* 공용 카메라 촬영용 hidden input */}
-            <input 
-                type="file" 
-                ref={commonCameraInputRef} 
-                className="hidden" 
-                onChange={(e) => handleFileChange(e, activeUploadType)} 
-                accept="image/*" 
-                capture="environment" 
-            />
-
-            {/* 공용 사진/서류 업로드 바텀 시트 */}
-            {showPhotoBottomSheet && (
-                <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-                    <div className="absolute inset-0" onClick={() => setShowPhotoBottomSheet(false)}></div>
-                    <div className="relative w-full max-w-md bg-white rounded-t-2xl p-8 space-y-6 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] animate-in slide-in-from-bottom duration-300 z-10 border-t border-slate-100 text-center text-[#191c1e]">
-                        <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-2"></div>
-                        <div className="space-y-2 text-left">
-                            <h3 className="font-extrabold text-xl text-teal-900">서류 및 사진 등록</h3>
-                            <p className="text-sm text-slate-500 font-semibold">업로드할 방식을 선택해 주세요.</p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <button 
-                                onClick={() => {
-                                    setShowPhotoBottomSheet(false);
-                                    commonCameraInputRef.current.click();
-                                }}
-                                className="flex flex-col items-center justify-center p-5 bg-teal-50 hover:bg-teal-100/70 text-[#004e47] rounded-xl border border-teal-100/50 active:scale-95 transition-all space-y-2 font-bold"
-                            >
-                                <span className="material-symbols-outlined text-4xl text-teal-800">photo_camera</span>
-                                <span className="text-sm">카메라로 촬영</span>
-                            </button>
-                            <button 
-                                onClick={() => {
-                                    setShowPhotoBottomSheet(false);
-                                    commonAlbumInputRef.current.click();
-                                }}
-                                className="flex flex-col items-center justify-center p-5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl border border-slate-100/50 active:scale-95 transition-all space-y-2 font-bold"
-                            >
-                                <span className="material-symbols-outlined text-4xl text-slate-500">image</span>
-                                <span className="text-sm">앨범에서 선택</span>
-                            </button>
-                        </div>
-                        <button 
-                            onClick={() => setShowPhotoBottomSheet(false)}
-                            className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 py-4 rounded-xl font-bold active:scale-[0.98] transition-all text-center text-sm"
-                        >
-                            취소
-                        </button>
-                    </div>
-                </div>
-            )}
 
             {/* 알림 설정 바텀 시트 (Premium UX) */}
             {showAlarmBottomSheet && (
