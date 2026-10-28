@@ -218,31 +218,36 @@ const Signup = () => {
     const handleShowTerms = () => {
         const termsList = getTermsList();
         const termsHtml = termsList.map(item => `
-            <div style="text-align: left; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
-                <h4 style="font-weight: bold; color: #0d9488; margin-bottom: 8px; font-size: 14px;">[필수] ${item.title}</h4>
-                <div style="max-height: 150px; overflow-y: auto; background: #f8fafc; padding: 10px; border-radius: 8px; font-size: 11px; color: #475569; white-space: pre-line; border: 1px solid #e2e8f0;">
+            <div style="text-align: left; margin-bottom: 14px; border-bottom: 1px solid #eee; padding-bottom: 12px;">
+                <h4 style="font-weight: bold; color: #0d9488; margin-bottom: 6px; font-size: 13px;">[필수] ${item.title}</h4>
+                <div style="max-height: 120px; overflow-y: auto; background: #f8fafc; padding: 10px; border-radius: 8px; font-size: 11px; color: #475569; white-space: pre-line; border: 1px solid #e2e8f0; line-height: 1.5;">
                     ${item.content}
                 </div>
             </div>
         `).join('') + `
-            <div style="text-align: left; margin-bottom: 10px;">
-                <h4 style="font-weight: bold; color: #64748b; margin-bottom: 8px; font-size: 14px;">[선택] 마케팅 정보 수신 및 알림 동의</h4>
-                <div style="max-height: 120px; overflow-y: auto; background: #f8fafc; padding: 10px; border-radius: 8px; font-size: 11px; color: #475569; white-space: pre-line; border: 1px solid #e2e8f0;">
+            <div style="text-align: left; margin-bottom: 5px;">
+                <h4 style="font-weight: bold; color: #64748b; margin-bottom: 6px; font-size: 13px;">[선택] 마케팅 정보 수신 및 알림 동의</h4>
+                <div style="max-height: 90px; overflow-y: auto; background: #f8fafc; padding: 10px; border-radius: 8px; font-size: 11px; color: #475569; white-space: pre-line; border: 1px solid #e2e8f0; line-height: 1.5;">
                     버스타암스가 제공하는 버스 대여 이벤트, 혜택, 회원 등급별 프로모션, 신규 기능 알림 등 마케팅 목적의 맞춤형 정보를 수신하는 것에 동의합니다.
                 </div>
             </div>
         `;
 
+        // 한글 주석: 상단 i 아이콘을 제거하고 모바일 화면에서 확인 버튼이 하단에 가려지지 않도록 컴팩트하게 조정한 약관 팝업
         Swal.fire({
-            title: '<strong>서비스 이용약관 및 정책</strong>',
-            html: `<div style="max-height: 50vh; overflow-y: auto; padding-right: 5px;">${termsHtml}</div>`,
-            icon: 'info',
+            title: '<span style="font-size: 1.15rem; font-weight: 800; color: #0f172a;">서비스 이용약관 및 정책</span>',
+            html: `<div style="max-height: 48vh; overflow-y: auto; padding-right: 4px; -webkit-overflow-scrolling: touch;">${termsHtml}</div>`,
             showCancelButton: false,
             confirmButtonColor: '#0d9488',
             confirmButtonText: '약관 전체 내용 확인 완료',
+            width: '92%',
+            padding: '1.25rem 1rem 1rem 1rem',
             customClass: {
-                popup: 'rounded-2xl',
-                confirmButton: 'rounded-xl text-sm font-bold py-3 px-6'
+                popup: 'rounded-2xl shadow-xl',
+                title: '!p-0 !mt-1 !mb-3',
+                htmlContainer: '!m-0 !p-0',
+                actions: '!mt-3 !mb-1 w-full flex justify-center',
+                confirmButton: 'rounded-xl text-sm font-bold py-3 px-6 w-full sm:w-auto shadow-sm'
             }
         }).then(() => {
             setViewedTerms({
@@ -285,7 +290,8 @@ const Signup = () => {
             return;
         }
         try {
-            const res = await checkEmailDuplicate(email);
+            // 한글 주석: 가입 유형(기사/여행자)에 맞추어 이메일 중복 검사를 진행합니다.
+            const res = await checkEmailDuplicate(email, isDriver ? 'DRIVER' : 'TRAVELER');
             if (res.isDuplicate) {
                 notify.error('중복된 이메일', '이미 사용 중인 이메일입니다.');
                 setIsEmailChecked(false);
@@ -472,7 +478,8 @@ const Signup = () => {
             password,
             userName,
             phoneNo,
-            userType: isDriver ? 'DRIVER' : 'CUSTOMER',
+            // 한글 주석: DB TB_USER의 USER_TYPE ENUM 규격('TRAVELER', 'DRIVER')에 맞추어 여행자는 TRAVELER로 전송합니다.
+            userType: isDriver ? 'DRIVER' : 'TRAVELER',
             email,
             signatureBase64: signature,
             firebaseToken: idToken,

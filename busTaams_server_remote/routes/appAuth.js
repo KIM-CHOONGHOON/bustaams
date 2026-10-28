@@ -83,13 +83,17 @@ router.get('/check-id', async (req, res) => {
  */
 router.get('/check-email', async (req, res) => {
     try {
-        const { email, userType } = req.query;
+        let { email, userType } = req.query;
         if (!email) return res.json({ isAvailable: false });
+        
+        // 한글 주석: userType 정규화 (CUSTOMER로 전달될 경우 TRAVELER로 변환)
+        let targetUserType = (userType || 'TRAVELER').toUpperCase();
+        if (targetUserType === 'CUSTOMER') targetUserType = 'TRAVELER';
         
         // EMAIL 컬럼에서 중복 확인 (유형별)
         const [rows] = await pool.execute(
             'SELECT 1 FROM TB_USER WHERE EMAIL = ? AND USER_TYPE = ?', 
-            [email, userType || 'TRAVELER']
+            [email, targetUserType]
         );
         
         res.json({ isAvailable: rows.length === 0 });
@@ -109,7 +113,11 @@ router.get('/check-phone', async (req, res) => {
         
         phoneNo = phoneNo.replace(/[^0-9]/g, '');
         
-        const [rows] = await pool.execute('SELECT 1 FROM TB_USER WHERE HP_NO = ? AND USER_TYPE = ?', [phoneNo, userType || 'TRAVELER']);
+        // 한글 주석: userType 정규화 (CUSTOMER로 전달될 경우 TRAVELER로 변환)
+        let targetUserType = (userType || 'TRAVELER').toUpperCase();
+        if (targetUserType === 'CUSTOMER') targetUserType = 'TRAVELER';
+        
+        const [rows] = await pool.execute('SELECT 1 FROM TB_USER WHERE HP_NO = ? AND USER_TYPE = ?', [phoneNo, targetUserType]);
         res.json({ isAvailable: rows.length === 0 });
     } catch (err) {
         res.status(500).json({ error: '서버 오류' });
@@ -164,8 +172,12 @@ router.post('/register', async (req, res) => {
     }
 
 
-        // userType 대문자 정규화 (DRIVER, TRAVELER 등)
-        const finalUserType = (userType || 'TRAVELER').toUpperCase();
+        // 한글 주석: userType 대문자 정규화 및 CUSTOMER를 DB ENUM 값인 TRAVELER로 매핑
+        let normalizedUserType = (userType || 'TRAVELER').toUpperCase();
+        if (normalizedUserType === 'CUSTOMER') {
+            normalizedUserType = 'TRAVELER';
+        }
+        const finalUserType = normalizedUserType;
 
         // [추가] 기사 주민번호 유효성 및 중복 체크 (DRIVER 타입인 경우)
         if (finalUserType === 'DRIVER') {

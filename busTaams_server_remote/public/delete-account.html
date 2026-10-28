@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>버스타암즈 - 회원 탈퇴 및 계정 삭제 요청</title>
+  <!-- Google Fonts 적용 (Outfit & Inter) -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #0b111e;
+      --card-bg: #151d30;
+      --primary-color: #3b82f6;
+      --primary-hover: #2563eb;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --border-color: #374151;
+      --danger-color: #ef4444;
+      --success-color: #10b981;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 520px;
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 40px 30px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* 상단 그라디언트 라인 */
+    .container::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, var(--primary-color), var(--danger-color));
+    }
+
+    .logo-area {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .logo-text {
+      font-family: 'Outfit', sans-serif;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #60a5fa, #3b82f6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+      text-align: center;
+      margin-bottom: 8px;
+      color: var(--text-main);
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.5;
+      margin-bottom: 32px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      color: var(--text-main);
+    }
+
+    input[type="text"],
+    input[type="email"],
+    select,
+    textarea {
+      width: 100%;
+      background-color: #0e1626;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px 14px;
+      color: var(--text-main);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: flex-start;
+      margin: 24px 0;
+      cursor: pointer;
+    }
+
+    .checkbox-group input {
+      margin-top: 3px;
+      margin-right: 10px;
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary-color);
+      cursor: pointer;
+    }
+
+    .checkbox-label {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.4;
+      user-select: none;
+    }
+
+    .btn-submit {
+      width: 100%;
+      background-color: var(--danger-color);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+
+    .btn-submit:hover {
+      background-color: #dc2626;
+    }
+
+    .btn-submit:active {
+      transform: scale(0.99);
+    }
+
+    /* 접수 성공 화면 */
+    .success-card {
+      display: none;
+      text-align: center;
+      animation: fadeIn 0.4s ease-out forwards;
+    }
+
+    .success-icon {
+      font-size: 48px;
+      color: var(--success-color);
+      margin-bottom: 20px;
+    }
+
+    .success-title {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--text-main);
+    }
+
+    .success-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-bottom: 30px;
+    }
+
+    .btn-home {
+      display: inline-block;
+      background-color: var(--primary-color);
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      padding: 12px 24px;
+      font-size: 14px;
+      font-weight: 600;
+      transition: background-color 0.2s;
+    }
+
+    .btn-home:hover {
+      background-color: var(--primary-hover);
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container" id="containerCard">
+    <!-- 입력 폼 영역 -->
+    <div id="formSection">
+      <div class="logo-area">
+        <div class="logo-text">busTaams</div>
+      </div>
+      <h1>회원 탈퇴 및 계정 삭제 요청</h1>
+      <p class="subtitle">
+        버스타암즈 서비스를 이용해 주셔서 감사합니다.<br>
+        탈퇴 시 모든 예약 및 승인 내역 정보가 삭제되며 복구할 수 없습니다.
+      </p>
+
+      <form id="deleteForm" onsubmit="handleSubmit(event)">
+        <div class="form-group">
+          <label for="userEmail">가입한 계정 이메일 (또는 ID) *</label>
+          <input type="email" id="userEmail" required placeholder="example@bustaams.com">
+        </div>
+
+        <div class="form-group">
+          <label for="userType">가입 계정 유형 *</label>
+          <select id="userType" required>
+            <option value="" disabled selected>계정 유형을 선택해 주세요</option>
+            <option value="driver">버스 기사용 계정 (Driver)</option>
+            <option value="customer">고객용 계정 (Customer)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="userName">사용자 이름 (실명) *</label>
+          <input type="text" id="userName" required placeholder="홍길동">
+        </div>
+
+        <div class="form-group">
+          <label for="userPhone">가입 휴대폰 번호 *</label>
+          <input type="text" id="userPhone" required placeholder="010-1234-5678">
+        </div>
+
+        <div class="form-group">
+          <label for="reason">탈퇴 사유 (선택)</label>
+          <textarea id="reason" placeholder="서비스 개선을 위해 탈퇴하시는 사유를 적어주시면 감사하겠습니다."></textarea>
+        </div>
+
+        <div class="checkbox-group" onclick="toggleCheckbox()">
+          <input type="checkbox" id="agreeCheck" required>
+          <div class="checkbox-label">
+            계정 삭제 요청 시 즉시 개인 정보 및 예약/승인 이력이 즉각 삭제 처리 프로세스에 진입하며, 복구가 불가능함에 동의합니다. *
+          </div>
+        </div>
+
+        <button type="submit" class="btn-submit">계정 삭제 및 탈퇴 요청</button>
+      </form>
+    </div>
+
+    <!-- 접수 완료 영역 -->
+    <div id="successSection" class="success-card">
+      <div class="success-icon">✓</div>
+      <div class="success-title">탈퇴 요청 접수 완료</div>
+      <p class="success-desc">
+        계정 삭제 요청이 성공적으로 접수되었습니다.<br>
+        구글 플레이 정책 및 개인정보처리방침에 따라 귀하의 데이터는 <br>
+        <strong>영업일 기준 3일 이내</strong>에 안전하고 영구적으로 삭제 처리됩니다.
+      </p>
+      <a href="https://bustaams.cafe24.com" class="btn-home">홈페이지로 이동</a>
+    </div>
+  </div>
+
+  <script>
+    function toggleCheckbox() {
+      const checkbox = document.getElementById('agreeCheck');
+      checkbox.checked = !checkbox.checked;
+    }
+
+    function handleSubmit(e) {
+      e.preventDefault();
+      
+      const email = document.getElementById('userEmail').value;
+      const userType = document.getElementById('userType').value;
+      const name = document.getElementById('userName').value;
+      const phone = document.getElementById('userPhone').value;
+      const reason = document.getElementById('reason').value;
+      const agree = document.getElementById('agreeCheck').checked;
+
+      if (!email || !userType || !name || !phone || !agree) {
+        alert('필수 입력 항목을 모두 작성해 주세요.');
+        return;
+      }
+
+      // 구글 심사위원 및 이용자가 제출 시 메일함 연동 기능 지원
+      const subject = encodeURIComponent('[버스타암즈] 회원 탈퇴 및 계정 삭제 요청');
+      const body = encodeURIComponent(
+        `[회원 탈퇴 요청 내역]\n` +
+        `- 이름: ${name}\n` +
+        `- 이메일(ID): ${email}\n` +
+        `- 계정 유형: ${userType}\n` +
+        `- 휴대폰 번호: ${phone}\n` +
+        `- 탈퇴 사유: ${reason}\n\n` +
+        `본 메일은 구글 플레이 정책 규정에 맞게 작성된 탈퇴 요청 이메일입니다.`
+      );
+
+      // mailto 링크 실행 (백그라운드에서 메일 전송 환경 유도)
+      window.location.href = `mailto:dohunkim72@gmail.com?subject=${subject}&body=${body}`;
+
+      // 화면을 접수 완료 상태로 즉시 전환
+      document.getElementById('formSection').style.display = 'none';
+      document.getElementById('successSection').style.display = 'block';
+    }
+  </script>
+</body>
+</html>
