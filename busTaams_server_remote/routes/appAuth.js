@@ -221,15 +221,20 @@ router.post('/register', async (req, res) => {
             }
         }
 
-        // [추가] 추천인 코드 검증 (입력된 경우 PARTNER 타입의 USER_ID인지 확인)
-        if (recomCode) {
-            const [partnerRows] = await connection.execute(
-                'SELECT 1 FROM TB_USER WHERE USER_TYPE = "PARTNER" AND USER_ID = ?',
-                [recomCode]
+        // 한글 주석: 추천인은 오직 버스 기사(DRIVER) 가입 시에만 적용 (여행자 가입 시에는 추천인을 받지 않음)
+        const cleanRecomCode = (finalUserType === 'DRIVER' && recomCode) ? String(recomCode).trim() : '';
+        if (cleanRecomCode && cleanRecomCode !== 'null' && cleanRecomCode !== 'undefined') {
+            const [adminRows] = await connection.execute(
+                'SELECT ADMIN_STAT FROM TB_ADMIN WHERE ADMIN_ID = ?',
+                [cleanRecomCode]
             );
-            if (partnerRows.length === 0) {
+            if (adminRows.length === 0) {
                 await connection.rollback();
                 return res.status(400).json({ error: '존재하지 않는 추천인 아이디입니다.' });
+            }
+            if (adminRows[0].ADMIN_STAT !== 'ACTIVE') {
+                await connection.rollback();
+                return res.status(400).json({ error: '활성화되지 않았거나 유효하지 않은 추천인입니다.' });
             }
         }
 
@@ -298,7 +303,7 @@ router.post('/register', async (req, res) => {
             finalUserType,
             signFileId, // SIGNATURE_FILE_ID
             finalUserType === 'DRIVER' ? encrypt(residentNo) : null,
-            recomCode || null,
+            (finalUserType === 'DRIVER' && cleanRecomCode) ? cleanRecomCode : null, // 기사만 추천인 저장
             custId  // MOD_ID
         ]);
 

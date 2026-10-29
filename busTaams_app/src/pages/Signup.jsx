@@ -183,6 +183,8 @@ const Signup = () => {
             tel: false,
             agree: false
         });
+        // 한글 주석: 가입 유형 변경 시 추천인 코드 초기화
+        setRecomCode('');
     };
 
     const validatePassword = (pw) => {
@@ -484,7 +486,8 @@ const Signup = () => {
             signatureBase64: signature,
             firebaseToken: idToken,
             residentNo: null, // 주민등록번호 수집 안 함
-            recomCode: recomCode.trim() || null,
+            // 한글 주석: 여행자는 추천인을 받지 않으며, 버스 기사 가입 시에만 추천인을 전송합니다.
+            recomCode: isDriver ? (recomCode.trim() || null) : null,
             termsData: {
                 service: terms.service,
                 privacy: terms.privacy,
@@ -852,16 +855,19 @@ const Signup = () => {
                                     )}
                                 </div>
 
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-on-surface ml-1">추천인 아이디 <span className="text-outline font-normal">(선택)</span></label>
-                                    <input
-                                        value={recomCode}
-                                        onChange={e => setRecomCode(e.target.value)}
-                                        type="text"
-                                        placeholder="추천인 아이디를 입력하세요"
-                                        className="w-full bg-slate-100 rounded-xl py-3 px-3 outline-none font-medium text-sm"
-                                    />
-                                </div>
+                                {/* 한글 주석: 추천인은 여행자는 받지 않고, 버스 기사 가입 시에만 노출 */}
+                                {isDriver && (
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-on-surface ml-1">추천인 아이디 <span className="text-outline font-normal">(선택)</span></label>
+                                        <input
+                                            value={recomCode}
+                                            onChange={e => setRecomCode(e.target.value)}
+                                            type="text"
+                                            placeholder="추천인 아이디를 입력하세요"
+                                            className="w-full bg-slate-100 rounded-xl py-3 px-3 outline-none font-medium text-sm"
+                                        />
+                                    </div>
+                                )}
 
                                 <div className="space-y-3 pt-2">
                                     <div className="flex items-center justify-between pb-2 border-b border-slate-200">
