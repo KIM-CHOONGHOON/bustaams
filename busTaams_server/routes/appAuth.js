@@ -61,13 +61,19 @@ const validateResidentNo = (rrn) => {
  */
 router.get('/check-id', async (req, res) => {
     try {
-        const { userId } = req.query;
-        if (!userId) return res.json({ isAvailable: false });
+        const userId = (req.query.userId || '').trim();
+        if (!userId) return res.json({ isAvailable: false, isDuplicate: true });
         
-        // USER_ID 컬럼에서 중복 확인 (전체 유형 대상)
-        const [rows] = await pool.execute('SELECT 1 FROM TB_USER WHERE USER_ID = ?', [userId]);
-        res.json({ isAvailable: rows.length === 0 });
+        // 한글 주석: USER_ID 컬럼에서 중복 확인 (전체 유형 대상, 기존 가입 유형도 함께 반환)
+        const [rows] = await pool.execute('SELECT USER_TYPE FROM TB_USER WHERE USER_ID = ?', [userId]);
+        const isAvailable = rows.length === 0;
+        res.json({
+            isAvailable,
+            isDuplicate: !isAvailable,
+            existingUserType: rows.length > 0 ? rows[0].USER_TYPE : null
+        });
     } catch (err) {
+        console.error('Check ID error:', err);
         res.status(500).json({ error: '서버 오류' });
     }
 });
@@ -78,19 +84,23 @@ router.get('/check-id', async (req, res) => {
 router.get('/check-email', async (req, res) => {
     try {
         let { email, userType } = req.query;
-        if (!email) return res.json({ isAvailable: false });
+        email = (email || '').trim();
+        if (!email) return res.json({ isAvailable: false, isDuplicate: true });
         
-        // 한글 주석: userType 정규화 (CUSTOMER로 전달될 경우 TRAVELER로 변환)
+        // 한글 주석: userType 정규화 (CUSTOMER, CONSUMER로 전달될 경우 TRAVELER로 변환)
         let targetUserType = (userType || 'TRAVELER').toUpperCase();
-        if (targetUserType === 'CUSTOMER') targetUserType = 'TRAVELER';
+        if (targetUserType === 'CUSTOMER' || targetUserType === 'CONSUMER') targetUserType = 'TRAVELER';
         
-        // EMAIL 컬럼에서 중복 확인 (유형별)
+        // 한글 주석: EMAIL 컬럼에서 가입 유형(DRIVER / TRAVELER)별로 중복 확인 (기사가 고객으로 가입 시 동일 이메일 허용)
         const [rows] = await pool.execute(
             'SELECT 1 FROM TB_USER WHERE EMAIL = ? AND USER_TYPE = ?', 
             [email, targetUserType]
         );
-        
-        res.json({ isAvailable: rows.length === 0 });
+        const isAvailable = rows.length === 0;
+        res.json({
+            isAvailable,
+            isDuplicate: !isAvailable
+        });
     } catch (err) {
         console.error('Check email error:', err);
         res.status(500).json({ error: '서버 오류' });
@@ -103,16 +113,21 @@ router.get('/check-email', async (req, res) => {
 router.get('/check-phone', async (req, res) => {
     try {
         let { phoneNo, userType } = req.query;
-        if (!phoneNo) return res.json({ isAvailable: false });
+        if (!phoneNo) return res.json({ isAvailable: false, isDuplicate: true });
         
-        phoneNo = phoneNo.replace(/[^0-9]/g, '');
+        phoneNo = String(phoneNo).replace(/[^0-9]/g, '');
+        if (!phoneNo) return res.json({ isAvailable: false, isDuplicate: true });
         
-        // 한글 주석: userType 정규화 (CUSTOMER로 전달될 경우 TRAVELER로 변환)
+        // 한글 주석: userType 정규화 (CUSTOMER, CONSUMER로 전달될 경우 TRAVELER로 변환)
         let targetUserType = (userType || 'TRAVELER').toUpperCase();
-        if (targetUserType === 'CUSTOMER') targetUserType = 'TRAVELER';
+        if (targetUserType === 'CUSTOMER' || targetUserType === 'CONSUMER') targetUserType = 'TRAVELER';
         
         const [rows] = await pool.execute('SELECT 1 FROM TB_USER WHERE HP_NO = ? AND USER_TYPE = ?', [phoneNo, targetUserType]);
-        res.json({ isAvailable: rows.length === 0 });
+        const isAvailable = rows.length === 0;
+        res.json({
+            isAvailable,
+            isDuplicate: !isAvailable
+        });
     } catch (err) {
         res.status(500).json({ error: '서버 오류' });
     }
@@ -130,47 +145,49 @@ router.post('/register', async (req, res) => {
 
         let {
             userId, password, userName, phoneNo, userType, 
-            signatureBase64, termsData, mktChannelYN, email, smsAuthYn,
+            signatureBase64, termsData, mktChannelYN, mktChannel, email, smsAuthYn,
             firebaseToken, residentNo, recomCode
         } = req.body;
 
-    if (userId) userId = userId.trim();
+        if (userId) userId = String(userId).trim();
+        if (email) email = String(email).trim();
+        if (userName) userName = String(userName).trim();
+        if (phoneNo) phoneNo = String(phoneNo).replace(/[^0-9]/g, '');
 
-    console.log(`[Registration] Request received for user: ${userId}`);
+        console.log(`[Registration] Request received for user: ${userId}, userType: ${userType}`);
 
-    // 0. SMS 인증 토큰 검증 (Firebase 대신 서버 자체 발행 토큰 사용)
-    let verifiedPhoneNo = phoneNo;
-    if (firebaseToken) {
-        try {
-            // firebaseToken이라는 이름은 유지하되, 서버에서 발행한 JWT인지 확인 (리팩토링 편의상)
-            const decoded = jwt.verify(firebaseToken, JWT_SECRET_KEY);
-            
-            if (!decoded.verified || !decoded.phoneNo) {
-                throw new Error('Invalid verification token');
-            }
+        // 0. SMS 인증 토큰 검증 (Firebase 대신 서버 자체 발행 토큰 사용)
+        if (firebaseToken) {
+            try {
+                // 한글 주석: 서버에서 발행한 본인인증 JWT 토큰인지 검증
+                const decoded = jwt.verify(firebaseToken, JWT_SECRET_KEY);
+                
+                if (!decoded.verified || !decoded.phoneNo) {
+                    throw new Error('Invalid verification token');
+                }
 
-            const cleanVerifiedPhone = decoded.phoneNo.replace(/[^0-9]/g, '');
-            const cleanRequestPhone = phoneNo.replace(/[^0-9]/g, '');
-            
-            if (cleanVerifiedPhone !== cleanRequestPhone) {
-                console.error(`[Registration] Phone mismatch: Verified(${cleanVerifiedPhone}) vs Req(${cleanRequestPhone})`);
+                const cleanVerifiedPhone = String(decoded.phoneNo).replace(/[^0-9]/g, '');
+                const cleanRequestPhone = String(phoneNo || '').replace(/[^0-9]/g, '');
+                
+                if (cleanVerifiedPhone !== cleanRequestPhone) {
+                    console.error(`[Registration] Phone mismatch: Verified(${cleanVerifiedPhone}) vs Req(${cleanRequestPhone})`);
+                    await connection.rollback();
+                    return res.status(400).json({ error: '인증된 휴대폰 번호와 입력된 번호가 일치하지 않습니다.' });
+                }
+                console.log(`[Registration] Phone Verified via Server Token: ${decoded.phoneNo}`);
+            } catch (error) {
+                console.error('[Registration] SMS Token Verification Failed:', error);
                 await connection.rollback();
-                return res.status(400).json({ error: '인증된 휴대폰 번호와 입력된 번호가 일치하지 않습니다.' });
+                return res.status(401).json({ error: '휴대폰 인증이 유효하지 않거나 만료되었습니다.' });
             }
-            console.log(`[Registration] Phone Verified via Server Token: ${decoded.phoneNo}`);
-        } catch (error) {
-            console.error('[Registration] SMS Token Verification Failed:', error);
+        } else {
             await connection.rollback();
-            return res.status(401).json({ error: '휴대폰 인증이 유효하지 않거나 만료되었습니다.' });
+            return res.status(400).json({ error: '휴대폰 인증이 필요합니다.' });
         }
-    } else {
-        return res.status(400).json({ error: '휴대폰 인증이 필요합니다.' });
-    }
 
-
-        // 한글 주석: userType 대문자 정규화 및 CUSTOMER를 DB ENUM 값인 TRAVELER로 매핑
+        // 한글 주석: userType 대문자 정규화 및 CUSTOMER, CONSUMER를 DB ENUM 값인 TRAVELER로 매핑
         let normalizedUserType = (userType || 'TRAVELER').toUpperCase();
-        if (normalizedUserType === 'CUSTOMER') {
+        if (normalizedUserType === 'CUSTOMER' || normalizedUserType === 'CONSUMER') {
             normalizedUserType = 'TRAVELER';
         }
         const finalUserType = normalizedUserType;
@@ -208,39 +225,59 @@ router.post('/register', async (req, res) => {
 
             if (existingUserId) {
                 await connection.rollback();
-                return res.status(400).json({ error: `이미 가입된 고객입니다. 아이디: [${existingUserId}]` });
+                return res.status(400).json({ error: `이미 가입된 기사입니다. 아이디: [${existingUserId}]` });
             }
         }
 
         // 한글 주석: 추천인은 오직 버스 기사(DRIVER) 가입 시에만 적용 (여행자 가입 시에는 추천인을 받지 않음)
+        let resolvedRecomCode = null;
         const cleanRecomCode = (finalUserType === 'DRIVER' && recomCode) ? String(recomCode).trim() : '';
         if (cleanRecomCode && cleanRecomCode !== 'null' && cleanRecomCode !== 'undefined') {
-            // 기사 가입 시 TB_ADMIN 테이블 조회 및 상태 확인
+            // 한글 주석: 기사 가입 시 TB_ADMIN 테이블(아이디 또는 성명) 조회 및 상태 확인
             const [adminRows] = await connection.execute(
-                'SELECT ADMIN_STAT FROM TB_ADMIN WHERE ADMIN_ID = ?',
-                [cleanRecomCode]
+                'SELECT ADMIN_ID, ADMIN_STAT FROM TB_ADMIN WHERE ADMIN_ID = ? OR ADMIN_NM = ? LIMIT 1',
+                [cleanRecomCode, cleanRecomCode]
             );
-            if (adminRows.length === 0) {
-                await connection.rollback();
-                return res.status(400).json({ error: '존재하지 않는 추천인 아이디입니다.' });
-            }
-            if (adminRows[0].ADMIN_STAT !== 'ACTIVE') {
-                await connection.rollback();
-                return res.status(400).json({ error: '활성화되지 않았거나 유효하지 않은 추천인입니다.' });
+            if (adminRows.length > 0) {
+                if (adminRows[0].ADMIN_STAT !== 'ACTIVE') {
+                    await connection.rollback();
+                    return res.status(400).json({ error: '활성화되지 않았거나 유효하지 않은 추천인입니다.' });
+                }
+                resolvedRecomCode = adminRows[0].ADMIN_ID;
+            } else {
+                // 한글 주석: TB_ADMIN에 없을 경우 TB_USER의 PARTNER 회원 여부도 보조 확인
+                const [partnerRows] = await connection.execute(
+                    'SELECT USER_ID, USER_STAT FROM TB_USER WHERE (USER_ID = ? OR USER_NM = ?) AND USER_TYPE = "PARTNER" LIMIT 1',
+                    [cleanRecomCode, cleanRecomCode]
+                );
+                if (partnerRows.length === 0) {
+                    await connection.rollback();
+                    return res.status(400).json({ error: '존재하지 않는 추천인 아이디입니다.' });
+                }
+                if (partnerRows[0].USER_STAT !== 'ACTIVE') {
+                    await connection.rollback();
+                    return res.status(400).json({ error: '활성화되지 않았거나 유효하지 않은 추천인입니다.' });
+                }
+                resolvedRecomCode = partnerRows[0].USER_ID;
             }
         }
 
-        // 한글 주석: 아이디는 전체 회원 중 유니크해야 하므로 아이디 단독 중복 체크
+        // 한글 주석: 아이디는 전체 회원 중 유니크(UK_USER_LOGIN_ID)해야 하므로 아이디 단독 중복 체크
         const [existingId] = await connection.execute(
-            'SELECT 1 FROM TB_USER WHERE USER_ID = ?', 
+            'SELECT USER_TYPE FROM TB_USER WHERE USER_ID = ?', 
             [userId]
         );
         if (existingId.length > 0) {
             await connection.rollback();
+            const existingType = existingId[0].USER_TYPE;
+            if (existingType !== finalUserType) {
+                const roleLabel = existingType === 'DRIVER' ? '기사' : '고객(여행자)';
+                return res.status(400).json({ error: `이미 ${roleLabel} 계정으로 사용 중인 아이디입니다. 다른 아이디를 입력해 주세요.` });
+            }
             return res.status(400).json({ error: '이미 존재하는 아이디입니다.' });
         }
 
-        // 한글 주석: 휴대폰 번호는 가입 유형(DRIVER, TRAVELER 등)별로 중복 검사를 하도록 분리
+        // 한글 주석: 휴대폰 번호는 가입 유형(DRIVER, TRAVELER 등)별로 중복 검사를 분리하여 기사의 고객 가입 및 고객의 기사 가입을 모두 허용
         const [existingPhone] = await connection.execute(
             'SELECT 1 FROM TB_USER WHERE HP_NO = ? AND USER_TYPE = ?', 
             [phoneNo, finalUserType]
@@ -248,6 +285,18 @@ router.post('/register', async (req, res) => {
         if (existingPhone.length > 0) {
             await connection.rollback();
             return res.status(400).json({ error: '해당 가입 유형으로 이미 등록된 휴대폰 번호입니다.' });
+        }
+
+        // 한글 주석: 이메일 또한 가입 유형(DRIVER, TRAVELER)별로 중복 검사를 수행 (동일 유형 내 이메일 중복 방지, 타 유형 간에는 동일 이메일 허용)
+        if (email) {
+            const [existingEmail] = await connection.execute(
+                'SELECT 1 FROM TB_USER WHERE EMAIL = ? AND USER_TYPE = ?',
+                [email, finalUserType]
+            );
+            if (existingEmail.length > 0) {
+                await connection.rollback();
+                return res.status(400).json({ error: '해당 가입 유형으로 이미 사용 중인 이메일입니다.' });
+            }
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -301,8 +350,8 @@ router.post('/register', async (req, res) => {
             finalUserType,
             signFileId, // SIGNATURE_FILE_ID
             finalUserType === 'DRIVER' && residentNo ? encrypt(residentNo) : null,
-            (finalUserType === 'DRIVER' && cleanRecomCode) ? cleanRecomCode : null, // 기사만 추천인 저장
-            (finalUserType === 'DRIVER' && cleanRecomCode) ? new Date() : null, // 기사 가입 시 추천인 지정일자 기록
+            (finalUserType === 'DRIVER' && resolvedRecomCode) ? resolvedRecomCode : null, // 기사만 추천인 저장
+            (finalUserType === 'DRIVER' && resolvedRecomCode) ? new Date() : null, // 기사 가입 시 추천인 지정일자 기록
             custId  // MOD_ID
         ]);
 
@@ -317,12 +366,40 @@ router.post('/register', async (req, res) => {
         `;
         await connection.execute(cancelManageQuery, [custId, finalUserType, custId, custId]);
 
-        // 4. 약관 동의 이력 처리 (TB_USER_TERMS_HIST - 키값을 CUST_ID로 변경)
+        // 4. 약관 동의 이력 처리 (TB_USER_TERMS_HIST - 배열 형태와 객체 형태 모두 호환 처리)
+        let normalizedTermsList = [];
         if (termsData && Array.isArray(termsData)) {
+            normalizedTermsList = termsData;
+        } else if (termsData && typeof termsData === 'object') {
+            // 한글 주석: 프론트엔드에서 객체({ service, privacy, traveler, location }) 형태로 전달한 경우 배열로 변환
+            const mktChannelsStr = String(mktChannel || '').toUpperCase();
+            const mktAgreed = mktChannelYN === 'Y' || mktChannelYN === true || Boolean(termsData.marketing);
+            normalizedTermsList = [
+                { type: 'SERVICE', agreed: Boolean(termsData.service) },
+                { type: 'PRIVACY', agreed: Boolean(termsData.privacy) },
+                {
+                    type: finalUserType === 'DRIVER' ? 'DRIVER_SERVICE' : 'TRAVELER_SERVICE',
+                    agreed: Boolean(termsData.traveler ?? termsData.driver ?? termsData.driver_service ?? termsData.traveler_service)
+                },
+                {
+                    type: 'MARKETING',
+                    agreed: mktAgreed,
+                    channels: {
+                        sms: mktChannelsStr.includes('SMS'),
+                        push: mktChannelsStr.includes('PUSH'),
+                        email: mktChannelsStr.includes('EMAIL'),
+                        tel: mktChannelsStr.includes('TEL')
+                    }
+                }
+            ];
+        }
+
+        if (normalizedTermsList.length > 0) {
             let seq = 1;
-            const validTypes = ['SERVICE', 'TRAVELER_SERVICE', 'DRIVER_SERVICE', 'PRIVACY', 'MARKETING', 'PARTNER_CONTRACT', 'LOCATION'];
+            // 한글 주석: DB TB_USER_TERMS_HIST.TERMS_TYPE의 실제 ENUM 값 목록 ('LOCATION'은 DB ENUM에 없으므로 제외)
+            const validTypes = ['SERVICE', 'TRAVELER_SERVICE', 'DRIVER_SERVICE', 'PRIVACY', 'MARKETING', 'PARTNER_CONTRACT'];
             
-            for (const term of termsData) {
+            for (const term of normalizedTermsList) {
                 let agreeYn = term.agreed ? 'Y' : 'N';
                 let normalizedType = (term.type || '').toUpperCase();
                 
@@ -335,7 +412,10 @@ router.post('/register', async (req, res) => {
                 if (normalizedType === 'DRIVER' || normalizedType === 'DRIVER_SERVICE') normalizedType = 'DRIVER_SERVICE';
                 if (normalizedType === 'ADVERTISING' || normalizedType === 'AD' || normalizedType === 'PROMOTION' || normalizedType === 'EVENT' || normalizedType === '마케팅') normalizedType = 'MARKETING';
                 if (normalizedType === 'PARTNER' || normalizedType === 'PARTNER_AGREEMENT' || normalizedType === 'CONTRACT') normalizedType = 'PARTNER_CONTRACT';
-                if (normalizedType === 'LOCATION' || normalizedType === 'LOCATION_SERVICE' || normalizedType === 'ETC_AGREEMENT') normalizedType = 'LOCATION';
+                if (normalizedType === 'LOCATION' || normalizedType === 'LOCATION_SERVICE' || normalizedType === 'ETC_AGREEMENT') {
+                    // 한글 주석: 위치기반 약관은 DB ENUM에 없으므로 스킵
+                    continue;
+                }
                 
                 if (validTypes.includes(normalizedType)) {
                     // 마케팅 세부 동의 항목 처리 (절대 놓치지 않는 초강력 딥스캔 로직)
@@ -382,7 +462,16 @@ router.post('/register', async (req, res) => {
                             mktTel = isY(c.tel || c.phone || c.call) ? 'Y' : 'N';
                         }
                         
-                        // 2. mktChannelYN 필드 확인 (하위 호환성)
+                        // 2. mktChannel 문자열 확인 ("SMS,PUSH,EMAIL,TEL")
+                        if (mktChannel && typeof mktChannel === 'string') {
+                            const upperCh = mktChannel.toUpperCase();
+                            if (mktSms === 'N' && upperCh.includes('SMS')) mktSms = 'Y';
+                            if (mktPush === 'N' && upperCh.includes('PUSH')) mktPush = 'Y';
+                            if (mktEmail === 'N' && upperCh.includes('EMAIL')) mktEmail = 'Y';
+                            if (mktTel === 'N' && upperCh.includes('TEL')) mktTel = 'Y';
+                        }
+
+                        // 3. mktChannelYN 필드 확인 (하위 호환성)
                         if (mktChannelYN && typeof mktChannelYN === 'object') {
                             if (mktSms === 'N') mktSms = isY(mktChannelYN.sms) ? 'Y' : 'N';
                             if (mktPush === 'N') mktPush = isY(mktChannelYN.push || mktChannelYN.alarm) ? 'Y' : 'N';
@@ -390,17 +479,16 @@ router.post('/register', async (req, res) => {
                             if (mktTel === 'N') mktTel = isY(mktChannelYN.tel || mktChannelYN.phone) ? 'Y' : 'N';
                         }
                         
-                        // 3. 만약 여전히 N이라면 딥스캔 수행 (최후의 수단)
+                        // 4. 만약 여전히 N이라면 딥스캔 수행 (최후의 수단)
                         if (mktSms === 'N') mktSms = deepSearch('sms') ? 'Y' : 'N';
                         if (mktPush === 'N') mktPush = (deepSearch('push') || deepSearch('alarm')) ? 'Y' : 'N';
                         if (mktEmail === 'N') mktEmail = deepSearch('email') ? 'Y' : 'N';
                         if (mktTel === 'N') mktTel = (deepSearch('tel') || deepSearch('phone') || deepSearch('call')) ? 'Y' : 'N';
                         
                         console.log(`[Registration] Marketing Result for ${userId} - SMS:${mktSms}, PUSH:${mktPush}, EMAIL:${mktEmail}, TEL:${mktTel}`);
-                        console.log(`[Registration] term.channels:`, JSON.stringify(term.channels || {}));
                         
-                        // 4대 알림 매체 중 하나라도 Y가 있으면 AGREE_YN은 Y
-                        agreeYn = (mktSms === 'Y' || mktPush === 'Y' || mktEmail === 'Y' || mktTel === 'Y') ? 'Y' : 'N';
+                        // 4대 알림 매체 중 하나라도 Y가 있거나 마케팅 동의가 Y이면 AGREE_YN은 Y
+                        agreeYn = (agreeYn === 'Y' || mktSms === 'Y' || mktPush === 'Y' || mktEmail === 'Y' || mktTel === 'Y') ? 'Y' : 'N';
                     }
 
                     const histQuery = `
@@ -420,7 +508,6 @@ router.post('/register', async (req, res) => {
                         signFileId
                     ]);
                 } else {
-                    // 4개 데이터 중 하나가 여기서 걸렸을 가능성 대비 로그 강화
                     console.warn(`[Registration] Warning: Unknown terms type skipped: "${term.type}" (Normalized: "${normalizedType}") for User: ${userId}`);
                 }
             }
@@ -620,10 +707,10 @@ router.post('/send-code', async (req, res) => {
         let { phoneNo, type, userType } = req.body;
         if (!phoneNo) return res.status(400).json({ error: '휴대폰 번호를 입력해주세요.' });
 
-        phoneNo = phoneNo.replace(/[^0-9]/g, '');
+        phoneNo = String(phoneNo).replace(/[^0-9]/g, '');
         const verificationType = type || 'signup';
-        let targetUserType = userType ? userType.toUpperCase() : 'TRAVELER';
-        if (targetUserType === 'CUSTOMER') targetUserType = 'TRAVELER';
+        let targetUserType = userType ? String(userType).toUpperCase() : 'TRAVELER';
+        if (targetUserType === 'CUSTOMER' || targetUserType === 'CONSUMER') targetUserType = 'TRAVELER';
 
         // 기가입 여부 확인 로직 분기 (유형별 중복 체크)
         if (verificationType === 'signup') {

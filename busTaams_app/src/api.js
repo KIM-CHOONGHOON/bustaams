@@ -169,9 +169,10 @@ export const findPassword = (userId, phoneNo) => request('/app/auth/find-passwor
     body: JSON.stringify({ userId, phoneNo })
 });
 
-export const checkIdDuplicate = (userId) => request(`/app/auth/check-id?userId=${userId}`);
-export const checkEmailDuplicate = (email, userType) => request(`/app/auth/check-email?email=${email}&userType=${userType || 'TRAVELER'}`);
-export const checkPhoneDuplicate = (phoneNo, userType) => request(`/app/auth/check-phone?phoneNo=${phoneNo}&userType=${userType || 'TRAVELER'}`);
+// 한글 주석: 아이디, 이메일, 휴대폰 번호 중복 확인 시 특수문자(@, + 등) 안전 처리를 위해 encodeURIComponent 적용
+export const checkIdDuplicate = (userId) => request(`/app/auth/check-id?userId=${encodeURIComponent(userId || '')}`);
+export const checkEmailDuplicate = (email, userType) => request(`/app/auth/check-email?email=${encodeURIComponent(email || '')}&userType=${encodeURIComponent(userType || 'TRAVELER')}`);
+export const checkPhoneDuplicate = (phoneNo, userType) => request(`/app/auth/check-phone?phoneNo=${encodeURIComponent(phoneNo || '')}&userType=${encodeURIComponent(userType || 'TRAVELER')}`);
 
 export const sendAuthCode = (phoneNo, type = 'signup', userType) => request('/app/auth/send-code', {
     method: 'POST',

@@ -11,7 +11,8 @@ import {
 
 import { notify } from '../utils/toast';
 
-const SignaturePad = ({ onSave, onClear }) => {
+// 한글 주석: 전자서명 패드 컴포넌트 (캔버스 해상도 스케일 보정 및 단계 이동 시 서명 복원 지원)
+const SignaturePad = ({ onSave, onClear, initialValue }) => {
     const canvasRef = useRef(null);
     const [isDrawing, setIsDrawing] = useState(false);
 
@@ -23,16 +24,29 @@ const SignaturePad = ({ onSave, onClear }) => {
         ctx.lineWidth = 2;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
+
+        // 한글 주석: 이전 단계로 갔다가 돌아온 경우 기존 서명 이미지를 캔버스에 복원
+        if (initialValue) {
+            const img = new Image();
+            img.onload = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            };
+            img.src = initialValue;
+        }
     }, []);
 
     const getCoordinates = (e) => {
         const canvas = canvasRef.current;
         const rect = canvas.getBoundingClientRect();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : e.clientY;
+        // 한글 주석: CSS 크기(w-full, h-full)와 실제 캔버스 해상도(500x160)의 비율을 계산하여 좌표 오차 방지
+        const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
+        const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
         return {
-            offsetX: clientX - rect.left,
-            offsetY: clientY - rect.top
+            offsetX: (clientX - rect.left) * scaleX,
+            offsetY: (clientY - rect.top) * scaleY
         };
     };
 
@@ -50,13 +64,17 @@ const SignaturePad = ({ onSave, onClear }) => {
         const ctx = canvasRef.current.getContext('2d');
         ctx.lineTo(offsetX, offsetY);
         ctx.stroke();
+        // 한글 주석: 모바일 터치 중 영역 밖으로 손가락이 벗어나더라도 서명 데이터가 유실되지 않도록 즉시 반영
+        onSave(canvasRef.current.toDataURL());
         if (e.cancelable) e.preventDefault();
     };
 
     const stopDrawing = () => {
         if (!isDrawing) return;
         setIsDrawing(false);
-        onSave(canvasRef.current.toDataURL());
+        if (canvasRef.current) {
+            onSave(canvasRef.current.toDataURL());
+        }
     };
 
     const clear = () => {
@@ -156,13 +174,18 @@ const Signup = () => {
         });
     };
 
-    // 가입 유형(고객/기사) 변경 시 전체 약관 동의 및 열람 상태 초기화
+    // 가입 유형(고객/기사) 변경 시 전체 약관 동의, 본인인증 및 중복확인 상태 초기화
     const handleUserTypeChange = (type) => {
         if (userType === type) return;
         setUserType(type);
         setStep(1);
         setIsEmailChecked(false);
         setIsIdChecked(false);
+        // 한글 주석: 가입 유형별로 휴대폰 번호 가입 여부를 각각 검증해야 하므로 인증 상태도 함께 초기화
+        setIsCodeSent(false);
+        setIsPhoneVerified(false);
+        setAuthCode('');
+        setIdToken(null);
         setTerms({
             service: false,
             privacy: false,
@@ -263,16 +286,29 @@ const Signup = () => {
     };
 
     const handleCheckId = async () => {
-        if (!userId.trim()) {
+        const trimmedId = userId.trim();
+        if (!trimmedId) {
             notify.warn('아이디 입력', '아이디를 입력해 주세요.');
             return;
         }
         try {
-            const res = await checkIdDuplicate(userId);
-            if (res.isDuplicate) {
-                notify.error('중복된 아이디', '이미 사용 중인 아이디입니다.');
+            const res = await checkIdDuplicate(trimmedId);
+            // 한글 주석: 서버가 반환하는 isDuplicate 또는 isAvailable 값을 모두 안전하게 확인
+            if (res.isDuplicate || res.isAvailable === false) {
+                const targetType = isDriver ? 'DRIVER' : 'TRAVELER';
+                if (res.existingUserType && res.existingUserType !== targetType) {
+                    const existingRoleLabel = res.existingUserType === 'DRIVER' ? '기사' : '고객(여행자)';
+                    const currentRoleLabel = isDriver ? '기사' : '고객';
+                    notify.error(
+                        '중복된 아이디',
+                        `이미 ${existingRoleLabel} 계정으로 사용 중인 아이디입니다. ${currentRoleLabel} 계정은 다른 아이디로 가입해 주세요.`
+                    );
+                } else {
+                    notify.error('중복된 아이디', '이미 사용 중인 아이디입니다.');
+                }
                 setIsIdChecked(false);
             } else {
+                setUserId(trimmedId);
                 notify.success('사용 가능', '사용 가능한 아이디입니다.');
                 setIsIdChecked(true);
             }
@@ -282,22 +318,24 @@ const Signup = () => {
     };
 
     const handleCheckEmail = async () => {
-        if (!email.trim()) {
+        const trimmedEmail = email.trim();
+        if (!trimmedEmail) {
             notify.warn('이메일 입력', '이메일을 입력해 주세요.');
             return;
         }
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
+        if (!emailRegex.test(trimmedEmail)) {
             notify.warn('이메일 형식 오류', '올바른 이메일 형식이 아닙니다.');
             return;
         }
         try {
-            // 한글 주석: 가입 유형(기사/여행자)에 맞추어 이메일 중복 검사를 진행합니다.
-            const res = await checkEmailDuplicate(email, isDriver ? 'DRIVER' : 'TRAVELER');
-            if (res.isDuplicate) {
-                notify.error('중복된 이메일', '이미 사용 중인 이메일입니다.');
+            // 한글 주석: 가입 유형(기사/여행자)에 맞추어 이메일 중복 검사를 진행합니다. (기사가 고객으로 가입 시 동일 이메일 사용 가능)
+            const res = await checkEmailDuplicate(trimmedEmail, isDriver ? 'DRIVER' : 'TRAVELER');
+            if (res.isDuplicate || res.isAvailable === false) {
+                notify.error('중복된 이메일', '해당 가입 유형으로 이미 사용 중인 이메일입니다.');
                 setIsEmailChecked(false);
             } else {
+                setEmail(trimmedEmail);
                 notify.success('사용 가능', '사용 가능한 이메일입니다.');
                 setIsEmailChecked(true);
             }
@@ -476,24 +514,34 @@ const Signup = () => {
         if (marketing.tel) mktChannel.push('TEL');
 
         const payload = {
-            userId,
+            userId: userId.trim(),
             password,
-            userName,
-            phoneNo,
+            userName: userName.trim(),
+            phoneNo: phoneNo.replace(/[^0-9]/g, ''),
             // 한글 주석: DB TB_USER의 USER_TYPE ENUM 규격('TRAVELER', 'DRIVER')에 맞추어 여행자는 TRAVELER로 전송합니다.
             userType: isDriver ? 'DRIVER' : 'TRAVELER',
-            email,
+            email: email.trim(),
             signatureBase64: signature,
             firebaseToken: idToken,
             residentNo: null, // 주민등록번호 수집 안 함
             // 한글 주석: 여행자는 추천인을 받지 않으며, 버스 기사 가입 시에만 추천인을 전송합니다.
             recomCode: isDriver ? (recomCode.trim() || null) : null,
-            termsData: {
-                service: terms.service,
-                privacy: terms.privacy,
-                traveler: terms.traveler,
-                location: terms.location
-            },
+            // 한글 주석: 서버(appAuth.js)의 TB_USER_TERMS_HIST 저장 규격에 맞춰 약관 동의 배열을 구성합니다.
+            termsData: [
+                { type: 'SERVICE', agreed: terms.service },
+                { type: 'PRIVACY', agreed: terms.privacy },
+                { type: isDriver ? 'DRIVER_SERVICE' : 'TRAVELER_SERVICE', agreed: terms.traveler },
+                {
+                    type: 'MARKETING',
+                    agreed: marketing.agree,
+                    channels: {
+                        sms: marketing.sms,
+                        push: marketing.push,
+                        email: marketing.email,
+                        tel: marketing.tel
+                    }
+                }
+            ],
             mktChannelYN: marketing.agree ? 'Y' : 'N',
             mktChannel: mktChannel.join(',')
         };
@@ -513,10 +561,22 @@ const Signup = () => {
                     navigate('/login');
                 });
             } else {
-                notify.error('회원가입 실패', res.message || res.error || '회원가입 중 오류가 발생했습니다.');
+                const errMsg = res.message || res.error || '회원가입 중 오류가 발생했습니다.';
+                // 한글 주석: 기사 2단계에서 아이디 또는 이메일 중복 오류가 발생한 경우 즉시 수정할 수 있도록 1단계로 이동
+                if (isDriver && step === 2 && (errMsg.includes('아이디') || errMsg.includes('이메일'))) {
+                    setStep(1);
+                }
+                notify.error('회원가입 실패', errMsg);
             }
         } catch (err) {
-            notify.error('회원가입 오류', err.message || '서버와의 통신에 실패했습니다.');
+            const errMsg = err.message || '서버와의 통신에 실패했습니다.';
+            // 한글 주석: 기사 2단계에서 아이디 또는 이메일 관련 오류가 발생한 경우 1단계로 자동 이동
+            if (isDriver && step === 2 && (errMsg.includes('아이디') || errMsg.includes('이메일'))) {
+                setStep(1);
+                if (errMsg.includes('아이디')) setIsIdChecked(false);
+                if (errMsg.includes('이메일')) setIsEmailChecked(false);
+            }
+            notify.error('회원가입 오류', errMsg);
         } finally {
             setIsSubmitting(false);
         }
@@ -968,7 +1028,7 @@ const Signup = () => {
                                 </div>
 
                                 <div className="pt-2">
-                                    <SignaturePad onSave={setSignature} onClear={() => setSignature('')} />
+                                    <SignaturePad initialValue={signature} onSave={setSignature} onClear={() => setSignature('')} />
                                 </div>
 
                                 <div className="pt-4 flex gap-3">
