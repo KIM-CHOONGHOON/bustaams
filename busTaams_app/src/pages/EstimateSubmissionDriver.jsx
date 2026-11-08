@@ -60,12 +60,12 @@ const EstimateSubmissionDriver = () => {
                                             <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-500 mb-2 italic">{item.label}</p>
                                             {item.isList ? (
                                                 <div className="space-y-1 text-left">
-                                                    {(item.value as string[]).map((v, idx) => (
+                                                    {(Array.isArray(item.value) ? item.value : []).map((v, idx) => (
                                                         <p key={idx} className="font-black text-white italic text-lg leading-none">{v}</p>
                                                     ))}
                                                 </div>
                                             ) : (
-                                                <p className="font-black text-white italic text-lg leading-tight text-left">{item.value as string}</p>
+                                                <p className="font-black text-white italic text-lg leading-tight text-left">{item.value}</p>
                                             )}
                                         </div>
                                     </div>

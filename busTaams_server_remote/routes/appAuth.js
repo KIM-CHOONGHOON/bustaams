@@ -837,11 +837,17 @@ router.post('/verify-code', async (req, res) => {
         const match = msgContent.includes(`[${cleanCode}]`);
 
         if (match) {
-            // 한글 주석: 인증 성공 시 즉시 SEND_STAT을 'VERIFIED'로 변경하여 동일 인증번호 재사용 방지
-            await pool.execute(
-                'UPDATE TB_SMS_LOG SET SEND_STAT = ? WHERE LOG_SEQ = ?',
-                ['VERIFIED', latestLog.LOG_SEQ]
+            // 한글 주석: 원자적(Atomic) 조건부 업데이트로 동시 요청(Race Condition) 시에도 단 1회만 인증 성공하도록 보장
+            const [updateResult] = await pool.execute(
+                `UPDATE TB_SMS_LOG 
+                 SET SEND_STAT = 'VERIFIED' 
+                 WHERE LOG_SEQ = ? AND SEND_STAT = 'SUCCESS' AND TIMESTAMPDIFF(SECOND, REG_DT, NOW()) <= 300`,
+                [latestLog.LOG_SEQ]
             );
+
+            if (updateResult.affectedRows === 0) {
+                return res.status(400).json({ success: false, error: '이미 사용되었거나 유효시간이 만료된 인증번호입니다. 다시 발송해 주세요.' });
+            }
 
             // 인증 성공 시 서버 자체 토큰 발행 (30분 유효)
             const verifyToken = jwt.sign(

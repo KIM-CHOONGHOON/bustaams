@@ -39,7 +39,7 @@ async function resolveCustId(req) {
 async function isAuthorizedForChatRoom(custId, { chatSeq, resId, reqId }) {
     if (!custId) return false;
 
-    // 1) 이미 채팅방이 존재하는 경우 해당 방의 예약/요청 당사자인지 또는 등록된 참여자인지 확인
+    // 1) 이미 채팅방이 존재하는 경우 해당 방의 예약/요청 당사자인지 확인
     if (chatSeq) {
         const [roomInfo] = await pool.execute(
             `SELECT REQ_ID, RES_ID, CREATED_BY_CUST_ID FROM TB_CHAT_LOG WHERE CHAT_LOG_SEQ = ?`,
@@ -50,21 +50,26 @@ async function isAuthorizedForChatRoom(custId, { chatSeq, resId, reqId }) {
         const rResId = roomInfo[0].RES_ID || resId;
         const rReqId = roomInfo[0].REQ_ID || reqId;
 
-        // 예약 테이블에서 당사자(여행자 또는 기사)인지 확인
+        // 방에 특정 예약(RES_ID)이 지정되어 있고 실제 예약 레코드가 존재하면, 반드시 그 예약의 여행자 또는 기사만 허용 (같은 여정의 다른 기사 차단, 한글 주석)
         if (rResId) {
-            const [resAuth] = await pool.execute(
-                `SELECT 1 FROM TB_BUS_RESERVATION WHERE RES_ID = ? AND (TRAVELER_ID = ? OR DRIVER_ID = ?) LIMIT 1`,
-                [rResId, custId, custId]
+            const [resRows] = await pool.execute(
+                `SELECT TRAVELER_ID, DRIVER_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ? LIMIT 1`,
+                [rResId]
             );
-            if (resAuth.length > 0) return true;
+            if (resRows.length > 0) {
+                return resRows[0].TRAVELER_ID === custId || resRows[0].DRIVER_ID === custId;
+            }
         }
-        if (rReqId) {
-            const [reqResAuth] = await pool.execute(
-                `SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = ? AND (TRAVELER_ID = ? OR DRIVER_ID = ?) LIMIT 1`,
-                [rReqId, custId, custId]
-            );
-            if (reqResAuth.length > 0) return true;
 
+        // 특정 RES_ID 예약 레코드가 없는 방인 경우 기존 등록된 채팅 참여자인지 확인
+        const [partRows] = await pool.execute(
+            `SELECT 1 FROM TB_CHAT_LOG_PART WHERE CHAT_LOG_SEQ = ? AND CUST_ID = ? LIMIT 1`,
+            [chatSeq, custId]
+        );
+        if (partRows.length > 0) return true;
+
+        // 예약(RES_ID) 없이 여정(REQ_ID) 단위로만 생성된 방인 경우 여정 요청자(여행자) 본인만 허용
+        if (rReqId) {
             const [reqOwnerAuth] = await pool.execute(
                 `SELECT 1 FROM TB_AUCTION_REQ WHERE REQ_ID = ? AND TRAVELER_ID = ? LIMIT 1`,
                 [rReqId, custId]
@@ -72,21 +77,25 @@ async function isAuthorizedForChatRoom(custId, { chatSeq, resId, reqId }) {
             if (reqOwnerAuth.length > 0) return true;
         }
 
-        // 예약/요청 ID가 연결되지 않은 방인 경우 TB_CHAT_LOG_PART에 기존 등록된 참여자인지 확인
-        const [partRows] = await pool.execute(
-            `SELECT 1 FROM TB_CHAT_LOG_PART WHERE CHAT_LOG_SEQ = ? AND CUST_ID = ? LIMIT 1`,
-            [chatSeq, custId]
-        );
-        return partRows.length > 0;
+        return false;
     }
 
     // 2) 신규 방 생성 또는 RES_ID / REQ_ID로 접근 시 당사자 여부 확인
-    if (resId) {
+    if (resId && resId !== reqId) {
         const [resAuth] = await pool.execute(
             `SELECT 1 FROM TB_BUS_RESERVATION WHERE RES_ID = ? AND (TRAVELER_ID = ? OR DRIVER_ID = ?) LIMIT 1`,
             [resId, custId, custId]
         );
-        if (resAuth.length > 0) return true;
+        return resAuth.length > 0;
+    }
+    if (resId) {
+        const [resRows] = await pool.execute(
+            `SELECT TRAVELER_ID, DRIVER_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ? LIMIT 1`,
+            [resId]
+        );
+        if (resRows.length > 0) {
+            return resRows[0].TRAVELER_ID === custId || resRows[0].DRIVER_ID === custId;
+        }
     }
     if (reqId) {
         const [reqResAuth] = await pool.execute(

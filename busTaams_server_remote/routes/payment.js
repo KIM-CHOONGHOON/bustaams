@@ -825,7 +825,7 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
 
             // 3. 실제 결제 완료(SUCCESS/COMPLETED) 이력이 TB_PAYMENT_MASTER에 존재하는지 검증 (한글 주석)
             const [payRows] = await connection.execute(
-                `SELECT PAY_ID, REQ_ID, CUST_ID, PAY_AMOUNT, PG_TID 
+                `SELECT PAY_ID, ORDER_NO, REQ_ID, CUST_ID, PAY_AMOUNT, PG_TID 
                  FROM TB_PAYMENT_MASTER 
                  WHERE PG_TID = ? AND PAY_STATUS IN ('SUCCESS', 'COMPLETED')`,
                 [tid]
@@ -842,7 +842,7 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
             let targetReqId = reqId;
             if (resId) {
                 const [resCheck] = await connection.execute(
-                    'SELECT REQ_ID, TRAVELER_ID, DRIVER_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?',
+                    'SELECT REQ_ID, TRAVELER_ID, DRIVER_ID, CUSTOMER_PAY_ID, DRIVER_PAY_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?',
                     [resId]
                 );
                 if (resCheck.length === 0) {
@@ -852,6 +852,30 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                     return res.status(403).json({ success: false, error: '해당 예약의 결제 상태를 동기화할 권한이 없습니다.' });
                 }
                 targetReqId = resCheck[0].REQ_ID;
+
+                // 다른 예약(RES_ID)에 이미 사용된 거래번호(TID)인지 검증 (같은 여정 내 다른 예약 재사용 차단, 한글 주석)
+                const [usedInOtherRes] = await connection.execute(
+                    `SELECT RES_ID FROM TB_BUS_RESERVATION 
+                     WHERE (CUSTOMER_PAY_ID = ? OR DRIVER_PAY_ID = ?) AND RES_ID != ? LIMIT 1`,
+                    [tid, tid, resId]
+                );
+                if (usedInOtherRes.length > 0) {
+                    return res.status(400).json({ success: false, error: '다른 예약에 이미 사용된 결제 거래번호(TID)입니다.' });
+                }
+
+                // ORDER_NO 또는 예약 테이블의 결제 ID가 요청된 resId와 정확히 일치하는지 검증 (한글 주석)
+                const orderNo = String(verifiedPay.ORDER_NO || '');
+                const matchesOrderRes =
+                    orderNo.startsWith(`BUS_RES_${resId}_`) ||
+                    orderNo.startsWith(`BUS_DRV_${resId}_`) ||
+                    orderNo === resId;
+                const matchesSavedPayId =
+                    resCheck[0].CUSTOMER_PAY_ID === tid ||
+                    resCheck[0].DRIVER_PAY_ID === tid;
+
+                if (!matchesOrderRes && !matchesSavedPayId) {
+                    return res.status(400).json({ success: false, error: '결제 거래번호(TID)의 결제 대상 예약과 요청한 예약(resId)이 일치하지 않습니다.' });
+                }
             } else if (reqId) {
                 const [reqCheck] = await connection.execute(
                     'SELECT TRAVELER_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ?',
@@ -862,6 +886,15 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                 }
                 if (reqCheck[0].TRAVELER_ID !== custId) {
                     return res.status(403).json({ success: false, error: '해당 견적 요청의 결제 상태를 동기화할 권한이 없습니다.' });
+                }
+
+                // 단건 예약(BUS_RES_ / BUS_DRV_) 결제 거래번호로 여정 전체(reqId)를 동기화하는 행위 차단 (한글 주석)
+                const orderNo = String(verifiedPay.ORDER_NO || '');
+                if (orderNo.startsWith('BUS_RES_') || orderNo.startsWith('BUS_DRV_')) {
+                    return res.status(400).json({ success: false, error: '개별 예약 결제 거래번호로 전체 여정을 동기화할 수 없습니다.' });
+                }
+                if (orderNo.startsWith('BUS_REQ_') && !orderNo.startsWith(`BUS_REQ_${reqId}_`)) {
+                    return res.status(400).json({ success: false, error: '결제 거래번호(TID)의 요청 ID와 동기화 대상이 일치하지 않습니다.' });
                 }
             }
 

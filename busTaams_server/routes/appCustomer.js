@@ -810,11 +810,16 @@ router.post('/auth/verify-code', authenticateToken, async (req, res) => {
         const isMatch = msgContent.includes(`[${cleanCode}]`);
 
         if (isMatch) {
-            // 한글 주석: 인증 성공 시 즉시 SEND_STAT을 'VERIFIED'로 변경하여 재사용 차단
-            await pool.execute(
-                'UPDATE TB_SMS_LOG SET SEND_STAT = ? WHERE LOG_SEQ = ?',
-                ['VERIFIED', latestLog.LOG_SEQ]
+            // 한글 주석: 원자적(Atomic) 조건부 업데이트로 동시 요청 시에도 단 1회만 인증 성공하도록 보장
+            const [updateResult] = await pool.execute(
+                `UPDATE TB_SMS_LOG 
+                 SET SEND_STAT = 'VERIFIED' 
+                 WHERE LOG_SEQ = ? AND SEND_STAT = 'SUCCESS' AND TIMESTAMPDIFF(SECOND, REG_DT, NOW()) <= 300`,
+                [latestLog.LOG_SEQ]
             );
+            if (updateResult.affectedRows === 0) {
+                return res.status(400).json({ success: false, error: '이미 사용되었거나 만료된 인증번호입니다. 다시 발송해 주세요.' });
+            }
             res.json({ success: true, message: '인증되었습니다.' });
         } else {
             res.status(400).json({ success: false, error: '인증번호가 일치하지 않습니다.' });
