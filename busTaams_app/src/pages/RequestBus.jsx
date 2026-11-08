@@ -532,7 +532,7 @@ const RequestBus = () => {
             }
         } catch (error) {
             console.error('[RequestSubmit Error]', error);
-            const errorMsg = error.response?.data?.error || error.response?.data?.detail || '서버와 통신 중 오류가 발생했습니다.';
+            const errorMsg = error.response?.data?.error || error.response?.data?.detail || error.message || '서버와 통신 중 오류가 발생했습니다.';
             notify.error('오류', errorMsg);
         }
     };

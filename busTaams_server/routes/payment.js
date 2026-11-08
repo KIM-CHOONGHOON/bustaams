@@ -5,6 +5,7 @@ const iconv = require('iconv-lite');
 const router = express.Router();
 const { sendNotification } = require('../services/notificationService');
 const { calculateDriverFee } = require('../lib/feeCalculator');
+const { authenticateToken } = require('../middleware/auth');
 
 // 이니시스 설정 (.env에서 가져옴)
 const MID = process.env.INICIS_MID || 'INIpayTest';
@@ -796,12 +797,78 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
     /**
      * POST /api/payment/force-sync
      * 카드 결제 완료 후 2중 안전장치 동기화 (DB 업데이트 및 기사 푸시 발송)
+     * - 인증 토큰 및 실제 PG 결제 완료 내역(TB_PAYMENT_MASTER) 검증 필수 (한글 주석)
      */
-    router.post('/force-sync', async (req, res) => {
+    router.post('/force-sync', authenticateToken, async (req, res) => {
         const { reqId, resId, tid, amt, cardAuthNo, authNo, resultCode, resultMsg, cardName, cardMaskNo } = req.body;
         console.log(`>>> [Payment Force Sync] ReqID: ${reqId}, ResID: ${resId}, TID: ${tid}, Amt: ${amt}, AuthNo: ${cardAuthNo || authNo}`);
+
+        // 1. 필수 파라미터 검증 (임의 결제 상태 위변조 차단, 한글 주석)
+        if (!tid || String(tid).startsWith('MANUAL-')) {
+            return res.status(400).json({ success: false, error: '유효한 PG 결제 거래번호(TID)가 필요합니다.' });
+        }
+        if (!reqId && !resId) {
+            return res.status(400).json({ success: false, error: '동기화할 요청 ID(reqId) 또는 예약 ID(resId)가 필요합니다.' });
+        }
+
         const connection = await pool.getConnection();
         try {
+            // 2. 로그인 사용자 CUST_ID 확인 (한글 주석)
+            let custId = req.user.custId;
+            if (!custId) {
+                const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [req.user.userId]);
+                if (uRows.length === 0) {
+                    return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
+                }
+                custId = uRows[0].CUST_ID;
+            }
+
+            // 3. 실제 결제 완료(SUCCESS/COMPLETED) 이력이 TB_PAYMENT_MASTER에 존재하는지 검증 (한글 주석)
+            const [payRows] = await connection.execute(
+                `SELECT PAY_ID, REQ_ID, CUST_ID, PAY_AMOUNT, PG_TID 
+                 FROM TB_PAYMENT_MASTER 
+                 WHERE PG_TID = ? AND PAY_STATUS IN ('SUCCESS', 'COMPLETED')`,
+                [tid]
+            );
+            if (payRows.length === 0) {
+                return res.status(400).json({ success: false, error: '확인된 결제 승인 내역이 없어 결제 상태를 동기화할 수 없습니다.' });
+            }
+
+            const verifiedPay = payRows[0];
+            if (verifiedPay.CUST_ID && verifiedPay.CUST_ID !== custId) {
+                return res.status(403).json({ success: false, error: '본인의 결제 내역만 동기화할 수 있습니다.' });
+            }
+
+            let targetReqId = reqId;
+            if (resId) {
+                const [resCheck] = await connection.execute(
+                    'SELECT REQ_ID, TRAVELER_ID, DRIVER_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?',
+                    [resId]
+                );
+                if (resCheck.length === 0) {
+                    return res.status(404).json({ success: false, error: '해당 예약 정보를 찾을 수 없습니다.' });
+                }
+                if (resCheck[0].TRAVELER_ID !== custId && resCheck[0].DRIVER_ID !== custId) {
+                    return res.status(403).json({ success: false, error: '해당 예약의 결제 상태를 동기화할 권한이 없습니다.' });
+                }
+                targetReqId = resCheck[0].REQ_ID;
+            } else if (reqId) {
+                const [reqCheck] = await connection.execute(
+                    'SELECT TRAVELER_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ?',
+                    [reqId]
+                );
+                if (reqCheck.length === 0) {
+                    return res.status(404).json({ success: false, error: '해당 견적 요청 정보를 찾을 수 없습니다.' });
+                }
+                if (reqCheck[0].TRAVELER_ID !== custId) {
+                    return res.status(403).json({ success: false, error: '해당 견적 요청의 결제 상태를 동기화할 권한이 없습니다.' });
+                }
+            }
+
+            if (verifiedPay.REQ_ID && targetReqId && verifiedPay.REQ_ID !== targetReqId) {
+                return res.status(400).json({ success: false, error: '결제 내역의 요청 ID와 동기화 대상이 일치하지 않습니다.' });
+            }
+
             await connection.beginTransaction();
             const syncExtraInfo = {
                 cardAuthNo: cardAuthNo || authNo || null,
@@ -810,10 +877,11 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                 cardName: cardName || null,
                 cardMaskNo: cardMaskNo || null
             };
+            const verifiedAmt = verifiedPay.PAY_AMOUNT || amt || 33000;
             if (resId) {
-                await updateDBAfterPayment(`BUS_RES_${resId}_${Date.now()}`, connection, tid || `MANUAL-${Date.now()}`, amt || 33000, syncExtraInfo);
+                await updateDBAfterPayment(`BUS_RES_${resId}_${Date.now()}`, connection, tid, verifiedAmt, syncExtraInfo);
             } else if (reqId) {
-                await updateDBAfterPayment(`BUS_REQ_${reqId}_${Date.now()}`, connection, tid || `MANUAL-${Date.now()}`, amt || 33000, syncExtraInfo);
+                await updateDBAfterPayment(`BUS_REQ_${reqId}_${Date.now()}`, connection, tid, verifiedAmt, syncExtraInfo);
             }
             await connection.commit();
             res.json({ success: true, message: '결제 상태가 성공적으로 동기화되었습니다.' });

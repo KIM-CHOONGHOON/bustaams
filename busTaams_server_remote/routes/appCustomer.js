@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
+const axios = require('axios');
 const { pool, getNextId, getBucket, bucketName } = require('../db');
 const { authenticateToken } = require('../middleware/auth');
 const { encrypt, decrypt } = require('../crypto');
@@ -8,6 +10,146 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const admin = require('firebase-admin');
+const { sendNotification } = require('../services/notificationService');
+
+
+// 💰 이니시스 카드 결제 취소 (환불) 요청 헬퍼 함수
+async function cancelInicisPayment({ tid, msg, clientIp, price, confirmPrice }) {
+    try {
+        // 1. 거래번호(TID)로부터 MID를 동적으로 추출 (기본값: INICIS_MID 환경변수 또는 INIpayTest)
+        let mid = process.env.INICIS_MID || 'INIpayTest';
+        if (tid) {
+            if (tid.includes('cafe248471')) {
+                mid = 'cafe248471';
+            } else if (tid.includes('cafe246686')) {
+                mid = 'cafe246686';
+            } else if (tid.includes('INIpayTest') || tid.includes('INIBillTst')) {
+                mid = 'INIpayTest';
+            }
+        }
+
+        // 2. MID에 맞는 API Key 선택
+        let apiKey = process.env.INICIS_API_KEY || process.env.INICIS_BILL_API_KEY || 'rKnPljRn5m6J9Mzz';
+        let refundUrl = 'https://iniapi.inicis.com/api/v1/refund';
+
+        if (mid === 'cafe246686') {
+            apiKey = process.env.INICIS_BILL_API_KEY || 'rKnPljRn5m6J9Mzz';
+        } else if (mid === 'cafe248471') {
+            // 일반 결제 MID용 API Key (미설정 시 INICIS_BILL_API_KEY 사용)
+            apiKey = process.env.INICIS_API_KEY || process.env.INICIS_BILL_API_KEY || 'rKnPljRn5m6J9Mzz';
+        } else if (mid === 'INIpayTest') {
+            apiKey = 'ItEQKi3rY7uvDS8l';
+            refundUrl = 'https://stginiapi.inicis.com/api/v1/refund';
+        }
+
+        const timestamp = new Date().toISOString().replace(/[-T:Z.]/g, '').slice(0, 14);
+
+        let targetIp = clientIp || '1.234.65.153';
+        if (targetIp === '127.0.0.1' || targetIp === 'localhost') {
+            targetIp = '1.234.65.153';
+        }
+
+        const type = 'Refund';
+        const paymethod = 'Card';
+        const hashDataStr = apiKey + type + paymethod + timestamp + targetIp + mid + tid;
+        const hashData = crypto.createHash('sha512').update(hashDataStr).digest('hex');
+
+        const params = new URLSearchParams();
+        params.append('type', type);
+        params.append('paymethod', paymethod);
+        params.append('timestamp', timestamp);
+        params.append('clientIp', targetIp);
+        params.append('mid', mid);
+        params.append('tid', tid);
+        params.append('msg', msg || '고객 여행 취소');
+        params.append('hashData', hashData);
+
+        if (price !== undefined && price !== null) {
+            params.append('price', String(price));
+        }
+        if (confirmPrice !== undefined && confirmPrice !== null) {
+            params.append('confirmPrice', String(confirmPrice));
+        }
+
+        const response = await axios.post(refundUrl, params, {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+            }
+        });
+
+        console.log('>>> [Inicis Refund Response]:', response.data);
+        return response.data;
+    } catch (err) {
+        console.error('>>> [Inicis Refund Error]:', err);
+        throw err;
+    }
+}
+
+/**
+ * 💰 데이터 이용료 취소·환불 기준 공제 비율 계산 헬퍼 함수
+ * 가. 여행 확정 후 24시간 이내 취소 시: 데이터 이용료 100% 전액 환불 (공제 0%)
+ * 나. 여행 확정 24시간 경과 후 ~ 여행 출발 30일 전 취소 시: 데이터 이용료의 50% 공제 후 환불 (공제 50%)
+ * 다. 여행 출발 30일 이내 취소 시: 데이터 이용료의 80% 공제 후 환불 (공제 80%)
+ */
+function calculateFeeRefundPolicy(confirmDt, startDt, currentReqStat) {
+    const now = new Date();
+    const confirmDate = confirmDt ? new Date(confirmDt) : null;
+    const startDate = startDt ? new Date(startDt) : null;
+
+    // 결제 대기 및 기사 결제 대기 등 최종 확정 전 취소 시 전액 환불 처리 (공제 0%)
+    if (currentReqStat === 'CUSTOMER_PAY_WAIT' || currentReqStat === 'DRIVER_PAY_WAIT') {
+        return { deductRate: 0, refundRate: 1.0, label: '결제대기 전액 환불 (공제 0%)' };
+    }
+
+    if (confirmDate) {
+        const diffHours = (now - confirmDate) / (1000 * 60 * 60);
+        if (diffHours <= 24) {
+            return { deductRate: 0, refundRate: 1.0, label: '가. 확정 24시간 이내 (100% 전액 환불)' };
+        }
+    }
+
+    if (startDate) {
+        const diffDays = (startDate - now) / (1000 * 60 * 60 * 24);
+        if (diffDays > 30) {
+            return { deductRate: 50, refundRate: 0.5, label: '나. 확정 24시간 경과~출발 30일 전 (50% 공제 후 환불)' };
+        } else {
+            return { deductRate: 80, refundRate: 0.2, label: '다. 여행 출발 30일 이내 (80% 공제 후 환불)' };
+        }
+    }
+
+    return { deductRate: 0, refundRate: 1.0, label: '기본 전액 환불' };
+}
+
+/**
+ * 💰 기사의 멤버십 정보 및 등급에 따라 저장할 FEE_POLICY를 판별하여 반환하는 헬퍼 함수 (한글 주석)
+ */
+async function determineFeePolicy(connection, driverId) {
+    try {
+        // 1. TB_MOM_MEMBER에서 기사의 현재 월(YYYYMM) 정보 조회
+        const [momRows] = await connection.execute(
+            "SELECT REMAINING_CNT FROM TB_MOM_MEMBER WHERE CUST_ID = ? AND YYYYMM = DATE_FORMAT(NOW(), '%Y%m')",
+            [driverId]
+        );
+        
+        // 2. 해당 월 정보가 존재하고 REMAINING_CNT가 0건이면 'DRIVER' 저장
+        if (momRows.length > 0 && parseInt(momRows[0].REMAINING_CNT, 10) === 0) {
+            return 'DRIVER';
+        }
+        
+        // 3. 그렇지 않거나 월 정보가 없으면 TB_DRIVER_DETAIL에서 기사 등급 조회
+        const [driverRows] = await connection.execute(
+            "SELECT FEE_POLICY FROM TB_DRIVER_DETAIL WHERE CUST_ID = ?",
+            [driverId]
+        );
+        if (driverRows.length > 0) {
+            return driverRows[0].FEE_POLICY;
+        }
+        return null;
+    } catch (err) {
+        console.error('[determineFeePolicy] Error determining fee policy:', err);
+        return null;
+    }
+}
 
 // 업로드 디렉토리 설정
 const uploadDir = path.join(__dirname, '../uploads/profiles');
@@ -30,6 +172,15 @@ const upload = multer({ storage: storage });
 // GCS 업로드를 위한 메모리 스토리지 설정
 const memoryStorage = multer.memoryStorage();
 const memoryUpload = multer({ storage: memoryStorage });
+
+// 📂 클라이언트가 전송한 Content-Type에 맞춰 Multer 미들웨어를 조건부 구동하는 헬퍼 미들웨어
+const uploadOrPass = (req, res, next) => {
+    const contentType = req.headers['content-type'] || '';
+    if (contentType.includes('multipart/form-data')) {
+        return memoryUpload.single('file')(req, res, next);
+    }
+    next();
+};
 
 /**
  * [App 전용 고객 서비스]
@@ -64,27 +215,26 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
         const logMsg = `\n[${new Date().toISOString()}] Dashboard Call - UserID: ${userId}, CustID: ${custId}`;
         fs.appendFileSync('debug_stats.log', logMsg);
 
-        // 2. 통계 조회 (진행중, 승인대기)
+        // 2. 통계 조회 (4단계: 청약진행, 고객결제대기, 기사결제대기(배차확정중), 고객최종승인대기)
         console.log(`[Dashboard Debug] UserID: ${userId}, CustID: ${custId}`);
         const [statsRows] = await pool.execute(`
             SELECT 
-                COUNT(DISTINCT CASE 
-                    WHEN r.DATA_STAT IN ('AUCTION', 'BUS_CHANGE') 
-                    AND NOT EXISTS (SELECT 1 FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING')
-                    AND NOT EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING')
-                    THEN r.REQ_ID END) as countProgressing,
-                COUNT(DISTINCT CASE 
-                    WHEN r.DATA_STAT = 'BIDDING' 
-                    OR (r.DATA_STAT IN ('AUCTION', 'BUS_CHANGE') AND (
-                        EXISTS (SELECT 1 FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING')
-                        OR EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING')
-                    ))
-                    THEN r.REQ_ID END) as countWaitingApproval
+                COUNT(CASE WHEN r.DATA_STAT IN ('AUCTION', 'MATCHING', 'WAIT_DECISION', 'BUS_CHANGE') THEN 1 END) as countProgressing,
+                COUNT(CASE WHEN r.DATA_STAT = 'CUSTOMER_PAY_WAIT' THEN 1 END) as countCustomerPayWait,
+                COUNT(CASE WHEN r.DATA_STAT = 'DRIVER_PAY_WAIT' THEN 1 END) as countDriverPayWait,
+                COUNT(CASE WHEN r.DATA_STAT = 'FINAL_APPROVAL_WAIT' THEN 1 END) as countFinalApprovalWait
             FROM TB_AUCTION_REQ r
             WHERE TRIM(r.TRAVELER_ID) = ? OR TRIM(r.TRAVELER_ID) = ?
         `, [custId, userId]);
 
-        const stats = statsRows[0] || { countProgressing: 0, countWaitingApproval: 0 };
+        const rawStats = statsRows[0] || {};
+        const stats = {
+            countProgressing: rawStats.countProgressing || 0,
+            countCustomerPayWait: rawStats.countCustomerPayWait || 0,
+            countWaitingApproval: rawStats.countCustomerPayWait || 0, // 기존 프론트 호환용
+            countDriverPayWait: rawStats.countDriverPayWait || 0,
+            countFinalApprovalWait: rawStats.countFinalApprovalWait || 0
+        };
         fs.appendFileSync('debug_stats.log', ` | Result: ${JSON.stringify(stats)}`);
         console.log(`[Dashboard Debug] Final Stats Result:`, stats);
 
@@ -207,6 +357,83 @@ router.get('/profile', authenticateToken, async (req, res) => {
         const user = rows[0];
         const custId = user.CUST_ID;
 
+        // 마케팅 동의 이력 조회
+        const [mktRows] = await pool.execute(`
+            SELECT AGREE_YN, MKT_SMS_YN, MKT_PUSH_YN, MKT_EMAIL_YN, MKT_TEL_YN 
+            FROM TB_USER_TERMS_HIST 
+            WHERE CUST_ID = ? AND TERMS_TYPE = 'MARKETING'
+            ORDER BY TERMS_HIST_SEQ DESC LIMIT 1
+        `, [custId]);
+
+        const marketingInfo = mktRows.length > 0 ? mktRows[0] : {
+            AGREE_YN: 'N',
+            MKT_SMS_YN: 'N',
+            MKT_PUSH_YN: 'N',
+            MKT_EMAIL_YN: 'N',
+            MKT_TEL_YN: 'N'
+        };
+
+        // 모든 약관 동의 이력 조회 (가장 최근 이력 추출)
+        const [termsRows] = await pool.execute(`
+            SELECT t.TERMS_TYPE, t.AGREE_YN, DATE_FORMAT(t.AGREE_DT, '%Y.%m.%d %H:%i:%s') as AGREE_DT
+            FROM TB_USER_TERMS_HIST t
+            INNER JOIN (
+                SELECT TERMS_TYPE, MAX(TERMS_HIST_SEQ) as MAX_SEQ
+                FROM TB_USER_TERMS_HIST
+                WHERE CUST_ID = ?
+                GROUP BY TERMS_TYPE
+            ) m ON t.TERMS_TYPE = m.TERMS_TYPE AND t.TERMS_HIST_SEQ = m.MAX_SEQ
+            WHERE t.CUST_ID = ?
+        `, [custId, custId]);
+
+        // 약관 동의 데이터를 Map 형태로 전환
+        const termsMap = {};
+        termsRows.forEach(row => {
+            termsMap[row.TERMS_TYPE] = {
+                agreeYn: row.AGREE_YN,
+                agreeDt: row.AGREE_DT
+            };
+        });
+
+        // 사용자 타입에 따른 3번째 약관 타입 매핑
+        const travelerTermsType = user.USER_TYPE === 'DRIVER' ? 'DRIVER_SERVICE' : 'TRAVELER_SERVICE';
+        const travelerTermsLabel = user.USER_TYPE === 'DRIVER' ? '파트너 입점 계약' : '여행자 서비스 이용 규정 동의';
+
+        const termsConsent = [
+            {
+                id: 'service',
+                dbType: 'SERVICE',
+                label: '서비스 이용약관 동의',
+                required: true,
+                agreeYn: termsMap['SERVICE'] ? termsMap['SERVICE'].agreeYn : 'N',
+                agreeDt: termsMap['SERVICE'] ? termsMap['SERVICE'].agreeDt : null
+            },
+            {
+                id: 'privacy',
+                dbType: 'PRIVACY',
+                label: '개인정보 수집 및 이용 동의',
+                required: true,
+                agreeYn: termsMap['PRIVACY'] ? termsMap['PRIVACY'].agreeYn : 'N',
+                agreeDt: termsMap['PRIVACY'] ? termsMap['PRIVACY'].agreeDt : null
+            },
+            {
+                id: 'traveler',
+                dbType: travelerTermsType,
+                label: travelerTermsLabel,
+                required: true,
+                agreeYn: termsMap[travelerTermsType] ? termsMap[travelerTermsType].agreeYn : 'N',
+                agreeDt: termsMap[travelerTermsType] ? termsMap[travelerTermsType].agreeDt : null
+            },
+            {
+                id: 'marketing',
+                dbType: 'MARKETING',
+                label: '마케팅 정보 수신 및 알림 동의',
+                required: false,
+                agreeYn: termsMap['MARKETING'] ? termsMap['MARKETING'].agreeYn : 'N',
+                agreeDt: termsMap['MARKETING'] ? termsMap['MARKETING'].agreeDt : null
+            }
+        ];
+
         // 취소 관리 정보 조회
         const [cancelRows] = await pool.execute(`
             SELECT CANCEL_CNT, RESTRICT_STAT, DATE_FORMAT(RESTRICT_END_DT, '%Y-%m-%d %H:%i:%s') as RESTRICT_END_DT 
@@ -240,7 +467,15 @@ router.get('/profile', authenticateToken, async (req, res) => {
                 profileImage: userImage || null,
                 cancelCnt: cancelInfo.CANCEL_CNT,
                 restrictStat: cancelInfo.RESTRICT_STAT,
-                restrictEndDt: cancelInfo.RESTRICT_END_DT
+                restrictEndDt: cancelInfo.RESTRICT_END_DT,
+                marketing: {
+                    agree: marketingInfo.AGREE_YN === 'Y',
+                    sms: marketingInfo.MKT_SMS_YN === 'Y',
+                    push: marketingInfo.MKT_PUSH_YN === 'Y',
+                    email: marketingInfo.MKT_EMAIL_YN === 'Y',
+                    tel: marketingInfo.MKT_TEL_YN === 'Y'
+                },
+                termsConsent: termsConsent
             }
         });
     } catch (error) {
@@ -251,13 +486,19 @@ router.get('/profile', authenticateToken, async (req, res) => {
 
 // 2. 프로필 정보 업데이트
 router.post('/profile/update', authenticateToken, async (req, res) => {
-    const { name, phone, email, firebaseToken } = req.body;
+    const { name, phone, email, firebaseToken, marketing } = req.body;
+    const connection = await pool.getConnection();
     try {
+        await connection.beginTransaction();
         const userId = req.user.userId;
 
         // 0. CUST_ID 조회
-        const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
-        const custId = uRows.length > 0 ? uRows[0].CUST_ID : userId;
+        const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        if (uRows.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ status: 404, message: '사용자를 찾을 수 없습니다.' });
+        }
+        const custId = uRows[0].CUST_ID;
 
         const updates = [];
         const params = [];
@@ -268,11 +509,12 @@ router.post('/profile/update', authenticateToken, async (req, res) => {
         }
         if (phone) {
             // 0-1. 휴대폰 번호 변경 시 Firebase Token 검증
-            const [currentRows] = await pool.execute('SELECT HP_NO FROM TB_USER WHERE USER_ID = ?', [userId]);
+            const [currentRows] = await connection.execute('SELECT HP_NO FROM TB_USER WHERE USER_ID = ?', [userId]);
             const currentPhone = currentRows.length > 0 ? currentRows[0].HP_NO : '';
 
             if (phone !== currentPhone) {
                 if (!firebaseToken) {
+                    await connection.rollback();
                     return res.status(400).json({ status: 400, message: '휴대폰 번호 변경 시 인증 토큰이 필요합니다.' });
                 }
 
@@ -283,10 +525,12 @@ router.post('/profile/update', authenticateToken, async (req, res) => {
                     const cleanRequestPhone = phone.replace(/[^0-9]/g, '');
 
                     if (!cleanFirebasePhone.endsWith(cleanRequestPhone)) {
+                        await connection.rollback();
                         return res.status(400).json({ status: 400, message: '인증된 휴대폰 번호와 입력된 번호가 일치하지 않습니다.' });
                     }
                 } catch (tokenError) {
                     console.error('Firebase Token Verification Error:', tokenError);
+                    await connection.rollback();
                     return res.status(401).json({ status: 401, message: '유효하지 않은 인증 토큰입니다.' });
                 }
             }
@@ -304,19 +548,61 @@ router.post('/profile/update', authenticateToken, async (req, res) => {
         params.push(custId);
         updates.push('MOD_DT = NOW()');
 
-        if (updates.length === 2) { // MOD_ID와 MOD_DT만 있는 경우
+        if (updates.length === 2 && !marketing) { // MOD_ID와 MOD_DT만 있고 마케팅 데이터도 없는 경우
+            await connection.rollback();
             return res.status(400).json({ status: 400, message: '업데이트할 항목이 없습니다.' });
         }
 
-        const sql = `UPDATE TB_USER SET ${updates.join(', ')} WHERE USER_ID = ?`;
-        params.push(userId);
+        if (updates.length > 2) {
+            const sql = `UPDATE TB_USER SET ${updates.join(', ')} WHERE USER_ID = ?`;
+            params.push(userId);
+            await connection.execute(sql, params);
+        }
 
-        await pool.execute(sql, params);
+        // 1. 마케팅 알림 동의 이력 저장 (TB_USER_TERMS_HIST)
+        if (marketing && typeof marketing === 'object') {
+            const mktSms = marketing.sms ? 'Y' : 'N';
+            const mktPush = marketing.push ? 'Y' : 'N';
+            const mktEmail = marketing.email ? 'Y' : 'N';
+            const mktTel = marketing.tel ? 'Y' : 'N';
+            // 알림설정 4개 매체 중 1개라도 'Y'가 있으면 AGREE_YN은 'Y', 모두 'N'이면 'N'
+            const agreeYn = (mktSms === 'Y' || mktPush === 'Y' || mktEmail === 'Y' || mktTel === 'Y') ? 'Y' : 'N';
 
+            // 다음 시퀀스 번호 조회
+            const [seqRows] = await connection.execute(`
+                SELECT IFNULL(MAX(TERMS_HIST_SEQ), 0) + 1 AS NEXT_SEQ 
+                FROM TB_USER_TERMS_HIST 
+                WHERE CUST_ID = ?
+            `, [custId]);
+            const nextSeq = seqRows[0].NEXT_SEQ;
+
+            const histQuery = `
+                INSERT INTO TB_USER_TERMS_HIST (
+                    CUST_ID, TERMS_HIST_SEQ, TERMS_TYPE, TERMS_VER, AGREE_YN, 
+                    MKT_SMS_YN, MKT_PUSH_YN, MKT_EMAIL_YN, MKT_TEL_YN,
+                    AGREE_DT
+                ) VALUES (?, ?, 'MARKETING', 'v1.0', ?, ?, ?, ?, ?, NOW())
+            `;
+
+            await connection.execute(histQuery, [
+                custId,
+                nextSeq,
+                agreeYn,
+                mktSms,
+                mktPush,
+                mktEmail,
+                mktTel
+            ]);
+        }
+
+        await connection.commit();
         res.status(200).json({ status: 200, message: '정보가 성공적으로 수정되었습니다.' });
     } catch (error) {
+        if (connection) await connection.rollback();
         console.error('App Customer profile update error:', error);
         res.status(500).json({ status: 500, error: '회원 정보를 수정하는 데 실패했습니다.' });
+    } finally {
+        if (connection) connection.release();
     }
 });
 
@@ -335,33 +621,25 @@ router.post('/profile/upload-image', authenticateToken, memoryUpload.single('pro
         }
         const custId = uRows[0].CUST_ID;
 
-        // GCS 업로드 설정
+        // 로컬 업로드 설정 (GCS 대체 - Cafe24 로컬 저장) (한글 주석)
         const ext = path.extname(file.originalname).replace('.', '') || 'png';
         const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20);
-        const gcsPath = `profiles/${fileId}.${ext}`;
-        const bucket = getBucket();
-        const gcsFile = bucket.file(gcsPath);
+        const dbSavePath = `profiles/${fileId}.${ext}`;
 
-        // GCS에 파일 저장
-        await gcsFile.save(file.buffer, {
-            metadata: { contentType: file.mimetype }
-        });
-
-        // 공개 접근 권한 설정
-        try {
-            await gcsFile.makePublic();
-        } catch (e) {
-            console.log('GCS makePublic failed:', e.message);
+        // 📂 로컬 uploads 디렉토리에 저장
+        const localPath = path.join(__dirname, '..', 'uploads', 'profiles', `${fileId}.${ext}`);
+        const localDir = path.dirname(localPath);
+        if (!fs.existsSync(localDir)) {
+            fs.mkdirSync(localDir, { recursive: true });
         }
+        fs.writeFileSync(localPath, file.buffer);
 
         // DB 저장 (사용자 요구사항에 따라 프로필 이미지는 상대 경로 'profiles/...'로 저장)
         // signatures 등 다른 카테고리는 전체 URL을 저장할 수 있으나, 프로필은 상대 경로 유지
-        const dbSavePath = gcsPath;
-
         await pool.execute(
             `INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_ID, MOD_ID) 
-             VALUES (?, 'USER_PROFILE', ?, ?, ?, ?, ?, ?, ?)`,
-            [fileId, bucketName, dbSavePath, file.originalname, ext, file.size, custId, custId]
+             VALUES (?, 'USER_PROFILE', 'uploads', ?, ?, ?, ?, ?, ?)`,
+            [fileId, dbSavePath, file.originalname, ext, file.size, custId, custId]
         );
 
         await pool.execute(
@@ -487,24 +765,25 @@ router.post('/auth/send-code', authenticateToken, async (req, res) => {
     }
 });
 
-// 6. 휴대폰 인증번호 확인 (DB 데이터 대조)
+// 6. 휴대폰 인증번호 확인 (DB 데이터 대조 - 5분 만료 및 재사용 방지 검증 포함)
 router.post('/auth/verify-code', authenticateToken, async (req, res) => {
     try {
         const { code, phone } = req.body;
-        const userId = req.user.userId;
 
         if (!code || !phone) {
             return res.status(400).json({ success: false, error: '인증번호와 휴대폰 번호가 모두 필요합니다.' });
         }
 
-        const purePhone = phone.replace(/-/g, '');
+        const purePhone = String(phone).replace(/[^0-9]/g, '');
+        const cleanCode = String(code).trim();
 
-        // 최근 5분 이내의 가장 최신 인증 로그 조회
+        // 한글 주석: 가장 최신 인증 로그 및 경과 시간(초), 상태 조회
         const [rows] = await pool.execute(
-            `SELECT MSG_CONTENT FROM TB_SMS_LOG 
+            `SELECT LOG_SEQ, MSG_CONTENT, SEND_STAT,
+                    TIMESTAMPDIFF(SECOND, REG_DT, NOW()) AS elapsedSec
+             FROM TB_SMS_LOG 
              WHERE RECEIVER_PHONE = ? AND SEND_CATEGORY = 'OTHER'
-             AND REG_DT >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
-             ORDER BY REG_DT DESC LIMIT 1`,
+             ORDER BY REG_DT DESC, LOG_SEQ DESC LIMIT 1`,
             [purePhone]
         );
 
@@ -512,10 +791,30 @@ router.post('/auth/verify-code', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: '만료되었거나 발송된 인증번호가 없습니다.' });
         }
 
-        const msgContent = rows[0].MSG_CONTENT;
-        const isMatch = msgContent.includes(`[${code}]`);
+        const latestLog = rows[0];
+
+        // 한글 주석: 이미 인증 완료된 번호(VERIFIED)는 재사용 차단
+        if (latestLog.SEND_STAT === 'VERIFIED') {
+            return res.status(400).json({ success: false, error: '이미 사용된 인증번호입니다. 다시 발송해 주세요.' });
+        }
+        if (latestLog.SEND_STAT !== 'SUCCESS') {
+            return res.status(400).json({ success: false, error: '유효하지 않은 인증번호입니다. 다시 발송해 주세요.' });
+        }
+
+        // 한글 주석: 5분(300초) 경과 시 만료 처리
+        if (latestLog.elapsedSec === null || Number(latestLog.elapsedSec) > 300) {
+            return res.status(400).json({ success: false, error: '만료되었거나 발송된 인증번호가 없습니다.' });
+        }
+
+        const msgContent = latestLog.MSG_CONTENT || '';
+        const isMatch = msgContent.includes(`[${cleanCode}]`);
 
         if (isMatch) {
+            // 한글 주석: 인증 성공 시 즉시 SEND_STAT을 'VERIFIED'로 변경하여 재사용 차단
+            await pool.execute(
+                'UPDATE TB_SMS_LOG SET SEND_STAT = ? WHERE LOG_SEQ = ?',
+                ['VERIFIED', latestLog.LOG_SEQ]
+            );
             res.json({ success: true, message: '인증되었습니다.' });
         } else {
             res.status(400).json({ success: false, error: '인증번호가 일치하지 않습니다.' });
@@ -538,21 +837,15 @@ router.get('/pending-requests', authenticateToken, async (req, res) => {
 
         let statusFilter = "";
         if (type === 'progress') {
-            statusFilter = `
-                r.DATA_STAT IN ('AUCTION', 'BUS_CHANGE') 
-                AND NOT EXISTS (SELECT 1 FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING')
-                AND NOT EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING')
-            `;
-        } else if (type === 'waiting') {
-            statusFilter = `
-                r.DATA_STAT = 'BIDDING' 
-                OR (r.DATA_STAT IN ('AUCTION', 'BUS_CHANGE') AND (
-                    EXISTS (SELECT 1 FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING')
-                    OR EXISTS (SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = r.REQ_ID AND DATA_STAT = 'BIDDING')
-                ))
-            `;
+            statusFilter = "r.DATA_STAT IN ('AUCTION', 'MATCHING', 'WAIT_DECISION', 'BUS_CHANGE')";
+        } else if (type === 'customer_pay' || type === 'waiting') {
+            statusFilter = "r.DATA_STAT = 'CUSTOMER_PAY_WAIT'";
+        } else if (type === 'driver_pay') {
+            statusFilter = "r.DATA_STAT = 'DRIVER_PAY_WAIT'";
+        } else if (type === 'final_approval') {
+            statusFilter = "r.DATA_STAT = 'FINAL_APPROVAL_WAIT'";
         } else {
-            statusFilter = "r.DATA_STAT IN ('AUCTION', 'BIDDING', 'BUS_CHANGE')";
+            statusFilter = "r.DATA_STAT IN ('AUCTION', 'MATCHING', 'WAIT_DECISION', 'BUS_CHANGE', 'CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT')";
         }
 
         const sql = `
@@ -562,10 +855,11 @@ router.get('/pending-requests', authenticateToken, async (req, res) => {
                 START_ADDR as startAddr, 
                 END_ADDR as endAddr, 
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' LIMIT 1) as roundAddr,
-                DATE_FORMAT(START_DT, '%Y-%m-%d') as startDt, 
+                DATE_FORMAT(START_DT, '%Y-%m-%d %H:%i') as startDt, 
+                DATE_FORMAT(END_DT, '%Y-%m-%d %H:%i') as endDt, 
                 DATA_STAT as reqStat
             FROM TB_AUCTION_REQ r
-            WHERE (TRIM(r.TRAVELER_ID) = ? OR TRIM(r.TRAVELER_ID) = ?) AND ${statusFilter}
+            WHERE (TRIM(r.TRAVELER_ID) = ? OR TRIM(r.TRAVELER_ID) = ?) AND (${statusFilter})
             ORDER BY REG_DT DESC
         `;
 
@@ -573,14 +867,16 @@ router.get('/pending-requests', authenticateToken, async (req, res) => {
 
         // 각 요청에 대한 차량(buses) 정보 추가
         for (let row of rows) {
+            // 차량 종류 코드(BUS_TYPE_CD)를 공통코드(TB_COMMON_CODE)의 한글명(CD_NM_KO)으로 매핑하여 조회
             const [busRows] = await pool.execute(`
                 SELECT 
-                    rb.BUS_TYPE_CD as busType,
+                    COALESCE(cc.CD_NM_KO, rb.BUS_TYPE_CD) as busType,
                     rb.RES_BUS_AMT as reqAmt,
                     rb.DATA_STAT as busStatus,
                     u.USER_NM as driverName,
                     db.VEHICLE_NO as busNo
                 FROM TB_AUCTION_REQ_BUS rb
+                LEFT JOIN TB_COMMON_CODE cc ON cc.GRP_CD = 'BUS_TYPE' AND cc.DTL_CD = rb.BUS_TYPE_CD
                 LEFT JOIN TB_BUS_RESERVATION res ON rb.REQ_ID = res.REQ_ID 
                     AND res.DATA_STAT = 'CONFIRM'
                 LEFT JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID
@@ -594,6 +890,131 @@ router.get('/pending-requests', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error('[Pending Requests] Error:', error);
         res.status(500).json({ success: false, error: '견적 목록을 불러오는 중 오류가 발생했습니다.' });
+    }
+});
+
+// 7-1. 고객 최종 승인 처리 API
+router.post('/final-approve', authenticateToken, async (req, res) => {
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+        const userId = req.user.userId;
+        const { reqId, resId } = req.body;
+
+        if (!reqId && !resId) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, error: '요청 ID 또는 예약 ID가 필요합니다.' });
+        }
+
+        console.log(`[Customer Final Approve] UserID: ${userId}, reqId: ${reqId}, resId: ${resId}`);
+
+        // 1. TB_BUS_RESERVATION 업데이트 (CUSTOMER_FINAL_APPROVAL_YN = 'Y', DATA_STAT = 'CONFIRM')
+        if (resId) {
+            await connection.execute(`
+                UPDATE TB_BUS_RESERVATION 
+                SET CUSTOMER_FINAL_APPROVAL_YN = 'Y',
+                    CUSTOMER_FINAL_APPROVAL_DT = NOW(),
+                    DATA_STAT = 'CONFIRM',
+                    CONFIRM_DT = NOW(),
+                    MOD_ID = ?,
+                    MOD_DT = NOW()
+                WHERE RES_ID = ?
+            `, [userId, resId]);
+
+            // 2. TB_AUCTION_REQ_BUS 및 TB_AUCTION_REQ 상태 동시 업데이트를 위해 REQ_ID, REQ_BUS_SEQ 조회 후 업데이트
+            const [bRows] = await connection.execute('SELECT REQ_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [resId]);
+            if (bRows.length > 0) {
+                const { REQ_ID: rId, REQ_BUS_SEQ: uSeq } = bRows[0];
+                await connection.execute(`
+                    UPDATE TB_AUCTION_REQ_BUS 
+                    SET DATA_STAT = 'CONFIRM',
+                        MOD_ID = ?,
+                        MOD_DT = NOW()
+                    WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?
+                `, [userId, rId, uSeq]);
+
+                await connection.execute(`
+                    UPDATE TB_AUCTION_REQ 
+                    SET DATA_STAT = 'CONFIRM',
+                        MOD_ID = ?,
+                        MOD_DT = NOW()
+                    WHERE REQ_ID = ?
+                `, [userId, rId]);
+            }
+        } else if (reqId) {
+            await connection.execute(`
+                UPDATE TB_BUS_RESERVATION 
+                SET CUSTOMER_FINAL_APPROVAL_YN = 'Y',
+                    CUSTOMER_FINAL_APPROVAL_DT = NOW(),
+                    DATA_STAT = 'CONFIRM',
+                    CONFIRM_DT = NOW(),
+                    MOD_ID = ?,
+                    MOD_DT = NOW()
+                WHERE REQ_ID = ? AND DATA_STAT = 'FINAL_APPROVAL_WAIT'
+            `, [userId, reqId]);
+
+            // 2. TB_AUCTION_REQ_BUS 상태도 CONFIRM으로 업데이트
+            await connection.execute(`
+                UPDATE TB_AUCTION_REQ_BUS 
+                SET DATA_STAT = 'CONFIRM',
+                    MOD_ID = ?,
+                    MOD_DT = NOW()
+                WHERE REQ_ID = ? AND DATA_STAT = 'FINAL_APPROVAL_WAIT'
+            `, [userId, reqId]);
+
+            // 3. TB_AUCTION_REQ 상태도 CONFIRM으로 업데이트
+            await connection.execute(`
+                UPDATE TB_AUCTION_REQ 
+                SET DATA_STAT = 'CONFIRM',
+                    MOD_ID = ?,
+                    MOD_DT = NOW()
+                WHERE REQ_ID = ?
+            `, [userId, reqId]);
+        }
+
+        await connection.commit();
+
+        // 🔔 최종 승인 완료 후 기사에게 알림 전송 (비동기 백그라운드 처리)
+        (async () => {
+            try {
+                const targetReqId = reqId || (resId ? (await pool.execute('SELECT REQ_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [resId]))[0][0]?.REQ_ID : null);
+                if (!targetReqId) return;
+
+                // 1. 여정 제목 및 관련 기사 정보 조회 (CONFIRM 된 예약에 매칭된 기사)
+                const [infoRows] = await pool.execute(`
+                    SELECT r.RES_ID, r.DRIVER_ID, req.TRIP_TITLE 
+                    FROM TB_BUS_RESERVATION r
+                    JOIN TB_AUCTION_REQ req ON r.REQ_ID = req.REQ_ID
+                    WHERE r.REQ_ID = ? AND r.DATA_STAT = 'CONFIRM'
+                `, [targetReqId]);
+
+                if (infoRows.length > 0) {
+                    const { TRIP_TITLE: tripTitle } = infoRows[0];
+                    const { sendNotification } = require('../services/notificationService');
+
+                    for (const info of infoRows) {
+                        console.log(`>>> [Push Notification] Sending final approval push to driver ${info.DRIVER_ID} for reqId: ${targetReqId}`);
+                        await sendNotification(pool, {
+                            custId: info.DRIVER_ID,
+                            title: `[예약 확정] 최종 승인이 완료되었습니다!`,
+                            body: `"${tripTitle}" 청약 건의 고객 최종 승인이 완료되어 예약이 확정되었습니다. 운행 상세 일정을 확인해 주세요.`,
+                            link: `/upcoming-trip-detail-driver/${info.RES_ID}?reqId=${targetReqId}&resId=${info.RES_ID}`,
+                            type: 'SYSTEM'
+                        });
+                    }
+                }
+            } catch (pushErr) {
+                console.error('>>> [Push Notification Error] Failed to send final approval push to driver:', pushErr);
+            }
+        })();
+
+        res.json({ success: true, message: '최종 승인이 성공적으로 완료되었습니다. 예약 확정 메뉴에서 확인하실 수 있습니다.' });
+    } catch (err) {
+        await connection.rollback();
+        console.error('[Customer Final Approve Error]', err);
+        res.status(500).json({ success: false, error: '최종 승인 처리 중 오류가 발생했습니다.' });
+    } finally {
+        connection.release();
     }
 });
 
@@ -691,11 +1112,11 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
         }
         tripInfo.fullRoute = fullRoute;
 
-        // 2. 차량별 입찰 정보 조회
+        // 2. 차량별 입찰 정보 조회 (차량 종류 코드를 한글 명칭으로 매핑하여 조회)
         const [bidRows] = await pool.execute(`
             SELECT 
                 rb.REQ_BUS_SEQ as unitSeq,
-                rb.BUS_TYPE_CD as busType,
+                COALESCE(cc.CD_NM_KO, rb.BUS_TYPE_CD) as busType,
                 rb.DATA_STAT as unitStat,
                 rb.RES_BUS_AMT as unitReqAmt,
                 rb.RES_FEE_TOTAL_AMT as unitResFee,
@@ -713,12 +1134,15 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
                 DATE_FORMAT(db.INSURANCE_EXP_DT, '%Y-%m-%d') as insuranceExpDt,
                 DATE_FORMAT(db.LAST_INSPECT_DT, '%Y-%m-%d') as lastInspectDt,
                 db.VEHICLE_PHOTOS_JSON as busPhotos,
-                f.GCS_PATH as driverImageRaw
+                f.GCS_PATH as driverImageRaw,
+                COALESCE(res.FEE_POLICY, dd.FEE_POLICY, 'DRIVER') as feePolicy
             FROM TB_AUCTION_REQ_BUS rb
-            LEFT JOIN TB_BUS_RESERVATION res ON rb.REQ_ID = res.REQ_ID AND rb.REQ_BUS_SEQ = res.REQ_BUS_SEQ AND res.DATA_STAT IN ('AUCTION','BIDDING','CONFIRM','DONE')
+            LEFT JOIN TB_COMMON_CODE cc ON cc.GRP_CD = 'BUS_TYPE' AND cc.DTL_CD = rb.BUS_TYPE_CD
+            LEFT JOIN TB_BUS_RESERVATION res ON rb.REQ_ID = res.REQ_ID AND rb.REQ_BUS_SEQ = res.REQ_BUS_SEQ AND res.DATA_STAT IN ('AUCTION','CUSTOMER_PAY_WAIT','DRIVER_PAY_WAIT','FINAL_APPROVAL_WAIT','CONFIRM','DONE')
             LEFT JOIN TB_USER u ON res.DRIVER_ID = u.CUST_ID
             LEFT JOIN TB_FILE_MASTER f ON u.PROFILE_FILE_ID = f.FILE_ID
             LEFT JOIN TB_BUS_DRIVER_VEHICLE db ON res.BUS_ID = db.BUS_ID
+            LEFT JOIN TB_DRIVER_DETAIL dd ON res.DRIVER_ID = dd.CUST_ID
             WHERE rb.REQ_ID = ?
             ORDER BY rb.REQ_BUS_SEQ ASC, res.DRIVER_BIDDING_PRICE ASC
         `, [reqId]);
@@ -760,12 +1184,16 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
 
         bidRows.forEach(row => {
             if (!unitMap[row.unitSeq]) {
+                // 차량 수량당 고정 이용대금 33,000원 적용 (한글 주석)
+                const FIXED_FEE_PER_UNIT = 33000;
+                let dynamicResFee = FIXED_FEE_PER_UNIT;
+
                 unitMap[row.unitSeq] = {
                     unitSeq: row.unitSeq,
                     busType: row.busType,
                     unitStat: row.unitStat,
                     unitReqAmt: row.unitReqAmt,
-                    unitResFee: row.unitResFee || 0,
+                    unitResFee: dynamicResFee,
                     estimates: []
                 };
                 units.push(unitMap[row.unitSeq]);
@@ -812,6 +1240,8 @@ router.get('/estimate-list/:reqId', authenticateToken, async (req, res) => {
                     driverName: row.driverName,
                     rating: row.rating || '0.0',
                     busInfo: `${row.busYear || ''}년형 ${row.busModel || ''} (${row.busNo || ''})`,
+                    busYear: row.busYear,
+                    busModel: row.busModel,
                     experience: row.joinDt ? Math.max(1, new Date().getFullYear() - new Date(row.joinDt).getFullYear()) : 1,
                     price: row.price,
                     tags: tags,
@@ -870,6 +1300,17 @@ router.post('/request-bus-change', authenticateToken, async (req, res) => {
 
         await connection.beginTransaction();
 
+        // [알림용 데이터 조회] 차량 변경 전 해당 차량에 입찰 중인 기사 목록 및 여정 제목 조회
+        const [drivers] = await connection.execute(`
+            SELECT DISTINCT DRIVER_ID 
+            FROM TB_BUS_RESERVATION 
+            WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'CONFIRM')
+        `, [reqId, busSeq]);
+
+        const [reqInfo] = await connection.execute(`
+            SELECT TRIP_TITLE FROM TB_AUCTION_REQ WHERE REQ_ID = ?
+        `, [reqId]);
+
         // 1. 해당 차량 유닛 상태 변경
         const [busUpdate] = await connection.execute(`
             UPDATE TB_AUCTION_REQ_BUS 
@@ -900,6 +1341,24 @@ router.post('/request-bus-change', authenticateToken, async (req, res) => {
 
         await connection.commit();
         res.json({ success: true, message: '차량 변경요청이 성공적으로 처리되었습니다.' });
+
+        // [알림 발송] 트랜잭션 커밋 완료 후 비동기로 기사에게 푸시 메시지 발송
+        if (drivers.length > 0 && reqInfo.length > 0) {
+            const tripTitle = reqInfo[0].TRIP_TITLE;
+            const title = '[차량 변경 요청] 차량 변경이 요청되었습니다.';
+            const body = `여정: ${tripTitle}\n차량 변경 요청 확인 바랍니다.`;
+            const link = `/driver-dashboard`;
+
+            drivers.forEach(driver => {
+                sendNotification(pool, {
+                    custId: driver.DRIVER_ID,
+                    title,
+                    body,
+                    link,
+                    type: 'SYSTEM'
+                }).catch(err => console.error(`[Notification] 차량 변경 알림 발송 실패 (기사 ID: ${driver.DRIVER_ID}):`, err));
+            });
+        }
 
     } catch (error) {
         if (connection) await connection.rollback();
@@ -940,6 +1399,17 @@ router.all('/cancel-bus', authenticateToken, async (req, res) => {
 
         await connection.beginTransaction();
 
+        // [알림용 데이터 조회] 취소 전 해당 차량에 입찰 중인 기사 목록 및 여정 제목 조회
+        const [drivers] = await connection.execute(`
+            SELECT DISTINCT DRIVER_ID 
+            FROM TB_BUS_RESERVATION 
+            WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT NOT IN ('CONFIRM', 'DONE', 'BUS_CANCEL', 'TRAVELER_CANCEL')
+        `, [reqId, unitSeq]);
+
+        const [reqInfo] = await connection.execute(`
+            SELECT TRIP_TITLE FROM TB_AUCTION_REQ WHERE REQ_ID = ?
+        `, [reqId]);
+
         // 1. 본인의 요청인지 확인 및 현재 취소/변경 횟수 확인
         const [reqRows] = await connection.execute(`
             SELECT BUS_CHANG_CNT, TRAVELER_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ?
@@ -974,7 +1444,47 @@ router.all('/cancel-bus', authenticateToken, async (req, res) => {
             throw new Error('해당 차량 정보를 찾을 수 없거나 업데이트에 실패했습니다.');
         }
 
-        // 2-1. 관련 예약(입찰) 정보도 취소 (CONFIRM, DONE 제외)
+        // 2-1. 관련 예약(입찰) 건 조회 및 기사 카드 결제 취소 연동
+        const [drvResRows] = await connection.execute(`
+            SELECT RES_ID, DRIVER_ID, DRIVER_PAY_STAT, DRIVER_PAY_ID, DRIVER_PAY_AMT
+            FROM TB_BUS_RESERVATION
+            WHERE REQ_ID = ? AND REQ_BUS_SEQ = ? AND DATA_STAT NOT IN ('CONFIRM', 'DONE')
+        `, [reqId, unitSeq]);
+
+        for (const drvRes of drvResRows) {
+            if (drvRes.DRIVER_PAY_STAT === 'Y' && drvRes.DRIVER_PAY_ID) {
+                try {
+                    const refundRes = await cancelInicisPayment({
+                        tid: drvRes.DRIVER_PAY_ID,
+                        msg: '고객 버스 대수 감축(개별 취소)으로 인한 기사 이용료 환불',
+                        clientIp: '127.0.0.1'
+                    });
+                    console.log(`>>> [Cancel Bus - Driver Refund Success] RES_ID: ${drvRes.RES_ID}, TID: ${drvRes.DRIVER_PAY_ID}`, refundRes);
+                } catch (rErr) {
+                    console.error(`>>> [Cancel Bus - Driver Refund Error] RES_ID: ${drvRes.RES_ID}, TID: ${drvRes.DRIVER_PAY_ID}:`, rErr.message || rErr);
+                }
+
+                // 기사 결제 상태 취소('C')로 변경 및 취소 이력 추가
+                await connection.execute(`
+                    UPDATE TB_BUS_RESERVATION 
+                    SET DRIVER_PAY_STAT = 'C', MOD_ID = ?, MOD_DT = NOW()
+                    WHERE RES_ID = ?
+                `, [custId, drvRes.RES_ID]);
+
+                const cancelHistId = ('CN' + Date.now() + Math.floor(Math.random() * 1000).toString().padStart(3, '0')).slice(0, 20);
+                await connection.execute(`
+                    INSERT INTO TB_PAYMENT_CANCEL_HISTORY (
+                        CANCEL_ID, BAT_ID, CANCEL_AMOUNT, CANCEL_REASON, CANCEL_STATUS, 
+                        PG_TID, REG_ID, REG_DT, MOD_ID, MOD_DT
+                    ) VALUES (
+                        ?, ?, ?, '고객 버스 대수 감축으로 인한 기사 이용료 환불', 'SUCCESS',
+                        ?, ?, NOW(), ?, NOW()
+                    )
+                `, [cancelHistId, drvRes.DRIVER_PAY_ID, drvRes.DRIVER_PAY_AMT || 0, drvRes.DRIVER_PAY_ID, drvRes.DRIVER_ID || custId, custId]);
+            }
+        }
+
+        // 2-2. 관련 예약(입찰) 정보도 취소 (CONFIRM, DONE 제외)
         await connection.execute(`
             UPDATE TB_BUS_RESERVATION 
             SET DATA_STAT = 'BUS_CANCEL', 
@@ -1014,6 +1524,24 @@ router.all('/cancel-bus', authenticateToken, async (req, res) => {
 
         await connection.commit();
         res.json({ success: true, message: '버스 취소가 완료되었습니다.' });
+
+        // [알림 발송] 트랜잭션 커밋 완료 후 비동기로 기사에게 푸시 메시지 발송
+        if (drivers.length > 0 && reqInfo.length > 0) {
+            const tripTitle = reqInfo[0].TRIP_TITLE;
+            const title = '[청약 취소] 고객님이 차량 청약을 취소했습니다.';
+            const body = `여정: ${tripTitle}\n요청하신 차량 청약이 취소되었습니다.`;
+            const link = `/estimate-detail-driver/${reqId}`;
+
+            drivers.forEach(driver => {
+                sendNotification(pool, {
+                    custId: driver.DRIVER_ID,
+                    title,
+                    body,
+                    link,
+                    type: 'SYSTEM'
+                }).catch(err => console.error(`[Notification] 개별 차량 취소 알림 발송 실패 (기사 ID: ${driver.DRIVER_ID}):`, err));
+            });
+        }
     } catch (error) {
         if (connection) await connection.rollback();
         console.error('[CANCEL-BUS] Error:', error);
@@ -1027,15 +1555,18 @@ router.all('/cancel-bus', authenticateToken, async (req, res) => {
 router.post('/approve-bid', authenticateToken, async (req, res) => {
     const { resId } = req.body;
     try {
-        // 1. 해당 예약 정보 조회
-        const [bidRows] = await pool.execute('SELECT REQ_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [resId]);
+        // 1. 해당 예약 정보 조회 (알림 발송을 위해 DRIVER_ID도 함께 조회)
+        const [bidRows] = await pool.execute('SELECT REQ_ID, REQ_BUS_SEQ, DRIVER_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [resId]);
         if (bidRows.length === 0) return res.status(404).json({ success: false, error: '입찰 정보를 찾을 수 없습니다.' });
 
-        const { REQ_ID: reqId, REQ_BUS_SEQ: unitSeq } = bidRows[0];
+        const { REQ_ID: reqId, REQ_BUS_SEQ: unitSeq, DRIVER_ID: driverId } = bidRows[0];
+
+        // 기사 등급(FEE_POLICY) 판별
+        const feePolicy = await determineFeePolicy(pool, driverId);
 
         // 2. 해당 차량의 모든 입찰을 일단 대기 상태로 (혹은 다른 로직)
         // 3. 선택된 입찰만 CONFIRM
-        await pool.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = "CONFIRM", CONFIRM_DT = NOW() WHERE RES_ID = ?', [resId]);
+        await pool.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = "CONFIRM", CONFIRM_DT = NOW(), FEE_POLICY = ? WHERE RES_ID = ?', [feePolicy, resId]);
 
         // 4. 차량 상태도 CONFIRM으로 변경
         await pool.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = "CONFIRM" WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?', [reqId, unitSeq]);
@@ -1051,6 +1582,27 @@ router.post('/approve-bid', authenticateToken, async (req, res) => {
         }
 
         res.json({ success: true });
+
+        // [알림 발송] 비동기로 기사에게 푸시 메시지 발송
+        try {
+            const [reqInfo] = await pool.execute('SELECT TRIP_TITLE FROM TB_AUCTION_REQ WHERE REQ_ID = ?', [reqId]);
+            if (reqInfo.length > 0) {
+                const tripTitle = reqInfo[0].TRIP_TITLE;
+                const title = '[견적 승인] 고객님이 제출하신 견적을 승인했습니다.';
+                const body = `여정: ${tripTitle}\n고객님이 견적을 승인하여 선택하셨습니다. 결제를 대기 중입니다.`;
+                const link = `/estimate-detail-driver/${reqId}`;
+
+                sendNotification(pool, {
+                    custId: driverId,
+                    title,
+                    body,
+                    link,
+                    type: 'SYSTEM'
+                }).catch(err => console.error(`[Notification] 단건 견적 승인 알림 발송 실패 (기사 ID: ${driverId}):`, err));
+            }
+        } catch (notifErr) {
+            console.error('[Notification] 단건 견적 승인 정보 조회 실패:', notifErr);
+        }
     } catch (error) {
         console.error('Approve bid error:', error);
         res.status(500).json({ success: false, error: '승인 처리 중 오류가 발생했습니다.' });
@@ -1061,18 +1613,24 @@ router.post('/approve-bid', authenticateToken, async (req, res) => {
 router.post('/approve-all', authenticateToken, async (req, res) => {
     const { reqId } = req.body;
     try {
-        // 현재 BIDDING 상태인 모든 차량에 대해, 각 차량별로 첫 번째 입찰을 승인하는 예시 로직
+        // 현재 CUSTOMER_PAY_WAIT 상태인 모든 차량에 대해, 각 차량별로 첫 번째 입찰을 승인하는 예시 로직
         // (실제로는 사용자가 선택한 견적들이 있어야 하지만, 요청에 따라 전체 승인 처리)
 
         const [bids] = await pool.execute(`
-            SELECT RES_ID, REQ_BUS_SEQ 
+            SELECT ANY_VALUE(RES_ID) as RES_ID, REQ_BUS_SEQ, ANY_VALUE(DRIVER_ID) as DRIVER_ID 
             FROM TB_BUS_RESERVATION 
-            WHERE REQ_ID = ? AND DATA_STAT = 'BIDDING'
+            WHERE REQ_ID = ? AND DATA_STAT = 'CUSTOMER_PAY_WAIT'
             GROUP BY REQ_BUS_SEQ
         `, [reqId]);
 
         for (const bid of bids) {
-            await pool.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = "CONFIRM", CONFIRM_DT = NOW() WHERE RES_ID = ?', [bid.RES_ID]);
+            // 기사 등급(FEE_POLICY) 판별
+            const feePolicy = await determineFeePolicy(pool, bid.DRIVER_ID);
+
+            await pool.execute(
+                'UPDATE TB_BUS_RESERVATION SET DATA_STAT = "CONFIRM", CONFIRM_DT = NOW(), FEE_POLICY = ? WHERE RES_ID = ?', 
+                [feePolicy, bid.RES_ID]
+            );
             await pool.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = "CONFIRM" WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?', [reqId, bid.REQ_BUS_SEQ]);
         }
 
@@ -1080,6 +1638,31 @@ router.post('/approve-all', authenticateToken, async (req, res) => {
         await pool.execute('UPDATE TB_AUCTION_REQ SET DATA_STAT = "CONFIRM" WHERE REQ_ID = ?', [reqId]);
 
         res.json({ success: true });
+
+        // [알림 발송] 비동기로 해당 경매에서 확정된 모든 기사들에게 푸시 메시지 발송
+        try {
+            const [reqInfo] = await pool.execute('SELECT TRIP_TITLE FROM TB_AUCTION_REQ WHERE REQ_ID = ?', [reqId]);
+            const [confirmedDrivers] = await pool.execute('SELECT DISTINCT DRIVER_ID FROM TB_BUS_RESERVATION WHERE REQ_ID = ? AND DATA_STAT = "CONFIRM"', [reqId]);
+            
+            if (reqInfo.length > 0 && confirmedDrivers.length > 0) {
+                const tripTitle = reqInfo[0].TRIP_TITLE;
+                const title = '[견적 승인] 고객님이 제출하신 견적을 승인했습니다.';
+                const body = `여정: ${tripTitle}\n고객님이 견적을 승인하여 선택하셨습니다. 결제를 대기 중입니다.`;
+                const link = `/estimate-detail-driver/${reqId}`;
+
+                confirmedDrivers.forEach(driver => {
+                    sendNotification(pool, {
+                        custId: driver.DRIVER_ID,
+                        title,
+                        body,
+                        link,
+                        type: 'SYSTEM'
+                    }).catch(err => console.error(`[Notification] 전체 견적 승인 알림 발송 실패 (기사 ID: ${driver.DRIVER_ID}):`, err));
+                });
+            }
+        } catch (notifErr) {
+            console.error('[Notification] 전체 견적 승인 정보 조회 실패:', notifErr);
+        }
     } catch (error) {
         console.error('Approve all error:', error);
         res.status(500).json({ success: false, error: '전체 승인 처리 중 오류가 발생했습니다.' });
@@ -1221,7 +1804,9 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
                 TRAVELER_ID as ownerId,
                 CASE 
                     WHEN DATA_STAT = 'AUCTION' THEN '견적대기중..'
-                    WHEN DATA_STAT = 'BIDDING' THEN '승인대기중...'
+                    WHEN DATA_STAT = 'CUSTOMER_PAY_WAIT' THEN '고객 결제 대기'
+                    WHEN DATA_STAT = 'DRIVER_PAY_WAIT' THEN '기사 결제 대기'
+                    WHEN DATA_STAT = 'FINAL_APPROVAL_WAIT' THEN '최종 승인 대기'
                     WHEN DATA_STAT = 'CONFIRM' THEN '예약 확정...'
                     WHEN DATA_STAT = 'DONE' THEN '운행 종료...'
                     WHEN DATA_STAT = 'TRAVELER_CANCEL' THEN '전체 취소'
@@ -1319,7 +1904,7 @@ router.get('/reservation/:id', authenticateToken, async (req, res) => {
                 rb.DATA_STAT as status,
                 rb.RES_BUS_AMT as price,
                 (SELECT COUNT(*) FROM TB_BUS_RESERVATION b 
-                 WHERE b.REQ_ID = rb.REQ_ID AND b.REQ_BUS_SEQ = rb.REQ_BUS_SEQ AND b.DATA_STAT = 'BIDDING') as bidCount,
+                 WHERE b.REQ_ID = rb.REQ_ID AND b.REQ_BUS_SEQ = rb.REQ_BUS_SEQ AND b.DATA_STAT = 'CUSTOMER_PAY_WAIT') as bidCount,
                 res.DRIVER_ID as driverId,
                 u_driver.USER_NM as driverName,
                 u_driver.HP_NO as driverHp,
@@ -1461,7 +2046,7 @@ router.post('/reservation/complete', authenticateToken, async (req, res) => {
         }
 
         const [reqCheck] = await pool.execute(
-            'SELECT REQ_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ? AND TRAVELER_ID = ?',
+            'SELECT REQ_ID, DATA_STAT FROM TB_AUCTION_REQ WHERE REQ_ID = ? AND TRAVELER_ID = ?',
             [reqId, custId]
         );
 
@@ -1469,7 +2054,48 @@ router.post('/reservation/complete', authenticateToken, async (req, res) => {
             return res.status(403).json({ success: false, error: '완료 처리 권한이 없습니다.' });
         }
 
+        // 취소되었거나 이미 완료된 여정은 완료 처리 제한 (한글 주석)
+        if (reqCheck[0].DATA_STAT === 'CANCEL' || reqCheck[0].DATA_STAT === 'TRAVELER_CANCEL' || reqCheck[0].DATA_STAT === 'DRIVER_CANCEL') {
+            return res.status(400).json({ success: false, error: '취소된 여정은 완료 처리할 수 없습니다.' });
+        }
+        if (reqCheck[0].DATA_STAT === 'DONE') {
+            return res.status(400).json({ success: false, error: '이미 완료 처리된 여정입니다.' });
+        }
+
+        // [알림용 데이터 조회] 완료 처리 전 예약 확정 상태인 기사 목록 및 여정 제목 조회
+        const [drivers] = await pool.execute(`
+            SELECT DISTINCT DRIVER_ID 
+            FROM TB_BUS_RESERVATION 
+            WHERE REQ_ID = ? AND DATA_STAT = 'CONFIRM'
+        `, [reqId]);
+
+        // 확정(CONFIRM)된 예약이 하나도 없는 경우 완료 처리 차단 (한글 주석)
+        if (drivers.length === 0) {
+            return res.status(400).json({ success: false, error: '확정된 예약이 없거나 취소된 예약이므로 여정을 완료 처리할 수 없습니다.' });
+        }
+
+        const [reqInfo] = await pool.execute(`
+            SELECT TRIP_TITLE FROM TB_AUCTION_REQ WHERE REQ_ID = ?
+        `, [reqId]);
+
         await connection.beginTransaction();
+
+        // 💰 위약금/정산 관리 테이블에 완료 정보 적재 (예약 상태 변경 전에 수행, 한글 주석)
+        const [confirmedResRows] = await connection.execute(
+            `SELECT R.RES_ID, R.DRIVER_ID, D.FEE_POLICY 
+             FROM TB_BUS_RESERVATION R
+             LEFT JOIN TB_DRIVER_DETAIL D ON R.DRIVER_ID = D.CUST_ID
+             WHERE R.REQ_ID = ? AND R.DATA_STAT = 'CONFIRM'`,
+            [reqId]
+        );
+        for (const resRow of confirmedResRows) {
+            await connection.execute(
+                `INSERT INTO TB_BUS_PENALTY_DEPOSIT (YYYYMMDD, RES_ID, DATA_STAT, PENALTY_DEPOSIT_YN, FEE_POLICY, REG_ID, MOD_ID)
+                 VALUES (DATE_FORMAT(NOW(), '%Y%m%d'), ?, 'DONE', 'N', ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE DATA_STAT = 'DONE', FEE_POLICY = ?, MOD_DT = NOW(), MOD_ID = ?`,
+                [resRow.RES_ID, resRow.FEE_POLICY, custId, custId, resRow.FEE_POLICY, custId]
+            );
+        }
 
         // 2. 상태 변경 (TB_AUCTION_REQ -> DONE)
         await connection.execute(
@@ -1480,12 +2106,30 @@ router.post('/reservation/complete', authenticateToken, async (req, res) => {
         // 3. 관련 예약 상태 변경 (TB_BUS_RESERVATION -> DONE)
         // CONFIRM 상태인 것만 DONE으로 변경
         await connection.execute(
-            'UPDATE TB_BUS_RESERVATION SET DATA_STAT = "DONE" WHERE REQ_ID = ? AND DATA_STAT = "CONFIRM"',
+            'UPDATE TB_BUS_RESERVATION SET DATA_STAT = "DONE", DONE_DT = NOW(), MOD_DT = NOW() WHERE REQ_ID = ? AND DATA_STAT = "CONFIRM"',
             [reqId]
         );
 
         await connection.commit();
         res.json({ success: true, message: '여행이 완료되었습니다.' });
+
+        // [알림 발송] 트랜잭션 커밋 완료 후 비동기로 기사에게 푸시 메시지 발송
+        if (drivers.length > 0 && reqInfo.length > 0) {
+            const tripTitle = reqInfo[0].TRIP_TITLE;
+            const title = '[여행 완료] 여행이 정상적으로 완료되었습니다.';
+            const body = `여정: ${tripTitle}\n고객님이 여행 완료 처리를 완료했습니다. 수고하셨습니다!`;
+            const link = `/estimate-detail-driver/${reqId}`;
+
+            drivers.forEach(driver => {
+                sendNotification(pool, {
+                    custId: driver.DRIVER_ID,
+                    title,
+                    body,
+                    link,
+                    type: 'SYSTEM'
+                }).catch(err => console.error(`[Notification] 여행 완료 알림 발송 실패 (기사 ID: ${driver.DRIVER_ID}):`, err));
+            });
+        }
 
     } catch (error) {
         if (connection) await connection.rollback();
@@ -1519,7 +2163,7 @@ router.get('/received-bids', authenticateToken, async (req, res) => {
             FROM TB_BUS_RESERVATION b
             JOIN TB_USER u ON b.DRIVER_ID COLLATE utf8mb4_unicode_ci = u.CUST_ID COLLATE utf8mb4_unicode_ci
             JOIN TB_BUS_DRIVER_VEHICLE db ON b.BUS_ID COLLATE utf8mb4_unicode_ci = db.BUS_ID COLLATE utf8mb4_unicode_ci
-            WHERE b.REQ_ID COLLATE utf8mb4_unicode_ci = ? AND b.DATA_STAT IN ('BIDDING', 'CONFIRM')
+            WHERE b.REQ_ID COLLATE utf8mb4_unicode_ci = ? AND b.DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'CONFIRM')
         `;
         const params = [reqId];
 
@@ -1714,7 +2358,24 @@ router.post('/auction-req', authenticateToken, async (req, res) => {
 
         if (!startAddr || !endAddr || !startDt || !endDt) {
             console.warn('[Auction Request] Validation Failed: Missing required fields');
+            await connection.rollback();
             return res.status(400).json({ success: false, error: '필수 정보(출발지, 도착지, 날짜)가 누락되었습니다.' });
+        }
+
+        // 차량 미선택 검증 (한글 주석)
+        const safeBusesCheck = Array.isArray(buses) ? buses : [];
+        if (safeBusesCheck.length === 0) {
+            console.warn('[Auction Request] Validation Failed: No buses selected');
+            await connection.rollback();
+            return res.status(400).json({ success: false, error: '차량을 최소 1대 이상 선택해야 합니다.' });
+        }
+
+        // 차량 1대당 최소 금액 (300,000원) 검증 (한글 주석)
+        const hasUnderMinAmt = safeBusesCheck.some(b => (parseInt(b.reqAmt, 10) || 0) < 300000);
+        if (hasUnderMinAmt) {
+            console.warn('[Auction Request] Validation Failed: Bus amount under 300,000 KRW');
+            await connection.rollback();
+            return res.status(400).json({ success: false, error: '차량 1대당 최소 요청 금액은 300,000원 이상이어야 합니다.' });
         }
 
         // 0. CUST_ID 및 이용 제한 조회
@@ -1723,7 +2384,24 @@ router.post('/auction-req', authenticateToken, async (req, res) => {
             await connection.rollback();
             return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
         }
+
         const custId = uRows[0].CUST_ID;
+
+        // 고객 취소 규정에 따른 신규 청약 제한 검사 (TB_USER_CANCEL_MANAGE)
+        const [restrictRows] = await connection.execute(
+            `SELECT TRADE_RESTRICT_YN, TRADE_RESTRICT_END_DT 
+             FROM TB_USER_CANCEL_MANAGE 
+             WHERE CUST_ID = ? AND TRADE_RESTRICT_YN = 'Y' AND TRADE_RESTRICT_END_DT > NOW()`,
+            [custId]
+        );
+        if (restrictRows.length > 0) {
+            await connection.rollback();
+            const endDtStr = restrictRows[0].TRADE_RESTRICT_END_DT ? new Date(restrictRows[0].TRADE_RESTRICT_END_DT).toLocaleString('ko-KR') : '';
+            return res.status(403).json({
+                success: false,
+                error: `청약 취소 규정(페널티)에 의해 신규 청약 신청이 제한된 상태입니다. (제한 해제 일시: ${endDtStr})`
+            });
+        }
 
         // 이용 제한 확인
         const [restrictionRows] = await connection.execute(`
@@ -1787,8 +2465,8 @@ router.post('/auction-req', authenticateToken, async (req, res) => {
             for (const bus of safeBuses) {
                 const busAmt = parseInt(bus.reqAmt, 10) || 0;
 
-                // 수수료 계산 (6.6%, 5.5%, 1.1%)
-                const feeTotal = Math.floor(busAmt * 0.066);
+                // 수수료 계산 (6.6%, 5.5%, 1.1%) - 무조건 33,000원 고정
+                const feeTotal = 33000;
                 const feeRefund = Math.floor(busAmt * 0.055);
                 const feeAttribution = parseFloat((busAmt * 0.011).toFixed(3)); // DECIMAL(18,3) 대응
 
@@ -1849,6 +2527,12 @@ router.post('/auction-req', authenticateToken, async (req, res) => {
 
         await connection.commit();
         console.log('[Auction Request] Success:', reqId);
+
+        // 🔔 여행 요청 완료 후 매칭되는 기사에게 알림 전송 (비동기 백그라운드 실행)
+        sendNotificationsToMatchingDrivers(reqId, tripTitle, safeBuses, 'CREATE').catch(err => {
+            console.error('[Notification Error] Failed to send notifications after create:', err);
+        });
+
         res.status(201).json({ success: true, message: '요청이 완료되었습니다.', reqId });
     } catch (error) {
         if (connection) await connection.rollback();
@@ -1950,8 +2634,19 @@ router.put('/auction-req/:id', authenticateToken, async (req, res) => {
             return res.status(403).json({ success: false, error: '수정 권한이 없습니다.' });
         }
 
-        // 2. 마스터 업데이트
+        // 2. 마스터 업데이트 및 차량 유효성 검증
         const safeBuses = Array.isArray(buses) ? buses : [];
+        if (safeBuses.length === 0) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, error: '차량을 최소 1대 이상 선택해야 합니다.' });
+        }
+
+        const hasUnderMinAmt = safeBuses.some(b => (parseInt(b.reqAmt, 10) || 0) < 300000);
+        if (hasUnderMinAmt) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, error: '차량 1대당 최소 요청 금액은 300,000원 이상이어야 합니다.' });
+        }
+
         const totalReqAmt = safeBuses.reduce((acc, b) => acc + (parseInt(b.reqAmt, 10) || 0), 0);
         const tripTitle = clientTripTitle || `${startAddr.split(' ')[0]} -> ${endAddr.split(' ')[0]} 여정`;
         const formatDt = (dtStr) => dtStr.replace('T', ' ').replace('Z', '').substring(0, 19);
@@ -1972,7 +2667,7 @@ router.put('/auction-req/:id', authenticateToken, async (req, res) => {
             let busSeq = 1;
             for (const bus of safeBuses) {
                 const busAmt = parseInt(bus.reqAmt, 10) || 0;
-                const feeTotal = Math.floor(busAmt * 0.066);
+                const feeTotal = 33000;
                 const feeRefund = Math.floor(busAmt * 0.055);
                 const feeAttribution = parseFloat((busAmt * 0.011).toFixed(3));
 
@@ -2003,6 +2698,12 @@ router.put('/auction-req/:id', authenticateToken, async (req, res) => {
         }
 
         await connection.commit();
+
+        // 🔔 여행 요청 수정 완료 후 매칭되는 기사에게 알림 전송 (비동기 백그라운드 실행)
+        sendNotificationsToMatchingDrivers(reqId, tripTitle, safeBuses, 'UPDATE').catch(err => {
+            console.error('[Notification Error] Failed to send notifications after update:', err);
+        });
+
         res.json({ success: true, message: '예약 정보가 수정되었습니다.' });
     } catch (error) {
         if (connection) await connection.rollback();
@@ -2027,9 +2728,9 @@ router.post('/confirm-bid', authenticateToken, async (req, res) => {
         const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
         const custId = uRows.length > 0 ? uRows[0].CUST_ID : userId;
 
-        // 1. 해당 입찰 정보 조회 (REQ_ID 확인용)
+        // 1. 해당 입찰 정보 조회 (REQ_ID 및 DRIVER_ID 확인용)
         const [bidRows] = await connection.execute(
-            'SELECT REQ_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?',
+            'SELECT REQ_ID, DRIVER_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?',
             [resId]
         );
 
@@ -2037,12 +2738,15 @@ router.post('/confirm-bid', authenticateToken, async (req, res) => {
             throw new Error('해당 입찰을 찾을 수 없습니다.');
         }
 
-        const reqId = bidRows[0].REQ_ID;
+        const { REQ_ID: reqId, DRIVER_ID: driverId } = bidRows[0];
 
-        // 2. 선택된 입찰은 'CONFIRM' 처리
+        // 기사 등급(FEE_POLICY) 판별
+        const feePolicy = await determineFeePolicy(connection, driverId);
+
+        // 2. 선택된 입찰은 'CONFIRM' 처리 (FEE_POLICY 반영)
         await connection.execute(
-            "UPDATE TB_BUS_RESERVATION SET DATA_STAT = 'CONFIRM', MOD_ID = ?, MOD_DT = NOW() WHERE RES_ID = ?",
-            [custId, resId]
+            "UPDATE TB_BUS_RESERVATION SET DATA_STAT = 'CONFIRM', FEE_POLICY = ?, MOD_ID = ?, MOD_DT = NOW() WHERE RES_ID = ?",
+            [feePolicy, custId, resId]
         );
 
         // 3. 모든 요청 차량이 예약되었는지 확인하여 마스터 상태 변경
@@ -2068,7 +2772,7 @@ router.post('/confirm-bid', authenticateToken, async (req, res) => {
         } else if (totalConfirmed > 0) {
             // 일부 차량만 예약 확정
             await connection.execute(
-                "UPDATE TB_AUCTION_REQ SET DATA_STAT = 'BIDDING', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?",
+                "UPDATE TB_AUCTION_REQ SET DATA_STAT = 'CUSTOMER_PAY_WAIT', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?",
                 [custId, reqId]
             );
         }
@@ -2224,6 +2928,8 @@ router.get('/reservations', authenticateToken, async (req, res) => {
                 r.START_ADDR as startAddr,
                 r.END_ADDR as endAddr,
                 DATE_FORMAT(r.START_DT, '%Y/%m/%d') as date,
+                DATE_FORMAT(r.START_DT, '%Y.%m.%d %H:%i') as startDt,
+                DATE_FORMAT(r.END_DT, '%Y.%m.%d %H:%i') as endDt,
                 r.TRIP_TITLE as title,
                 MIN(res.RES_ID) as firstResId,
                 COUNT(res.RES_ID) as busCount,
@@ -2246,6 +2952,19 @@ router.get('/reservations', authenticateToken, async (req, res) => {
                 FROM TB_AUCTION_REQ_VIA 
                 WHERE REQ_ID IN (${reqIds.map(() => '?').join(',')})
                 ORDER BY REQ_ID, VIA_SEQ ASC
+            `, reqIds);
+
+            // 모든 요청의 버스 수량 및 차량 종류 정보 조회 (TB_AUCTION_REQ_BUS)
+            const [allReqBuses] = await pool.execute(`
+                SELECT 
+                    B.REQ_ID,
+                    B.REQ_BUS_SEQ,
+                    B.BUS_TYPE_CD,
+                    C.CD_NM_KO as busTypeName
+                FROM TB_AUCTION_REQ_BUS B
+                LEFT JOIN TB_COMMON_CODE C ON C.GRP_CD = 'BUS_TYPE' AND C.DTL_CD = B.BUS_TYPE_CD
+                WHERE B.REQ_ID IN (${reqIds.map(() => '?').join(',')})
+                ORDER BY B.REQ_ID, B.REQ_BUS_SEQ ASC
             `, reqIds);
 
             // 모든 예약의 확정 차량 및 기사 정보 조회
@@ -2338,8 +3057,21 @@ router.get('/reservations', authenticateToken, async (req, res) => {
                     };
                 });
 
-                // 첫 번째 차량 정보를 기본 정보로 설정 (하위 호환성)
-                if (resObj.buses.length > 0) {
+                // 3. 요청 차량 구성집계 (예: "일반 버스 (45석) 1대, 대형 밴 (11석) 1대")
+                const reqBuses = allReqBuses.filter(b => b.REQ_ID === resObj.id);
+                const busTypeCounts = {};
+                reqBuses.forEach(b => {
+                    const name = b.busTypeName || '차량';
+                    busTypeCounts[name] = (busTypeCounts[name] || 0) + 1;
+                });
+
+                const busTypeSummaries = Object.entries(busTypeCounts).map(([typeName, count]) => `${typeName} ${count}대`);
+                const busTypeSummaryStr = busTypeSummaries.join(', ');
+
+                resObj.busTypeSummary = busTypeSummaryStr;
+                if (busTypeSummaryStr) {
+                    resObj.busType = busTypeSummaryStr;
+                } else if (resObj.buses.length > 0) {
                     resObj.busType = resObj.buses[0].busType;
                     resObj.img = resObj.buses[0].busImage;
                 }
@@ -2355,7 +3087,7 @@ router.get('/reservations', authenticateToken, async (req, res) => {
 
 
 // 11. 전체 견적 요청 취소 (상세 사유 및 증빙 서류 포함)
-router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), async (req, res) => {
+router.post('/cancel-request', authenticateToken, uploadOrPass, async (req, res) => {
     const connection = await pool.getConnection();
     try {
         await connection.beginTransaction();
@@ -2368,6 +3100,17 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
             return res.status(400).json({ success: false, error: '요청 ID가 누락되었습니다.' });
         }
 
+        // [알림용 데이터 조회] 취소 전 해당 경매에 입찰 중인 기사 목록 및 여정 제목 조회
+        const [drivers] = await connection.execute(`
+            SELECT DISTINCT DRIVER_ID 
+            FROM TB_BUS_RESERVATION 
+            WHERE REQ_ID = ? AND DATA_STAT IN ('CUSTOMER_PAY_WAIT', 'DRIVER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'CONFIRM')
+        `, [reqId]);
+
+        const [reqInfo] = await connection.execute(`
+            SELECT TRIP_TITLE FROM TB_AUCTION_REQ WHERE REQ_ID = ?
+        `, [reqId]);
+
         // 1. 본인의 요청인지 확인 및 현재 상태 조회
         const [check] = await connection.execute('SELECT DATA_STAT FROM TB_AUCTION_REQ WHERE REQ_ID = ? AND TRAVELER_ID = ?', [reqId, custId]);
         if (check.length === 0) {
@@ -2376,136 +3119,386 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
         }
         const currentReqStat = check[0].DATA_STAT;
 
-        // [추가] 견적 리스트(AUCTION) 상태이거나 버스변경(BUS_CHANGE) 상태인 경우 단순 취소 처리 (페널티 없음)
-        if (currentReqStat === 'AUCTION' || currentReqStat === 'BUS_CHANGE') {
-            // 사용자의 요청대로 TB_AUCTION_REQ, TB_AUCTION_REQ_BUS 테이블의 상태만 변경
+        // 💰 혹시 이미 결제된 내역이 존재하는지 확인 (단순 취소 여부 판별)
+        const [hasPaymentRows] = await connection.execute(
+            `SELECT 1 FROM TB_BUS_RESERVATION 
+              WHERE REQ_ID = ? AND (CUSTOMER_PAY_STAT = 'Y' OR DRIVER_PAY_STAT = 'Y')
+              LIMIT 1`,
+            [reqId]
+        );
+        const hasPayment = hasPaymentRows.length > 0;
+
+        // 견적 리스트(AUCTION) 상태이거나 버스변경(BUS_CHANGE) 상태이며 결제 내역이 전혀 없는 경우 단순 취소 처리
+        if ((currentReqStat === 'AUCTION' || currentReqStat === 'BUS_CHANGE') && !hasPayment) {
             await connection.execute('UPDATE TB_AUCTION_REQ SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?', [custId, reqId]);
             await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?', [custId, reqId]);
+            await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND DATA_STAT NOT IN (\'CONFIRM\', \'DONE\')', [custId, reqId]);
 
-            // 기존 코드에서 예약 정보도 함께 취소 처리 (드라이버 혼선 방지 위해 유지 권장하나, 사용자 요청에 따라 최소화)
-            // await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND DATA_STAT NOT IN (\'CONFIRM\', \'DONE\')', [custId, reqId]);
+            // 결제 취소 이력 적재 및 결제 마스터 처리 생략 (단순 견적 취소이므로 결제 이력 없음)
 
             await connection.commit();
-            return res.json({ success: true, message: '견적 요청 취소가 완료되었습니다.' });
+            res.json({ success: true, message: '견적 요청 취소가 완료되었습니다.' });
+
+            // [알림 발송] 트랜잭션 커밋 완료 후 비동기로 기사에게 푸시 메시지 발송
+            if (drivers.length > 0 && reqInfo.length > 0) {
+                const tripTitle = reqInfo[0].TRIP_TITLE;
+                const title = '[전체 취소] 고객님이 청약을 취소했습니다.';
+                const body = `여정: ${tripTitle}\n요청하신 전체 여행 청약이 취소되었습니다.`;
+                const link = `/estimate-detail-driver/${reqId}`;
+
+                drivers.forEach(driver => {
+                    sendNotification(pool, {
+                        custId: driver.DRIVER_ID,
+                        title,
+                        body,
+                        link,
+                        type: 'SYSTEM'
+                    }).catch(err => console.error(`[Notification] 전체 청약 취소 알림 발송 실패 (기사 ID: ${driver.DRIVER_ID}):`, err));
+                });
+            }
+            return;
         }
 
-        // 2. 증빙 서류 업로드 처리 (GCS) - 페널티가 발생하는 경우에만 수행
+        // 2. 증빙 서류 업로드 처리 (로컬) - 페널티가 발생하는 경우에만 수행
         let gcsPath = null;
         if (req.file) {
             const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20, connection);
-            const fileName = `cancel_docs/${fileId}${path.extname(req.file.originalname)}`;
-            const file = getBucket().file(fileName);
+            const fileExt = path.extname(req.file.originalname).replace('.', '') || 'png';
+            const objectKey = `cancel_docs/${fileId}.${fileExt}`;
+            
+            // 📂 로컬 uploads 디렉토리에 저장
+            const localPath = path.join(__dirname, '..', 'uploads', objectKey);
+            const localDir = path.dirname(localPath);
+            if (!fs.existsSync(localDir)) {
+                fs.mkdirSync(localDir, { recursive: true });
+            }
+            fs.writeFileSync(localPath, req.file.buffer);
 
-            await file.save(req.file.buffer, {
-                metadata: { contentType: req.file.mimetype }
-            });
-
-            gcsPath = `https://storage.googleapis.com/${bucketName}/${fileName}`;
+            gcsPath = `https://bustaams.cafe24.com/uploads/${objectKey}`;
 
             // TB_FILE_MASTER 등록
             const fileQuery = `
                 INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_ID, MOD_ID)
-                VALUES (?, 'CANCEL_DOC', ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, 'CANCEL_DOC', 'uploads', ?, ?, ?, ?, ?, ?)
             `;
             await connection.execute(fileQuery, [
-                fileId, bucketName, gcsPath, req.file.originalname,
-                path.extname(req.file.originalname).replace('.', ''),
-                req.file.size, custId, custId
+                fileId,
+                gcsPath,
+                req.file.originalname,
+                fileExt,
+                req.file.size,
+                custId,
+                custId
             ]);
         }
 
-        // 3. 현재 취소 횟수 조회 (페널티 적용 대상)
-        const [manageRows] = await connection.execute(
-            'SELECT CANCEL_CNT FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ?',
-            [custId]
-        );
-
-        let currentCnt = 0;
-        if (manageRows.length > 0) {
-            currentCnt = manageRows[0].CANCEL_CNT;
-        } else {
-            // 정보가 없으면 초기 행 생성
-            await connection.execute(
-                'INSERT INTO TB_USER_CANCEL_MANAGE (CUST_ID, CANCEL_CNT, REG_ID, MOD_ID) VALUES (?, 0, ?, ?)',
-                [custId, custId, custId]
+        if (currentReqStat !== 'CUSTOMER_PAY_WAIT' && currentReqStat !== 'DRIVER_PAY_WAIT') {
+            // 3. 현재 취소 횟수 조회 (페널티 적용 대상)
+            const [manageRows] = await connection.execute(
+                'SELECT CANCEL_CNT FROM TB_USER_CANCEL_MANAGE WHERE CUST_ID = ?',
+                [custId]
             );
+
+            let currentCnt = 0;
+            if (manageRows.length > 0) {
+                currentCnt = manageRows[0].CANCEL_CNT;
+            } else {
+                // 정보가 없으면 초기 행 생성
+                await connection.execute(
+                    'INSERT INTO TB_USER_CANCEL_MANAGE (CUST_ID, CANCEL_CNT, REG_ID, MOD_ID) VALUES (?, 0, ?, ?)',
+                    [custId, custId, custId]
+                );
+            }
+
+            const newCnt = currentCnt + 1;
+
+            // 취소 관리 테이블 업데이트 (9회까지 당일부터 1주일, 10회부터 당일부터 9999-12-31 무기한 제한 설정) (한글 주석)
+            if (newCnt >= 10) {
+                await connection.execute(`
+                    UPDATE TB_USER_CANCEL_MANAGE 
+                    SET CANCEL_CNT = ?, 
+                        CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
+                        RESTRICT_STAT = 'P',
+                        RESTRICT_START_DT = NOW(),
+                        RESTRICT_END_DT = '9999-12-31 23:59:59',
+                        TRADE_RESTRICT_YN = 'Y',
+                        TRADE_RESTRICT_START_DT = NOW(),
+                        TRADE_RESTRICT_END_DT = '9999-12-31 23:59:59',
+                        MOD_ID = ?, MOD_DT = NOW()
+                    WHERE CUST_ID = ?
+                `, [newCnt, custId, custId]);
+            } else {
+                await connection.execute(`
+                    UPDATE TB_USER_CANCEL_MANAGE 
+                    SET CANCEL_CNT = ?, 
+                        CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
+                        RESTRICT_STAT = 'Y',
+                        RESTRICT_START_DT = NOW(),
+                        RESTRICT_END_DT = DATE_ADD(NOW(), INTERVAL 7 DAY),
+                        TRADE_RESTRICT_YN = 'Y',
+                        TRADE_RESTRICT_START_DT = NOW(),
+                        TRADE_RESTRICT_END_DT = DATE_ADD(NOW(), INTERVAL 7 DAY),
+                        MOD_ID = ?, MOD_DT = NOW()
+                    WHERE CUST_ID = ?
+                `, [newCnt, custId, custId]);
+            }
+
+            // 4. 취소 이력 테이블 등록
+            const [[seqRow]] = await connection.execute(`
+                SELECT IFNULL(MAX(HIST_SEQ), 0) + 1 AS HIST_SEQ
+                FROM TB_USER_CANCEL_HIST
+                WHERE CUST_ID = ?
+            `, [custId]);
+
+            const histSeq = seqRow.HIST_SEQ;
+
+            await connection.execute(`
+                INSERT INTO TB_USER_CANCEL_HIST (
+                    CUST_ID, HIST_SEQ, CANCEL_REASON_GRP_CD, CANCEL_REASON_DTL_CD, 
+                    CANCEL_REASON_TEXT, REASON_DOC_FILE_NM, REG_ID, MOD_ID
+                ) VALUES (?, ?, 'CANCEL_REASON', ?, ?, ?, ?, ?)
+            `, [custId, histSeq, cancelCode || '06', cancelReasonText || '', gcsPath, custId, custId]);
         }
 
-        const newCnt = currentCnt + 1;
-        let restrictMonths = 0;
-        let restrictYn = 'N'; // N: 정상, Y: 이용제한
-        let restrictEndDt = null;
+        // 💰 카드 결제 완료된 건이 있는지 조회하여 카드 취소(환불) 및 이력 적재 진행 (여행자 & 기사 결제 건 모두 포함)
+        const [paymentInfo] = await connection.execute(`
+            SELECT BR.RES_ID, BR.DRIVER_ID, BR.REG_DT, BR.MOD_DT, BR.CONFIRM_DT,
+                   BR.CUSTOMER_PAY_STAT, BR.CUSTOMER_PAY_ID, BR.CUSTOMER_PAY_AMT,
+                   BR.DRIVER_PAY_STAT, BR.DRIVER_PAY_ID, BR.DRIVER_PAY_AMT,
+                   AR.START_DT
+            FROM TB_BUS_RESERVATION BR
+            JOIN TB_AUCTION_REQ AR ON BR.REQ_ID = AR.REQ_ID
+            WHERE BR.REQ_ID = ? AND BR.DATA_STAT NOT IN ('TRAVELER_CANCEL')
+        `, [reqId]);
 
-        // 페널티 정책 (누적 횟수에 따른 차등 제한)
-        if (newCnt === 1) {
-            restrictMonths = 3;
-            restrictYn = 'Y';
-        } else if (newCnt === 2) {
-            restrictMonths = 6;
-            restrictYn = 'Y';
-        } else if (newCnt === 3) {
-            restrictMonths = 9;
-            restrictYn = 'Y';
-        } else if (newCnt >= 4) {
-            restrictYn = 'Y'; // 무기한은 별도 플래그가 없으므로 아주 먼 미래나 관리자 처리 필요하나 일단 Y로 세팅
+        let refundTotalAmt = 0; // 여행자 총 환불액
+        let driverRefundMap = {}; // 기사별 환불액 맵 (FCM 발송용)
+        let processedTids = new Set();
+
+        if (paymentInfo.length > 0) {
+            for (const p of paymentInfo) {
+                // 환불 비율 정책 산출 (가. 24h이내 100%, 나. 24h경과~출발30일전 50%공제, 다. 출발30인이내 80%공제)
+                const policy = calculateFeeRefundPolicy(p.CONFIRM_DT || p.MOD_DT || p.REG_DT, p.START_DT, currentReqStat);
+
+                // 1. 여행자(고객) 결제 건 카드 취소 및 이력 기록 (데이터 이용료 환불 규정에 따라 공제 후 환불)
+                if (p.CUSTOMER_PAY_STAT === 'Y' && p.CUSTOMER_PAY_ID) {
+                    const originalCustAmt = Number(p.CUSTOMER_PAY_AMT || 0);
+                    const custRefundAmt = Math.round(originalCustAmt * policy.refundRate);
+                    const custConfirmAmt = originalCustAmt - custRefundAmt; // 취소 후 남을 금액
+
+                    if (!processedTids.has(p.CUSTOMER_PAY_ID)) {
+                        processedTids.add(p.CUSTOMER_PAY_ID);
+                        try {
+                            const refundResult = await cancelInicisPayment({
+                                tid: p.CUSTOMER_PAY_ID,
+                                msg: `고객 여행 취소 (${policy.label})`,
+                                clientIp: '127.0.0.1',
+                                price: custRefundAmt,
+                                confirmPrice: custConfirmAmt
+                            });
+                            console.log(`>>> [Traveler Card Refund Result] ResId: ${p.RES_ID}, TID: ${p.CUSTOMER_PAY_ID}, Amt: ${custRefundAmt}, Policy: ${policy.label}`, refundResult);
+                            
+                            if (refundResult && refundResult.resultCode !== '00') {
+                                // ERR3001 또는 01은 이미 취소된 거래에 대한 에러이므로 통과시킵니다.
+                                if (refundResult.resultCode !== 'ERR3001' && refundResult.resultCode !== '01') {
+                                    throw new Error(`이니시스 환불 거절: ${refundResult.resultMsg} (${refundResult.resultCode})`);
+                                }
+                            }
+                        } catch (refundErr) {
+                            console.error(`>>> [Traveler Card Refund API Error] ResId: ${p.RES_ID}, TID: ${p.CUSTOMER_PAY_ID}:`, refundErr.message || refundErr);
+                            throw refundErr;
+                        }
+
+                        refundTotalAmt += custRefundAmt;
+
+                        // B. 결제 취소 이력 테이블 (TB_PAYMENT_CANCEL_HISTORY) 적재 (한글 주석)
+                        const cancelHistIdCust = ('CN' + Date.now() + Math.floor(Math.random() * 1000).toString().padStart(3, '0')).slice(0, 20);
+                        const batIdCust = String(p.CUSTOMER_PAY_ID || reqId || 'BAT_CUST_CANCEL').slice(0, 20);
+                        await connection.execute(`
+                            INSERT INTO TB_PAYMENT_CANCEL_HISTORY (
+                                CANCEL_ID, BAT_ID, CANCEL_AMOUNT, CANCEL_REASON, CANCEL_STATUS, 
+                                PG_TID, REG_ID, REG_DT, MOD_ID, MOD_DT
+                            ) VALUES (
+                                ?, ?, ?, ?, 'SUCCESS', 
+                                ?, ?, NOW(), ?, NOW()
+                            )
+                        `, [
+                            cancelHistIdCust, batIdCust, custRefundAmt, 
+                            `고객 일정 취소 환불 (${policy.label})`, p.CUSTOMER_PAY_ID || null, 
+                            custId, custId
+                        ]);
+
+                        // C. 결제 마스터 테이블 (TB_PAYMENT_MASTER) 상태 변경 ('CANCEL') (한글 주석)
+                        await connection.execute(`
+                            UPDATE TB_PAYMENT_MASTER 
+                            SET PAY_STATUS = 'CANCEL', MOD_ID = ?, MOD_DT = NOW() 
+                            WHERE PG_TID = ? OR REQ_ID = ?
+                        `, [custId, p.CUSTOMER_PAY_ID, reqId]);
+                    }
+
+                    // A. 예약 테이블 고객 결제 상태 취소('C')로 변경 (한글 주석)
+                    await connection.execute(`
+                        UPDATE TB_BUS_RESERVATION 
+                        SET CUSTOMER_PAY_STAT = 'C',
+                            MOD_DT = NOW()
+                        WHERE RES_ID = ?
+                    `, [p.RES_ID]);
+                }
+
+                // 2. 버스 기사 결제 건 카드 취소 및 이력 기록 (데이터 이용료 환불 규정에 따라 공제 후 환불)
+                if (p.DRIVER_PAY_STAT === 'Y' && p.DRIVER_PAY_ID) {
+                    const originalDrvAmt = Number(p.DRIVER_PAY_AMT || 0);
+                    const drvRefundAmt = Math.round(originalDrvAmt * policy.refundRate);
+                    const drvConfirmAmt = originalDrvAmt - drvRefundAmt; // 취소 후 남을 금액
+
+                    if (p.DRIVER_ID) {
+                        driverRefundMap[p.DRIVER_ID] = (driverRefundMap[p.DRIVER_ID] || 0) + drvRefundAmt;
+                    }
+
+                    if (!processedTids.has(p.DRIVER_PAY_ID)) {
+                        processedTids.add(p.DRIVER_PAY_ID);
+                        let drvCancelOk = false;
+                        try {
+                            const refundResult = await cancelInicisPayment({
+                                tid: p.DRIVER_PAY_ID,
+                                msg: `고객 여행 취소 기사 이용료 환불 (${policy.label})`,
+                                clientIp: '127.0.0.1',
+                                price: drvRefundAmt,
+                                confirmPrice: drvConfirmAmt
+                            });
+                            console.log(`>>> [Driver Card Refund Result] ResId: ${p.RES_ID}, TID: ${p.DRIVER_PAY_ID}, Amt: ${drvRefundAmt}, Policy: ${policy.label}`, refundResult);
+                            
+                            if (refundResult && (refundResult.resultCode === '00' || refundResult.resultCode === 'ERR3001' || refundResult.resultCode === '01')) {
+                                drvCancelOk = true;
+                            } else {
+                                console.warn(`>>> [Driver Card Refund Non-Zero Result] ${p.DRIVER_PAY_ID}: ${refundResult?.resultMsg} (${refundResult?.resultCode})`);
+                                drvCancelOk = true; // 무효 처리 방지를 위해 취소 처리 진행
+                            }
+                        } catch (refundErr) {
+                            console.error(`>>> [Driver Card Refund API Error] ResId: ${p.RES_ID}, TID: ${p.DRIVER_PAY_ID}:`, refundErr.message || refundErr);
+                            // 기사 환불 API 실패하더라도 DB 상태는 취소로 맞춤
+                            drvCancelOk = true;
+                        }
+
+                        // B. 결제 취소 이력 테이블 (TB_PAYMENT_CANCEL_HISTORY) 적재 (한글 주석)
+                        const cancelHistIdDrv = ('CN' + (Date.now() + 1) + Math.floor(Math.random() * 1000).toString().padStart(3, '0')).slice(0, 20);
+                        const batIdDrv = String(p.DRIVER_PAY_ID || reqId || 'BAT_DRV_CANCEL').slice(0, 20);
+                        await connection.execute(`
+                            INSERT INTO TB_PAYMENT_CANCEL_HISTORY (
+                                CANCEL_ID, BAT_ID, CANCEL_AMOUNT, CANCEL_REASON, CANCEL_STATUS, 
+                                PG_TID, REG_ID, REG_DT, MOD_ID, MOD_DT
+                            ) VALUES (
+                                ?, ?, ?, ?, 'SUCCESS', 
+                                ?, ?, NOW(), ?, NOW()
+                            )
+                        `, [
+                            cancelHistIdDrv, batIdDrv, drvRefundAmt, 
+                            `고객 일정 취소 기사 이용료 환불 (${policy.label})`, p.DRIVER_PAY_ID || null, 
+                            p.DRIVER_ID || custId, custId
+                        ]);
+
+                        // C. 결제 마스터 테이블 (TB_PAYMENT_MASTER) 상태 변경 ('CANCEL') (한글 주석)
+                        await connection.execute(`
+                            UPDATE TB_PAYMENT_MASTER 
+                            SET PAY_STATUS = 'CANCEL', MOD_ID = ?, MOD_DT = NOW() 
+                            WHERE PG_TID = ?
+                        `, [custId, p.DRIVER_PAY_ID]);
+                    }
+
+                    // A. 예약 테이블 기사 결제 상태 취소('C')로 변경 (한글 주석)
+                    await connection.execute(`
+                        UPDATE TB_BUS_RESERVATION 
+                        SET DRIVER_PAY_STAT = 'C',
+                            MOD_DT = NOW()
+                        WHERE RES_ID = ?
+                    `, [p.RES_ID]);
+                }
+            }
         }
 
-        // 취소 관리 테이블 업데이트 (DB.md 스키마에 맞게 컬럼명 보정)
-        if (newCnt >= 4) {
-            await connection.execute(`
-                UPDATE TB_USER_CANCEL_MANAGE 
-                SET CANCEL_CNT = ?, 
-                    CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
-                    TRADE_RESTRICT_YN = 'Y',
-                    TRADE_RESTRICT_START_DT = NOW(),
-                    TRADE_RESTRICT_END_DT = '2099-12-31 23:59:59',
-                    MOD_ID = ?, MOD_DT = NOW()
-                WHERE CUST_ID = ?
-            `, [newCnt, custId, custId]);
-        } else if (restrictYn === 'Y') {
-            await connection.execute(`
-                UPDATE TB_USER_CANCEL_MANAGE 
-                SET CANCEL_CNT = ?, 
-                    CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
-                    TRADE_RESTRICT_YN = ?,
-                    TRADE_RESTRICT_START_DT = NOW(),
-                    TRADE_RESTRICT_END_DT = DATE_ADD(NOW(), INTERVAL ? MONTH),
-                    MOD_ID = ?, MOD_DT = NOW()
-                WHERE CUST_ID = ?
-            `, [newCnt, restrictYn, restrictMonths, custId, custId]);
-        } else {
-            await connection.execute(`
-                UPDATE TB_USER_CANCEL_MANAGE 
-                SET CANCEL_CNT = ?, 
-                    CANCEL_TRAVELER_ALL_CNT = CANCEL_TRAVELER_ALL_CNT + 1,
-                    MOD_ID = ?, MOD_DT = NOW()
-                WHERE CUST_ID = ?
-            `, [newCnt, custId, custId]);
-        }
-
-        // 4. 취소 이력 테이블 등록
-        const [[seqRow]] = await connection.execute(`
-            SELECT IFNULL(MAX(HIST_SEQ), 0) + 1 AS HIST_SEQ
-            FROM TB_USER_CANCEL_HIST
-            WHERE CUST_ID = ?
-        `, [custId]);
-
-        const histSeq = seqRow.HIST_SEQ;
-
-        await connection.execute(`
-            INSERT INTO TB_USER_CANCEL_HIST (
-                CUST_ID, HIST_SEQ, CANCEL_REASON_GRP_CD, CANCEL_REASON_DTL_CD, 
-                CANCEL_REASON_TEXT, REASON_DOC_FILE_NM, REG_ID, MOD_ID
-            ) VALUES (?, ?, 'CANCEL_REASON', ?, ?, ?, ?, ?)
-        `, [custId, histSeq, cancelCode || '06', cancelReasonText || '', gcsPath, custId, custId]);
-
-        // 5. 기존 상태 변경 로직 (전체 요청, 차량 유닛, 응찰 정보)
+        // 5. 기존 상태 변경 로직 (전체 요청, 차량 유닛, 응찰 정보 상태 일괄 TRAVELER_CANCEL 로 변경) (한글 주석)
         await connection.execute('UPDATE TB_AUCTION_REQ SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?', [custId, reqId]);
         await connection.execute('UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?', [custId, reqId]);
-        await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ? AND DATA_STAT NOT IN (\'CONFIRM\', \'DONE\')', [custId, reqId]);
+        await connection.execute('UPDATE TB_BUS_RESERVATION SET DATA_STAT = \'TRAVELER_CANCEL\', MOD_ID = ?, MOD_DT = NOW() WHERE REQ_ID = ?', [custId, reqId]);
+
+        // 💰 위약금/정산 관리 테이블에 여행자 취소 정보 적재 (한글 주석)
+        const [confirmedResRows] = await connection.execute(
+            `SELECT R.RES_ID, R.DRIVER_ID, D.FEE_POLICY 
+             FROM TB_BUS_RESERVATION R
+             LEFT JOIN TB_DRIVER_DETAIL D ON R.DRIVER_ID = D.CUST_ID
+             WHERE R.REQ_ID = ?`,
+            [reqId]
+        );
+        if (confirmedResRows.length > 0) {
+            for (const resRow of confirmedResRows) {
+                const feePolicy = resRow.FEE_POLICY || 'DRIVER';
+                await connection.execute(
+                    `INSERT INTO TB_BUS_PENALTY_DEPOSIT (YYYYMMDD, RES_ID, DATA_STAT, PENALTY_DEPOSIT_YN, FEE_POLICY, REG_ID, MOD_ID)
+                     VALUES (DATE_FORMAT(NOW(), '%Y%m%d'), ?, 'TRAVELER_CANCEL', 'N', ?, ?, ?)
+                     ON DUPLICATE KEY UPDATE DATA_STAT = 'TRAVELER_CANCEL', FEE_POLICY = ?, MOD_DT = NOW(), MOD_ID = ?`,
+                    [resRow.RES_ID, feePolicy, custId, custId, feePolicy, custId]
+                );
+            }
+        }
 
         await connection.commit();
         res.json({ success: true, message: '여행 취소 처리가 완료되었습니다.' });
+
+        // [알림 발송] 트랜잭션 커밋 완료 후 비동기로 기사에게 푸시 메시지 발송
+        if (reqInfo.length > 0) {
+            const tripTitle = reqInfo[0].TRIP_TITLE;
+
+            // 1. 기사들에게 발송하는 푸시
+            if (drivers.length > 0) {
+                // 한글 주석: 결제 대기, 최종 승인 대기, 기사 결제 대기 중 취소 시 푸시 메시지 내용 분기
+                const isConfirmed = currentReqStat === 'CONFIRM';
+                const isPendingState = ['CUSTOMER_PAY_WAIT', 'FINAL_APPROVAL_WAIT', 'DRIVER_PAY_WAIT'].includes(currentReqStat);
+                
+                drivers.forEach(driver => {
+                    let title = '';
+                    let body = '';
+
+                    const driverRefundAmt = driverRefundMap[driver.DRIVER_ID] || 0;
+                    if (driverRefundAmt > 0) {
+                        title = '[결제 취소 완료] 청약 취소 및 환불 안내';
+                        body = `여행자가 "${tripTitle}" 여행을 취소했습니다. 기사님께서 결제하셨던 데이터 이용료 ₩${driverRefundAmt.toLocaleString()}원이 자동 결제 취소(환불)되었습니다.`;
+                    } else if (isPendingState) {
+                        title = '[여행 취소] 여행자 취소 알림';
+                        body = `여행자가 "${tripTitle}" 여행에 대해 취소를 했습니다.`;
+                    } else if (isConfirmed) {
+                        title = '[여행 취소] 고객님이 예약을 취소했습니다.';
+                        body = `여정: ${tripTitle}\n확정되었던 예약이 취소되었습니다. 환불 및 상세 내용을 확인해 주세요.`;
+                    } else {
+                        title = '[전체 취소] 고객님이 청약을 취소했습니다.';
+                        body = `여정: ${tripTitle}\n요청하신 전체 여행 청약이 취소되었습니다.`;
+                    }
+                    const link = `/estimate-detail-driver/${reqId}`;
+
+                    sendNotification(pool, {
+                        custId: driver.DRIVER_ID,
+                        title,
+                        body,
+                        link,
+                        type: 'SYSTEM'
+                    }).catch(err => console.error(`[Notification] 전체 취소 알림 발송 실패 (기사 ID: ${driver.DRIVER_ID}):`, err));
+                });
+            }
+
+            // 2. 고객 본인에게 발송하는 푸시 (실제 카드 결제 환불 대금이 발생한 경우에만 환불 완료 푸시 발송)
+            if (refundTotalAmt > 0) {
+                const customerTitle = '[결제 환불 완료] 결제가 취소되었습니다.';
+                const customerBody = `"${tripTitle}" 여행 예약이 취소되었으며, 결제하신 카드 대금 ₩${refundTotalAmt.toLocaleString()}원이 자동 결제 취소(환불)되었습니다.`;
+                const customerLink = `/app/estimate-request-list?type=cancel`;
+
+                sendNotification(pool, {
+                    custId: custId,
+                    title: customerTitle,
+                    body: customerBody,
+                    link: customerLink,
+                    type: 'CANCEL'
+                }).catch(err => console.error(`[Notification] 고객 본인 환불 알림 발송 실패 (고객 ID: ${custId}):`, err));
+            }
+        }
     } catch (error) {
         if (connection) await connection.rollback();
         console.error('[Cancel Request] Error Details:', {
@@ -2514,7 +3507,7 @@ router.post('/cancel-request', authenticateToken, memoryUpload.single('file'), a
             sql: error.sql,
             sqlMessage: error.sqlMessage
         });
-        res.status(500).json({ success: false, error: '취소 처리 중 오류가 발생했습니다.' });
+        res.status(500).json({ success: false, error: error.message || '취소 처리 중 오류가 발생했습니다.' });
     } finally {
         if (connection) connection.release();
     }
@@ -2539,8 +3532,8 @@ router.get('/completed-missions', authenticateToken, async (req, res) => {
                 r.END_ADDR as endAddrMaster,
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'END_NODE' LIMIT 1) as endAddrVia,
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' LIMIT 1) as roundTrip,
-                DATE_FORMAT(r.START_DT, '%Y.%m.%d') as startDate,
-                DATE_FORMAT(r.END_DT, '%Y.%m.%d') as endDate,
+                DATE_FORMAT(r.START_DT, '%Y.%m.%d %H:%i') as startDate,
+                DATE_FORMAT(r.END_DT, '%Y.%m.%d %H:%i') as endDate,
                 b.DRIVER_BIDDING_PRICE as price,
                 db.MODEL_NM as model,
                 u_driver.USER_NM as driverName,
@@ -2659,6 +3652,8 @@ router.get('/review-pending-missions', authenticateToken, async (req, res) => {
                 r.END_ADDR as endAddrMaster,
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'ROUND_TRIP' LIMIT 1) as viaAddr,
                 (SELECT VIA_ADDR FROM TB_AUCTION_REQ_VIA WHERE REQ_ID = r.REQ_ID AND VIA_TYPE = 'END_NODE' LIMIT 1) as endAddrVia,
+                DATE_FORMAT(r.START_DT, '%Y.%m.%d') as startDt,
+                DATE_FORMAT(r.END_DT, '%Y.%m.%d') as endDt,
                 DATE_FORMAT(r.END_DT, '%Y/%m/%d') as date,
                 db.MODEL_NM as busModel,
                 (SELECT COUNT(*) FROM TB_AUCTION_REQ_BUS WHERE REQ_ID = r.REQ_ID) as busCnt,
@@ -2738,6 +3733,9 @@ router.post('/upsert-device-token', authenticateToken, async (req, res) => {
             return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
         }
         const custId = uRows[0].CUST_ID;
+
+        // [안전장치] 동일한 FCM 토큰이 다른 사용자에게 이미 등록되어 있다면 삭제 (기기 소유주 변경 대응)
+        await pool.execute('DELETE FROM TB_USER_DEVICE_TOKEN WHERE FCM_TOKEN = ?', [fcmToken]);
 
         // 2. Upsert 실행 (CUST_ID, CLIENT_KIND가 PK이므로 중복 시 UPDATE)
         await pool.execute(`
@@ -2835,9 +3833,37 @@ router.post('/payment-bank', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: '요청 ID가 누락되었습니다.' });
         }
 
+        // 로그인한 고객의 CUST_ID 확인 (한글 주석)
+        let custId = req.user.custId;
+        if (!custId) {
+            const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [req.user.userId]);
+            if (uRows.length === 0) {
+                return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
+            }
+            custId = uRows[0].CUST_ID;
+        }
+
+        // 본인의 견적 요청인지 소유권 검증 (한글 주석)
+        const [reqRows] = await pool.execute(
+            'SELECT REQ_ID, TRAVELER_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ?',
+            [reqId]
+        );
+        if (reqRows.length === 0) {
+            return res.status(404).json({ success: false, error: '해당 견적 요청을 찾을 수 없습니다.' });
+        }
+        if (reqRows[0].TRAVELER_ID !== custId) {
+            return res.status(403).json({ success: false, error: '본인의 견적 요청만 결제 상태를 변경할 수 있습니다.' });
+        }
+
         // TB_AUCTION_REQ 테이블의 PAYMENT_STS 컬럼을 "1"로 업데이트합니다.
         await pool.execute(
-            'UPDATE TB_AUCTION_REQ SET PAYMENT_STS = "1", MOD_DT = NOW() WHERE REQ_ID = ?',
+            'UPDATE TB_AUCTION_REQ SET PAYMENT_STS = "1", MOD_DT = NOW() WHERE REQ_ID = ? AND TRAVELER_ID = ?',
+            [reqId, custId]
+        );
+
+        // 고객의 환불정책 동의 일자 저장 (운행 완료 일시인 DONE_DT는 건드리지 않음, 한글 주석)
+        await pool.execute(
+            'UPDATE TB_BUS_RESERVATION SET CUSTOMER_REFUND_AGREE_DT = NOW(), MOD_DT = NOW() WHERE REQ_ID = ?',
             [reqId]
         );
 
@@ -2847,6 +3873,72 @@ router.post('/payment-bank', authenticateToken, async (req, res) => {
         res.status(500).json({ success: false, error: error.message || '결제 상태 업데이트 중 오류가 발생했습니다.' });
     }
 });
+
+/**
+ * 🔔 매칭되는 차량종류를 보유한 활성 기사들에게 알림을 전송하는 헬퍼 함수
+ * @param {string} reqId 요청 ID (REQ_ID)
+ * @param {string} tripTitle 여정 제목
+ * @param {Array} buses 고객이 요청한 버스 목록 (busTypeCd 포함)
+ * @param {string} type 'CREATE' (등록) 또는 'UPDATE' (수정)
+ */
+async function sendNotificationsToMatchingDrivers(reqId, tripTitle, buses, type = 'CREATE') {
+    try {
+        if (!buses || buses.length === 0) return;
+
+        // 1. 요청된 버스의 차종(busTypeCd) 추출 및 중복 제거
+        const busTypes = [...new Set(buses.map(b => b.busTypeCd || b.name))].filter(Boolean);
+        if (busTypes.length === 0) return;
+
+        // 2. 기사 조회: USER_TYPE = 'DRIVER', USER_STAT = 'ACTIVE' 이면서 해당 차종 보유 기사
+        const query = `
+            SELECT DISTINCT u.CUST_ID 
+            FROM TB_USER u
+            JOIN TB_BUS_DRIVER_VEHICLE v ON u.CUST_ID = v.CUST_ID
+            WHERE u.USER_TYPE = 'DRIVER' 
+              AND u.USER_STAT = 'ACTIVE' 
+              AND v.SERVICE_CLASS IN (?)
+        `;
+
+        // mysql2의 IN (?) 바인딩 지원을 위해 query() 사용
+        const [drivers] = await pool.query(query, [busTypes]);
+        if (!drivers || drivers.length === 0) {
+            console.log(`[Notification] No matching active drivers for bus types: ${busTypes.join(', ')}`);
+            return;
+        }
+
+        const { sendNotification } = require('../services/notificationService');
+
+        // 3. 알림 문구 구성
+        let title = '';
+        let body = '';
+        if (type === 'CREATE') {
+            title = '[신규 청약 요청] 새로운 여행 요청이 등록되었습니다.';
+            body = `여정: ${tripTitle}\n새로운 여행 요청이 등록되었습니다. 청약(입찰)을 진행해 주세요.`;
+        } else {
+            title = '[청약 요청 수정] 여행 요청 정보가 수정되었습니다.';
+            body = `여정: ${tripTitle}\n여행 요청의 상세 내용이 수정되었습니다. 변경된 내용을 확인해 주세요.`;
+        }
+        const link = `/estimate-detail-driver/${reqId}`;
+
+        // 4. 기사별 비동기 병렬 전송
+        const sendPromises = drivers.map(driver => {
+            return sendNotification(pool, {
+                custId: driver.CUST_ID,
+                title,
+                body,
+                link,
+                type: 'SYSTEM'
+            }).catch(err => {
+                console.error(`[Notification] Failed to send notification to driver ${driver.CUST_ID}:`, err.message);
+            });
+        });
+
+        await Promise.all(sendPromises);
+        console.log(`[Notification] Successfully processed notifications for ${drivers.length} drivers.`);
+    } catch (err) {
+        console.error('[Notification] Error in sendNotificationsToMatchingDrivers:', err);
+    }
+}
 
 module.exports = router;
 

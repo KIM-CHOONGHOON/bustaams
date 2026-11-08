@@ -86,8 +86,14 @@ export const request = async (url, options = {}, isFormData = false) => {
 
     if (!response.ok) {
         const errorMsg = data.error || data.message || '요청 처리에 실패했습니다.';
-        // 401(인증 누락), 403(토큰 만료/유효하지 않음) 발생 시 인증 정보 즉시 제거
-        if (response.status === 401 || response.status === 403 || errorMsg.includes('토큰') || errorMsg.includes('인증')) {
+        // 401(인증 누락) 또는 토큰 자체 만료/위조 시에만 로그인 정보를 제거하고, 업무상 권한 거부(403)에서는 로그인 유지 (한글 주석)
+        const isAuthEndpoint = url.includes('/app/auth/') || url.includes('/auth/');
+        const isTokenError =
+            (!isAuthEndpoint && response.status === 401) ||
+            errorMsg.includes('토큰') ||
+            (response.status === 403 && currentToken && !isTokenValid(currentToken));
+
+        if (isTokenError) {
             console.warn(`[API] 인증 실패 또는 토큰 만료 감지 (Status: ${response.status}): ${errorMsg}`);
             localStorage.removeItem('accessToken');
             localStorage.removeItem('user');
@@ -263,7 +269,7 @@ export const deleteNotification = (seq) => request(`/app/notifications/${seq}`, 
 // [추가] 차량 번호 가입 여부 확인 API
 export const checkVehicle = (vehicleNo) => request(`/common/check-vehicle?vehicleNo=${encodeURIComponent(vehicleNo)}`);
 
-// api.get() / api.post() 형식 지원
+// api.get() / api.post() / api.put() / api.delete() 형식 지원 (한글 주석)
 
 const api = {
     get: (url) => request(url, { method: 'GET' }),
@@ -290,7 +296,29 @@ const api = {
         }
 
         return request(url, config, isFormData);
-    }
+    },
+    put: (url, data, options = {}) => {
+        const isFormData = data instanceof FormData;
+        const config = {
+            method: 'PUT',
+            ...options,
+            headers: {
+                ...options.headers
+            }
+        };
+
+        if (isFormData) {
+            config.body = data;
+            if (config.headers['Content-Type']) {
+                delete config.headers['Content-Type'];
+            }
+        } else {
+            config.body = JSON.stringify(data);
+        }
+
+        return request(url, config, isFormData);
+    },
+    delete: (url, options = {}) => request(url, { method: 'DELETE', ...options })
 };
 
 export default api;

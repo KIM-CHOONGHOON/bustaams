@@ -765,24 +765,25 @@ router.post('/auth/send-code', authenticateToken, async (req, res) => {
     }
 });
 
-// 6. 휴대폰 인증번호 확인 (DB 데이터 대조)
+// 6. 휴대폰 인증번호 확인 (DB 데이터 대조 - 5분 만료 및 재사용 방지 검증 포함)
 router.post('/auth/verify-code', authenticateToken, async (req, res) => {
     try {
         const { code, phone } = req.body;
-        const userId = req.user.userId;
 
         if (!code || !phone) {
             return res.status(400).json({ success: false, error: '인증번호와 휴대폰 번호가 모두 필요합니다.' });
         }
 
-        const purePhone = phone.replace(/-/g, '');
+        const purePhone = String(phone).replace(/[^0-9]/g, '');
+        const cleanCode = String(code).trim();
 
-        // 최근 5분 이내의 가장 최신 인증 로그 조회
+        // 한글 주석: 가장 최신 인증 로그 및 경과 시간(초), 상태 조회
         const [rows] = await pool.execute(
-            `SELECT MSG_CONTENT FROM TB_SMS_LOG 
+            `SELECT LOG_SEQ, MSG_CONTENT, SEND_STAT,
+                    TIMESTAMPDIFF(SECOND, REG_DT, NOW()) AS elapsedSec
+             FROM TB_SMS_LOG 
              WHERE RECEIVER_PHONE = ? AND SEND_CATEGORY = 'OTHER'
-             AND REG_DT >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
-             ORDER BY REG_DT DESC LIMIT 1`,
+             ORDER BY REG_DT DESC, LOG_SEQ DESC LIMIT 1`,
             [purePhone]
         );
 
@@ -790,10 +791,30 @@ router.post('/auth/verify-code', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: '만료되었거나 발송된 인증번호가 없습니다.' });
         }
 
-        const msgContent = rows[0].MSG_CONTENT;
-        const isMatch = msgContent.includes(`[${code}]`);
+        const latestLog = rows[0];
+
+        // 한글 주석: 이미 인증 완료된 번호(VERIFIED)는 재사용 차단
+        if (latestLog.SEND_STAT === 'VERIFIED') {
+            return res.status(400).json({ success: false, error: '이미 사용된 인증번호입니다. 다시 발송해 주세요.' });
+        }
+        if (latestLog.SEND_STAT !== 'SUCCESS') {
+            return res.status(400).json({ success: false, error: '유효하지 않은 인증번호입니다. 다시 발송해 주세요.' });
+        }
+
+        // 한글 주석: 5분(300초) 경과 시 만료 처리
+        if (latestLog.elapsedSec === null || Number(latestLog.elapsedSec) > 300) {
+            return res.status(400).json({ success: false, error: '만료되었거나 발송된 인증번호가 없습니다.' });
+        }
+
+        const msgContent = latestLog.MSG_CONTENT || '';
+        const isMatch = msgContent.includes(`[${cleanCode}]`);
 
         if (isMatch) {
+            // 한글 주석: 인증 성공 시 즉시 SEND_STAT을 'VERIFIED'로 변경하여 재사용 차단
+            await pool.execute(
+                'UPDATE TB_SMS_LOG SET SEND_STAT = ? WHERE LOG_SEQ = ?',
+                ['VERIFIED', latestLog.LOG_SEQ]
+            );
             res.json({ success: true, message: '인증되었습니다.' });
         } else {
             res.status(400).json({ success: false, error: '인증번호가 일치하지 않습니다.' });
@@ -2025,12 +2046,20 @@ router.post('/reservation/complete', authenticateToken, async (req, res) => {
         }
 
         const [reqCheck] = await pool.execute(
-            'SELECT REQ_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ? AND TRAVELER_ID = ?',
+            'SELECT REQ_ID, DATA_STAT FROM TB_AUCTION_REQ WHERE REQ_ID = ? AND TRAVELER_ID = ?',
             [reqId, custId]
         );
 
         if (reqCheck.length === 0) {
             return res.status(403).json({ success: false, error: '완료 처리 권한이 없습니다.' });
+        }
+
+        // 취소되었거나 이미 완료된 여정은 완료 처리 제한 (한글 주석)
+        if (reqCheck[0].DATA_STAT === 'CANCEL' || reqCheck[0].DATA_STAT === 'TRAVELER_CANCEL' || reqCheck[0].DATA_STAT === 'DRIVER_CANCEL') {
+            return res.status(400).json({ success: false, error: '취소된 여정은 완료 처리할 수 없습니다.' });
+        }
+        if (reqCheck[0].DATA_STAT === 'DONE') {
+            return res.status(400).json({ success: false, error: '이미 완료 처리된 여정입니다.' });
         }
 
         // [알림용 데이터 조회] 완료 처리 전 예약 확정 상태인 기사 목록 및 여정 제목 조회
@@ -2039,6 +2068,11 @@ router.post('/reservation/complete', authenticateToken, async (req, res) => {
             FROM TB_BUS_RESERVATION 
             WHERE REQ_ID = ? AND DATA_STAT = 'CONFIRM'
         `, [reqId]);
+
+        // 확정(CONFIRM)된 예약이 하나도 없는 경우 완료 처리 차단 (한글 주석)
+        if (drivers.length === 0) {
+            return res.status(400).json({ success: false, error: '확정된 예약이 없거나 취소된 예약이므로 여정을 완료 처리할 수 없습니다.' });
+        }
 
         const [reqInfo] = await pool.execute(`
             SELECT TRIP_TITLE FROM TB_AUCTION_REQ WHERE REQ_ID = ?
@@ -3799,15 +3833,37 @@ router.post('/payment-bank', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: '요청 ID가 누락되었습니다.' });
         }
 
-        // TB_AUCTION_REQ 테이블의 PAYMENT_STS 컬럼을 "1"로 업데이트합니다.
-        await pool.execute(
-            'UPDATE TB_AUCTION_REQ SET PAYMENT_STS = "1", MOD_DT = NOW() WHERE REQ_ID = ?',
+        // 로그인한 고객의 CUST_ID 확인 (한글 주석)
+        let custId = req.user.custId;
+        if (!custId) {
+            const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [req.user.userId]);
+            if (uRows.length === 0) {
+                return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
+            }
+            custId = uRows[0].CUST_ID;
+        }
+
+        // 본인의 견적 요청인지 소유권 검증 (한글 주석)
+        const [reqRows] = await pool.execute(
+            'SELECT REQ_ID, TRAVELER_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ?',
             [reqId]
         );
+        if (reqRows.length === 0) {
+            return res.status(404).json({ success: false, error: '해당 견적 요청을 찾을 수 없습니다.' });
+        }
+        if (reqRows[0].TRAVELER_ID !== custId) {
+            return res.status(403).json({ success: false, error: '본인의 견적 요청만 결제 상태를 변경할 수 있습니다.' });
+        }
 
-        // 고객의 환불정책 동의 일자 및 DONE_DT 일시 저장 (한글 주석)
+        // TB_AUCTION_REQ 테이블의 PAYMENT_STS 컬럼을 "1"로 업데이트합니다.
         await pool.execute(
-            'UPDATE TB_BUS_RESERVATION SET CUSTOMER_REFUND_AGREE_DT = NOW(), DONE_DT = NOW(), MOD_DT = NOW() WHERE REQ_ID = ?',
+            'UPDATE TB_AUCTION_REQ SET PAYMENT_STS = "1", MOD_DT = NOW() WHERE REQ_ID = ? AND TRAVELER_ID = ?',
+            [reqId, custId]
+        );
+
+        // 고객의 환불정책 동의 일자 저장 (운행 완료 일시인 DONE_DT는 건드리지 않음, 한글 주석)
+        await pool.execute(
+            'UPDATE TB_BUS_RESERVATION SET CUSTOMER_REFUND_AGREE_DT = NOW(), MOD_DT = NOW() WHERE REQ_ID = ?',
             [reqId]
         );
 

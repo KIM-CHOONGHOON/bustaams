@@ -1864,11 +1864,29 @@ router.post('/complete-mission/:id', authenticateToken, async (req, res) => {
         if (uRows.length === 0) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
         const custId = uRows[0].CUST_ID;
 
-        // 상태 업데이트 (DATA_STAT = 'DONE')
+        // 예약 존재 여부, 기사 본인 여부, 예약 확정(CONFIRM) 상태 검증 (취소 예약 완료 처리 차단, 한글 주석)
+        const [resRows] = await pool.execute(
+            'SELECT RES_ID, DRIVER_ID, DATA_STAT FROM TB_BUS_RESERVATION WHERE RES_ID = ?',
+            [id]
+        );
+        if (resRows.length === 0) {
+            return res.status(404).json({ success: false, error: '운행 정보를 찾을 수 없습니다.' });
+        }
+        if (resRows[0].DRIVER_ID !== custId) {
+            return res.status(403).json({ success: false, error: '운행 완료 처리 권한이 없습니다.' });
+        }
+        if (resRows[0].DATA_STAT !== 'CONFIRM') {
+            return res.status(400).json({
+                success: false,
+                error: '취소되었거나 예약 확정(CONFIRM) 상태가 아닌 운행은 완료 처리할 수 없습니다.'
+            });
+        }
+
+        // 상태 업데이트 (DATA_STAT = 'CONFIRM'인 경우에만 'DONE'으로 변경)
         const [result] = await pool.execute(
             `UPDATE TB_BUS_RESERVATION 
              SET DATA_STAT = 'DONE', MOD_DT = NOW(), MOD_ID = ?, DONE_DT = NOW()
-             WHERE RES_ID = ? AND DRIVER_ID = ?`,
+             WHERE RES_ID = ? AND DRIVER_ID = ? AND DATA_STAT = 'CONFIRM'`,
             [custId, id, custId]
         );
 

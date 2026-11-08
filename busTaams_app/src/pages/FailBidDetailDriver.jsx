@@ -143,9 +143,9 @@ const FailBidDetailDriver = () => {
                 </section>
             </main>
  
-            {/* Bottom Nav */}
+            {/* Bottom Nav (유효한 기사 대시보드 및 정산 내역 경로로 이동, 한글 주석) */}
             <nav className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 flex justify-around items-center px-4 py-2 bg-slate-900 text-slate-500 w-[90%] max-w-lg mx-auto rounded-2xl shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] border border-white/10">
-                <button onClick={() => navigate('/driver-main')} className="flex flex-col items-center justify-center px-5 py-2 hover:text-white transition-all">
+                <button onClick={() => navigate('/driver-dashboard')} className="flex flex-col items-center justify-center px-5 py-2 hover:text-white transition-all">
                     <span className="material-symbols-outlined">dashboard</span>
                     <span className="font-black text-[9px] uppercase tracking-widest mt-1">Home</span>
                 </button>
@@ -158,8 +158,8 @@ const FailBidDetailDriver = () => {
                     <span className="material-symbols-outlined">history</span>
                     <span className="font-black text-[9px] uppercase tracking-widest mt-1">History</span>
                 </button>
-                <button onClick={() => navigate('/rating-reply-driver')} className="flex flex-col items-center justify-center px-5 py-2 hover:text-white transition-all">
-                    <span className="material-symbols-outlined">star</span>
+                <button onClick={() => navigate('/payment-history-driver')} className="flex flex-col items-center justify-center px-5 py-2 hover:text-white transition-all">
+                    <span className="material-symbols-outlined">account_balance_wallet</span>
                     <span className="font-black text-[9px] uppercase tracking-widest mt-1">Intel</span>
                 </button>
             </nav>

@@ -787,14 +787,15 @@ router.post('/send-code', async (req, res) => {
 });
 
 /**
- * [App 전용] 휴대폰 인증번호 확인
+ * [App 전용] 휴대폰 인증번호 확인 (5분 만료 및 재사용 방지 검증 포함)
  */
 router.post('/verify-code', async (req, res) => {
     try {
         let { phoneNo, code, type } = req.body;
         if (!phoneNo || !code) return res.status(400).json({ error: '번호와 인증코드를 모두 입력해주세요.' });
 
-        phoneNo = phoneNo.replace(/[^0-9]/g, '');
+        phoneNo = String(phoneNo).replace(/[^0-9]/g, '');
+        const cleanCode = String(code).trim();
         const verificationType = type || 'signup';
         const categoryMap = {
             'signup': 'SIGN_UP',
@@ -803,11 +804,13 @@ router.post('/verify-code', async (req, res) => {
         };
         const category = categoryMap[verificationType] || 'VERIFY';
 
-        // TB_SMS_LOG에서 해당 번호와 카테고리의 가장 최신 인증번호 조회
+        // 한글 주석: TB_SMS_LOG에서 해당 번호와 카테고리의 가장 최신 인증번호 및 경과 시간(초), 상태 조회
         const [rows] = await pool.execute(
-            `SELECT MSG_CONTENT FROM TB_SMS_LOG 
+            `SELECT LOG_SEQ, MSG_CONTENT, SEND_STAT,
+                    TIMESTAMPDIFF(SECOND, REG_DT, NOW()) AS elapsedSec
+             FROM TB_SMS_LOG 
              WHERE RECEIVER_PHONE = ? AND SEND_CATEGORY = ?
-             ORDER BY REG_DT DESC LIMIT 1`,
+             ORDER BY REG_DT DESC, LOG_SEQ DESC LIMIT 1`,
             [phoneNo, category]
         );
 
@@ -815,13 +818,34 @@ router.post('/verify-code', async (req, res) => {
             return res.status(400).json({ success: false, error: '발송된 인증번호가 없습니다.' });
         }
 
-        const msgContent = rows[0].MSG_CONTENT;
-        const match = msgContent.includes(`[${code}]`);
+        const latestLog = rows[0];
+
+        // 한글 주석: 이미 인증에 사용된 번호(VERIFIED)이거나 발송 실패 건인 경우 재사용 차단
+        if (latestLog.SEND_STAT === 'VERIFIED') {
+            return res.status(400).json({ success: false, error: '이미 사용된 인증번호입니다. 인증번호를 다시 발송해 주세요.' });
+        }
+        if (latestLog.SEND_STAT !== 'SUCCESS') {
+            return res.status(400).json({ success: false, error: '유효하지 않은 인증번호입니다. 인증번호를 다시 발송해 주세요.' });
+        }
+
+        // 한글 주석: 발송 후 5분(300초)이 경과한 경우 만료 처리
+        if (latestLog.elapsedSec === null || Number(latestLog.elapsedSec) > 300) {
+            return res.status(400).json({ success: false, error: '인증번호 유효시간(5분)이 만료되었습니다. 다시 발송해 주세요.' });
+        }
+
+        const msgContent = latestLog.MSG_CONTENT || '';
+        const match = msgContent.includes(`[${cleanCode}]`);
 
         if (match) {
+            // 한글 주석: 인증 성공 시 즉시 SEND_STAT을 'VERIFIED'로 변경하여 동일 인증번호 재사용 방지
+            await pool.execute(
+                'UPDATE TB_SMS_LOG SET SEND_STAT = ? WHERE LOG_SEQ = ?',
+                ['VERIFIED', latestLog.LOG_SEQ]
+            );
+
             // 인증 성공 시 서버 자체 토큰 발행 (30분 유효)
             const verifyToken = jwt.sign(
-                { phoneNo, verified: true, type: verificationType },
+                { phoneNo, verified: true, type: verificationType, logSeq: latestLog.LOG_SEQ },
                 JWT_SECRET_KEY,
                 { expiresIn: '30m' }
             );
@@ -838,3 +862,4 @@ router.post('/verify-code', async (req, res) => {
 
 console.log('>>> APP AUTH ROUTER LOADED SUCCESSFULLY');
 module.exports = router;
+

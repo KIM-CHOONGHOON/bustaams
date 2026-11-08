@@ -25,12 +25,97 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
+// 로그인 사용자의 CUST_ID 확인 헬퍼 함수 (한글 주석)
+async function resolveCustId(req) {
+    if (req.user && req.user.custId) return req.user.custId;
+    if (req.user && req.user.userId) {
+        const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [req.user.userId]);
+        if (uRows.length > 0) return uRows[0].CUST_ID;
+    }
+    return null;
+}
+
+// 채팅방 참여 권한 검증 헬퍼 함수 (당사자 여부 확인, 한글 주석)
+async function isAuthorizedForChatRoom(custId, { chatSeq, resId, reqId }) {
+    if (!custId) return false;
+
+    // 1) 이미 채팅방이 존재하는 경우 해당 방의 예약/요청 당사자인지 또는 등록된 참여자인지 확인
+    if (chatSeq) {
+        const [roomInfo] = await pool.execute(
+            `SELECT REQ_ID, RES_ID, CREATED_BY_CUST_ID FROM TB_CHAT_LOG WHERE CHAT_LOG_SEQ = ?`,
+            [chatSeq]
+        );
+        if (roomInfo.length === 0) return false;
+
+        const rResId = roomInfo[0].RES_ID || resId;
+        const rReqId = roomInfo[0].REQ_ID || reqId;
+
+        // 예약 테이블에서 당사자(여행자 또는 기사)인지 확인
+        if (rResId) {
+            const [resAuth] = await pool.execute(
+                `SELECT 1 FROM TB_BUS_RESERVATION WHERE RES_ID = ? AND (TRAVELER_ID = ? OR DRIVER_ID = ?) LIMIT 1`,
+                [rResId, custId, custId]
+            );
+            if (resAuth.length > 0) return true;
+        }
+        if (rReqId) {
+            const [reqResAuth] = await pool.execute(
+                `SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = ? AND (TRAVELER_ID = ? OR DRIVER_ID = ?) LIMIT 1`,
+                [rReqId, custId, custId]
+            );
+            if (reqResAuth.length > 0) return true;
+
+            const [reqOwnerAuth] = await pool.execute(
+                `SELECT 1 FROM TB_AUCTION_REQ WHERE REQ_ID = ? AND TRAVELER_ID = ? LIMIT 1`,
+                [rReqId, custId]
+            );
+            if (reqOwnerAuth.length > 0) return true;
+        }
+
+        // 예약/요청 ID가 연결되지 않은 방인 경우 TB_CHAT_LOG_PART에 기존 등록된 참여자인지 확인
+        const [partRows] = await pool.execute(
+            `SELECT 1 FROM TB_CHAT_LOG_PART WHERE CHAT_LOG_SEQ = ? AND CUST_ID = ? LIMIT 1`,
+            [chatSeq, custId]
+        );
+        return partRows.length > 0;
+    }
+
+    // 2) 신규 방 생성 또는 RES_ID / REQ_ID로 접근 시 당사자 여부 확인
+    if (resId) {
+        const [resAuth] = await pool.execute(
+            `SELECT 1 FROM TB_BUS_RESERVATION WHERE RES_ID = ? AND (TRAVELER_ID = ? OR DRIVER_ID = ?) LIMIT 1`,
+            [resId, custId, custId]
+        );
+        if (resAuth.length > 0) return true;
+    }
+    if (reqId) {
+        const [reqResAuth] = await pool.execute(
+            `SELECT 1 FROM TB_BUS_RESERVATION WHERE REQ_ID = ? AND (TRAVELER_ID = ? OR DRIVER_ID = ?) LIMIT 1`,
+            [reqId, custId, custId]
+        );
+        if (reqResAuth.length > 0) return true;
+
+        const [reqOwnerAuth] = await pool.execute(
+            `SELECT 1 FROM TB_AUCTION_REQ WHERE REQ_ID = ? AND TRAVELER_ID = ? LIMIT 1`,
+            [reqId, custId]
+        );
+        if (reqOwnerAuth.length > 0) return true;
+    }
+
+    return false;
+}
+
 // 1. 채팅방 정보 조회 및 생성 (RES_ID, REQ_ID, 또는 CHAT_LOG_SEQ 기준)
 router.get('/room/:resId', authenticateToken, async (req, res) => {
     const { resId } = req.params;
-    const { custId, userType } = req.user;
+    const { userType } = req.user;
 
     try {
+        const custId = await resolveCustId(req);
+        if (!custId) {
+            return res.status(401).json({ success: false, error: '사용자 인증 정보를 확인할 수 없습니다.' });
+        }
+
         let chatSeq = null;
         let chatRoom = null;
 
@@ -45,44 +130,48 @@ router.get('/room/:resId', authenticateToken, async (req, res) => {
             if (bySeq.length > 0) {
                 chatRoom = bySeq[0];
                 chatSeq = chatRoom.CHAT_SEQ;
+            } else {
+                return res.status(404).json({ success: false, error: '존재하지 않는 채팅방입니다.' });
             }
         }
 
         // 1-2. 고유한 RES_ID 혹은 REQ_ID 분석
-        let actualResId = null;
-        let reqId = null;
+        let actualResId = chatRoom ? chatRoom.RES_ID : null;
+        let reqId = chatRoom ? chatRoom.REQ_ID : null;
 
-        if (resId.startsWith('RES_')) {
-            actualResId = resId;
-            const [resRows] = await pool.execute(
-                `SELECT REQ_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?`,
-                [resId]
-            );
-            if (resRows.length > 0) {
-                reqId = resRows[0].REQ_ID;
-            }
-        } else if (resId.startsWith('REQ_')) {
-            reqId = resId;
-            if (userType === 'DRIVER') {
-                const [drvResRows] = await pool.execute(
-                    `SELECT RES_ID FROM TB_BUS_RESERVATION WHERE REQ_ID = ? AND DRIVER_ID = ? LIMIT 1`,
-                    [reqId, custId]
+        if (!chatRoom) {
+            if (resId.startsWith('RES_')) {
+                actualResId = resId;
+                const [resRows] = await pool.execute(
+                    `SELECT REQ_ID FROM TB_BUS_RESERVATION WHERE RES_ID = ?`,
+                    [resId]
                 );
-                if (drvResRows.length > 0) {
-                    actualResId = drvResRows[0].RES_ID;
+                if (resRows.length > 0) {
+                    reqId = resRows[0].REQ_ID;
+                }
+            } else if (resId.startsWith('REQ_')) {
+                reqId = resId;
+                if (userType === 'DRIVER') {
+                    const [drvResRows] = await pool.execute(
+                        `SELECT RES_ID FROM TB_BUS_RESERVATION WHERE REQ_ID = ? AND DRIVER_ID = ? LIMIT 1`,
+                        [reqId, custId]
+                    );
+                    if (drvResRows.length > 0) {
+                        actualResId = drvResRows[0].RES_ID;
+                    }
+                } else {
+                    const [custResRows] = await pool.execute(
+                        `SELECT RES_ID FROM TB_BUS_RESERVATION WHERE REQ_ID = ? LIMIT 1`,
+                        [reqId]
+                    );
+                    if (custResRows.length > 0) {
+                        actualResId = custResRows[0].RES_ID;
+                    }
                 }
             } else {
-                const [custResRows] = await pool.execute(
-                    `SELECT RES_ID FROM TB_BUS_RESERVATION WHERE REQ_ID = ? LIMIT 1`,
-                    [reqId]
-                );
-                if (custResRows.length > 0) {
-                    actualResId = custResRows[0].RES_ID;
-                }
+                actualResId = resId;
+                reqId = resId;
             }
-        } else {
-            actualResId = resId;
-            reqId = resId;
         }
 
         // 1-3. RES_ID 기준 기존 방 검색 (1:1 채널 고유성 보장)
@@ -99,6 +188,16 @@ router.get('/room/:resId', authenticateToken, async (req, res) => {
                 chatRoom = rooms[0];
                 chatSeq = chatRoom.CHAT_SEQ;
             }
+        }
+
+        // [권한 검증] 비참여자가 채팅방을 조회하거나 참여자로 자동 등록되는 것을 차단 (한글 주석)
+        const isAllowed = await isAuthorizedForChatRoom(custId, {
+            chatSeq,
+            resId: actualResId,
+            reqId
+        });
+        if (!isAllowed) {
+            return res.status(403).json({ success: false, error: '해당 채팅방에 접근할 권한이 없습니다.' });
         }
 
         // 1-4. 방이 없는 경우 신규 1:1 대화방 생성
@@ -197,9 +296,15 @@ router.get('/room/:resId', authenticateToken, async (req, res) => {
 // 2. 채팅 내역 조회
 router.get('/history/:chatSeq', authenticateToken, async (req, res) => {
     const { chatSeq } = req.params;
-    const { custId } = req.user;
 
     try {
+        const custId = await resolveCustId(req);
+        // [권한 검증] 해당 채팅방의 적법한 참여자인지 확인 (비참여자 조회 차단, 한글 주석)
+        const isAllowed = await isAuthorizedForChatRoom(custId, { chatSeq });
+        if (!isAllowed) {
+            return res.status(403).json({ success: false, error: '채팅 내역을 조회할 권한이 없습니다.' });
+        }
+
         // 내역 조회 시 해당 방의 로그인한 사용자 LAST_READ_DT를 현재 시간으로 즉시 업데이트 (한글 주석)
         try {
             await pool.execute(
@@ -231,10 +336,16 @@ router.get('/history/:chatSeq', authenticateToken, async (req, res) => {
 // 3. 메시지 전송
 router.post('/send', authenticateToken, async (req, res) => {
     const { chatSeq, msgBody, msgKind = 'TEXT', fileId = null } = req.body;
-    const { custId, userType } = req.user;
+    const { userType } = req.user;
 
     if (!chatSeq || !msgBody) {
         return res.status(400).json({ success: false, error: '필수 데이터가 누락되었습니다.' });
+    }
+
+    const custId = await resolveCustId(req);
+    const isAllowed = await isAuthorizedForChatRoom(custId, { chatSeq });
+    if (!isAllowed) {
+        return res.status(403).json({ success: false, error: '해당 채팅방에 메시지를 전송할 권한이 없습니다.' });
     }
 
     const connection = await pool.getConnection();

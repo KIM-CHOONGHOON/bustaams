@@ -222,7 +222,7 @@ const InquiryForm = () => {
                     <span className="material-symbols-outlined text-[20px]">confirmation_number</span>
                     <span className="font-bold text-[9px] uppercase tracking-widest mt-0.5">예약</span>
                 </button>
-                <button onClick={() => navigate('/chat-list')} className="flex flex-col items-center justify-center text-slate-500 px-4 py-2 hover:text-teal-700 transition-colors">
+                <button onClick={() => navigate('/chat-list-customer')} className="flex flex-col items-center justify-center text-slate-500 px-4 py-2 hover:text-teal-700 transition-colors">
                     <span className="material-symbols-outlined text-[20px]">chat_bubble</span>
                     <span className="font-bold text-[9px] uppercase tracking-widest mt-0.5">메시지</span>
                 </button>

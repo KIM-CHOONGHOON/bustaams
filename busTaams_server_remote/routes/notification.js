@@ -8,25 +8,38 @@ module.exports = function createNotificationRouter(pool, app) {
         app.use('/api/app/notifications', router);
     }
 
+    // 로그인한 사용자의 고유 CUST_ID를 토큰에서 추출하는 헬퍼 함수 (한글 주석)
+    async function resolveTokenCustId(req) {
+        if (req.user && req.user.custId) {
+            return req.user.custId;
+        }
+        if (req.user && req.user.userId) {
+            const [uRows] = await pool.execute(
+                'SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?',
+                [req.user.userId]
+            );
+            if (uRows.length > 0) {
+                return uRows[0].CUST_ID;
+            }
+        }
+        return null;
+    }
+
     /**
      * 사용자의 알림 내역 조회
      * GET /api/app/notifications
-     * (이제 custId를 쿼리로 보내지 않아도 토큰에서 자동으로 추출합니다)
+     * (본인 토큰의 custId만 허용하며, 타인의 custId 요청 시 403 차단)
      */
     router.get('/', authenticateToken, async (req, res) => {
         try {
-            let custId = req.query.custId;
-            
-            // 쿼리에 custId가 없으면 토큰 정보를 바탕으로 DB에서 조회
-            if (!custId) {
-                const [uRows] = await pool.execute(
-                    'SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?',
-                    [req.user.userId]
-                );
-                if (uRows.length === 0) {
-                    return res.status(404).json({ error: 'User not found' });
-                }
-                custId = uRows[0].CUST_ID;
+            const tokenCustId = await resolveTokenCustId(req);
+            if (!tokenCustId) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+
+            // 쿼리에 다른 사용자의 custId가 전달된 경우 권한 오류 반환 (한글 주석)
+            if (req.query.custId && String(req.query.custId).trim() !== String(tokenCustId).trim()) {
+                return res.status(403).json({ error: '다른 사용자의 알림을 조회할 권한이 없습니다.' });
             }
 
             const [rows] = await pool.execute(
@@ -34,7 +47,7 @@ module.exports = function createNotificationRouter(pool, app) {
                  WHERE CUST_ID = ? 
                  ORDER BY REG_DT DESC 
                  LIMIT 50`,
-                [custId]
+                [tokenCustId]
             );
             res.json(rows);
         } catch (e) {
@@ -49,22 +62,36 @@ module.exports = function createNotificationRouter(pool, app) {
      */
     router.post('/read', authenticateToken, async (req, res) => {
         const { seq } = req.body;
-        let custId = req.body.custId;
 
         if (!seq) {
             return res.status(400).json({ error: 'seq is required' });
         }
 
         try {
-            if (!custId) {
-                const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [req.user.userId]);
-                if (uRows.length === 0) return res.status(404).json({ error: 'User not found' });
-                custId = uRows[0].CUST_ID;
+            const tokenCustId = await resolveTokenCustId(req);
+            if (!tokenCustId) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+
+            if (req.body.custId && String(req.body.custId).trim() !== String(tokenCustId).trim()) {
+                return res.status(403).json({ error: '다른 사용자의 알림을 변경할 권한이 없습니다.' });
+            }
+
+            // 대상 알림 소유자 확인 (한글 주석)
+            const [targetRows] = await pool.execute(
+                'SELECT CUST_ID FROM TB_NOTIFICATION WHERE SEQ = ?',
+                [seq]
+            );
+            if (targetRows.length === 0) {
+                return res.status(404).json({ error: '알림을 찾을 수 없습니다.' });
+            }
+            if (String(targetRows[0].CUST_ID).trim() !== String(tokenCustId).trim()) {
+                return res.status(403).json({ error: '다른 사용자의 알림을 변경할 권한이 없습니다.' });
             }
 
             await pool.execute(
                 `UPDATE TB_NOTIFICATION SET READ_YN = 'Y' WHERE SEQ = ? AND CUST_ID = ?`,
-                [seq, custId]
+                [seq, tokenCustId]
             );
             res.json({ ok: true });
         } catch (e) {
@@ -78,18 +105,19 @@ module.exports = function createNotificationRouter(pool, app) {
      * POST /api/app/notifications/read-all
      */
     router.post('/read-all', authenticateToken, async (req, res) => {
-        let custId = req.body.custId;
-
         try {
-            if (!custId) {
-                const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [req.user.userId]);
-                if (uRows.length === 0) return res.status(404).json({ error: 'User not found' });
-                custId = uRows[0].CUST_ID;
+            const tokenCustId = await resolveTokenCustId(req);
+            if (!tokenCustId) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+
+            if (req.body.custId && String(req.body.custId).trim() !== String(tokenCustId).trim()) {
+                return res.status(403).json({ error: '다른 사용자의 알림을 변경할 권한이 없습니다.' });
             }
 
             await pool.execute(
                 `UPDATE TB_NOTIFICATION SET READ_YN = 'Y' WHERE CUST_ID = ?`,
-                [custId]
+                [tokenCustId]
             );
             res.json({ ok: true });
         } catch (e) {
@@ -104,22 +132,36 @@ module.exports = function createNotificationRouter(pool, app) {
      */
     router.delete('/:seq', authenticateToken, async (req, res) => {
         const { seq } = req.params;
-        let custId = req.query.custId;
 
         if (!seq) {
             return res.status(400).json({ error: 'seq is required' });
         }
 
         try {
-            if (!custId) {
-                const [uRows] = await pool.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [req.user.userId]);
-                if (uRows.length === 0) return res.status(404).json({ error: 'User not found' });
-                custId = uRows[0].CUST_ID;
+            const tokenCustId = await resolveTokenCustId(req);
+            if (!tokenCustId) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+
+            if (req.query.custId && String(req.query.custId).trim() !== String(tokenCustId).trim()) {
+                return res.status(403).json({ error: '다른 사용자의 알림을 삭제할 권한이 없습니다.' });
+            }
+
+            // 대상 알림 소유자 확인 (한글 주석)
+            const [targetRows] = await pool.execute(
+                'SELECT CUST_ID FROM TB_NOTIFICATION WHERE SEQ = ?',
+                [seq]
+            );
+            if (targetRows.length === 0) {
+                return res.status(404).json({ error: '알림을 찾을 수 없습니다.' });
+            }
+            if (String(targetRows[0].CUST_ID).trim() !== String(tokenCustId).trim()) {
+                return res.status(403).json({ error: '다른 사용자의 알림을 삭제할 권한이 없습니다.' });
             }
 
             await pool.execute(
                 `DELETE FROM TB_NOTIFICATION WHERE SEQ = ? AND CUST_ID = ?`,
-                [seq, custId]
+                [seq, tokenCustId]
             );
             res.json({ ok: true });
         } catch (e) {
