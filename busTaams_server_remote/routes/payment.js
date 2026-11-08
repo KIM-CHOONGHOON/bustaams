@@ -283,40 +283,62 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
         const limitDate = new Date('2026-08-17T23:59:59');
 
         if (type === 'RES') {
+            // [동시성 제어] 대상 예약 행 비관적 잠금 (FOR UPDATE) 및 중복 반영 재검사 (한글 주석)
+            const [resRows] = await connection.execute(
+                `SELECT REQ_ID, REQ_BUS_SEQ, CUSTOMER_PAY_ID, CUSTOMER_PAY_STAT 
+                 FROM TB_BUS_RESERVATION 
+                 WHERE RES_ID = ? 
+                 FOR UPDATE`,
+                [targetId]
+            );
+            if (resRows.length === 0) {
+                console.warn(`>>> [updateDBAfterPayment RES] Reservation not found: ${targetId}`);
+                return { success: false, error: '예약 정보를 찾을 수 없습니다.' };
+            }
+
+            // 락 획득 후 이미 동일 TID로 결제 완료 처리된 경우 중복 후처리(이력/알림) 건너뜀 (한글 주석)
+            if (resRows[0].CUSTOMER_PAY_STAT === 'Y' && resRows[0].CUSTOMER_PAY_ID === tid) {
+                console.log(`>>> [updateDBAfterPayment RES] Already processed TID: ${tid} for RES_ID: ${targetId}. Skipping duplicate update.`);
+                return { success: true, alreadyProcessed: true };
+            }
+
             if (now <= limitDate && finalAmt === 1100) {
                 console.log(`>>> [TEST PAYMENT OVERRIDE] Restoring database recorded amount to 33,000 KRW (paid: 1,100 KRW)`);
                 finalAmt = 33000;
             }
             console.log(`>>> [updateDBAfterPayment RES] Updating customer payment to DRIVER_PAY_WAIT for RES_ID: ${targetId}`);
             
-            const [bidRows] = await connection.execute('SELECT REQ_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [targetId]);
-            if (bidRows.length > 0) {
-                const { REQ_ID: reqId, REQ_BUS_SEQ: unitSeq } = bidRows[0];
+            const { REQ_ID: reqId, REQ_BUS_SEQ: unitSeq } = resRows[0];
 
-                // 1. TB_BUS_RESERVATION 결제 정보 적재 및 상태 전이 (해당 버스 개별)
-                await connection.execute(
-                    `UPDATE TB_BUS_RESERVATION 
-                     SET DATA_STAT = 'DRIVER_PAY_WAIT',
-                         CUSTOMER_PAY_STAT = 'Y',
-                         CUSTOMER_PAY_AMT = ?,
-                         CUSTOMER_PAY_DT = NOW(),
-                         CUSTOMER_PAY_ID = ?,
-                         DONE_DT = IFNULL(DONE_DT, NOW()),
-                         MOD_DT = NOW() 
-                     WHERE RES_ID = ?`,
-                    [finalAmt, tid || `PAY-CUST-${Date.now()}`, targetId]
-                );
+            // 1. TB_BUS_RESERVATION 결제 정보 적재 및 상태 전이 (해당 버스 개별)
+            await connection.execute(
+                `UPDATE TB_BUS_RESERVATION 
+                 SET DATA_STAT = 'DRIVER_PAY_WAIT',
+                     CUSTOMER_PAY_STAT = 'Y',
+                     CUSTOMER_PAY_AMT = ?,
+                     CUSTOMER_PAY_DT = NOW(),
+                     CUSTOMER_PAY_ID = ?,
+                     DONE_DT = IFNULL(DONE_DT, NOW()),
+                     MOD_DT = NOW() 
+                 WHERE RES_ID = ?`,
+                [finalAmt, tid || `PAY-CUST-${Date.now()}`, targetId]
+            );
 
-                // 2. TB_AUCTION_REQ_BUS 상태를 DRIVER_PAY_WAIT으로 변경 (해당 버스 슬롯 개별)
-                await connection.execute(
-                    `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'DRIVER_PAY_WAIT', MOD_DT = NOW() 
-                     WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?`,
-                    [reqId, unitSeq]
-                );
+            // 2. TB_AUCTION_REQ_BUS 상태를 DRIVER_PAY_WAIT으로 변경 (해당 버스 슬롯 개별)
+            await connection.execute(
+                `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'DRIVER_PAY_WAIT', MOD_DT = NOW() 
+                 WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?`,
+                [reqId, unitSeq]
+            );
 
-                // 3. TB_PAYMENT_MASTER 결제 이력 저장 (고객 단건 결제)
-                const [custRows] = await connection.execute('SELECT TRAVELER_ID AS CUST_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ?', [reqId]);
-                const custId = custRows.length > 0 ? custRows[0].CUST_ID : 'CUSTOMER';
+            // 3. TB_PAYMENT_MASTER 결제 이력 저장 (동일 PG_TID 중복 적재 방지)
+            const [custRows] = await connection.execute('SELECT TRAVELER_ID AS CUST_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ?', [reqId]);
+            const custId = custRows.length > 0 ? custRows[0].CUST_ID : 'CUSTOMER';
+            const [existPayMaster] = await connection.execute(
+                'SELECT PAY_ID FROM TB_PAYMENT_MASTER WHERE PG_TID = ? AND PAY_STATUS IN ("SUCCESS", "COMPLETED") LIMIT 1',
+                [tid]
+            );
+            if (existPayMaster.length === 0) {
                 await insertPaymentMaster(connection, {
                     orderNo: oid,
                     reqId: reqId,
@@ -330,18 +352,43 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                     cardName: payExtraInfo.cardName || null,
                     cardMaskNo: payExtraInfo.cardMaskNo || null
                 });
-
-                // 4. TB_AUCTION_REQ 마스터 상태 변경 및 결제 상태 COMPLETED 변경
-                await checkAndUpdateMasterStatus(connection, reqId, 'CUSTOMER');
-                await connection.execute(
-                    'UPDATE TB_AUCTION_REQ SET PAYMENT_STS = "COMPLETED", MOD_DT = NOW() WHERE REQ_ID = ?',
-                    [reqId]
-                );
-
-                // 5. 해당 버스 기사에게 PUSH 알림 전송
-                await sendDriverPaymentPushNotification(connection, reqId, unitSeq, targetId);
             }
+
+            // 4. TB_AUCTION_REQ 마스터 상태 변경 및 결제 상태 COMPLETED 변경
+            await checkAndUpdateMasterStatus(connection, reqId, 'CUSTOMER');
+            await connection.execute(
+                'UPDATE TB_AUCTION_REQ SET PAYMENT_STS = "COMPLETED", MOD_DT = NOW() WHERE REQ_ID = ?',
+                [reqId]
+            );
+
+            // 5. 해당 버스 기사에게 PUSH 알림 전송
+            await sendDriverPaymentPushNotification(connection, reqId, unitSeq, targetId);
+            return { success: true };
         } else if (type === 'REQ') {
+            // [동시성 제어] 대상 여정 행 비관적 잠금 (FOR UPDATE) 및 중복 반영 재검사 (한글 주석)
+            const [reqRows] = await connection.execute(
+                `SELECT REQ_ID, TRAVELER_ID, PAYMENT_STS, DATA_STAT 
+                 FROM TB_AUCTION_REQ 
+                 WHERE REQ_ID = ? 
+                 FOR UPDATE`,
+                [targetId]
+            );
+            if (reqRows.length === 0) {
+                console.warn(`>>> [updateDBAfterPayment REQ] Request not found: ${targetId}`);
+                return { success: false, error: '요청 정보를 찾을 수 없습니다.' };
+            }
+
+            // 락 획득 후 이미 해당 TID로 전체 결제가 반영되었는지 확인 (한글 주석)
+            const [alreadyPayRows] = await connection.execute(
+                `SELECT 1 FROM TB_BUS_RESERVATION 
+                 WHERE REQ_ID = ? AND CUSTOMER_PAY_ID = ? AND CUSTOMER_PAY_STAT = 'Y' LIMIT 1`,
+                [targetId, tid]
+            );
+            if (reqRows[0].PAYMENT_STS === 'COMPLETED' && alreadyPayRows.length > 0) {
+                console.log(`>>> [updateDBAfterPayment REQ] Already processed TID: ${tid} for REQ_ID: ${targetId}. Skipping duplicate update.`);
+                return { success: true, alreadyProcessed: true };
+            }
+
             if (now <= limitDate && finalAmt === 1100) {
                 console.log(`>>> [TEST PAYMENT OVERRIDE] Restoring database recorded amount to 33,000 KRW (paid: 1,100 KRW)`);
                 finalAmt = 33000;
@@ -375,22 +422,27 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                 [targetId]
             );
 
-            // 3. TB_PAYMENT_MASTER 결제 이력 저장 (고객 전체 결제)
-            const [custRows] = await connection.execute('SELECT TRAVELER_ID AS CUST_ID FROM TB_AUCTION_REQ WHERE REQ_ID = ?', [targetId]);
-            const custId = custRows.length > 0 ? custRows[0].CUST_ID : 'CUSTOMER';
-            await insertPaymentMaster(connection, {
-                orderNo: oid,
-                reqId: targetId,
-                custId: custId,
-                payAmount: finalAmt,
-                pgTid: tid,
-                cardAuthNo: payExtraInfo.cardAuthNo || null,
-                pgResultCode: payExtraInfo.pgResultCode || '0000',
-                pgResultMsg: payExtraInfo.pgResultMsg || '정상결제',
-                cardCode: payExtraInfo.cardCode || null,
-                cardName: payExtraInfo.cardName || null,
-                cardMaskNo: payExtraInfo.cardMaskNo || null
-            });
+            // 3. TB_PAYMENT_MASTER 결제 이력 저장 (동일 PG_TID 중복 적재 방지)
+            const custId = reqRows[0].TRAVELER_ID || 'CUSTOMER';
+            const [existPayMaster] = await connection.execute(
+                'SELECT PAY_ID FROM TB_PAYMENT_MASTER WHERE PG_TID = ? AND PAY_STATUS IN ("SUCCESS", "COMPLETED") LIMIT 1',
+                [tid]
+            );
+            if (existPayMaster.length === 0) {
+                await insertPaymentMaster(connection, {
+                    orderNo: oid,
+                    reqId: targetId,
+                    custId: custId,
+                    payAmount: finalAmt,
+                    pgTid: tid,
+                    cardAuthNo: payExtraInfo.cardAuthNo || null,
+                    pgResultCode: payExtraInfo.pgResultCode || '0000',
+                    pgResultMsg: payExtraInfo.pgResultMsg || '정상결제',
+                    cardCode: payExtraInfo.cardCode || null,
+                    cardName: payExtraInfo.cardName || null,
+                    cardMaskNo: payExtraInfo.cardMaskNo || null
+                });
+            }
 
             // 4. TB_AUCTION_REQ 마스터 상태 변경
             await checkAndUpdateMasterStatus(connection, targetId, 'CUSTOMER');
@@ -403,48 +455,67 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
             for (const bid of bids) {
                 await sendDriverPaymentPushNotification(connection, targetId, bid.REQ_BUS_SEQ, bid.RES_ID);
             }
+            return { success: true };
         } else if (type === 'DRV') {
-            // 기사 데이터 이용료 결제 완료 처리 -> 기사 개별 레코드 FINAL_APPROVAL_WAIT 변경 및 마스터 상태 체크
-            console.log(`>>> [updateDBAfterPayment DRV] Updating driver payment to FINAL_APPROVAL_WAIT for RES_ID: ${targetId}`);
-
+            // [동시성 제어] 대상 예약 행 비관적 잠금 (FOR UPDATE) 및 중복 반영 재검사 (한글 주석)
             const [priceRows] = await connection.execute(
-                'SELECT REQ_ID, DRIVER_ID, DRIVER_BIDDING_PRICE FROM TB_BUS_RESERVATION WHERE RES_ID = ?',
+                `SELECT REQ_ID, DRIVER_ID, DRIVER_BIDDING_PRICE, DRIVER_PAY_ID, DRIVER_PAY_STAT 
+                 FROM TB_BUS_RESERVATION 
+                 WHERE RES_ID = ? 
+                 FOR UPDATE`,
                 [targetId]
             );
-            if (priceRows.length > 0) {
-                const { REQ_ID: reqId, DRIVER_ID: driverId, DRIVER_BIDDING_PRICE: biddingPriceStr } = priceRows[0];
-                const biddingPrice = Number(biddingPriceStr) || 0;
+            if (priceRows.length === 0) {
+                console.warn(`>>> [updateDBAfterPayment DRV] Reservation not found: ${targetId}`);
+                return { success: false, error: '예약 정보를 찾을 수 없습니다.' };
+            }
 
-                // 동적 계산 수수료 산출
-                const dynamic = await calculateDriverDynamicFee(connection, driverId, biddingPrice);
+            // 락 획득 후 이미 기사 결제가 반영되었는지 확인 (동시 호출 시 결제 이력 및 이용권 중복 차감 완벽 차단, 한글 주석)
+            if (priceRows[0].DRIVER_PAY_STAT === 'Y' && priceRows[0].DRIVER_PAY_ID === tid) {
+                console.log(`>>> [updateDBAfterPayment DRV] Already processed TID: ${tid} for RES_ID: ${targetId}. Skipping duplicate update and USE_CNT increment.`);
+                return { success: true, alreadyProcessed: true };
+            }
 
-                // 1. TB_BUS_RESERVATION 기사 결제 완료 업데이트 및 개별 상태를 'FINAL_APPROVAL_WAIT' (고객 최종 승인대기)로 변경
+            console.log(`>>> [updateDBAfterPayment DRV] Updating driver payment to FINAL_APPROVAL_WAIT for RES_ID: ${targetId}`);
+
+            const { REQ_ID: reqId, DRIVER_ID: driverId, DRIVER_BIDDING_PRICE: biddingPriceStr } = priceRows[0];
+            const biddingPrice = Number(biddingPriceStr) || 0;
+
+            // 동적 계산 수수료 산출
+            const dynamic = await calculateDriverDynamicFee(connection, driverId, biddingPrice);
+
+            // 1. TB_BUS_RESERVATION 기사 결제 완료 업데이트 및 개별 상태를 'FINAL_APPROVAL_WAIT' (고객 최종 승인대기)로 변경
+            await connection.execute(
+                `UPDATE TB_BUS_RESERVATION 
+                 SET DRIVER_PAY_STAT = 'Y',
+                     DRIVER_PAY_AMT = ?,
+                     DRIVER_PAY_DT = NOW(),
+                     DRIVER_PAY_ID = ?,
+                     DRIVER_FEE_RATE = ?,
+                     DATA_STAT = 'FINAL_APPROVAL_WAIT',
+                     MOD_ID = ?,
+                     MOD_DT = NOW()
+                 WHERE RES_ID = ?`,
+                [dynamic.feeTotalAmt, tid || `PAY-DRIVER-${Date.now()}`, dynamic.feeRate, driverId, targetId]
+            );
+
+            // 2. TB_AUCTION_REQ_BUS 개별 차량 슬롯 상태도 'FINAL_APPROVAL_WAIT'로 변경
+            const [bRows] = await connection.execute('SELECT REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [targetId]);
+            if (bRows.length > 0) {
+                const { REQ_BUS_SEQ: uSeq } = bRows[0];
                 await connection.execute(
-                    `UPDATE TB_BUS_RESERVATION 
-                     SET DRIVER_PAY_STAT = 'Y',
-                         DRIVER_PAY_AMT = ?,
-                         DRIVER_PAY_DT = NOW(),
-                         DRIVER_PAY_ID = ?,
-                         DRIVER_FEE_RATE = ?,
-                         DATA_STAT = 'FINAL_APPROVAL_WAIT',
-                         MOD_ID = ?,
-                         MOD_DT = NOW()
-                     WHERE RES_ID = ?`,
-                    [dynamic.feeTotalAmt, tid || `PAY-DRIVER-${Date.now()}`, dynamic.feeRate, driverId, targetId]
+                    `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'FINAL_APPROVAL_WAIT', MOD_ID = ?, MOD_DT = NOW() 
+                     WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?`,
+                    [driverId, reqId, uSeq]
                 );
+            }
 
-                // 2. TB_AUCTION_REQ_BUS 개별 차량 슬롯 상태도 'FINAL_APPROVAL_WAIT'로 변경
-                const [bRows] = await connection.execute('SELECT REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [targetId]);
-                if (bRows.length > 0) {
-                    const { REQ_BUS_SEQ: uSeq } = bRows[0];
-                    await connection.execute(
-                        `UPDATE TB_AUCTION_REQ_BUS SET DATA_STAT = 'FINAL_APPROVAL_WAIT', MOD_ID = ?, MOD_DT = NOW() 
-                         WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?`,
-                        [driverId, reqId, uSeq]
-                    );
-                }
-
-                // 3. TB_PAYMENT_MASTER 결제 이력 저장 (기사 결제)
+            // 3. TB_PAYMENT_MASTER 결제 이력 저장 (동일 PG_TID 중복 적재 방지)
+            const [existPayMaster] = await connection.execute(
+                'SELECT PAY_ID FROM TB_PAYMENT_MASTER WHERE PG_TID = ? AND PAY_STATUS IN ("SUCCESS", "COMPLETED") LIMIT 1',
+                [tid]
+            );
+            if (existPayMaster.length === 0) {
                 await insertPaymentMaster(connection, {
                     orderNo: oid,
                     reqId: reqId,
@@ -458,38 +529,39 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
                     cardName: payExtraInfo.cardName || null,
                     cardMaskNo: payExtraInfo.cardMaskNo || null
                 });
-
-                // 4. TB_AUCTION_REQ 마스터 상태도 모든 버스가 결제 완료되었을 때만 'FINAL_APPROVAL_WAIT'로 변경
-                const newMasterStatus = await checkAndUpdateMasterStatus(connection, reqId, driverId);
-                if (newMasterStatus === 'FINAL_APPROVAL_WAIT') {
-                    await sendCustomerFinalApprovalPushNotification(connection, reqId);
-                }
-
-                // 5. TB_MOM_MEMBER 사용량(USE_CNT) 증가 처리
-                const yyyyMM = now.getFullYear().toString() + String(now.getMonth() + 1).padStart(2, '0');
-                let basicCnt = 0;
-                if (dynamic.feePolicy === 'DRIVER_GENERAL') {
-                    basicCnt = 10;
-                } else if (dynamic.feePolicy === 'DRIVER_MIDDLE') {
-                    basicCnt = 20;
-                } else if (dynamic.feePolicy === 'DRIVER_HIGH') {
-                    basicCnt = 30;
-                }
-
-                if (['DRIVER_GENERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH'].includes(dynamic.feePolicy)) {
-                    await connection.execute(
-                        `INSERT INTO TB_MOM_MEMBER (
-                            CUST_ID, YYYYMM, FEE_POLICY, BASIC_CNT, USE_CNT, REMAINING_CNT, REG_DT, REG_ID, MOD_DT, MOD_ID
-                         ) VALUES (?, ?, ?, ?, 1, ?, NOW(), ?, NOW(), ?)
-                         ON DUPLICATE KEY UPDATE
-                            USE_CNT = USE_CNT + 1,
-                            REMAINING_CNT = IF(BASIC_CNT > USE_CNT, BASIC_CNT - USE_CNT, 0),
-                            MOD_DT = NOW(),
-                            MOD_ID = ?`,
-                        [driverId, yyyyMM, dynamic.feePolicy, basicCnt, basicCnt - 1, driverId, driverId, driverId, driverId]
-                    );
-                }
             }
+
+            // 4. TB_AUCTION_REQ 마스터 상태도 모든 버스가 결제 완료되었을 때만 'FINAL_APPROVAL_WAIT'로 변경
+            const newMasterStatus = await checkAndUpdateMasterStatus(connection, reqId, driverId);
+            if (newMasterStatus === 'FINAL_APPROVAL_WAIT') {
+                await sendCustomerFinalApprovalPushNotification(connection, reqId);
+            }
+
+            // 5. TB_MOM_MEMBER 사용량(USE_CNT) 증가 처리 (락 획득 후 단 1회만 안전하게 실행됨, 한글 주석)
+            const yyyyMM = now.getFullYear().toString() + String(now.getMonth() + 1).padStart(2, '0');
+            let basicCnt = 0;
+            if (dynamic.feePolicy === 'DRIVER_GENERAL') {
+                basicCnt = 10;
+            } else if (dynamic.feePolicy === 'DRIVER_MIDDLE') {
+                basicCnt = 20;
+            } else if (dynamic.feePolicy === 'DRIVER_HIGH') {
+                basicCnt = 30;
+            }
+
+            if (['DRIVER_GENERAL', 'DRIVER_MIDDLE', 'DRIVER_HIGH'].includes(dynamic.feePolicy)) {
+                await connection.execute(
+                    `INSERT INTO TB_MOM_MEMBER (
+                        CUST_ID, YYYYMM, FEE_POLICY, BASIC_CNT, USE_CNT, REMAINING_CNT, REG_DT, REG_ID, MOD_DT, MOD_ID
+                     ) VALUES (?, ?, ?, ?, 1, ?, NOW(), ?, NOW(), ?)
+                     ON DUPLICATE KEY UPDATE
+                        USE_CNT = USE_CNT + 1,
+                        REMAINING_CNT = IF(BASIC_CNT > USE_CNT, BASIC_CNT - USE_CNT, 0),
+                        MOD_DT = NOW(),
+                        MOD_ID = ?`,
+                    [driverId, yyyyMM, dynamic.feePolicy, basicCnt, basicCnt - 1, driverId, driverId, driverId, driverId]
+                );
+            }
+            return { success: true };
         }
     };
 
@@ -986,15 +1058,20 @@ async function checkAndUpdateMasterStatus(connection, reqId, modId = 'SYSTEM') {
             };
             const verifiedAmt = verifiedPay.PAY_AMOUNT || amt || 33000;
 
-            // 6. 식별된 주문번호 유형에 따라 정확한 접두사로 DB 업데이트 후처리 실행 (한글 주석)
+            // 6. 식별된 주문번호 유형에 따라 정확한 접두사로 DB 업데이트 후처리 실행 (트랜잭션 락 보호)
+            let updateResult = null;
             if (orderType === 'DRV') {
-                await updateDBAfterPayment(`BUS_DRV_${targetResId}_${Date.now()}`, connection, tid, verifiedAmt, syncExtraInfo);
+                updateResult = await updateDBAfterPayment(`BUS_DRV_${targetResId}_${Date.now()}`, connection, tid, verifiedAmt, syncExtraInfo);
             } else if (orderType === 'RES') {
-                await updateDBAfterPayment(`BUS_RES_${targetResId}_${Date.now()}`, connection, tid, verifiedAmt, syncExtraInfo);
+                updateResult = await updateDBAfterPayment(`BUS_RES_${targetResId}_${Date.now()}`, connection, tid, verifiedAmt, syncExtraInfo);
             } else if (orderType === 'REQ') {
-                await updateDBAfterPayment(`BUS_REQ_${targetReqId}_${Date.now()}`, connection, tid, verifiedAmt, syncExtraInfo);
+                updateResult = await updateDBAfterPayment(`BUS_REQ_${targetReqId}_${Date.now()}`, connection, tid, verifiedAmt, syncExtraInfo);
             }
             await connection.commit();
+
+            if (updateResult && updateResult.alreadyProcessed) {
+                return res.json({ success: true, message: '이미 결제 처리가 완료된 건입니다.', alreadySynced: true });
+            }
             res.json({ success: true, message: '결제 상태가 성공적으로 동기화되었습니다.' });
         } catch (err) {
             await connection.rollback();
