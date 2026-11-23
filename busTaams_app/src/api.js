@@ -86,12 +86,11 @@ export const request = async (url, options = {}, isFormData = false) => {
 
     if (!response.ok) {
         const errorMsg = data.error || data.message || '요청 처리에 실패했습니다.';
-        // 401(인증 누락) 또는 토큰 자체 만료/위조 시에만 로그인 정보를 제거하고, 업무상 권한 거부(403)에서는 로그인 유지 (한글 주석)
+        // 401(인증 누락) 또는 403 인증/토큰 오류 시에만 로그인 정보를 제거하고, 500/400 업무 오류('기기 토큰' 등)에서는 로그인 유지 (한글 주석)
         const isAuthEndpoint = url.includes('/app/auth/') || url.includes('/auth/');
         const isTokenError =
             (!isAuthEndpoint && response.status === 401) ||
-            errorMsg.includes('토큰') ||
-            (response.status === 403 && currentToken && !isTokenValid(currentToken));
+            (response.status === 403 && (errorMsg.includes('토큰') || (currentToken && !isTokenValid(currentToken))));
 
         if (isTokenError) {
             console.warn(`[API] 인증 실패 또는 토큰 만료 감지 (Status: ${response.status}): ${errorMsg}`);

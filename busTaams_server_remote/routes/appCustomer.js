@@ -3742,7 +3742,7 @@ router.post('/upsert-device-token', authenticateToken, async (req, res) => {
         // [안전장치] 동일한 FCM 토큰이 다른 사용자에게 이미 등록되어 있다면 삭제 (기기 소유주 변경 대응)
         await pool.execute('DELETE FROM TB_USER_DEVICE_TOKEN WHERE FCM_TOKEN = ?', [fcmToken]);
 
-        // 2. Upsert 실행 (CUST_ID, CLIENT_KIND가 PK이므로 중복 시 UPDATE)
+        // 2. Upsert 실행 (REG_ID/MOD_ID는 varchar(10)이므로 10자리 custId 저장, 한글 주석)
         await pool.execute(`
             INSERT INTO TB_USER_DEVICE_TOKEN (CUST_ID, FCM_TOKEN, CLIENT_KIND, REG_ID, MOD_ID)
             VALUES (?, ?, ?, ?, ?)
@@ -3750,7 +3750,7 @@ router.post('/upsert-device-token', authenticateToken, async (req, res) => {
                 FCM_TOKEN = VALUES(FCM_TOKEN),
                 MOD_DT = CURRENT_TIMESTAMP,
                 MOD_ID = VALUES(MOD_ID)
-        `, [custId, fcmToken, clientKind, userId, userId]);
+        `, [custId, fcmToken, clientKind, custId, custId]);
 
         res.json({ success: true, message: '기기 토큰이 성공적으로 등록되었습니다.' });
     } catch (err) {
