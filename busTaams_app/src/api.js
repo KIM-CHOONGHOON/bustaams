@@ -221,6 +221,34 @@ export const updateDriverProfile = async (formData) => {
 
 export const getBusProfile = () => request('/app/driver/bus/profile');
 
+// 기사 최초 간편 초기 등록 조회 및 저장 API (한글 주석)
+export const getDriverQuickSetup = () => request('/app/driver/quick-setup');
+
+export const submitDriverQuickSetup = async (formData, idempotencyKey = '') => {
+    const token = localStorage.getItem('accessToken');
+    const headers = {
+        'Authorization': `Bearer ${token}`
+    };
+    if (idempotencyKey) {
+        headers['X-Idempotency-Key'] = idempotencyKey;
+    }
+    const response = await fetch(`${API_BASE_URL}/app/driver/quick-setup`, {
+        method: 'POST',
+        headers,
+        body: formData
+    });
+
+    const text = await response.text();
+    let resJson;
+    try {
+        resJson = JSON.parse(text);
+    } catch (e) {
+        throw new Error('서버 응답 형식이 올바르지 않습니다.');
+    }
+    if (!response.ok) throw new Error(resJson.error || '간편 등록 저장에 실패했습니다.');
+    return resJson;
+};
+
 export const updateBusProfile = async (formData) => {
     const token = localStorage.getItem('accessToken');
     const response = await fetch(`${API_BASE_URL}/app/driver/bus/register`, {

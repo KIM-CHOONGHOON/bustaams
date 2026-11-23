@@ -50,14 +50,65 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
-// GCS 업로드를 위한 메모리 스토리지 설정
+// 업로드 이미지 형식·용량 제한 상수 (한글 주석)
+const ALLOWED_IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif', 'avif']);
+const MAX_IMAGE_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+// GCS/로컬 업로드를 위한 메모리 스토리지 설정 (10MB 초과 파일 메모리 적재 전 즉시 차단, 한글 주석)
 const memoryStorage = multer.memoryStorage();
-const memoryUpload = multer({ storage: memoryStorage });
+const memoryUpload = multer({
+    storage: memoryStorage,
+    limits: {
+        fileSize: MAX_IMAGE_FILE_SIZE,
+        files: 12
+    }
+});
+
+// 간편 등록 Multer 에러(용량 초과 등) JSON 응답 래퍼 (한글 주석)
+const quickSetupUploadMiddleware = (req, res, next) => {
+    const uploader = memoryUpload.fields([
+        { name: 'licenseImg', maxCount: 1 },
+        { name: 'vehiclePhotos', maxCount: 8 }
+    ]);
+    uploader(req, res, (err) => {
+        if (!err) return next();
+        if (err instanceof multer.MulterError) {
+            if (err.code === 'LIMIT_FILE_SIZE') {
+                return res.status(400).json({ success: false, error: '이미지 파일 크기는 10MB 이하만 업로드할 수 있습니다.' });
+            }
+            if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') {
+                return res.status(400).json({ success: false, error: '업로드 가능한 파일 개수를 초과했습니다. (차량 사진 최대 8장)' });
+            }
+            return res.status(400).json({ success: false, error: `파일 업로드 오류: ${err.message}` });
+        }
+        return res.status(400).json({ success: false, error: err.message || '파일 업로드 처리 중 오류가 발생했습니다.' });
+    });
+};
+
+// 요청 본문 및 업로드 파일 버퍼 기반 SHA-256 요청 해시 생성 헬퍼 (동일 키의 서로 다른 요청 내용 감지, 한글 주석)
+const nodeCrypto = require('crypto');
+const computeQuickSetupRequestHash = ({ normVehicleNo, serviceClass, keepPhotoIds, licenseFile, newVehiclePhotoFiles }) => {
+    const hash = nodeCrypto.createHash('sha256');
+    hash.update(JSON.stringify({
+        normVehicleNo,
+        serviceClass,
+        keepPhotoIds: Array.isArray(keepPhotoIds) ? [...keepPhotoIds] : null
+    }));
+    if (licenseFile && licenseFile.buffer) {
+        hash.update('|LIC|');
+        hash.update(licenseFile.buffer);
+    }
+    for (const f of newVehiclePhotoFiles || []) {
+        hash.update('|VEH|');
+        if (f && f.buffer) hash.update(f.buffer);
+    }
+    return hash.digest('hex');
+};
 
 // 로컬 파일 업로드 공통 함수 (GCS 대체)
 const uploadToGCS = async (file, folder, connection = null) => {
     if (!file) return null;
-    const ext = path.extname(file.originalname).replace('.', '') || 'png';
+    const ext = path.extname(file.originalname).replace('.', '').toLowerCase() || 'png';
     const fileId = await getNextId('TB_FILE_MASTER', 'FILE_ID', 20, connection);
     const objectKey = `${folder}/${fileId}.${ext}`;
     
@@ -72,9 +123,156 @@ const uploadToGCS = async (file, folder, connection = null) => {
     return {
         fileId,
         url: `https://bustaams.cafe24.com/uploads/${objectKey}`,
+        localPath,
         ext,
         originalName: file.originalname,
         fileSize: file.size
+    };
+};
+
+// 차량번호 공백·하이픈 제거 정규화 및 대한민국 번호판 형식 검증 헬퍼 (한글 주석)
+const normalizeVehicleNo = (val) => {
+    if (!val) return '';
+    return String(val).replace(/[\s-]/g, '').trim();
+};
+
+// 구형/영업용(서울70자1234) 및 신형/전국(192너8567, 79무3180) 번호판 형식 검증 (한글 주석)
+const VEHICLE_NO_REGEX = /^(?:[가-힣]{2})?\d{2,3}[가-힣]\d{4}$/;
+const isValidVehicleNo = (normVal) => Boolean(normVal && VEHICLE_NO_REGEX.test(normVal));
+
+// 실제 파일 바이너리 매직 바이트로 이미지 형식 검증 (위조된 확장자·텍스트 파일 차단, 한글 주석)
+const detectImageFormatFromBuffer = (buf) => {
+    if (!buf || !Buffer.isBuffer(buf) || buf.length < 12) return null;
+    // JPEG: FF D8 FF
+    if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpeg';
+    // PNG: 89 50 4E 47 0D 0A 1A 0A
+    if (
+        buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47 &&
+        buf[4] === 0x0d && buf[5] === 0x0a && buf[6] === 0x1a && buf[7] === 0x0a
+    ) return 'png';
+    // GIF: GIF87a / GIF89a
+    const gifSig = buf.toString('ascii', 0, 6);
+    if (gifSig === 'GIF87a' || gifSig === 'GIF89a') return 'gif';
+    // WEBP: RIFF....WEBP
+    if (buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'webp';
+    // HEIC / HEIF / AVIF (ISO Base Media File Format: offset 4 = 'ftyp')
+    if (buf.toString('ascii', 4, 8) === 'ftyp') {
+        const brand = buf.toString('ascii', 8, 12).toLowerCase();
+        if (['heic', 'heix', 'hevc', 'hevx', 'mif1', 'msf1', 'avif', 'avis'].includes(brand)) {
+            return 'heic';
+        }
+    }
+    return null;
+};
+
+// 업로드 이미지 MIME + 확장자 + 실제 바이너리 내용 3중 검증 헬퍼 (한글 주석)
+const validateImageFile = (file, label = '이미지') => {
+    if (!file) return;
+    const ext = path.extname(file.originalname || '').replace('.', '').toLowerCase();
+    const mime = String(file.mimetype || '').toLowerCase();
+
+    if (!mime.startsWith('image/')) {
+        throw Object.assign(new Error(`${label}은(는) 이미지 파일(JPG, PNG, WEBP 등)만 업로드할 수 있습니다.`), { statusCode: 400 });
+    }
+    if (ext && !ALLOWED_IMAGE_EXTS.has(ext)) {
+        throw Object.assign(new Error(`${label}의 파일 확장자(.${ext})는 지원하지 않습니다.`), { statusCode: 400 });
+    }
+    if (file.size > MAX_IMAGE_FILE_SIZE) {
+        throw Object.assign(new Error(`${label} 파일 크기는 10MB 이하만 업로드할 수 있습니다.`), { statusCode: 400 });
+    }
+    const detectedFormat = detectImageFormatFromBuffer(file.buffer);
+    if (!detectedFormat) {
+        throw Object.assign(new Error(`${label}의 실제 파일 내용이 올바른 이미지 형식이 아닙니다.`), { statusCode: 400 });
+    }
+};
+
+// VEHICLE_PHOTOS_JSON 안전 파싱 헬퍼 (한글 주석)
+const parseVehiclePhotoIds = (raw) => {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw.filter(Boolean);
+    if (typeof raw === 'string') {
+        try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+    return [];
+};
+
+// 기사 최초 간편 등록 완료 여부 통합 판별 헬퍼 (APPROVE_STAT와 분리, 등록 완료 기준, 한글 주석)
+const getDriverQuickSetupStatus = async (conn, custId) => {
+    const [detailRows] = await conn.execute(
+        'SELECT CUST_ID, FEE_POLICY FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1',
+        [custId]
+    );
+    const [licenseRows] = await conn.execute(
+        `SELECT d.DOC_TYPE_SEQ, d.GCS_PATH, d.APPROVE_STAT, COALESCE(f.GCS_PATH, d.GCS_PATH) AS resolvedPath
+         FROM TB_DRIVER_DOCS d
+         LEFT JOIN TB_FILE_MASTER f ON d.GCS_PATH = f.GCS_PATH
+         WHERE d.CUST_ID = ? AND d.DOC_TYPE = 'LICENSE'
+         ORDER BY d.REG_DT DESC, d.DOC_TYPE_SEQ DESC LIMIT 1`,
+        [custId]
+    );
+    const [busRows] = await conn.execute(
+        `SELECT BUS_ID, VEHICLE_NO, MODEL_NM, SERVICE_CLASS, VEHICLE_PHOTOS_JSON
+         FROM TB_BUS_DRIVER_VEHICLE
+         WHERE CUST_ID = ?
+         ORDER BY REG_DT DESC LIMIT 1`,
+        [custId]
+    );
+
+    const hasDriverDetail = detailRows.length > 0;
+    const hasLicensePhoto = licenseRows.length > 0 && Boolean(licenseRows[0].resolvedPath);
+    const bus = busRows.length > 0 ? busRows[0] : null;
+    const normVehicleNo = bus ? normalizeVehicleNo(bus.VEHICLE_NO) : '';
+    const hasVehicleNo = isValidVehicleNo(normVehicleNo);
+
+    // 실제 유효한 BUS_TYPE 공통 코드(USE_YN='Y')인지 DB에서 검증 (한글 주석)
+    let hasServiceClass = false;
+    const rawServiceClass = bus && bus.SERVICE_CLASS ? String(bus.SERVICE_CLASS).trim() : '';
+    if (rawServiceClass) {
+        const [validTypeRows] = await conn.execute(
+            `SELECT 1 FROM TB_COMMON_CODE WHERE GRP_CD = 'BUS_TYPE' AND DTL_CD = ? AND USE_YN = 'Y' LIMIT 1`,
+            [rawServiceClass]
+        );
+        hasServiceClass = validTypeRows.length > 0;
+    }
+
+    // VEHICLE_PHOTOS_JSON의 FILE_ID 중 실제 TB_FILE_MASTER에 존재하는 사진만 유효한 사진으로 판정 (한글 주석)
+    const rawPhotoIds = bus ? parseVehiclePhotoIds(bus.VEHICLE_PHOTOS_JSON) : [];
+    let validPhotoIds = [];
+    if (rawPhotoIds.length > 0) {
+        const placeholders = rawPhotoIds.map(() => '?').join(',');
+        const [fileRows] = await conn.execute(
+            `SELECT FILE_ID FROM TB_FILE_MASTER WHERE FILE_ID IN (${placeholders}) AND GCS_PATH IS NOT NULL AND TRIM(GCS_PATH) != ''`,
+            rawPhotoIds
+        );
+        const existingFileSet = new Set(fileRows.map(r => r.FILE_ID));
+        validPhotoIds = rawPhotoIds.filter(id => existingFileSet.has(id));
+    }
+    const hasVehiclePhotos = validPhotoIds.length > 0;
+
+    const missingItems = [];
+    if (!hasLicensePhoto) missingItems.push('licenseImg');
+    if (!hasVehicleNo) missingItems.push('vehicleNo');
+    if (!hasServiceClass) missingItems.push('serviceClass');
+    if (!hasVehiclePhotos) missingItems.push('vehiclePhotos');
+
+    const isQuickSetupCompleted = hasDriverDetail && hasLicensePhoto && hasVehicleNo && hasServiceClass && hasVehiclePhotos;
+
+    return {
+        isQuickSetupCompleted,
+        hasDriverDetail,
+        hasLicensePhoto,
+        hasVehicleNo,
+        hasServiceClass,
+        hasVehiclePhotos,
+        missingItems,
+        licenseDoc: licenseRows.length > 0 ? licenseRows[0] : null,
+        bus,
+        photoIds: validPhotoIds
     };
 };
 
@@ -111,11 +309,14 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
 
         // 3. 버스 정보 등록 여부 확인 및 버스 타입 조회 (TB_BUS_DRIVER_VEHICLE)
         const [busRows] = await pool.execute(
-            'SELECT SERVICE_CLASS FROM TB_BUS_DRIVER_VEHICLE WHERE CUST_ID = ?',
+            'SELECT SERVICE_CLASS FROM TB_BUS_DRIVER_VEHICLE WHERE CUST_ID = ? ORDER BY REG_DT DESC LIMIT 1',
             [custId]
         );
         const isBusInfoRegistered = busRows.length > 0;
         const busType = isBusInfoRegistered ? busRows[0].SERVICE_CLASS : null;
+
+        // 3-1. 간편 초기 등록 완료 여부 확인 (APPROVE_STAT와 분리, 한글 주석)
+        const quickSetupStatus = await getDriverQuickSetupStatus(pool, custId);
 
         // 4. 경매 통계 및 최신 리스트 (버스 타입 일치 + AUCTION 상태)
         let countAuctions = 0;
@@ -256,6 +457,8 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
                 userImage,
                 isDriverInfoRegistered,
                 isBusInfoRegistered,
+                isQuickSetupCompleted: quickSetupStatus.isQuickSetupCompleted,
+                quickSetupMissing: quickSetupStatus.missingItems,
                 countBidding: statsRows[0].countCustomerWait || 0, // 기존 호환용
                 countCustomerWait: statsRows[0].countCustomerWait || 0,
                 countDriverPayWait: statsRows[0].countDriverPayWait || 0,
@@ -461,14 +664,14 @@ router.get('/profile', authenticateToken, async (req, res) => {
             [custId]
         );
 
-        // 3. TB_DRIVER_DOCS 인증 서류 정보 (면허증, 자격증 등)
+        // 3. TB_DRIVER_DOCS 인증 서류 정보 (면허증, 자격증 등 - 서류 유형별 최신 1건 조회, 한글 주석)
         const [docRows] = await pool.execute(
-            `SELECT DOC_TYPE, LICENSE_TYPE_CD, DOC_NO_ENC, DATE_FORMAT(ISSUE_DT, '%Y-%m-%d') as issueDt, INFO_STAT_CD, 
-                    CASE WHEN d.GCS_PATH IS NOT NULL THEN CONCAT('/api/common/display-image?path=', f.GCS_PATH) ELSE NULL END as filePath, 
-                    APPROVE_STAT as approveStat
+            `SELECT d.DOC_TYPE, d.LICENSE_TYPE_CD, d.DOC_NO_ENC, DATE_FORMAT(d.ISSUE_DT, '%Y-%m-%d') as issueDt, d.INFO_STAT_CD, 
+                    CASE WHEN COALESCE(f.GCS_PATH, d.GCS_PATH) IS NOT NULL THEN CONCAT('/api/common/display-image?path=', COALESCE(f.GCS_PATH, d.GCS_PATH)) ELSE NULL END as filePath, 
+                    d.APPROVE_STAT as approveStat
              FROM TB_DRIVER_DOCS d
              LEFT JOIN TB_FILE_MASTER f ON d.GCS_PATH = f.GCS_PATH
-             WHERE d.CUST_ID = ? ORDER BY d.REG_DT DESC`,
+             WHERE d.CUST_ID = ? ORDER BY d.REG_DT DESC, d.DOC_TYPE_SEQ DESC`,
             [custId]
         );
 
@@ -519,25 +722,29 @@ router.get('/profile', authenticateToken, async (req, res) => {
             ceoNm: bizRows.length > 0 ? bizRows[0].ceoNm : ''
         };
 
-        // 서류 데이터 매핑 (가장 최근 것 기준)
+        // 서류 데이터 매핑 (면허번호 유무와 무관하게 서류 유형별 최신 1건만 선택, 한글 주석)
+        const seenDocTypes = new Set();
         for (const doc of docRows) {
-            if (doc.DOC_TYPE === 'LICENSE' && !driverData.licenseNo) {
+            if (seenDocTypes.has(doc.DOC_TYPE)) continue;
+            seenDocTypes.add(doc.DOC_TYPE);
+
+            if (doc.DOC_TYPE === 'LICENSE') {
                 driverData.licenseType = doc.LICENSE_TYPE_CD;
                 driverData.licenseNo = doc.DOC_NO_ENC ? decrypt(doc.DOC_NO_ENC) : '';
                 driverData.licenseIssueDt = doc.issueDt;
                 driverData.licenseImg = doc.filePath;
                 driverData.licenseValidity = doc.INFO_STAT_CD === 'VALID' ? 'Y' : 'N';
                 driverData.licenseApproveStat = doc.approveStat;
-            } else if (doc.DOC_TYPE === 'QUALIFICATION' && !driverData.busLicenseNo) {
+            } else if (doc.DOC_TYPE === 'QUALIFICATION') {
                 driverData.busLicenseNo = doc.DOC_NO_ENC ? decrypt(doc.DOC_NO_ENC) : '';
                 driverData.qualAcquisitionDt = doc.issueDt;
                 driverData.busLicenseImg = doc.filePath;
                 driverData.qualStatus = doc.INFO_STAT_CD;
                 driverData.qualApproveStat = doc.approveStat;
-            } else if (doc.DOC_TYPE === 'CAREER_CERT' && !driverData.careerCertImg) {
+            } else if (doc.DOC_TYPE === 'CAREER_CERT') {
                 driverData.careerCertImg = doc.filePath;
                 driverData.careerCertApproveStat = doc.approveStat;
-            } else if (doc.DOC_TYPE === 'BANKBOOK' && !driverData.bankBookImg) {
+            } else if (doc.DOC_TYPE === 'BANKBOOK') {
                 driverData.bankBookImg = doc.filePath;
                 driverData.bankBookApproveStat = doc.approveStat;
             }
@@ -695,8 +902,8 @@ router.post('/profile/update', authenticateToken, memoryUpload.fields([
 
         const userId = req.user.userId;
 
-        // 0. CUST_ID, 기존 프로필 파일 ID 및 기존 주민번호 조회
-        const [uRows] = await connection.execute('SELECT CUST_ID, PROFILE_FILE_ID, HP_NO, RESIDENT_NO_ENC FROM TB_USER WHERE USER_ID = ?', [userId]);
+        // 0. CUST_ID, 기존 프로필 파일 ID 및 기존 주민번호 조회 (간편 등록과 동일 사용자 행 잠금 공유, 한글 주석)
+        const [uRows] = await connection.execute('SELECT CUST_ID, PROFILE_FILE_ID, HP_NO, RESIDENT_NO_ENC FROM TB_USER WHERE USER_ID = ? FOR UPDATE', [userId]);
         if (uRows.length === 0) throw new Error('사용자를 찾을 수 없습니다.');
         const { CUST_ID: custId, PROFILE_FILE_ID: existingProfileFileId, HP_NO: existingPhone, RESIDENT_NO_ENC: existingResidentNoEnc } = uRows[0];
 
@@ -1107,7 +1314,9 @@ router.post('/bus/register', authenticateToken, memoryUpload.fields([
             bizNo, bizNm, ceoNm, bizAddr, bizType, bizItem, email
         } = req.body;
         const userId = req.user.userId;
-        const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+        // 간편 등록·기사 상세 등록과 동일한 사용자 행 잠금(FOR UPDATE) 공유 (한글 주석)
+        const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ? FOR UPDATE', [userId]);
+        if (uRows.length === 0) throw Object.assign(new Error('사용자 정보를 찾을 수 없습니다.'), { statusCode: 404 });
         const custId = uRows[0].CUST_ID;
 
         const [existing] = await connection.execute('SELECT BUS_ID, BIZ_REG_FILE_ID, TRANS_LIC_FILE_ID, INS_CERT_FILE_ID, VEHICLE_PHOTOS_JSON FROM TB_BUS_DRIVER_VEHICLE WHERE CUST_ID = ?', [custId]);
@@ -1186,7 +1395,364 @@ router.post('/bus/register', authenticateToken, memoryUpload.fields([
     } catch (err) {
         if (connection) await connection.rollback();
         console.error('Bus registration error:', err);
-        res.status(500).json({ error: err.message });
+        if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
+            return res.status(409).json({ success: false, error: '이미 다른 기사가 등록한 차량 번호입니다.' });
+        }
+        res.status(err.statusCode || 500).json({ success: false, error: err.message });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+/**
+ * [App] 기사 간편 초기 등록 현황 조회 (기존 등록된 운전면허증·차량번호·차종·차량사진 반환)
+ */
+router.get('/quick-setup', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const [uRows] = await pool.execute('SELECT CUST_ID, USER_NM FROM TB_USER WHERE USER_ID = ?', [userId]);
+        if (uRows.length === 0) {
+            return res.status(404).json({ success: false, error: '사용자를 찾을 수 없습니다.' });
+        }
+        const { CUST_ID: custId, USER_NM: userName } = uRows[0];
+
+        const status = await getDriverQuickSetupStatus(pool, custId);
+
+        // 기존 등록된 차량 사진 URL 목록 조회 (한글 주석)
+        let vehiclePhotos = [];
+        if (status.photoIds.length > 0) {
+            const placeholders = status.photoIds.map(() => '?').join(',');
+            const [fRows] = await pool.execute(
+                `SELECT FILE_ID, GCS_PATH FROM TB_FILE_MASTER WHERE FILE_ID IN (${placeholders})`,
+                status.photoIds
+            );
+            const pathMap = new Map(fRows.map(r => [r.FILE_ID, r.GCS_PATH]));
+            vehiclePhotos = status.photoIds
+                .filter(fid => pathMap.has(fid))
+                .map(fid => ({
+                    fileId: fid,
+                    url: `/api/common/display-image?path=${pathMap.get(fid)}`
+                }));
+        }
+
+        // 사용 가능한 BUS_TYPE(승차 인원/차종) 공통 코드 목록 조회 (한글 주석)
+        const [busTypes] = await pool.execute(
+            `SELECT DTL_CD as code, CD_NM_KO as name, CD_DESC as description
+             FROM TB_COMMON_CODE
+             WHERE GRP_CD = 'BUS_TYPE' AND USE_YN = 'Y'
+             ORDER BY DISP_ORD ASC`
+        );
+
+        const licenseImgUrl = status.licenseDoc && status.licenseDoc.resolvedPath
+            ? `/api/common/display-image?path=${status.licenseDoc.resolvedPath}`
+            : null;
+
+        res.json({
+            success: true,
+            data: {
+                userName,
+                isQuickSetupCompleted: status.isQuickSetupCompleted,
+                missingItems: status.missingItems,
+                licenseImg: licenseImgUrl,
+                licenseApproveStat: status.licenseDoc ? status.licenseDoc.APPROVE_STAT : null,
+                vehicleNo: status.bus && status.bus.VEHICLE_NO && status.bus.VEHICLE_NO !== '미등록' ? status.bus.VEHICLE_NO : '',
+                serviceClass: status.bus && status.bus.SERVICE_CLASS ? status.bus.SERVICE_CLASS : '',
+                vehiclePhotos,
+                busTypes
+            }
+        });
+    } catch (err) {
+        console.error('[Quick Setup GET Error]:', err);
+        res.status(500).json({ success: false, error: '간편 등록 정보를 불러오는 중 오류가 발생했습니다.' });
+    }
+});
+
+/**
+ * [App] 기사 최초 간편 초기 등록 저장 (운전면허증 사진 + 차량번호 + 승차 인원 + 차량 사진)
+ * - 일부만 등록된 기존 기사 데이터(FEE_POLICY, 승인 서류, 기존 차량 옵션/서류 등) 100% 보존
+ * - 트랜잭션 + TB_USER 행 잠금(FOR UPDATE) + DB UNIQUE 제약(VEHICLE_NO_NORM)으로 동시성/중복 차단
+ * - 실패 시 이번 요청에서 디스크에 저장한 로컬 파일 즉시 정리(cleanup)
+ */
+router.post('/quick-setup', authenticateToken, quickSetupUploadMiddleware, async (req, res) => {
+    const createdFilePaths = []; // 실패/롤백 시 정리할 로컬 파일 목록 (한글 주석)
+    const connection = await pool.getConnection();
+
+    try {
+        const userId = req.user.userId;
+        const idempotencyKey = String(req.headers['x-idempotency-key'] || req.body.idempotencyKey || '').trim();
+        const rawVehicleNo = req.body.vehicleNo ? String(req.body.vehicleNo).trim() : '';
+        const normVehicleNo = normalizeVehicleNo(rawVehicleNo);
+        const serviceClass = req.body.serviceClass ? String(req.body.serviceClass).trim() : '';
+
+        // 1. 업로드 파일 사전 검증 (이미지 형식·용량·개수) (한글 주석)
+        const licenseFile = req.files && req.files.licenseImg ? req.files.licenseImg[0] : null;
+        const newVehiclePhotoFiles = req.files && req.files.vehiclePhotos ? req.files.vehiclePhotos : [];
+
+        if (licenseFile) {
+            validateImageFile(licenseFile, '운전면허증 사진');
+        }
+        if (newVehiclePhotoFiles.length > 8) {
+            throw Object.assign(new Error('차량 사진은 최대 8장까지 업로드할 수 있습니다.'), { statusCode: 400 });
+        }
+        for (const f of newVehiclePhotoFiles) {
+            validateImageFile(f, '차량 사진');
+        }
+
+        // 2. 필수 입력값(차량번호 형식, 차종/승차 인원) 서버 측 검증 (한글 주석)
+        if (!normVehicleNo || normVehicleNo === '미등록') {
+            throw Object.assign(new Error('차량 번호를 입력해 주세요.'), { statusCode: 400 });
+        }
+        if (!isValidVehicleNo(normVehicleNo)) {
+            throw Object.assign(new Error('올바른 형식의 차량 번호를 입력해 주세요. (예: 서울70자1234, 192너8567)'), { statusCode: 400 });
+        }
+        if (!serviceClass) {
+            throw Object.assign(new Error('차량의 승차 인원(차종)을 선택해 주세요.'), { statusCode: 400 });
+        }
+
+        // 유효한 BUS_TYPE 공통 코드인지 DB 검증 (한글 주석)
+        const [busTypeRows] = await connection.execute(
+            `SELECT DTL_CD, CD_NM_KO FROM TB_COMMON_CODE WHERE GRP_CD = 'BUS_TYPE' AND DTL_CD = ? AND USE_YN = 'Y' LIMIT 1`,
+            [serviceClass]
+        );
+        if (busTypeRows.length === 0) {
+            throw Object.assign(new Error('유효하지 않은 차량 승차 인원(차종) 코드입니다.'), { statusCode: 400 });
+        }
+        const busTypeName = busTypeRows[0].CD_NM_KO || serviceClass;
+
+        // 3. 트랜잭션 시작 및 동일 기사 행 잠금(FOR UPDATE)으로 중복 요청/중복 레코드 생성 방지 (한글 주석)
+        await connection.beginTransaction();
+
+        const [uRows] = await connection.execute(
+            'SELECT CUST_ID FROM TB_USER WHERE USER_ID = ? FOR UPDATE',
+            [userId]
+        );
+        if (uRows.length === 0) {
+            throw Object.assign(new Error('사용자 정보를 찾을 수 없습니다.'), { statusCode: 404 });
+        }
+        const custId = uRows[0].CUST_ID;
+
+        // 3-1. 클라이언트가 전송한 원본 keepPhotoIds 파싱 (현재 DB 상태와 무관하게 요청 자체의 해시 산출, 한글 주석)
+        let requestedKeepPhotoIds = null;
+        if (req.body.keepPhotoIds !== undefined) {
+            if (Array.isArray(req.body.keepPhotoIds)) {
+                requestedKeepPhotoIds = req.body.keepPhotoIds.map(String);
+            } else if (typeof req.body.keepPhotoIds === 'string' && req.body.keepPhotoIds.trim()) {
+                try {
+                    const tmp = JSON.parse(req.body.keepPhotoIds);
+                    requestedKeepPhotoIds = Array.isArray(tmp) ? tmp.map(String) : [];
+                } catch (e) {
+                    requestedKeepPhotoIds = [];
+                }
+            } else {
+                requestedKeepPhotoIds = [];
+            }
+        }
+
+        // 3-2. DB 기반 영구 요청 식별 키(Idempotency-Key) 우선 조회 (다른 탭에서 사진/차량 변경 후 재시도해도 기존 성공 응답 보장, 한글 주석)
+        const requestHash = idempotencyKey
+            ? computeQuickSetupRequestHash({
+                normVehicleNo,
+                serviceClass,
+                keepPhotoIds: requestedKeepPhotoIds,
+                licenseFile,
+                newVehiclePhotoFiles
+            })
+            : null;
+
+        if (idempotencyKey) {
+            const [idemRows] = await connection.execute(
+                `SELECT REQUEST_HASH, RESPONSE_JSON
+                 FROM TB_API_IDEMPOTENCY
+                 WHERE CUST_ID = ? AND API_NAME = 'DRIVER_QUICK_SETUP' AND IDEMPOTENCY_KEY = ?
+                 LIMIT 1`,
+                [custId, idempotencyKey]
+            );
+            if (idemRows.length > 0) {
+                await connection.rollback();
+                if (idemRows[0].REQUEST_HASH !== requestHash) {
+                    return res.status(409).json({
+                        success: false,
+                        error: '동일한 요청 식별 키로 서로 다른 내용이 전송되었습니다. 다시 시도해 주세요.'
+                    });
+                }
+                const savedRes = typeof idemRows[0].RESPONSE_JSON === 'string'
+                    ? JSON.parse(idemRows[0].RESPONSE_JSON)
+                    : idemRows[0].RESPONSE_JSON;
+                return res.json({ ...savedRes, duplicateRetry: true });
+            }
+        }
+
+        // 4. 타 기사의 동일 차량번호 중복 사전 확인 (DB UNIQUE 제약과 이중 방어, 한글 주석)
+        const [dupVehicleRows] = await connection.execute(
+            `SELECT BUS_ID FROM TB_BUS_DRIVER_VEHICLE WHERE VEHICLE_NO_NORM = ? AND CUST_ID != ? LIMIT 1`,
+            [normVehicleNo, custId]
+        );
+        if (dupVehicleRows.length > 0) {
+            throw Object.assign(new Error('이미 다른 기사가 등록한 차량 번호입니다.'), { statusCode: 409 });
+        }
+
+        // 5. 기존 기사 상세·면허 서류·차량 정보 조회 (일부 등록된 기존 데이터 보존, 한글 주석)
+        const [detailRows] = await connection.execute(
+            'SELECT CUST_ID, FEE_POLICY FROM TB_DRIVER_DETAIL WHERE CUST_ID = ? LIMIT 1',
+            [custId]
+        );
+        const [existingLicRows] = await connection.execute(
+            `SELECT DOC_TYPE_SEQ, LICENSE_TYPE_CD, DOC_NO_ENC, ISSUE_DT, INFO_STAT_CD, APPROVE_STAT, GCS_PATH
+             FROM TB_DRIVER_DOCS
+             WHERE CUST_ID = ? AND DOC_TYPE = 'LICENSE'
+             ORDER BY REG_DT DESC, DOC_TYPE_SEQ DESC LIMIT 1`,
+            [custId]
+        );
+        const [existingBusRows] = await connection.execute(
+            `SELECT BUS_ID, MODEL_NM, VEHICLE_PHOTOS_JSON
+             FROM TB_BUS_DRIVER_VEHICLE
+             WHERE CUST_ID = ?
+             ORDER BY REG_DT DESC LIMIT 1`,
+            [custId]
+        );
+
+        // 운전면허증 사진 필수 확인 (기존 면허 사진이 없고 새 파일도 없으면 차단)
+        const hasExistingLicense = existingLicRows.length > 0 && Boolean(existingLicRows[0].GCS_PATH);
+        if (!licenseFile && !hasExistingLicense) {
+            throw Object.assign(new Error('운전면허증 사진을 업로드해 주세요.'), { statusCode: 400 });
+        }
+
+        // 기존 유지할 차량 사진 ID 필터링 (본인 차량 소속 + TB_FILE_MASTER 실존 파일만 허용, 한글 주석)
+        const rawExistingPhotoIds = existingBusRows.length > 0 ? parseVehiclePhotoIds(existingBusRows[0].VEHICLE_PHOTOS_JSON) : [];
+        let existingPhotoIds = [];
+        if (rawExistingPhotoIds.length > 0) {
+            const ph = rawExistingPhotoIds.map(() => '?').join(',');
+            const [validFileRows] = await connection.execute(
+                `SELECT FILE_ID FROM TB_FILE_MASTER WHERE FILE_ID IN (${ph}) AND GCS_PATH IS NOT NULL AND TRIM(GCS_PATH) != ''`,
+                rawExistingPhotoIds
+            );
+            const validFileSet = new Set(validFileRows.map(r => r.FILE_ID));
+            existingPhotoIds = rawExistingPhotoIds.filter(id => validFileSet.has(id));
+        }
+        let keepPhotoIds = existingPhotoIds;
+        if (requestedKeepPhotoIds !== null) {
+            const existingSet = new Set(existingPhotoIds);
+            keepPhotoIds = requestedKeepPhotoIds.filter(id => existingSet.has(id));
+        }
+
+        const totalPhotoCount = keepPhotoIds.length + newVehiclePhotoFiles.length;
+        if (totalPhotoCount < 1) {
+            throw Object.assign(new Error('차량 사진을 최소 1장 이상 업로드해 주세요.'), { statusCode: 400 });
+        }
+        if (totalPhotoCount > 8) {
+            throw Object.assign(new Error('차량 사진은 기존 사진 포함 최대 8장까지만 등록할 수 있습니다.'), { statusCode: 400 });
+        }
+
+        // 6. TB_DRIVER_DETAIL 생성 (이미 존재하면 기존 FEE_POLICY 및 상세 정보 100% 보존, 한글 주석)
+        if (detailRows.length === 0) {
+            await connection.execute(
+                `INSERT INTO TB_DRIVER_DETAIL (CUST_ID, ADDR_TYPE, FEE_POLICY, REG_ID, MOD_ID)
+                 VALUES (?, 'HOME', 'DRIVER', ?, ?)`,
+                [custId, custId, custId]
+            );
+        }
+
+        // 7. 운전면허증 사진 저장 (새 파일이 올라온 경우에만 저장; 기존 승인 서류만 있고 미업로드 시 보존, 한글 주석)
+        if (licenseFile) {
+            const licUpload = await uploadToGCS(licenseFile, 'drivers', connection);
+            createdFilePaths.push(licUpload.localPath);
+
+            await connection.execute(
+                `INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_ID, MOD_ID)
+                 VALUES (?, 'DRIVER_LICENSE', ?, ?, ?, ?, ?, ?, ?)`,
+                [licUpload.fileId, bucketName, licUpload.url, licUpload.originalName, licUpload.ext, licUpload.fileSize, custId, custId]
+            );
+
+            const nextDocSeq = existingLicRows.length > 0 ? Number(existingLicRows[0].DOC_TYPE_SEQ) + 1 : 1;
+            const prevLic = existingLicRows.length > 0 ? existingLicRows[0] : null;
+            await connection.execute(
+                `INSERT INTO TB_DRIVER_DOCS (
+                    CUST_ID, DOC_TYPE, DOC_TYPE_SEQ, GCS_BUCKET_NM, GCS_PATH,
+                    ORG_FILE_NM, ORG_FILE_EXT, FILE_SIZE,
+                    LICENSE_TYPE_CD, DOC_NO_ENC, ISSUE_DT, INFO_STAT_CD, APPROVE_STAT, REG_ID, MOD_ID
+                 ) VALUES (?, 'LICENSE', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'WAIT', ?, ?)`,
+                [
+                    custId, nextDocSeq, bucketName, licUpload.url,
+                    licUpload.originalName, licUpload.ext, licUpload.fileSize,
+                    prevLic ? prevLic.LICENSE_TYPE_CD : null,
+                    prevLic ? prevLic.DOC_NO_ENC : null,
+                    prevLic ? prevLic.ISSUE_DT : null,
+                    prevLic ? prevLic.INFO_STAT_CD : 'VALID',
+                    custId, custId
+                ]
+            );
+        }
+
+        // 8. 차량 사진 업로드 및 TB_BUS_DRIVER_VEHICLE 저장/업데이트 (한글 주석)
+        const uploadedPhotoIds = [];
+        for (const photoFile of newVehiclePhotoFiles) {
+            const up = await uploadToGCS(photoFile, 'buses', connection);
+            createdFilePaths.push(up.localPath);
+            await connection.execute(
+                `INSERT INTO TB_FILE_MASTER (FILE_ID, FILE_CATEGORY, GCS_BUCKET_NM, GCS_PATH, ORG_FILE_NM, FILE_EXT, FILE_SIZE, REG_ID, MOD_ID)
+                 VALUES (?, 'BUS_PHOTO', ?, ?, ?, ?, ?, ?, ?)`,
+                [up.fileId, bucketName, up.url, up.originalName, up.ext, up.fileSize, custId, custId]
+            );
+            uploadedPhotoIds.push(up.fileId);
+        }
+        const finalPhotoIds = [...keepPhotoIds, ...uploadedPhotoIds].slice(0, 8);
+
+        if (existingBusRows.length > 0) {
+            const existingBus = existingBusRows[0];
+            const nextModelNm = existingBus.MODEL_NM && existingBus.MODEL_NM !== '미등록' ? existingBus.MODEL_NM : busTypeName;
+            await connection.execute(
+                `UPDATE TB_BUS_DRIVER_VEHICLE
+                 SET VEHICLE_NO = ?, MODEL_NM = ?, SERVICE_CLASS = ?, VEHICLE_PHOTOS_JSON = ?, MOD_ID = ?, MOD_DT = NOW()
+                 WHERE BUS_ID = ?`,
+                [normVehicleNo, nextModelNm, serviceClass, JSON.stringify(finalPhotoIds), custId, existingBus.BUS_ID]
+            );
+        } else {
+            const newBusId = await getNextId('TB_BUS_DRIVER_VEHICLE', 'BUS_ID', 10, connection);
+            await connection.execute(
+                `INSERT INTO TB_BUS_DRIVER_VEHICLE (
+                    BUS_ID, CUST_ID, VEHICLE_NO, MODEL_NM, SERVICE_CLASS, HAS_ADAS, VEHICLE_PHOTOS_JSON, REG_ID, MOD_ID
+                 ) VALUES (?, ?, ?, ?, ?, 'N', ?, ?, ?)`,
+                [newBusId, custId, normVehicleNo, busTypeName, serviceClass, JSON.stringify(finalPhotoIds), custId, custId]
+            );
+        }
+
+        const responsePayload = {
+            success: true,
+            message: '기본 등록이 완료되었습니다. 이제 바로 서비스를 이용하실 수 있습니다!',
+            isQuickSetupCompleted: true
+        };
+
+        // 9. 요청 식별 키와 처리 결과를 등록 데이터와 동일 트랜잭션으로 영구 커밋 (재시작·다중 프로세스 대응, 한글 주석)
+        if (idempotencyKey && requestHash) {
+            await connection.execute(
+                `INSERT INTO TB_API_IDEMPOTENCY (CUST_ID, API_NAME, IDEMPOTENCY_KEY, REQUEST_HASH, RESPONSE_JSON)
+                 VALUES (?, 'DRIVER_QUICK_SETUP', ?, ?, ?)`,
+                [custId, idempotencyKey, requestHash, JSON.stringify(responsePayload)]
+            );
+        }
+
+        await connection.commit();
+        res.json(responsePayload);
+    } catch (err) {
+        if (connection) {
+            try { await connection.rollback(); } catch (rbErr) { console.error('[Quick Setup Rollback Error]:', rbErr); }
+        }
+        // DB 롤백/실패 시 이번 요청에서 디스크에 기록된 고아 파일 즉시 정리 (한글 주석)
+        for (const filePath of createdFilePaths) {
+            try {
+                if (filePath && fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+            } catch (unlinkErr) {
+                console.error('[Quick Setup Cleanup Error]:', filePath, unlinkErr);
+            }
+        }
+
+        console.error('[Quick Setup POST Error]:', err);
+        if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
+            return res.status(409).json({ success: false, error: '이미 다른 기사가 등록한 차량 번호입니다.' });
+        }
+        res.status(err.statusCode || 500).json({ success: false, error: err.message || '간편 등록 처리 중 오류가 발생했습니다.' });
     } finally {
         if (connection) connection.release();
     }

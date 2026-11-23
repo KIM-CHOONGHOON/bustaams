@@ -65,6 +65,7 @@ CREATE TABLE `TB_BUS_DRIVER_VEHICLE` (
   `BUS_ID` varchar(10) NOT NULL COMMENT '버스 고유 ID(0패딩 순번)',
   `CUST_ID` varchar(10) NOT NULL COMMENT '해당 버스기사 TB_USER.CUST_ID',
   `VEHICLE_NO` varchar(20) NOT NULL COMMENT '차량 번호',
+  `VEHICLE_NO_NORM` varchar(20) GENERATED ALWAYS AS (nullif(replace(replace(replace(trim(`VEHICLE_NO`),_utf8mb4' ',_utf8mb4''),_utf8mb4'-',_utf8mb4''),_utf8mb4'\t',_utf8mb4''),_utf8mb4'')) STORED COMMENT '공백/하이픈 제거 정규화 차량번호 (중복 방지 UNIQUE 키)',
   `MODEL_NM` varchar(100) NOT NULL COMMENT '모델명',
   `MANUFACTURE_YEAR` varchar(10) DEFAULT NULL COMMENT '제작 연도(표시 문자열)',
   `MILEAGE` int DEFAULT '0' COMMENT '주행거리 km',
@@ -82,6 +83,7 @@ CREATE TABLE `TB_BUS_DRIVER_VEHICLE` (
   `MOD_DT` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '수정 일시',
   `MOD_ID` varchar(10) DEFAULT NULL COMMENT '수정자 ID',
   PRIMARY KEY (`BUS_ID`),
+  UNIQUE KEY `UK_BUS_VEHICLE_NO_NORM` (`VEHICLE_NO_NORM`),
   KEY `IDX_BUS_CUST` (`CUST_ID`),
   CONSTRAINT `FK_BUS_DRIVER` FOREIGN KEY (`CUST_ID`) REFERENCES `TB_USER` (`CUST_ID`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='기사 보유 차량·ADAS(서류최신은 HIST, 사진8장은 JSON) — CUST_ID는 TB_USER와 동일 charset/collation';

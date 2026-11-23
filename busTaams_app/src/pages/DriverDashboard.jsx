@@ -23,7 +23,11 @@ const DriverDashboard = () => {
     });
     const [userName, setUserName] = useState('기사님');
     const [userImage, setUserImage] = useState(null);
-    const [registrationStatus, setRegistrationStatus] = useState({ isDriverInfoRegistered: false, isBusInfoRegistered: false });
+    const [registrationStatus, setRegistrationStatus] = useState({
+        isDriverInfoRegistered: false,
+        isBusInfoRegistered: false,
+        isQuickSetupCompleted: false
+    });
     const [auctionList, setAuctionList] = useState([]);
     const [todayTrip, setTodayTrip] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -53,38 +57,27 @@ const DriverDashboard = () => {
                 setUserImage(res.data.userImage);
                 const isDriverReg = !!res.data.isDriverInfoRegistered;
                 const isBusReg = !!res.data.isBusInfoRegistered;
+                const isQuickDone = !!res.data.isQuickSetupCompleted;
                 setRegistrationStatus({
                     isDriverInfoRegistered: isDriverReg,
-                    isBusInfoRegistered: isBusReg
+                    isBusInfoRegistered: isBusReg,
+                    isQuickSetupCompleted: isQuickDone
                 });
                 setAuctionList(res.data.auctionList || []);
                 setTodayTrip(res.data.todayTrip || null);
 
-                // 미등록 상태 알림 팝업 및 자동 이동
-                if (!isDriverReg) {
+                // 서버의 간편 등록 완료 기준(isQuickSetupCompleted)으로 최초 미등록 시 1회 간편 등록 화면으로 안내 (한글 주석)
+                if (!isQuickDone) {
                     Swal.fire({
-                        title: '기사 정보 등록 필요',
-                        text: '기사 정보가 등록되어 있지 않습니다. 기사 정보를 먼저 등록해 주세요.',
-                        icon: 'warning',
+                        title: '간편 초기 등록 필요',
+                        text: '운전면허증 사진, 차량 번호, 승차 인원, 차량 사진만 등록하시면 바로 서비스를 이용하실 수 있습니다.',
+                        icon: 'info',
                         confirmButtonColor: '#00685f',
-                        confirmButtonText: '확인',
+                        confirmButtonText: '등록하러 가기',
                         allowOutsideClick: false
                     }).then((result) => {
                         if (result.isConfirmed) {
-                            navigate('/driver-certification');
-                        }
-                    });
-                } else if (!isBusReg) {
-                    Swal.fire({
-                        title: '버스 정보 등록 필요',
-                        text: '버스 정보가 등록되어 있지 않습니다. 버스 정보를 등록해 주세요.',
-                        icon: 'warning',
-                        confirmButtonColor: '#00685f',
-                        confirmButtonText: '확인',
-                        allowOutsideClick: false
-                    }).then((result) => {
-                        if (result.isConfirmed) {
-                            navigate('/bus-certification');
+                            navigate('/driver-quick-setup', { replace: true });
                         }
                     });
                 }
@@ -388,18 +381,13 @@ const DriverDashboard = () => {
                         </h3>
                         <div className="flex flex-col gap-3">
                             {quickMenus.map((menu, idx) => {
-                                const isDriverInfoReg = registrationStatus.isDriverInfoRegistered;
-                                const isBusInfoReg = registrationStatus.isBusInfoRegistered;
-                                
-                                let isDisabled = false;
-                                if (!isDriverInfoReg && menu.path !== '/driver-certification') {
-                                    isDisabled = true;
-                                }
-                                else if (isDriverInfoReg && !isBusInfoReg && 
-                                         menu.path !== '/driver-certification' && 
-                                         menu.path !== '/bus-certification') {
-                                    isDisabled = true;
-                                }
+                                const isQuickDone = registrationStatus.isQuickSetupCompleted;
+                                // 간편 초기 등록 완료 기준과 메뉴 제한 일치화 (기사 정보·버스 정보 등록 메뉴는 항상 허용, 한글 주석)
+                                const isAlwaysAllowedMenu =
+                                    menu.path === '/driver-certification' ||
+                                    menu.path === '/bus-certification' ||
+                                    menu.path === '/driver-quick-setup';
+                                const isDisabled = !isQuickDone && !isAlwaysAllowedMenu;
 
                                 return (
                                     <div 
@@ -407,28 +395,16 @@ const DriverDashboard = () => {
                                         onClick={() => {
                                             if (!isDisabled) {
                                                 navigate(menu.path);
-                                            } else if (!isDriverInfoReg) {
+                                            } else {
                                                 Swal.fire({
-                                                    title: '기사 정보 등록 필요',
-                                                    text: '기사 정보를 먼저 등록해 주세요.',
-                                                    icon: 'warning',
+                                                    title: '간편 초기 등록 필요',
+                                                    text: '운전면허증 사진, 차량 번호, 승차 인원, 차량 사진 등록을 완료해 주세요.',
+                                                    icon: 'info',
                                                     confirmButtonColor: '#00685f',
-                                                    confirmButtonText: '확인'
+                                                    confirmButtonText: '등록하러 가기'
                                                 }).then((result) => {
                                                     if (result.isConfirmed) {
-                                                        navigate('/driver-certification');
-                                                    }
-                                                });
-                                            } else if (!isBusInfoReg) {
-                                                Swal.fire({
-                                                    title: '버스 정보 등록 필요',
-                                                    text: '버스 정보를 등록해 주세요.',
-                                                    icon: 'warning',
-                                                    confirmButtonColor: '#00685f',
-                                                    confirmButtonText: '확인'
-                                                }).then((result) => {
-                                                    if (result.isConfirmed) {
-                                                        navigate('/bus-certification');
+                                                        navigate('/driver-quick-setup');
                                                     }
                                                 });
                                             }

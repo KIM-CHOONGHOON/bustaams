@@ -21,6 +21,7 @@ import { requestFirebaseToken } from './utils/fcm';
 
 
 import DriverDashboard from './pages/DriverDashboard';
+import DriverQuickSetup from './pages/DriverQuickSetup';
 import DriverInfoRegistration from './pages/DriverInfoRegistration';
 import BusInfoRegistration from './pages/BusInfoRegistration';
 import EstimateListDriver from './pages/EstimateListDriver';
@@ -173,6 +174,7 @@ function App() {
         {/* 기사님용 라우트 */}
         <Route path="/driver-dashboard" element={<DriverDashboard />} />
         <Route path="/driver/dashboard" element={<DriverDashboard />} />
+        <Route path="/driver-quick-setup" element={<ErrorBoundary><DriverQuickSetup /></ErrorBoundary>} />
         <Route path="/driver-certification" element={<ErrorBoundary><DriverInfoRegistration /></ErrorBoundary>} />
         <Route path="/bus-certification" element={<ErrorBoundary><BusInfoRegistration /></ErrorBoundary>} />
         <Route path="/estimate-list-driver" element={<EstimateListDriver />} />
