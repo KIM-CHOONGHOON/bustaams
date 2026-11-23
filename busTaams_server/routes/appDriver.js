@@ -2585,12 +2585,12 @@ router.post('/save-review-reply/:id', authenticateToken, async (req, res) => {
         if (uRows.length === 0) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
         const custId = uRows[0].CUST_ID;
 
-        // 2. 리뷰 업데이트 (기사 본인의 운행인지 확인)
+        // 2. 리뷰 업데이트 (MOD_ID는 varchar(10)이므로 custId 저장, 한글 주석)
         const [result] = await pool.execute(`
             UPDATE TB_TRIP_REVIEW 
             SET REPLY_TEXT = ?, REPLY_DT = NOW(), MOD_ID = ?, MOD_DT = NOW()
             WHERE RES_ID = ? AND DRIVER_ID = ?
-        `, [replyText, userId, id, custId]);
+        `, [replyText, custId, id, custId]);
 
         if (result.affectedRows === 0) {
             return res.status(404).json({ success: false, error: '리뷰를 찾을 수 없거나 권한이 없습니다.' });

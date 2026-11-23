@@ -904,6 +904,11 @@ router.post('/final-approve', authenticateToken, async (req, res) => {
     try {
         await connection.beginTransaction();
         const userId = req.user.userId;
+        let custId = req.user.custId;
+        if (!custId) {
+            const [uRows] = await connection.execute('SELECT CUST_ID FROM TB_USER WHERE USER_ID = ?', [userId]);
+            custId = uRows.length > 0 ? uRows[0].CUST_ID : String(userId || '').slice(0, 10);
+        }
         const { reqId, resId } = req.body;
 
         if (!reqId && !resId) {
@@ -911,9 +916,9 @@ router.post('/final-approve', authenticateToken, async (req, res) => {
             return res.status(400).json({ success: false, error: '요청 ID 또는 예약 ID가 필요합니다.' });
         }
 
-        console.log(`[Customer Final Approve] UserID: ${userId}, reqId: ${reqId}, resId: ${resId}`);
+        console.log(`[Customer Final Approve] UserID: ${userId}, CustID: ${custId}, reqId: ${reqId}, resId: ${resId}`);
 
-        // 1. TB_BUS_RESERVATION 업데이트 (CUSTOMER_FINAL_APPROVAL_YN = 'Y', DATA_STAT = 'CONFIRM')
+        // 1. TB_BUS_RESERVATION 업데이트 (MOD_ID는 varchar(10)이므로 custId 저장, 한글 주석)
         if (resId) {
             await connection.execute(`
                 UPDATE TB_BUS_RESERVATION 
@@ -924,7 +929,7 @@ router.post('/final-approve', authenticateToken, async (req, res) => {
                     MOD_ID = ?,
                     MOD_DT = NOW()
                 WHERE RES_ID = ?
-            `, [userId, resId]);
+            `, [custId, resId]);
 
             // 2. TB_AUCTION_REQ_BUS 및 TB_AUCTION_REQ 상태 동시 업데이트를 위해 REQ_ID, REQ_BUS_SEQ 조회 후 업데이트
             const [bRows] = await connection.execute('SELECT REQ_ID, REQ_BUS_SEQ FROM TB_BUS_RESERVATION WHERE RES_ID = ?', [resId]);
@@ -936,7 +941,7 @@ router.post('/final-approve', authenticateToken, async (req, res) => {
                         MOD_ID = ?,
                         MOD_DT = NOW()
                     WHERE REQ_ID = ? AND REQ_BUS_SEQ = ?
-                `, [userId, rId, uSeq]);
+                `, [custId, rId, uSeq]);
 
                 await connection.execute(`
                     UPDATE TB_AUCTION_REQ 
@@ -944,7 +949,7 @@ router.post('/final-approve', authenticateToken, async (req, res) => {
                         MOD_ID = ?,
                         MOD_DT = NOW()
                     WHERE REQ_ID = ?
-                `, [userId, rId]);
+                `, [custId, rId]);
             }
         } else if (reqId) {
             await connection.execute(`
@@ -956,7 +961,7 @@ router.post('/final-approve', authenticateToken, async (req, res) => {
                     MOD_ID = ?,
                     MOD_DT = NOW()
                 WHERE REQ_ID = ? AND DATA_STAT = 'FINAL_APPROVAL_WAIT'
-            `, [userId, reqId]);
+            `, [custId, reqId]);
 
             // 2. TB_AUCTION_REQ_BUS 상태도 CONFIRM으로 업데이트
             await connection.execute(`
@@ -965,7 +970,7 @@ router.post('/final-approve', authenticateToken, async (req, res) => {
                     MOD_ID = ?,
                     MOD_DT = NOW()
                 WHERE REQ_ID = ? AND DATA_STAT = 'FINAL_APPROVAL_WAIT'
-            `, [userId, reqId]);
+            `, [custId, reqId]);
 
             // 3. TB_AUCTION_REQ 상태도 CONFIRM으로 업데이트
             await connection.execute(`
@@ -974,7 +979,7 @@ router.post('/final-approve', authenticateToken, async (req, res) => {
                     MOD_ID = ?,
                     MOD_DT = NOW()
                 WHERE REQ_ID = ?
-            `, [userId, reqId]);
+            `, [custId, reqId]);
         }
 
         await connection.commit();
@@ -3816,7 +3821,7 @@ router.post('/submit-review', authenticateToken, async (req, res) => {
                 RES_ID, REVIEW_SEQ, WRITER_ID, DRIVER_ID, STAR_RATING, COMMENT_TEXT, 
                 REG_ID, REG_DT, MOD_ID, MOD_DT
             ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW())
-        `, [resId, nextSeq, custId, reservation.DRIVER_ID, rating, comment || '', userId, userId]);
+        `, [resId, nextSeq, custId, reservation.DRIVER_ID, rating, comment || '', custId, custId]);
 
         await connection.commit();
         res.json({ success: true, message: '리뷰가 성공적으로 등록되었습니다.' });
