@@ -215,6 +215,20 @@ const Signup = () => {
         return regex.test(pw);
     };
 
+    // 회원가입 아이디 검증: 한글·공백 불가, 영문·숫자·특수문자만 허용 (4~50자) (한글 주석)
+    const validateUserId = (id) => /^[\x21-\x7E]{4,50}$/.test(id);
+
+    const handleUserIdChange = (e) => {
+        const raw = e.target.value;
+        // 한글 및 공백 등 비-ASCII 문자 즉시 제거 (한글 입력 차단, 한글 주석)
+        const filtered = raw.replace(/[^\x21-\x7E]/g, '').slice(0, 50);
+        if (raw !== filtered && /[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(raw)) {
+            notify.warn('아이디 입력 안내', '아이디는 한글 없이 영문, 숫자, 특수문자(4~50자)만 입력 가능합니다.');
+        }
+        setUserId(filtered);
+        setIsIdChecked(false);
+    };
+
     const getTermsList = () => {
         return [
             {
@@ -289,6 +303,10 @@ const Signup = () => {
         const trimmedId = userId.trim();
         if (!trimmedId) {
             notify.warn('아이디 입력', '아이디를 입력해 주세요.');
+            return;
+        }
+        if (!validateUserId(trimmedId)) {
+            notify.warn('아이디 양식 오류', '아이디는 한글·공백 없이 영문, 숫자, 특수문자 4~50자로 입력해 주세요.');
             return;
         }
         try {
@@ -422,6 +440,10 @@ const Signup = () => {
             notify.warn('아이디 입력', '아이디를 입력해 주세요.');
             return;
         }
+        if (!validateUserId(userId.trim())) {
+            notify.warn('아이디 양식 오류', '아이디는 한글·공백 없이 영문, 숫자, 특수문자 4~50자로 입력해 주세요.');
+            return;
+        }
         if (!isIdChecked) {
             notify.warn('아이디 중복 확인', '아이디 중복 확인을 진행해 주세요.');
             return;
@@ -466,6 +488,10 @@ const Signup = () => {
 
         if (!userId.trim()) {
             notify.warn('아이디 입력', '아이디를 입력해 주세요.');
+            return;
+        }
+        if (!validateUserId(userId.trim())) {
+            notify.warn('아이디 양식 오류', '아이디는 한글·공백 없이 영문, 숫자, 특수문자 4~50자로 입력해 주세요.');
             return;
         }
         if (!isIdChecked) {
@@ -673,9 +699,11 @@ const Signup = () => {
                                     <div className="flex gap-2">
                                         <input
                                             value={userId}
-                                            onChange={e => { setUserId(e.target.value); setIsIdChecked(false); }}
+                                            onChange={handleUserIdChange}
                                             type="text"
-                                            placeholder="아이디 입력"
+                                            inputMode="email"
+                                            maxLength={50}
+                                            placeholder="영문, 숫자, 특수문자 4~50자"
                                             className="flex-grow min-w-0 bg-slate-100 rounded-xl py-3 px-3 outline-none font-medium text-sm"
                                         />
                                         <button
@@ -802,9 +830,11 @@ const Signup = () => {
                                             <div className="flex gap-2">
                                                 <input
                                                     value={userId}
-                                                    onChange={e => { setUserId(e.target.value); setIsIdChecked(false); }}
+                                                    onChange={handleUserIdChange}
                                                     type="text"
-                                                    placeholder="아이디 입력"
+                                                    inputMode="email"
+                                                    maxLength={50}
+                                                    placeholder="영문, 숫자, 특수문자 4~50자"
                                                     className="flex-grow min-w-0 bg-slate-100 rounded-xl py-3 px-3 outline-none font-medium text-sm"
                                                 />
                                                 <button

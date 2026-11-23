@@ -56,6 +56,9 @@ const validateResidentNo = (rrn) => {
     return /^[0-9]{13}$/.test(clean);
 };
 
+// 회원가입 아이디 규칙: 한글·공백 불가, 영문·숫자·특수문자 4~50자 (로그인 시에는 기존 한글 아이디 허용, 한글 주석)
+const SIGNUP_USER_ID_REGEX = /^[\x21-\x7E]{4,50}$/;
+
 /**
  * [App 전용] 아이디 중복 확인 (평문 매칭)
  */
@@ -63,6 +66,13 @@ router.get('/check-id', async (req, res) => {
     try {
         const userId = (req.query.userId || '').trim();
         if (!userId) return res.json({ isAvailable: false, isDuplicate: true });
+        if (!SIGNUP_USER_ID_REGEX.test(userId)) {
+            return res.status(400).json({
+                isAvailable: false,
+                isDuplicate: false,
+                error: '아이디는 한글·공백 없이 영문, 숫자, 특수문자 4~50자로 입력해 주세요.'
+            });
+        }
         
         // 한글 주석: USER_ID 컬럼에서 중복 확인 (전체 유형 대상, 기존 가입 유형도 함께 반환)
         const [rows] = await pool.execute('SELECT USER_TYPE FROM TB_USER WHERE USER_ID = ?', [userId]);
@@ -153,6 +163,12 @@ router.post('/register', async (req, res) => {
         if (email) email = String(email).trim();
         if (userName) userName = String(userName).trim();
         if (phoneNo) phoneNo = String(phoneNo).replace(/[^0-9]/g, '');
+
+        // 회원가입 아이디 길이(4~50자) 및 영문·숫자·특수문자 형식 검증 (한글·공백 차단, 한글 주석)
+        if (!userId || !SIGNUP_USER_ID_REGEX.test(userId)) {
+            await connection.rollback();
+            return res.status(400).json({ error: '아이디는 한글·공백 없이 영문, 숫자, 특수문자 4~50자로 입력해 주세요.' });
+        }
 
         console.log(`[Registration] Request received for user: ${userId}, userType: ${userType}`);
 
